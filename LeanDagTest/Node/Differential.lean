@@ -113,7 +113,8 @@ def cfg (p : Scheme.Params) (per m : ℕ) (hper : 0 < per) (hm : 0 < m)
   timeout := fun _ => 10
   σ := boundedSel
   idOf := idIn bs
-  payload := fun _ => ()
+  xp := ⟨fun _ => ∅, fun _ => ∅⟩
+  payload := fun _ _ _ => ()
 
 /-- The record, in order of round, through the acceptance path onto an
 empty disk. -/

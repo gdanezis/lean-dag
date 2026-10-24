@@ -8,9 +8,13 @@ quorum, the node's identity, the schedule, the timeouts, the vote rule,
 the identifier map and the payload source; `Input` and `Output` are the
 events it consumes and produces.
 
-The node checks the row's validity `rowValid q` on receipt, and decides
-on a record of its memory at `stored`, references one round below,
-and the honest set `∅`.
+A payload carries evidence of equivocation, an author with two of its
+blocks, and the authors its block exposes (`Exposure`). The node checks the
+row's validity `rowValid q E` on receipt: references one round below from
+`q` distinct authors, and the exposure clause (`Clause.exposes`): the
+block exposes the authors its evidence names and those its references
+expose, and references none of them. It decides on a record of its memory
+at `stored`, references one round below, and the honest set `∅`.
 
 Definitions only.
 -/
@@ -21,12 +25,38 @@ namespace Node
 
 variable {Validator BlockId Payload : Type} [DecidableEq Validator]
 
+variable (Validator BlockId Payload) in
+/-- **What a payload says of equivocation**: the evidence it carries, each
+an author with two of its blocks, and the authors its block exposes. -/
+structure Exposure where
+  /-- The evidence a payload carries. -/
+  ev : Payload → Finset (Validator × BlockId × BlockId)
+  /-- The authors a payload's block exposes. -/
+  ex : Payload → Finset Validator
+
+/-- **The authors evidence names**: those it gives two distinct blocks of. -/
+def named [DecidableEq BlockId] (E : Finset (Validator × BlockId × BlockId)) : Finset Validator :=
+  (E.filter fun e => e.2.1 ≠ e.2.2).image (·.1)
+
+/-- **The exposure clause**: a block exposes the authors its evidence names
+and those its references expose, and references none of them. -/
+def Clause.exposes [DecidableEq BlockId] (E : Exposure Validator BlockId Payload) :
+    Clause Validator BlockId Payload := fun blk b =>
+  E.ex b.payload = named (E.ev b.payload) ∪ b.refs.biUnion (fun j => E.ex (blk j).payload) ∧
+    ∀ j ∈ b.refs, (blk j).creator ∉ E.ex b.payload
+
+instance [DecidableEq BlockId] (E : Exposure Validator BlockId Payload)
+    (blk : BlockId → Block Validator BlockId Payload) (b : Block Validator BlockId Payload) :
+    Decidable (Clause.exposes E blk b) :=
+  inferInstanceAs (Decidable (_ ∧ _))
+
 /-- **The node's validity**: references one round below from `q`
-distinct authors, no author twice. Referencing the author's own previous
-block is the honest build rule, not a validity clause (`docs/validator.md`
-§11). -/
-abbrev rowValid (q : ℕ) : Validity Validator BlockId Payload :=
-  ValidAt q Clause.distinct
+distinct authors, no author twice, and the exposure clause. Referencing
+the author's own previous block is the honest build rule, not a validity
+clause (`docs/validator.md` §8). -/
+abbrev rowValid [DecidableEq BlockId] (q : ℕ) (E : Exposure Validator BlockId Payload) :
+    Validity Validator BlockId Payload :=
+  ValidAt q fun blk b => Clause.distinct blk b ∧ Clause.exposes E blk b
 
 variable (Validator BlockId Payload) in
 /-- **The validity a store's record carries**: references one round
@@ -64,8 +94,11 @@ structure Config where
   σ : Scheme.VoteSel Validator BlockId Payload (stored Validator BlockId Payload) ∅
   /-- The identifier of a block: the environment's hash. -/
   idOf : Block Validator BlockId Payload → BlockId
-  /-- The payload of the node's round-`r` block. -/
-  payload : ℕ → Payload
+  /-- What payloads say of equivocation. -/
+  xp : Exposure Validator BlockId Payload
+  /-- The payload of the node's round-`r` block, carrying the evidence `E`
+  and exposing the authors `X`. -/
+  payload : ℕ → Finset (Validator × BlockId × BlockId) → Finset Validator → Payload
 
 variable {Validator BlockId Payload}
 
@@ -91,6 +124,11 @@ def Admissible : Prop :=
     cfg.p.commitThreshold ≤ Fintype.card Validator - cfg.f - cfg.c ∧ 0 < cfg.q ∧
     cfg.q ≤ Fintype.card Validator
 
+/-- **The payload source is faithful**: a payload reads back the evidence
+and the exposed authors put in it. -/
+def Faithful : Prop :=
+  ∀ r E X, cfg.xp.ev (cfg.payload r E X) = E ∧ cfg.xp.ex (cfg.payload r E X) = X
+
 instance : Decidable cfg.Admissible := by
   unfold Admissible Scheme.Params.Covered Scheme.Params.CertFits
     Scheme.Params.TwoRound Scheme.Params.ThreeRound Scheme.Params.TwoRoundCrash
@@ -115,6 +153,8 @@ inductive Input where
   /-- A peer asks for the history of the block `t` from its frontier `fr`,
   and for the blocks `ids` by name. -/
   | syncRequest (peer : Validator) (t : BlockId) (fr : Validator → ℕ) (ids : List BlockId)
+  /-- A peer asks for the node's block of round `r`. -/
+  | ask (peer : Validator) (r : ℕ)
   /-- The node restarts after a crash, from the state it persisted. -/
   | restart
 
@@ -133,6 +173,10 @@ inductive Output where
   | sync (peer : Validator) (t : BlockId) (fr : Validator → ℕ) (ids : List BlockId)
   /-- Stream blocks to one peer, in order of round. -/
   | stream (peer : Validator) (L : List (BlockId × Block Validator BlockId Payload))
+  /-- Ask every peer for its block of round `r`. -/
+  | ask (r : ℕ)
+  /-- Send one of the node's own blocks to one peer. -/
+  | send (peer : Validator) (id : BlockId) (b : Block Validator BlockId Payload)
 
 end Node
 

@@ -84,7 +84,7 @@ def ValidOut : Prop :=
     let K := delivered cfg is ++ B
     ∀ e ∈ B, (∀ j ∈ e.2.refs, j ∈ K.map Prod.fst) ∧
       ∀ blk : BlockId → Block Validator BlockId Payload, (∀ x ∈ K, blk x.1 = x.2) →
-        rowValid cfg.q blk e.2
+        rowValid cfg.q cfg.xp blk e.2
 
 /-- **Decisions are the scheme's on the view**: at the bounded vote, a
 decision step of a node whose memory holds the round of its next

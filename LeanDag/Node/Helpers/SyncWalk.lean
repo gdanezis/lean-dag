@@ -278,7 +278,7 @@ omit [Fintype Validator] in
 that holds its references. -/
 theorem ready_of_refs {g : BlockId → Block Validator BlockId Payload}
     {y : BlockId × Block Validator BlockId Payload}
-    (hv : (∀ j ∈ y.2.refs, (g j).round + 1 = y.2.round) ∧ rowValid cfg.q g y.2)
+    (hv : (∀ j ∈ y.2.refs, (g j).round + 1 = y.2.round) ∧ rowValid cfg.q cfg.xp g y.2)
     {st : Store Validator BlockId Payload} (hst : ReadsAs g st) (hrefs : y.2.refs ⊆ st.ids)
     (hnin : y.1 ∉ st.ids) : readyOn cfg st y = true := by
   have hag : ∀ j ∈ y.2.refs, st.blk j = g j := fun j hj => hst j (hrefs hj)
@@ -286,7 +286,7 @@ theorem ready_of_refs {g : BlockId → Block Validator BlockId Payload}
   refine ⟨hrefs, fun j hj => by rw [hag j hj]; exact hv.1 j hj,
     rowValid_congr (fun j hj => ?_) hv.2⟩
   have hj' : j ≠ y.1 := fun e => hnin (e ▸ hrefs hj)
-  rw [Function.update_of_ne hj', hag j hj]; exact ⟨rfl, rfl⟩
+  rw [Function.update_of_ne hj', hag j hj]; exact ⟨rfl, rfl, rfl⟩
 
 omit [Fintype Validator] in
 /-- **Taking blocks in without gaining one**: each was held or not
@@ -300,7 +300,7 @@ theorem foldl_stuck : ∀ (l : List (BlockId × Block Validator BlockId Payload)
     rw [List.foldl_cons] at h
     have hg := Grows.foldl (cfg := cfg) l (acceptOn cfg st x.1 x.2)
     have hsame : acceptOn cfg st x.1 x.2 = st := by
-      by_cases hc : x.1 ∉ st.ids ∧ st.Checks cfg.q x.1 x.2
+      by_cases hc : x.1 ∉ st.ids ∧ st.Checks cfg.q cfg.xp x.1 x.2
       · exfalso
         have h₁ := Finset.card_le_card hg.1
         rw [h] at h₁
@@ -314,7 +314,8 @@ theorem foldl_stuck : ∀ (l : List (BlockId × Block Validator BlockId Payload)
       · exact Or.inl hin
       · right
         by_contra hr
-        have hc : e.1 ∉ st.ids ∧ st.Checks cfg.q e.1 e.2 := ⟨hin, by simpa [readyOn] using hr⟩
+        have hc : e.1 ∉ st.ids ∧ st.Checks cfg.q cfg.xp e.1 e.2 := ⟨hin, by simpa [readyOn] using
+            hr⟩
         have := congrArg Store.ids hsame
         unfold acceptOn at this
         rw [dif_pos hc, Store.insert_ids] at this

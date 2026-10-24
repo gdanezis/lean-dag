@@ -103,6 +103,7 @@ def main (args : List String) : IO UInt32 := do
       let skips := (ds.filter (·.2.isNone)).length
       IO.println s!"node {v}: round {top.getD 0}, {ds.length} slots decided, {skips} skipped"
     IO.println (s!"requests {r.stats.requests} ({r.stats.named} asked by name)  " ++
+      s!"pieces {r.stats.pieces} ({r.stats.streamed} blocks, {r.stats.served} served)  " ++
       s!"honest blocks not kept {r.stats.notKept}")
     for (v, _, b) in sc.outages do
       let (R, t₁, t₂) := recovery r v b

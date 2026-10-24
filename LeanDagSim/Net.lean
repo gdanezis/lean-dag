@@ -11,11 +11,14 @@ fires when it expires. A crashed node acts on nothing from its crash
 time on. A node with an outage is down for a while: it loses what
 arrives meanwhile and the timers it set before, and then restarts from
 its state. An equivocator is two copies of the honest program with the
-same identity and different payloads, each sending to half the nodes, so
-its twins are valid blocks; it acts on nothing from `byzUntil` on. A
-node's request for blocks goes to the peer it names, and an answer to
-the node that asked. `simulate` runs the schedule and reports what each
-honest node reached and committed, whether their decisions agree, and
+same identity and different payload nonces, each sending to half the
+nodes, so its twins are valid blocks; it acts on nothing from `byzUntil`
+on. A payload carries a nonce, evidence and exposed authors (`Pay`), and
+the block hash reads all three. A node's request for blocks or for a
+peer's block of a round goes to the peer it names, an ask for blocks of
+a round to every other node, and an answer to the node that asked.
+`simulate` runs the schedule and reports what each honest node reached
+and committed, whether their decisions agree, and
 whether every honest block above round `0` is valid under the blocks the
 nodes made. An attacker (`Scenario.adv`) runs the honest program and
 mounts `Scenario.attacks`; the network checks signatures
@@ -113,13 +116,32 @@ structure Scenario where
 def Scenario.honest (sc : Scenario) (v : ℕ) : Bool :=
   !(sc.byz.contains v) && !(sc.adv.contains v)
 
+/-- **A simulated payload**: a nonce that tells an equivocator's twins
+apart, the evidence the block carries, and the authors it exposes. -/
+structure Pay (n : ℕ) where
+  nonce : ℕ
+  ev : Finset (Fin n × ℕ × ℕ)
+  ex : Finset (Fin n)
+  deriving DecidableEq
+
+/-- A payload with only a nonce. -/
+def Pay.plain {n : ℕ} (k : ℕ) : Pay n := ⟨k, ∅, ∅⟩
+
+/-- An evidence item as a number, for hashing. -/
+def evKey {n : ℕ} (e : Fin n × ℕ × ℕ) : ℕ := (hash (e.1.val, e.2.1, e.2.2)).toNat
+
 /-- A block's identifier: a hash of its content. -/
-def idOf {n : ℕ} (b : Block (Fin n) ℕ ℕ) : ℕ :=
-  (hash (b.round, b.creator.val, b.refs.sort (· ≤ ·), b.payload)).toNat % 2 ^ 62
+def idOf {n : ℕ} (b : Block (Fin n) ℕ (Pay n)) : ℕ :=
+  (hash (b.round, b.creator.val, b.refs.sort (· ≤ ·), b.payload.nonce,
+    (b.payload.ev.image evKey).sort (· ≤ ·),
+    (b.payload.ex.image Fin.val).sort (· ≤ ·))).toNat % 2 ^ 62
+
+/-- What a simulated payload says of equivocation. -/
+def payXp {n : ℕ} : Exposure (Fin n) ℕ (Pay n) := ⟨Pay.ev, Pay.ex⟩
 
 /-- The configuration of node `me`, its payload `twin` at every round. -/
 def cfgFor (sc : Scenario) (p : Scheme.Params) (q : ℕ) {n : ℕ} (hn : 0 < n) (me : Fin n)
-    (twin : ℕ) : Config (Fin n) ℕ ℕ where
+    (twin : ℕ) : Config (Fin n) ℕ (Pay n) where
   p := p
   f := sc.f
   c := sc.c
@@ -136,7 +158,8 @@ def cfgFor (sc : Scenario) (p : Scheme.Params) (q : ℕ) {n : ℕ} (hn : 0 < n) 
   timeout := fun _ => sc.timeout
   σ := boundedSel
   idOf := idOf
-  payload := fun _ => twin
+  xp := payXp
+  payload := fun _ E X => ⟨twin, E, X⟩
 
 /-- An agent: a node, and which copy of it (`0` unless it equivocates). -/
 structure Agent (n : ℕ) where
@@ -163,6 +186,11 @@ structure Stats where
   in them. -/
   requests : ℕ := 0
   named : ℕ := 0
+  /-- The stream pieces honest nodes received, and the blocks in them. -/
+  pieces : ℕ := 0
+  streamed : ℕ := 0
+  /-- The blocks honest nodes streamed, to any node. -/
+  served : ℕ := 0
   deriving Inhabited
 
 /-- **What a simulation reports.** -/
@@ -222,22 +250,22 @@ hash, every block broadcast or sent under its hash, the largest honest
 disk, and the inputs processed. -/
 structure World (n : ℕ) where
   agents : Array (Agent n)
-  states : Array (State (Fin n) ℕ ℕ)
+  states : Array (State (Fin n) ℕ (Pay n))
   /-- The inputs in flight, by `queueKey`: the agent and the input. -/
-  queue : Std.TreeMap ℕ (ℕ × Input (Fin n) ℕ ℕ) compare
+  queue : Std.TreeMap ℕ (ℕ × Input (Fin n) ℕ (Pay n)) compare
   /-- The number of inputs put in flight so far. -/
   seq : ℕ
   gen : StdGen
   decisions : Array (List (ℕ × Option ℕ))
-  honest : List (ℕ × Block (Fin n) ℕ ℕ)
-  blocks : Std.TreeMap ℕ (Block (Fin n) ℕ ℕ) compare
-  seen : Std.TreeMap ℕ (Block (Fin n) ℕ ℕ) compare
+  honest : List (ℕ × Block (Fin n) ℕ (Pay n))
+  blocks : Std.TreeMap ℕ (Block (Fin n) ℕ (Pay n)) compare
+  seen : Std.TreeMap ℕ (Block (Fin n) ℕ (Pay n)) compare
   maxDisk : ℕ
   maxSyncs : ℕ
   events : ℕ
   time : ℕ
   /-- The withheld block, once built. -/
-  withheld : Option (ℕ × Block (Fin n) ℕ ℕ)
+  withheld : Option (ℕ × Block (Fin n) ℕ (Pay n))
   /-- The inputs the signature checks dropped. -/
   dropped : ℕ
   /-- The timing measurements. -/
@@ -272,12 +300,13 @@ def delayAt (src dst t : ℕ) (g : StdGen) : ℕ × StdGen :=
   else (dt, g')
 
 /-- The inputs an agent's outputs at time `t` send. -/
-def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (Fin n) ℕ ℕ))
-    (g : StdGen) : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen :=
-  out.foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) o =>
+def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (Fin n) ℕ (Pay n)))
+    (g : StdGen) : List (ℕ × ℕ × Input (Fin n) ℕ (Pay n)) × StdGen :=
+  out.foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ (Pay n)) × StdGen) o =>
     match o with
     | .broadcast id b =>
-      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
+      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ (Pay n)) × StdGen) d
+          =>
         match agents[src]?, agents[d]? with
         | some s, some a =>
           if receives sc a s then
@@ -292,7 +321,8 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
       -- the frontier, read once, as a request on the wire carries it
       let tbl := (List.finRange n).map fr
       let fr : Fin n → ℕ := fun a => tbl.getD a.val 0
-      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
+      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ (Pay n)) × StdGen) d
+          =>
         match agents[src]?, agents[d]? with
         | some s, some a =>
           if a.node = peer then
@@ -301,7 +331,8 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
           else acc
         | _, _ => acc) acc
     | .stream peer L =>
-      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
+      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ (Pay n)) × StdGen) d
+          =>
         match agents[src]?, agents[d]? with
         | some s, some a =>
           if a.node = peer then
@@ -314,14 +345,15 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
 /-- **The withholding attack**, applied to agent `src`'s outputs at time
 `t`: the outputs it keeps, the deliveries it adds, and the withheld
 block. -/
-def withholding (agents : Array (Agent n)) (src t : ℕ) (out : List (Output (Fin n) ℕ ℕ))
-    (wh : Option (ℕ × Block (Fin n) ℕ ℕ)) :
-    List (Output (Fin n) ℕ ℕ) × List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × Option (ℕ × Block (Fin n) ℕ ℕ) :=
+def withholding (agents : Array (Agent n)) (src t : ℕ) (out : List (Output (Fin n) ℕ (Pay n)))
+    (wh : Option (ℕ × Block (Fin n) ℕ (Pay n))) :
+    List (Output (Fin n) ℕ (Pay n)) × List (ℕ × ℕ × Input (Fin n) ℕ (Pay n)) × Option (ℕ × Block
+        (Fin n) ℕ (Pay n)) :=
   match sc.withhold, agents[src]? with
   | some (z, v, R), some a =>
     if a.node.val ≠ z then (out, [], wh) else
-    out.foldl (fun (acc : List (Output (Fin n) ℕ ℕ) × List (ℕ × ℕ × Input (Fin n) ℕ ℕ) ×
-        Option (ℕ × Block (Fin n) ℕ ℕ)) o =>
+    out.foldl (fun (acc : List (Output (Fin n) ℕ (Pay n)) × List (ℕ × ℕ × Input (Fin n) ℕ (Pay n)) ×
+        Option (ℕ × Block (Fin n) ℕ (Pay n))) o =>
       match o with
       | .broadcast id b =>
         if b.round = R then (acc.1, acc.2.1, some (id, b))
@@ -350,43 +382,49 @@ def withholding (agents : Array (Agent n)) (src t : ℕ) (out : List (Output (Fi
   | _, _ => (out, [], wh)
 
 /-- Two blocks alike. -/
-def sameBlock (b c : Block (Fin n) ℕ ℕ) : Bool :=
-  b.round == c.round && b.creator == c.creator && decide (b.refs = c.refs) && b.payload == c.payload
+def sameBlock (b c : Block (Fin n) ℕ (Pay n)) : Bool :=
+  b.round == c.round && b.creator == c.creator && decide (b.refs = c.refs) && decide (b.payload =
+      c.payload)
 
 /-- **A block passes the signature check**: an honest author made it. -/
-def authentic (w : World n) (id : ℕ) (b : Block (Fin n) ℕ ℕ) : Bool :=
+def authentic (w : World n) (id : ℕ) (b : Block (Fin n) ℕ (Pay n)) : Bool :=
   !(sc.honest b.creator.val) || (w.blocks.get? id).any (sameBlock b)
 
 /-- **The signature check** on an input: a block in an honest author's
 name is one it made. -/
-def checked (w : World n) : Input (Fin n) ℕ ℕ → Option (Input (Fin n) ℕ ℕ)
+def checked (w : World n) : Input (Fin n) ℕ (Pay n) → Option (Input (Fin n) ℕ (Pay n))
   | .deliver u id b => if authentic sc w id b then some (.deliver u id b) else none
   | .stream u L => some (.stream u (L.filter fun e => authentic sc w e.1 e.2))
   | i => some i
 
 /-- **An attacker's outputs**: the honest program's outputs, changed by
 the attacks, and the blocks it sends each node in its own name. -/
-def attacked (out : List (Output (Fin n) ℕ ℕ)) :
-    List (Output (Fin n) ℕ ℕ) × List (Fin n × ℕ × Block (Fin n) ℕ ℕ) :=
+def attacked (out : List (Output (Fin n) ℕ (Pay n))) :
+    List (Output (Fin n) ℕ (Pay n)) × List (Fin n × ℕ × Block (Fin n) ℕ (Pay n)) :=
   let has (x : Attack) := sc.attacks.contains x
-  out.foldl (fun (acc : List (Output (Fin n) ℕ ℕ) × List (Fin n × ℕ × Block (Fin n) ℕ ℕ)) o =>
+  out.foldl (fun (acc : List (Output (Fin n) ℕ (Pay n)) × List (Fin n × ℕ × Block (Fin n) ℕ (Pay
+      n))) o =>
     match o with
     | .broadcast _ b =>
-      let junk : List (Output (Fin n) ℕ ℕ) := if has .invalidBlocks then
-          let b₁ : Block (Fin n) ℕ ℕ := { b with refs := ∅, payload := 1 }
-          let b₂ : Block (Fin n) ℕ ℕ := { b with refs := {123456789}, payload := 2 }
-          let b₃ : Block (Fin n) ℕ ℕ := { b with payload := 3 }
+      let junk : List (Output (Fin n) ℕ (Pay n)) := if has .invalidBlocks then
+          let b₁ : Block (Fin n) ℕ (Pay n) := { b with refs := ∅, payload := { b.payload with nonce
+              := 1 } }
+          let b₂ : Block (Fin n) ℕ (Pay n) := { b with refs := {123456789}, payload := { b.payload
+              with nonce := 2 } }
+          let b₃ : Block (Fin n) ℕ (Pay n) := { b with payload := { b.payload with nonce := 3 } }
           [.broadcast (idOf b₁) b₁, .broadcast (idOf b₂) b₂, .broadcast (idOf b₃ + 1) b₃]
         else []
-      let forged : List (Output (Fin n) ℕ ℕ) := if has .forgedAuthor then
+      let forged : List (Output (Fin n) ℕ (Pay n)) := if has .forgedAuthor then
           let v : Fin n := ⟨(b.creator.val + 1) % n, Nat.mod_lt _ (Fin.pos b.creator)⟩
-          let b₄ : Block (Fin n) ℕ ℕ := { b with creator := v, payload := 4 }
+          let b₄ : Block (Fin n) ℕ (Pay n) := { b with creator := v, payload := { b.payload with
+              nonce := 4 } }
           [.broadcast (idOf b₄) b₄]
         else []
       if has .twinSplit then
         (acc.1 ++ junk ++ forged, acc.2 ++ (List.finRange n).filterMap fun v =>
           if v = b.creator then none else
-          let bv : Block (Fin n) ℕ ℕ := { b with payload := 200 + v.val }
+          let bv : Block (Fin n) ℕ (Pay n) := { b with payload := { b.payload with nonce := 200 +
+              v.val } }
           some (v, idOf bv, bv))
       else (acc.1 ++ o :: junk ++ forged, acc.2)
     | o => (acc.1 ++ [o], acc.2)) ([], [])
@@ -422,7 +460,7 @@ def loop : ℕ → World n → World n
         let own := r.2.filterMap fun
           | .persist id b => some (id, b)
           | _ => none
-        let directBlocks := direct.filterMap fun (e : ℕ × ℕ × Input (Fin n) ℕ ℕ) =>
+        let directBlocks := direct.filterMap fun (e : ℕ × ℕ × Input (Fin n) ℕ (Pay n)) =>
           match e.2.2 with
           | .deliver _ id b => if id = idOf b then some (id, b) else none
           | _ => none
@@ -450,7 +488,10 @@ def loop : ℕ → World n → World n
                   if sc.honest b.creator.val ∧ b.creator ≠ a.node then some (a.node.val, b.round, t)
                   else none) ++ ss.accepted
               requests := ss.requests + fs.length
-              named := ss.named + fs.foldl (· + ·) 0 }
+              named := ss.named + fs.foldl (· + ·) 0
+              pieces := ss.pieces + (match i with | .stream _ _ => 1 | _ => 0)
+              streamed := ss.streamed + (match i with | .stream _ L => L.length | _ => 0)
+              served := ss.served + (r.2.map fun | .stream _ L => L.length | _ => 0).sum }
             match i with
             | .deliver _ id b =>
               if sc.honest b.creator.val ∧ b.creator ≠ a.node ∧ id = idOf b ∧
@@ -527,9 +568,9 @@ def simulate (sc : Scenario) : Report :=
       let w := loop sc p q hn sc.fuel w0
       let honestIdx := (List.range n).filter sc.honest
       let decs := honestIdx.map fun v => (w.decisions[v]?.getD []).reverse
-      let junk : Block (Fin n) ℕ ℕ := ⟨0, ⟨0, hn⟩, ∅, 0⟩
+      let junk : Block (Fin n) ℕ (Pay n) := ⟨0, ⟨0, hn⟩, ∅, Pay.plain 0⟩
       let valid := w.honest.all fun e =>
-        e.2.round == 0 || decide (rowValid q (fun i => w.seen.getD i junk) e.2)
+        e.2.round == 0 || decide (rowValid q payXp (fun i => w.seen.getD i junk) e.2)
       { admissible := true
         tops := honestIdx.map fun v => (w.states[v]?.map (·.top)).getD none
         final := honestIdx.map fun v => match w.states[v]? with
@@ -539,7 +580,7 @@ def simulate (sc : Scenario) : Report :=
             let cf := cfgFor sc p q hn ⟨v % n, Nat.mod_lt _ hn⟩ 0
             let pend := st.syncs.map fun e => (e.1.val, e.2.1.2.round,
               (e.2.1.2.refs.filter fun j => j ∉ st.disk.ids).card, e.2.2.length)
-            let reach := reachReady cf st.memory (refsAt cf st.memory t st.own) t
+            let reach := reachReady cf st.memory (refsAt cf st.memory t st.own st.evidence) t
             s!"node {v}: top {st.top} own {st.own.isSome} " ++
               s!"lo {st.lo} authors {auth t}/{auth (t + 1)}/{auth (t + 2)} " ++
               s!"syncs {pend} detected {(st.detected.image (·.val)).sort (· ≤ ·)} " ++

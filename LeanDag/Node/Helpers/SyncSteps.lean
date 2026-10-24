@@ -28,67 +28,27 @@ variable {Validator BlockId Payload : Type} [Fintype Validator] [DecidableEq Val
 variable [LinearOrder BlockId]
 variable {cfg : Config Validator BlockId Payload}
 
-/-! ## Detection -/
-
-/-- **A detected author has two blocks at one round on the disk.** -/
-def TwinsOn (s : State Validator BlockId Payload) : Prop :=
-  ∀ a ∈ s.detected, ∃ i ∈ s.disk.ids, ∃ j ∈ s.disk.ids, i ≠ j ∧ (s.disk.blk i).creator = a ∧
-    (s.disk.blk j).creator = a ∧ (s.disk.blk i).round = (s.disk.blk j).round
-
-omit [Fintype Validator] [DecidableEq Validator] in
-theorem TwinsOn.grow {s s' : State Validator BlockId Payload} (h : TwinsOn s)
-    (hg : Grows s.disk s'.disk) (hd : s'.detected ⊆ s.detected) : TwinsOn s' := by
-  intro a ha
-  obtain ⟨i, hi, j, hj, hij, hic, hjc, hr⟩ := h a (hd ha)
-  exact ⟨i, hg.1 hi, j, hg.1 hj, hij, by rw [hg.blk hi]; exact hic, by rw [hg.blk hj]; exact hjc,
-    by rw [hg.blk hi, hg.blk hj]; exact hr⟩
-
-omit [Fintype Validator] in
-theorem TwinsOn.accept {s : State Validator BlockId Payload} (h : TwinsOn s) (id : BlockId)
-    (b : Block Validator BlockId Payload) : TwinsOn (Node.accept cfg s id b) := by
-  unfold Node.accept
-  split
-  · rename_i hc
-    have hd := s.mirrors.checks_pick.mp hc.2
-    have hg : Grows s.disk (s.disk.insert id b hc.1 hd.1 hd.2.1) := Grows.insert s.disk
-    split
-    · rename_i ha
-      intro a hamem
-      rcases Finset.mem_insert.mp hamem with rfl | hamem
-      · obtain ⟨i, hi, hic⟩ := mem_creatorsOf.mp ha
-        rw [Store.atRound_eq, mem_blocksAt] at hi
-        refine ⟨i, hg.1 hi.1, id, Store.mem_insert_self (hrefs := hd.1) (hpred := hd.2.1),
-          fun e => hc.1 (e ▸ hi.1), ?_, ?_, ?_⟩
-        · change ((s.disk.insert id b hc.1 hd.1 hd.2.1).blk i).creator = _
-          rw [hg.blk hi.1]; exact hic
-        · change ((s.disk.insert id b hc.1 hd.1 hd.2.1).blk id).creator = _
-          rw [Store.insert_blk, if_pos rfl]
-        · change ((s.disk.insert id b hc.1 hd.1 hd.2.1).blk i).round =
-            ((s.disk.insert id b hc.1 hd.1 hd.2.1).blk id).round
-          rw [hg.blk hi.1, Store.insert_blk, if_pos rfl]; exact hi.2
-      · exact (h.grow (s' := keep s id b _ _ _) hg subset_rfl) a hamem
-    · exact h.grow (s' := keep s id b _ _ _) hg subset_rfl
-  · exact h
-
 /-! ## Thinning the syncs -/
 
+variable (cfg) in
 /-- **`s'` thins the syncs of `s`**: it keeps a part of them, dropping only
 those whose block it holds or whose peer it detected, grows the disk and
-the detected authors, and keeps `TwinsOn`. -/
+the detected authors, and keeps `EvidenceOn`. -/
 structure Thins (s s' : State Validator BlockId Payload) : Prop where
   sub : s'.syncs.Sublist s.syncs
   kept : ∀ e ∈ s.syncs, e ∈ s'.syncs ∨ e.2.1.1 ∈ s'.disk.ids ∨ e.1 ∈ s'.detected
   grows : Grows s.disk s'.disk
   det : s.detected ⊆ s'.detected
-  twins : TwinsOn s → TwinsOn s'
+  twins : EvidenceOn cfg s → EvidenceOn cfg s'
 
-omit [Fintype Validator] [DecidableEq Validator] in
-theorem Thins.refl (s : State Validator BlockId Payload) : Thins s s :=
+omit [Fintype Validator] in
+theorem Thins.refl (s : State Validator BlockId Payload) : Thins cfg s s :=
   ⟨List.Sublist.refl _, fun _ h => Or.inl h, Grows.refl _, subset_rfl, id⟩
 
-omit [Fintype Validator] [DecidableEq Validator] in
-theorem Thins.trans {a b c : State Validator BlockId Payload} (h₁ : Thins a b) (h₂ : Thins b c) :
-    Thins a c := by
+omit [Fintype Validator] in
+theorem Thins.trans {a b c : State Validator BlockId Payload} (h₁ : Thins cfg a b) (h₂ : Thins cfg
+    b c) :
+    Thins cfg a c := by
   refine ⟨h₂.sub.trans h₁.sub, fun e he => ?_, h₁.grows.trans h₂.grows, h₁.det.trans h₂.det,
     h₂.twins ∘ h₁.twins⟩
   rcases h₁.kept e he with h | h | h
@@ -96,17 +56,18 @@ theorem Thins.trans {a b c : State Validator BlockId Payload} (h₁ : Thins a b)
   · exact Or.inr (Or.inl (h₂.grows.1 h))
   · exact Or.inr (Or.inr (h₂.det h))
 
-omit [Fintype Validator] [DecidableEq Validator] in
-/-- A state with the syncs and the detected authors kept, and the disk
-grown, thins the syncs. -/
+omit [Fintype Validator] in
+/-- A state with the syncs, the detected authors and the evidence kept,
+and the disk grown, thins the syncs. -/
 theorem Thins.of_grows {s s' : State Validator BlockId Payload} (hg : Grows s.disk s'.disk)
-    (hs : s'.syncs = s.syncs) (hd : s'.detected = s.detected) : Thins s s' :=
+    (hs : s'.syncs = s.syncs) (hd : s'.detected = s.detected)
+    (he : s'.evidence = s.evidence) : Thins cfg s s' :=
   ⟨hs ▸ List.Sublist.refl _, fun _ he => Or.inl (hs ▸ he), hg, hd ▸ subset_rfl,
-    fun h => h.grow hg hd.le⟩
+    fun h => h.grow hg hd he⟩
 
 omit [Fintype Validator] in
 theorem Thins.accept (s : State Validator BlockId Payload) (id : BlockId)
-    (b : Block Validator BlockId Payload) : Thins s (Node.accept cfg s id b) := by
+    (b : Block Validator BlockId Payload) : Thins cfg s (Node.accept cfg s id b) := by
   have hr := accept_rest (cfg := cfg) (s := s) (id := id) (b := b)
   refine ⟨hr.2.1 ▸ List.Sublist.refl _, fun e he => Or.inl (hr.2.1 ▸ he), ?_, hr.2.2.2.2.2.2.2.2.2,
     fun h => h.accept id b⟩
@@ -114,7 +75,7 @@ theorem Thins.accept (s : State Validator BlockId Payload) (id : BlockId)
 
 omit [Fintype Validator] in
 theorem Thins.absorb (s : State Validator BlockId Payload) :
-    ∀ L : List (BlockId × Block Validator BlockId Payload), Thins s (Node.absorb cfg s L)
+    ∀ L : List (BlockId × Block Validator BlockId Payload), Thins cfg s (Node.absorb cfg s L)
   | [] => Thins.refl s
   | x :: L => by
     unfold Node.absorb
@@ -122,7 +83,7 @@ theorem Thins.absorb (s : State Validator BlockId Payload) :
     exact (Thins.accept s x.1 x.2).trans (Thins.absorb _ L)
 
 omit [Fintype Validator] in
-theorem Thins.tidy (s : State Validator BlockId Payload) : Thins s (Node.tidy s) := by
+theorem Thins.tidy (s : State Validator BlockId Payload) : Thins cfg s (Node.tidy s) := by
   refine ⟨List.filter_sublist, fun e he => ?_, Grows.refl _, subset_rfl, id⟩
   by_cases hk : e.2.1.1 ∉ s.disk.ids ∧ e.1 ∉ s.detected
   · exact Or.inl (List.mem_filter.mpr ⟨he, by simp only [decide_eq_true_eq]; exact hk⟩)
@@ -133,7 +94,7 @@ theorem Thins.tidy (s : State Validator BlockId Payload) : Thins s (Node.tidy s)
 
 omit [Fintype Validator] in
 theorem Thins.flushSyncs : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
-    Thins s (Node.flushSyncs cfg fuel s)
+    Thins cfg s (Node.flushSyncs cfg fuel s)
   | 0, s => Thins.refl s
   | fuel + 1, s => by
     unfold Node.flushSyncs
@@ -143,30 +104,16 @@ theorem Thins.flushSyncs : ∀ (fuel : ℕ) (s : State Validator BlockId Payload
     · exact ((Thins.absorb s _).trans (Thins.tidy _)).trans (Thins.flushSyncs fuel _)
 
 omit [Fintype Validator] in
-theorem tryBuild_detected {s s' : State Validator BlockId Payload}
-    {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
-    s'.detected = s.detected := by
-  obtain ⟨_, _, _, -, h, -⟩ := tryBuild_cases h
-  unfold buildAbove at h
-  dsimp only at h
-  split at h
-  · split at h
-    · rw [Option.some.injEq, Prod.mk.injEq] at h
-      obtain ⟨rfl, -⟩ := h
-      exact release_detected _
-    · exact absurd h (by simp)
-  · exact absurd h (by simp)
-
-omit [Fintype Validator] in
 theorem Thins.progress : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
-    Thins s (Node.progress cfg fuel s).1
+    Thins cfg s (Node.progress cfg fuel s).1
   | 0, s => Thins.refl s
   | fuel + 1, s => by
     unfold Node.progress
     split
     · rename_i s₁ out h
-      have h₁ : Thins s s₁ := by
-        refine Thins.of_grows ?_ (tryBuild_syncs h) (tryBuild_detected h)
+      have h₁ : Thins cfg s s₁ := by
+        refine Thins.of_grows ?_ (tryBuild_syncs h) (tryBuild_detected h).1
+          (tryBuild_detected h).2
         obtain ⟨_, _, _, _, _, _, -, -, -, -, -, hd, -⟩ := tryBuild_some h
         rw [hd]; exact Grows.insert _
       exact h₁.trans (Thins.progress fuel s₁)
@@ -174,27 +121,29 @@ theorem Thins.progress : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
 
 omit [Fintype Validator] in
 theorem Thins.decideStep (s : State Validator BlockId Payload) :
-    Thins s (Node.decideStep cfg s).1 := by
-  refine Thins.of_grows (by rw [decideStep_disk]; exact Grows.refl _) (decideStep_syncs s) ?_
-  unfold Node.decideStep
-  dsimp only
-  split
-  · exact release_detected _
-  · rfl
+    Thins cfg s (Node.decideStep cfg s).1 := by
+  refine Thins.of_grows (by rw [decideStep_disk]; exact Grows.refl _) (decideStep_syncs s) ?_ ?_
+  all_goals
+    unfold Node.decideStep
+    dsimp only
+    split
+    · simp
+    · rfl
 
 omit [Fintype Validator] in
-theorem Thins.advance (s : State Validator BlockId Payload) : Thins s (Node.advance cfg s).1 := by
+theorem Thins.advance (s : State Validator BlockId Payload) : Thins cfg s (Node.advance cfg s).1 :=
+    by
   obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) (Node.pass cfg s).1
-  have hp : Thins s (Node.pass cfg s).1 :=
+  have hp : Thins cfg s (Node.pass cfg s).1 :=
     ((Thins.progress _ s).trans (Thins.decideStep _)).trans (Thins.flushSyncs _ _)
   unfold Node.advance
   dsimp only
   rw [ha]
-  exact hp.trans (Thins.of_grows (Grows.refl _) rfl rfl)
+  exact hp.trans (Thins.of_grows (Grows.refl _) rfl rfl rfl)
 
 omit [Fintype Validator] in
-theorem Thins.settle (s : State Validator BlockId Payload) : Thins s (Node.settle cfg s).1 :=
-  (quiesce_rel (P := fun _ => True) (R := fun a _ b => Thins a b)
+theorem Thins.settle (s : State Validator BlockId Payload) : Thins cfg s (Node.settle cfg s).1 :=
+  (quiesce_rel (P := fun _ => True) (R := fun a _ b => Thins cfg a b)
     (fun s => Thins.refl s) (fun _ _ _ _ _ h₁ h₂ => h₁.trans h₂)
     (fun s _ => ⟨Thins.advance s, trivial⟩) _ s trivial).1
 
@@ -307,18 +256,19 @@ theorem mem_of_dedup_length {A M : List BlockId} (hA : A.Nodup)
 
 /-! ## The step's shape -/
 
+variable (cfg) in
 /-- **A plain step**: it thins the syncs, and asks only as an old sync
 does. -/
 structure Plain (s s' : State Validator BlockId Payload)
     (out : List (Output Validator BlockId Payload)) : Prop where
-  thins : Thins s s'
+  thins : Thins cfg s s'
   asks : ∀ peer i fr ids, Output.sync peer i fr ids ∈ out →
     ∃ e ∈ s.syncs, e.1 = peer ∧ e.2.1.1 = i ∧ e.2.2 = ids
 
-omit [Fintype Validator] [DecidableEq Validator] in
+omit [Fintype Validator] in
 theorem Plain.of {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)}
-    (ht : Thins s s') (hn : NoAsk out) : Plain s s' out :=
+    (ht : Thins cfg s s') (hn : NoAsk out) : Plain cfg s s' out :=
   ⟨ht, fun peer i fr ids ho => absurd rfl (hn _ ho peer i fr ids)⟩
 
 omit [Fintype Validator] in
@@ -389,18 +339,18 @@ theorem step_stream_cases {s : State Validator BlockId Payload} (hs : SyncsOn s)
     obtain rfl : e₁ = (u, t, A) := hs.eq (hsub.sub.subset he₁) he hp
     exact Or.inr ⟨he₁, rfl⟩
 
-omit [Fintype Validator] [DecidableEq Validator] in
+omit [Fintype Validator] in
 theorem Thins.keep (s : State Validator BlockId Payload) (id : BlockId)
     (b : Block Validator BlockId Payload) (hnew hrefs hpred) :
-    Thins s (Node.keep s id b hnew hrefs hpred) :=
-  Thins.of_grows (Grows.insert (hnew := hnew) (hrefs := hrefs) (hpred := hpred) _) rfl rfl
+    Thins cfg s (Node.keep s id b hnew hrefs hpred) :=
+  Thins.of_grows (Grows.insert (hnew := hnew) (hrefs := hrefs) (hpred := hpred) _) rfl rfl rfl
 
 /-- **A start**, unfolded. -/
 theorem step_start_eq (s : State Validator BlockId Payload) :
     Node.step cfg s .start =
       if s.top = none ∧ cfg.Admissible then
         if h : cfg.idOf cfg.genesis ∉ s.disk.ids ∧
-            rowValid cfg.q (Function.update s.disk.blk (cfg.idOf cfg.genesis) cfg.genesis)
+            rowValid cfg.q cfg.xp (Function.update s.disk.blk (cfg.idOf cfg.genesis) cfg.genesis)
               cfg.genesis then
           ((Node.settle cfg { Node.keep s (cfg.idOf cfg.genesis) cfg.genesis h.1
               (fun _ hj => absurd hj (Finset.notMem_empty _))
@@ -418,7 +368,7 @@ theorem step_start_eq (s : State Validator BlockId Payload) :
 
 /-- **A start is plain.** -/
 theorem step_start_plain (s : State Validator BlockId Payload) :
-    Plain s (Node.step cfg s .start).1 (Node.step cfg s .start).2 := by
+    Plain cfg s (Node.step cfg s .start).1 (Node.step cfg s .start).2 := by
   rw [step_start_eq]
   split_ifs
   · refine Plain.of (Thins.trans ?_ (Thins.settle _)) (NoAsk.append (noAsk_quiet fun o ho => by
@@ -428,17 +378,17 @@ theorem step_start_plain (s : State Validator BlockId Payload) :
         · exact Or.inr (Or.inr (Or.inr ⟨_, _, rfl⟩))
         · exact Or.inl ⟨_, _, rfl⟩) (noAsk_settle _))
     exact Thins.of_grows (Grows.insert (hrefs := fun _ hj => absurd hj (Finset.notMem_empty _))
-      (hpred := fun j hj => absurd hj (Finset.notMem_empty j)) _) rfl rfl
+      (hpred := fun j hj => absurd hj (Finset.notMem_empty j)) _) rfl rfl rfl
   · exact Plain.of (Thins.refl s) fun o ho => absurd ho List.not_mem_nil
   · exact Plain.of (Thins.refl s) fun o ho => absurd ho List.not_mem_nil
 
 /-- **A timer is plain.** -/
 theorem step_timer_plain (s : State Validator BlockId Payload) (r : ℕ) :
-    Plain s (Node.step cfg s (.timer r)).1 (Node.step cfg s (.timer r)).2 := by
+    Plain cfg s (Node.step cfg s (.timer r)).1 (Node.step cfg s (.timer r)).2 := by
   refine ⟨by
     rw [step_timer_fst]
     exact Thins.trans (b := { s with fired := fire s r, recovering := false })
-      (Thins.of_grows (Grows.refl _) rfl rfl) (Thins.settle _), fun peer i fr ids ho => ?_⟩
+      (Thins.of_grows (Grows.refl _) rfl rfl rfl) (Thins.settle _), fun peer i fr ids ho => ?_⟩
   rcases step_timer_snd (cfg := cfg) s r with h | h
   · rw [h] at ho; exact absurd rfl (noAsk_settle _ _ ho peer i fr ids)
   · rw [h] at ho
@@ -451,22 +401,34 @@ theorem step_timer_plain (s : State Validator BlockId Payload) (r : ℕ) :
 /-- **A request for a stream is plain.** -/
 theorem step_syncRequest_plain (s : State Validator BlockId Payload) (peer : Validator)
     (t : BlockId) (fr : Validator → ℕ) (ids : List BlockId) :
-    Plain s (Node.step cfg s (.syncRequest peer t fr ids)).1
+    Plain cfg s (Node.step cfg s (.syncRequest peer t fr ids)).1
       (Node.step cfg s (.syncRequest peer t fr ids)).2 := by
   have h : Node.step cfg s (.syncRequest peer t fr ids) =
-      (s, if (streamOf s.disk t fr ids).isEmpty then [] else
+      (s, if peer ∈ s.detected ∨ (streamOf s.disk t fr ids).isEmpty then [] else
         [.stream peer (streamOf s.disk t fr ids)]) := rfl
   rw [h]
   refine ⟨Thins.refl s, fun peer' i fr' ids' ho => ?_⟩
   split at ho <;> simp at ho
 
+/-- **A request for a round's block is plain.** -/
+theorem step_ask_plain (s : State Validator BlockId Payload) (peer : Validator) (r : ℕ) :
+    Plain cfg s (Node.step cfg s (.ask peer r)).1 (Node.step cfg s (.ask peer r)).2 := by
+  have h : Node.step cfg s (.ask peer r) = (s, if peer ∈ s.detected then [] else
+      match ownAt cfg s r with
+      | some i => [.send peer i (s.disk.blk i)]
+      | none => []) := rfl
+  rw [h]
+  refine Plain.of (Thins.refl s) fun o ho p t fr ids he => ?_
+  subst he
+  split at ho <;> (try split at ho) <;> simp at ho
+
 /-- **A restart is plain.** -/
 theorem step_restart_plain (s : State Validator BlockId Payload) :
-    Plain s (Node.step cfg s .restart).1 (Node.step cfg s .restart).2 := by
+    Plain cfg s (Node.step cfg s .restart).1 (Node.step cfg s .restart).2 := by
   refine ⟨by
     rw [step_restart_fst]
     exact Thins.trans (b := { s with recovering := true })
-      (Thins.of_grows (Grows.refl _) rfl rfl) (Thins.settle _), fun peer i fr ids ho => ?_⟩
+      (Thins.of_grows (Grows.refl _) rfl rfl rfl) (Thins.settle _), fun peer i fr ids ho => ?_⟩
   change Output.sync peer i fr ids ∈
     resend cfg s ++ rearm cfg s ++ (Node.settle cfg { s with recovering := true }).2 at ho
   rcases List.mem_append.mp ho with ho | ho
@@ -479,10 +441,10 @@ theorem step_restart_plain (s : State Validator BlockId Payload) :
 stream piece extending a sync. -/
 theorem step_form {s : State Validator BlockId Payload} (hs : SyncsOn s)
     (inp : Input Validator BlockId Payload) :
-    Plain s (Node.step cfg s inp).1 (Node.step cfg s inp).2 ∨
+    Plain cfg s (Node.step cfg s inp).1 (Node.step cfg s inp).2 ∨
     (∃ u id b, inp = .deliver u id b ∧ id = cfg.idOf b ∧ b.creator = u ∧ u ≠ cfg.me ∧
       (∀ e ∈ s.syncs, e.1 = u → e.2.1.2.round < b.round) ∧
-      Thins { s with syncs := (u, (id, b), ([] : List BlockId)) ::
+      Thins cfg { s with syncs := (u, (id, b), ([] : List BlockId)) ::
         (s.syncs.filter fun e => decide (e.1 ≠ u)) } (Node.step cfg s inp).1 ∧
       (∀ peer i fr ids, Output.sync peer i fr ids ∈ (Node.step cfg s inp).2 →
         peer = u ∧ i = id ∧ ids = []) ∧
@@ -492,7 +454,7 @@ theorem step_form {s : State Validator BlockId Payload} (hs : SyncsOn s)
       let s₁ := tidy (absorb cfg s (inHistory cfg t L))
       let asked := (A ++ missingIn s₁ (t :: inHistory cfg t L)).dedup
       let s₂ := { s₁ with syncs := s₁.syncs.map fun x => if x.1 = u then (u, t, asked) else x }
-      Thins s₂ (Node.step cfg s inp).1 ∧
+      Thins cfg s₂ (Node.step cfg s inp).1 ∧
       (∀ peer i fr ids, Output.sync peer i fr ids ∈ (Node.step cfg s inp).2 →
         peer = u ∧ i = t.1 ∧ ids = asked) ∧
       ((∀ fr ids, Output.sync u t.1 fr ids ∉ (Node.step cfg s inp).2) →
@@ -548,6 +510,7 @@ theorem step_form {s : State Validator BlockId Payload} (hs : SyncsOn s)
             (List.mem_ite_nil_right.mpr ⟨not_and_or.mp hm, List.mem_singleton_self _⟩))
   | timer r => exact Or.inl (step_timer_plain s r)
   | syncRequest peer t fr ids => exact Or.inl (step_syncRequest_plain s peer t fr ids)
+  | ask peer r => exact Or.inl (step_ask_plain s peer r)
   | restart => exact Or.inl (step_restart_plain s)
 
 /-! ## One sync across a step -/
@@ -616,9 +579,10 @@ theorem SyncsOn.step {s : State Validator BlockId Payload} (h : SyncsOn s)
   · exact (h.fresh hc).sublist ht.sub
   · exact (h.extend ((Thins.absorb s _).trans (Thins.tidy _)).sub he).sublist ht.sub
 
-/-- **Only twins detect an author.** -/
-theorem TwinsOn.step {s : State Validator BlockId Payload} (hs : SyncsOn s) (h : TwinsOn s)
-    (inp : Input Validator BlockId Payload) : TwinsOn (Node.step cfg s inp).1 := by
+/-- **Only evidence convicts an author.** -/
+theorem EvidenceOn.step {s : State Validator BlockId Payload} (hs : SyncsOn s)
+    (h : EvidenceOn cfg s) (inp : Input Validator BlockId Payload) :
+    EvidenceOn cfg (Node.step cfg s inp).1 := by
   rcases step_form (cfg := cfg) hs inp with hp | ⟨u, id, b, rfl, -, -, -, -, ht, -, -⟩ |
       ⟨u, L, t, A, rfl, -, -, ht, -, -⟩
   · exact hp.thins.twins h

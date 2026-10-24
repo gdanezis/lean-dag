@@ -64,7 +64,7 @@ def Fits (y : BlockId × Block Validator BlockId Payload) : Prop :=
 omit [Fintype Validator] in
 /-- **A block valid under `g` fits.** -/
 theorem fits_of_valid {y : BlockId × Block Validator BlockId Payload}
-    (hv : (∀ j ∈ y.2.refs, (g j).round + 1 = y.2.round) ∧ rowValid cfg.q g y.2) :
+    (hv : (∀ j ∈ y.2.refs, (g j).round + 1 = y.2.round) ∧ rowValid cfg.q cfg.xp g y.2) :
     Fits cfg g y := by
   intro st hst hr
   unfold acceptOn
@@ -79,7 +79,7 @@ theorem fits_of_valid {y : BlockId × Block Validator BlockId Payload}
     rw [dif_pos ⟨hin, hrefs, fun j hj => by rw [hag j hj]; exact hv.1 j hj,
       rowValid_congr (fun j hj => by
         have hj' : j ≠ y.1 := fun e => hin (e ▸ hrefs hj)
-        rw [Function.update_of_ne hj', hag j hj]; exact ⟨rfl, rfl⟩) hv.2⟩]
+        rw [Function.update_of_ne hj', hag j hj]; exact ⟨rfl, rfl, rfl⟩) hv.2⟩]
     exact Store.mem_insert_self
 
 omit [Fintype Validator] in
@@ -93,7 +93,7 @@ theorem ready_mono {st st' : Store Validator BlockId Payload} (hg : Grows st st'
   by_cases hje : j = e.1
   · subst hje; simp
   · rw [Function.update_of_ne hje, Function.update_of_ne hje, hg.blk (h₁ hj)]
-    exact ⟨rfl, rfl⟩
+    exact ⟨rfl, rfl, rfl⟩
 
 omit [Fintype Validator] in
 theorem foldl_takes : ∀ (l : List (BlockId × Block Validator BlockId Payload))

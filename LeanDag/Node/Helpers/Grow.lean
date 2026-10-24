@@ -105,6 +105,7 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
       · exact (Grows.absorb (cfg := cfg) s _).trans (Grows.settle_of _ rfl)
   | timer r => rw [step_timer_fst]; exact Grows.settle_of _ rfl
   | syncRequest peer t fr ids => exact Grows.refl _
+  | ask peer r => exact Grows.refl _
   | restart => exact Grows.settle_of { s with recovering := true } rfl
 
 end Node

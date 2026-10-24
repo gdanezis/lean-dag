@@ -601,6 +601,7 @@ import LeanDag.Node.Helpers.Shape
 import LeanDag.Node.Helpers.Arrive
 import LeanDag.Node.Helpers.SyncWalk
 import LeanDag.Node.Helpers.SyncSteps
+import LeanDag.Node.Helpers.SyncInv
 import LeanDag.Node.Helpers.SyncTrace
 import LeanDag.Node.Helpers.Armed
 import LeanDag.Node.Helpers.Catch

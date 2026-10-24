@@ -68,6 +68,13 @@ theorem creator {i : BlockId} (hi : i ∈ m.ids) : (m.blk i).creator = (d.blk i)
   split <;> rfl
 
 omit [DecidableEq Validator] in
+theorem payload {i : BlockId} (hi : i ∈ m.ids) : (m.blk i).payload = (d.blk i).payload := by
+  rw [h.blk i hi]
+  unfold windowBlk
+  dsimp only
+  split <;> rfl
+
+omit [DecidableEq Validator] in
 theorem refs {i : BlockId} (hi : i ∈ d.ids) (hr : F < (d.blk i).round) :
     (m.blk i).refs = (d.blk i).refs := by
   rw [h.blk i (h.mem_of hi hr.le)]
@@ -346,36 +353,42 @@ theorem Mirrors.above (h : m.Mirrors d F) {F' : ℕ} (hF : F ≤ F') : (m.above 
     omega
 
 omit [LinearOrder BlockId] in
-/-- **Validity at the row reads only the references' rounds and authors.** -/
-theorem rowValid_congr {q : ℕ} {blk blk' : BlockId → Block Validator BlockId Payload}
-    {b : Block Validator BlockId Payload}
+/-- **Validity at the row reads only the references' rounds, authors and
+payloads.** -/
+theorem rowValid_congr [DecidableEq BlockId] {q : ℕ} {E : Exposure Validator BlockId Payload}
+    {blk blk' : BlockId → Block Validator BlockId Payload} {b : Block Validator BlockId Payload}
     (hr : ∀ j ∈ b.refs, (blk' j).round = (blk j).round)
-    (hc : ∀ j ∈ b.refs, (blk' j).creator = (blk j).creator) :
-    rowValid q blk b → rowValid q blk' b := fun h =>
+    (hc : ∀ j ∈ b.refs, (blk' j).creator = (blk j).creator)
+    (hp : ∀ j ∈ b.refs, (blk' j).payload = (blk j).payload) :
+    rowValid q E blk b → rowValid q E blk' b := fun h =>
   ⟨fun i hi => by rw [hr i hi]; exact h.predecessor i hi,
     fun h0 => by
       have : creators blk' b = creators blk b := Finset.image_congr fun j hj => hc j hj
       rw [this]; exact h.quorum h0,
-    fun i hi j hj hij => h.clause i hi j hj (by rw [← hc i hi, ← hc j hj]; exact hij)⟩
+    ⟨fun i hi j hj hij => h.clause.1 i hi j hj (by rw [← hc i hi, ← hc j hj]; exact hij),
+      by rw [Finset.biUnion_congr rfl fun j hj => by rw [hp j hj]]; exact h.clause.2.1,
+      fun j hj => by rw [hc j hj]; exact h.clause.2.2 j hj⟩⟩
 
 /-- **The checks a block passes to be accepted**: its references are
 accepted, one round below it, and it is valid at the row. -/
-def Checks (q : ℕ) (st : Store Validator BlockId Payload) (id : BlockId)
-    (b : Block Validator BlockId Payload) : Prop :=
+def Checks (q : ℕ) (E : Exposure Validator BlockId Payload) (st : Store Validator BlockId Payload)
+    (id : BlockId) (b : Block Validator BlockId Payload) : Prop :=
   b.refs ⊆ st.ids ∧ (∀ j ∈ b.refs, (st.blk j).round + 1 = b.round) ∧
-    rowValid q (Function.update st.blk id b) b
+    rowValid q E (Function.update st.blk id b) b
 
-instance (q : ℕ) (st : Store Validator BlockId Payload) (id : BlockId)
-    (b : Block Validator BlockId Payload) : Decidable (st.Checks q id b) :=
+instance (q : ℕ) (E : Exposure Validator BlockId Payload) (st : Store Validator BlockId Payload)
+    (id : BlockId) (b : Block Validator BlockId Payload) : Decidable (st.Checks q E id b) :=
   inferInstanceAs (Decidable (_ ∧ _ ∧ _))
 
-/-- Reading the update at `id` of a map that agrees on round and author
-with another on `b`'s references. -/
-theorem update_congr {blk blk' : BlockId → Block Validator BlockId Payload} {id : BlockId}
+/-- Reading the update at `id` of a map that agrees on round, author and
+payload with another on `b`'s references. -/
+theorem update_congr {q : ℕ} {E : Exposure Validator BlockId Payload}
+    {blk blk' : BlockId → Block Validator BlockId Payload} {id : BlockId}
     {b : Block Validator BlockId Payload}
     (hr : ∀ j ∈ b.refs, (blk' j).round = (blk j).round)
-    (hc : ∀ j ∈ b.refs, (blk' j).creator = (blk j).creator) :
-    rowValid q (Function.update blk id b) b → rowValid q (Function.update blk' id b) b :=
+    (hc : ∀ j ∈ b.refs, (blk' j).creator = (blk j).creator)
+    (hp : ∀ j ∈ b.refs, (blk' j).payload = (blk j).payload) :
+    rowValid q E (Function.update blk id b) b → rowValid q E (Function.update blk' id b) b :=
   rowValid_congr
     (fun j hj => by
       by_cases hji : j = id
@@ -385,32 +398,38 @@ theorem update_congr {blk blk' : BlockId → Block Validator BlockId Payload} {i
       by_cases hji : j = id
       · subst hji; simp
       · rw [Function.update_of_ne hji, Function.update_of_ne hji]; exact hc j hj)
+    (fun j hj => by
+      by_cases hji : j = id
+      · subst hji; simp
+      · rw [Function.update_of_ne hji, Function.update_of_ne hji]; exact hp j hj)
 
 /-- **A block passing the checks in memory passes them on disk.** -/
-theorem Mirrors.checks_disk (h : m.Mirrors d F) {q : ℕ} {id : BlockId}
-    {b : Block Validator BlockId Payload} (hc : m.Checks q id b) : d.Checks q id b :=
+theorem Mirrors.checks_disk (h : m.Mirrors d F) {q : ℕ} {E : Exposure Validator BlockId Payload}
+    {id : BlockId} {b : Block Validator BlockId Payload} (hc : m.Checks q E id b) :
+    d.Checks q E id b :=
   ⟨fun j hj => h.sub (hc.1 hj), fun j hj => by rw [← h.round (hc.1 hj)]; exact hc.2.1 j hj,
     update_congr (fun j hj => (h.round (hc.1 hj)).symm) (fun j hj => (h.creator (hc.1 hj)).symm)
-      hc.2.2⟩
+      (fun j hj => (h.payload (hc.1 hj)).symm) hc.2.2⟩
 
 /-- **Above `F`, a block passes the checks in memory exactly when on
 disk.** -/
-theorem Mirrors.checks_iff (h : m.Mirrors d F) {q : ℕ} {id : BlockId}
-    {b : Block Validator BlockId Payload} (hF : F < b.round) :
-    m.Checks q id b ↔ d.Checks q id b := by
+theorem Mirrors.checks_iff (h : m.Mirrors d F) {q : ℕ} {E : Exposure Validator BlockId Payload}
+    {id : BlockId} {b : Block Validator BlockId Payload} (hF : F < b.round) :
+    m.Checks q E id b ↔ d.Checks q E id b := by
   refine ⟨h.checks_disk, fun hc => ?_⟩
   have hm := h.refs_mem hc.1 hc.2.1 hF
   exact ⟨hm, h.pred_mem hc.1 hc.2.1 hF,
-    update_congr (fun j hj => h.round (hm hj)) (fun j hj => h.creator (hm hj)) hc.2.2⟩
+    update_congr (fun j hj => h.round (hm hj)) (fun j hj => h.creator (hm hj))
+      (fun j hj => h.payload (hm hj)) hc.2.2⟩
 
 /-- **The store a block of round `ρ` is checked against**: the memory `m`
 above its lowest round `F`, the disk `d` otherwise. -/
 def pick (m d : Store Validator BlockId Payload) (F ρ : ℕ) : Store Validator BlockId Payload :=
   if F < ρ then m else d
 
-theorem Mirrors.checks_pick (h : m.Mirrors d F) {q : ℕ} {id : BlockId}
-    {b : Block Validator BlockId Payload} :
-    (pick m d F b.round).Checks q id b ↔ d.Checks q id b := by
+theorem Mirrors.checks_pick (h : m.Mirrors d F) {q : ℕ} {E : Exposure Validator BlockId Payload}
+    {id : BlockId} {b : Block Validator BlockId Payload} :
+    (pick m d F b.round).Checks q E id b ↔ d.Checks q E id b := by
   unfold pick
   split
   · exact h.checks_iff (by assumption)

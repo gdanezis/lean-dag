@@ -222,7 +222,7 @@ theorem fits_stored {u : Validator} (hu : u ∈ H) {i : ℕ} {j : BlockId}
     exact st.pred j hj k hk
   · refine rowValid_congr (fun k hk => ?_) ((inv_before (cfg := cfg) i u).valid j hj)
     rw [hR k (href k hk)]
-    exact ⟨rfl, rfl⟩
+    exact ⟨rfl, rfl, rfl⟩
 
 omit hinj in
 /-- **What an event makes is on its node's disk after it.** -/

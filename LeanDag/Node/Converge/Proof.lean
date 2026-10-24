@@ -24,7 +24,7 @@ namespace Node
 namespace Converge
 
 theorem converges : Converges := by
-  intro Validator BlockId Payload _ _ _ cfg H tr hdel htime hinj u hu j hown y hy v hv
+  intro Validator BlockId Payload _ _ _ cfg H tr hdel htime hinj hev u hu j hown y hy v hv
   have hiu := inv_before (cfg := cfg) (tr := tr) tr.length u
   obtain ⟨hjd, hjB⟩ := hiu.own j hown
   set b := (stateBefore cfg tr tr.length u).disk.blk j with hb
@@ -60,8 +60,8 @@ theorem converges : Converges := by
   obtain ⟨k, -, hk⟩ := hdel p u inpp hp hu (v, .deliver u j b)
     ⟨.broadcast j b, mem_broadcasts.mp (broadcasts_of_persists hpp), Ne.symm huv, rfl⟩ hv
   have hkL : k < tr.length := (List.getElem?_eq_some_iff.mp hk).1
-  have hfin := sync_stays htime hu hv htop hlack
-    (sync_made htime hu hv huv hpers htop hlack hid hc hval hk) tr.length (by omega)
+  have hfin := sync_stays htime hev hu hv htop hlack
+    (sync_made htime hev hu hv huv hpers htop hlack hid hc hval hk) tr.length (by omega)
   -- its last request, answered by `u` with the stream of `j`'s history
   obtain ⟨R, hRL, fr, ids, ⟨inpR, hR⟩, hreq, hnoR, hall⟩ := last_ask tr.length hfin
   obtain ⟨A₁, he₁, -⟩ := hall (R + 1) (by omega) (by omega)
@@ -76,13 +76,15 @@ theorem converges : Converges := by
   have hjLu : j ∈ Lu.map Prod.fst := mem_streamOf_self st j hju
   have hout : Output.stream v Lu ∈ outputsAt cfg tr R' := by
     rw [outputsAt_eq hR']
-    change Output.stream v Lu ∈ (if Lu.isEmpty then [] else [Output.stream v Lu])
+    change Output.stream v Lu ∈
+      (if v ∈ (stateBefore cfg tr R' u).detected ∨ Lu.isEmpty then [] else [Output.stream v Lu])
     rw [if_neg]
     · exact List.mem_singleton_self _
-    · intro h
-      rw [List.isEmpty_iff] at h
-      rw [h] at hjLu
-      exact absurd hjLu List.not_mem_nil
+    · rintro (h | h)
+      · exact not_detected htime hev hv hu R' h
+      · rw [List.isEmpty_iff] at h
+        rw [h] at hjLu
+        exact absurd hjLu List.not_mem_nil
   obtain ⟨R'', hR'R'', hR''⟩ :=
     hdel R' u _ hR' hu (v, .stream u Lu) ⟨.stream v Lu, hout, rfl, rfl⟩ hv
   have hR''L : R'' < tr.length := (List.getElem?_eq_some_iff.mp hR'').1
@@ -94,7 +96,7 @@ theorem converges : Converges := by
   have hheld : j ∉ (Node.step (cfg.at v) s (.stream u Lu)).1.disk.ids := by
     rw [← step_before hR'']; exact hlack _
   have hdet : u ∉ (Node.step (cfg.at v) s (.stream u Lu)).1.detected := by
-    rw [← step_before hR'']; exact not_detected htime hu hv _
+    rw [← step_before hR'']; exact not_detected htime hev hu hv _
   obtain ⟨hstuck, hasked⟩ := step_stream_stuck (syncsOn_before v R'') heA hno hheld hdet
   -- a block of the part in `j`'s history that `v` lacks, at the least round
   set P := inHistory (cfg.at v) (j, b) Lu with hP
@@ -121,12 +123,12 @@ theorem converges : Converges := by
     by_contra hall'
     push Not at hall'
     have hvalid : (∀ k ∈ (st.blk xi).refs, (gT cfg H tr k).round + 1 = (st.blk xi).round) ∧
-        rowValid (cfg.at v).q (gT cfg H tr) (st.blk xi) := by
+        rowValid (cfg.at v).q (cfg.at v).xp (gT cfg H tr) (st.blk xi) := by
       refine ⟨fun k hk => ?_, rowValid_congr (fun k hk => ?_) ((inv_before R' u).valid xi hxst)⟩
       · rw [← hRu k (st.complete xi hxst k hk)]
         exact st.pred xi hxst k hk
       · rw [hRu k (st.complete xi hxst k hk)]
-        exact ⟨rfl, rfl⟩
+        exact ⟨rfl, rfl, rfl⟩
     have := ready_of_refs hvalid (reads_before hinj hv R'') (fun k hk => hall' k hk) hxn
     rw [hnr] at this
     cases this

@@ -193,10 +193,11 @@ def Progresses : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H T : Finset Validator)
     (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δ Δₛ t₁ : ℕ),
-    cfg.σ = boundedSel → cfg.Admissible → Hᶜ.card ≤ cfg.f → T ⊆ H →
+    cfg.σ = boundedSel → cfg.Admissible → cfg.Faithful → Hᶜ.card ≤ cfg.f → T ⊆ H →
     cfg.q ≤ T.card → Fintype.card Validator - cfg.f - cfg.c ≤ T.card → 2 ≤ cfg.q →
     Function.Injective cfg.idOf → (∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) →
-    Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr → TimeMono tr time →
+    Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr →
+    Converge.EvidenceAuthentic cfg H tr → TimeMono tr time →
     DeliveredWithin cfg T tr time gst Δ t₁ →
     TimersFire cfg T tr time t₁ → TimersAfterSet cfg H tr time →
     SyncedWithin cfg T tr time gst Δₛ t₁ → StartedBy T tr time gst → UpFrom T tr time 0 t₁ →
@@ -212,10 +213,11 @@ def Recovers : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H T : Finset Validator)
     (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δ Δₛ t_r t₁ : ℕ),
-    cfg.σ = boundedSel → cfg.Admissible → Hᶜ.card ≤ cfg.f → T ⊆ H →
+    cfg.σ = boundedSel → cfg.Admissible → cfg.Faithful → Hᶜ.card ≤ cfg.f → T ⊆ H →
     cfg.q ≤ T.card → Fintype.card Validator - cfg.f - cfg.c ≤ T.card → 2 ≤ cfg.q →
     Function.Injective cfg.idOf → (∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) →
-    Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr → TimeMono tr time →
+    Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr →
+    Converge.EvidenceAuthentic cfg H tr → TimeMono tr time →
     DeliveredFrom cfg T tr time gst Δ t_r t₁ → TimersFireUp cfg T tr time t₁ →
     TimersAfterSet cfg H tr time → SyncedFrom cfg T tr time gst Δₛ t_r t₁ →
     UpFrom T tr time t_r t₁ → StartedBy T tr time gst →

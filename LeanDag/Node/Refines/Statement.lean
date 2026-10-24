@@ -99,7 +99,8 @@ def Timed (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload)
     (U : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H) : Prop :=
   ∀ (T : Finset Validator) (time : ℕ → ℕ) (gst Δ Δₛ t₁ : ℕ), T ⊆ H →
-    cfg.q ≤ T.card → Fintype.card Validator - cfg.f - cfg.c ≤ T.card → 2 ≤ cfg.q →
+    cfg.Faithful → Converge.EvidenceAuthentic cfg H tr → cfg.q ≤ T.card → Fintype.card Validator -
+        cfg.f - cfg.c ≤ T.card → 2 ≤ cfg.q →
     Function.Injective cfg.idOf → (∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) →
     Live.TimeMono tr time → Live.DeliveredWithin cfg T tr time gst Δ t₁ →
     Live.TimersAfterSet cfg H tr time → Live.SyncedWithin cfg T tr time gst Δₛ t₁ →
@@ -112,7 +113,8 @@ def Recovering (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload)
     (U : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H) : Prop :=
   ∀ (T : Finset Validator) (time : ℕ → ℕ) (gst Δ Δₛ t_r t₁ : ℕ), T ⊆ H →
-    cfg.q ≤ T.card → Fintype.card Validator - cfg.f - cfg.c ≤ T.card → 2 ≤ cfg.q →
+    cfg.Faithful → Converge.EvidenceAuthentic cfg H tr → cfg.q ≤ T.card → Fintype.card Validator -
+        cfg.f - cfg.c ≤ T.card → 2 ≤ cfg.q →
     Function.Injective cfg.idOf → (∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) →
     Live.TimeMono tr time → Live.DeliveredFrom cfg T tr time gst Δ t_r t₁ →
     Live.TimersFireUp cfg T tr time t₁ → Live.TimersAfterSet cfg H tr time →

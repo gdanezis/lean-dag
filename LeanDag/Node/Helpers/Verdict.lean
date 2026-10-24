@@ -139,7 +139,7 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   | start =>
     by_cases h₁ : s.top = none ∧ cfg.Admissible
     · by_cases h₂ : cfg.idOf cfg.genesis ∉ s.disk.ids ∧
-          rowValid cfg.q (Function.update s.disk.blk (cfg.idOf cfg.genesis) cfg.genesis)
+          rowValid cfg.q cfg.xp (Function.update s.disk.blk (cfg.idOf cfg.genesis) cfg.genesis)
             cfg.genesis
       · let st := s.disk.insert (cfg.idOf cfg.genesis) cfg.genesis h₂.1
           (fun _ hj => absurd hj (Finset.notMem_empty _))
@@ -180,6 +180,10 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     refine ⟨hc, fun e he => ?_⟩
     simp only [Node.step] at he
     split at he <;> simp [commitsOf] at he
+  | ask peer r =>
+    refine ⟨hc, fun e he => ?_⟩
+    simp only [Node.step] at he
+    split at he <;> (try split at he) <;> simp [commitsOf] at he
   | restart =>
     rw [persists_step_restart] at hb
     rw [step_restart_fst, commitsOf_step_restart]

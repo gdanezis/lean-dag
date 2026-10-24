@@ -151,6 +151,7 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
     · rw [he]; exact Held.settle (h.grow hr.grows hr.top)
   | timer r => rw [step_timer_fst]; exact Held.settle (h.grow (Grows.refl _) rfl)
   | syncRequest peer t fr ids => simp only [Node.step]; exact h
+  | ask peer r => simp only [Node.step]; exact h
   | restart =>
     exact Held.settle (h.grow (s' := { s with recovering := true }) (Grows.refl _) rfl)
 
@@ -190,7 +191,7 @@ theorem tryBuild_quorum {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : Node.tryBuild cfg s = some (s', out)) :
     ∃ r, s'.top = some (r + 1) ∧ cfg.q ≤ (authorsIn s.disk.toRecord s.disk.ids r).card := by
   obtain ⟨_, r, _, -, hb, -⟩ := tryBuild_cases h
-  obtain ⟨-, -, -, -, -, -, -, -, -, -, -, htop, -⟩ := buildAbove_some hb
+  obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, htop, -⟩ := buildAbove_some hb
   unfold buildAbove at hb
   dsimp only at hb
   split at hb
@@ -272,6 +273,7 @@ theorem Quorate.step {s : State Validator BlockId Payload} (h : Quorate cfg s)
     · rw [he]; exact Quorate.settle (h.grow hr.grows hr.top)
   | timer r => rw [step_timer_fst]; exact Quorate.settle (h.grow (Grows.refl _) rfl)
   | syncRequest peer t fr ids => simp only [Node.step]; exact h
+  | ask peer r => simp only [Node.step]; exact h
   | restart =>
     exact Quorate.settle (h.grow (s' := { s with recovering := true }) (Grows.refl _) rfl)
 

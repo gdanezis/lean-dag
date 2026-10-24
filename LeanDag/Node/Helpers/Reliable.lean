@@ -38,6 +38,7 @@ theorem step_settles {s : State Validator BlockId Payload} {inp : Input Validato
     · rw [he]; exact Or.inr ⟨_, rfl⟩
   | timer r => rw [step_timer_fst]; exact Or.inr ⟨_, rfl⟩
   | syncRequest p t fr ids => exact Or.inl rfl
+  | ask p r => exact Or.inl rfl
   | restart => exact Or.inr ⟨_, rfl⟩
 
 /-! ## What only rises -/
@@ -97,7 +98,7 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
   | start =>
     by_cases h₁ : s.top = none ∧ cfg.Admissible
     · by_cases h₂ : cfg.idOf cfg.genesis ∉ s.disk.ids ∧
-          rowValid cfg.q (Function.update s.disk.blk (cfg.idOf cfg.genesis) cfg.genesis)
+          rowValid cfg.q cfg.xp (Function.update s.disk.blk (cfg.idOf cfg.genesis) cfg.genesis)
             cfg.genesis
       · let st := s.disk.insert (cfg.idOf cfg.genesis) cfg.genesis h₂.1
           (fun _ hj => absurd hj (Finset.notMem_empty _))
@@ -131,6 +132,7 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
     exact hset { s with fired := fire s r, recovering := false } ⟨le_rfl, id, le_rfl⟩
       (step_timer_fst s r)
   | syncRequest p t fr ids => exact Rises.refl s
+  | ask p r => exact Rises.refl s
   | restart => exact hset { s with recovering := true } ⟨le_rfl, id, le_rfl⟩ rfl
 
 /-! ## Along a trace -/

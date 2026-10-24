@@ -11,24 +11,25 @@ the stages, and what each stage keeps proved.
 
 ## 1. Where the node stands
 
-Stages 0 and 1 are done (§4). The node receives blocks by announcements
-and syncs, one sync for each peer (`docs/validator.md` §3.4); it holds at
-most `n − 1` syncs (V1, `SyncsBound`), and the honest nodes converge
-(V3′). It detects an author whose twins it accepts, and takes no
-announcement from it after.
+Stages 0, 1 and 2 are done (§4). The node receives blocks by
+announcements and syncs, one sync for each peer (`docs/validator.md`
+§3.4); it holds at most `n − 1` syncs (V1, `SyncsBound`), and the honest
+nodes converge (V3′). Its blocks carry evidence of equivocation and the
+authors they expose; a block is valid only if it references no author it
+exposes (`Clause.exposes`). The node convicts the authors its evidence
+names, takes no announcement from them, answers none of their requests,
+and leaves them out of its references.
 
-Two consequences of the node before Stage 1 remain.
+One consequence of the node before Stage 3 remains.
 
-* **A convicted author still makes valid blocks.** An author whose twins
-  are known can build blocks that reference only honest blocks; they are
-  valid, and the node accepts those it is sent in streams, since honest
-  blocks may reference them.
 * **Nothing bounds what a node takes in a round.** A Byzantine target
-  can carry any number of valid twins of an author not yet detected.
+  can carry any number of valid twins of an author not yet convicted,
+  and, since each streamed block is checked on arrival, the twins of a
+  convicted author under blocks that break the exposure rule, which
+  arrive before those blocks.
 
-Stage 2 makes honest blocks stop referencing convicted authors; Stages 3
-and 4 bound what a node takes in a round once every equivocator is
-exposed (S5 of `docs/sync.md`).
+Stages 3 and 4 bound what a node takes in a round once every equivocator
+is exposed (S5 of `docs/sync.md`).
 
 ## 2. The design
 
@@ -62,24 +63,31 @@ the history of their targets.
 
 ### 2.2 DoS protections
 
-* **Evidence.** Every block carries the twin pairs its author knows: two
-  signed headers by one author at one round, at most `f` pairs. A node
-  checks a pair by the headers alone.
-* **Exposure.** The authors a block exposes are those its references
-  expose and those its own evidence names: at most `f`, computed when the
-  block is accepted and kept with it, so no check walks a history.
-* **Validity.** The row's validity gains one clause: a block references no
-  author it exposes (`DoSValidOn` with exposure from evidence,
-  `LeanDag/Common/Exclusion.lean`). Validity stays a function of the block
-  and its history, so every node judges a block alike.
-* **The builder** drops from its references the authors its block would
-  expose, and its block carries the evidence of every author it has
-  convicted.
+* **Evidence.** A block's payload carries evidence items: an author and
+  two block identifiers (`Exposure.ev`). The node carries only items of
+  twins it holds; that another node's items are authentic is a premise
+  of the claims (`EvidenceAuthentic`), which signed headers give.
+* **Exposure.** A block's payload also names the authors it exposes
+  (`Exposure.ex`): those its evidence names and those its references
+  expose. The validity clause checks this against the references, so
+  exposure is read off each block and no check walks a history.
+* **Validity.** The row's validity gains one clause: the exposure is as
+  above, and the block references no author it exposes
+  (`Clause.exposes`, `rowValid q E`). The clause reads a block and its
+  references only, so every node judges a block alike.
+* **The builder** leaves out of its references the authors its evidence
+  names and those its round's blocks expose (`excluded`, `refsFor`), and
+  its block carries the evidence against the authors it does not
+  reference (`payloadFor`). With fewer than `q` authors left, it builds on
+  the references of a held valid block of the next round (`lent`), and
+  on its retry timer asks every peer for its block of its top round
+  (`Input.ask`, `Output.send`).
 * **Conviction.** Two blocks of one author at one round on the disk, or
   evidence in an accepted block, convict the author. The node syncs no
-  target of a convicted author and ignores its announcements. Evidence
-  travels in blocks, so no report message is needed: after GST an honest
-  block carrying it reaches every reliable node within `Δ + Δₛ`.
+  target of a convicted author, ignores its announcements and answers
+  none of its requests. Evidence travels in blocks, so no report message
+  is needed: after GST an honest block carrying it reaches every
+  reliable node within `Δ + Δₛ`.
 * **Checks on arrival.** Each streamed block is taken in only if it is
   ready and passes the checks, the validity clause among them (§3, D1).
 
@@ -107,15 +115,28 @@ at before every reliable node held the evidence.
 * **D2. Authenticated links.** An announcement and a stream must name
   their sender: `Input.deliver` gains the peer. The proofs already assume
   timely authentication (`TimelyAuthentic`); this asks it of links too.
-* **D3. Evidence in the payload.** The block type is shared by every rule,
-  so evidence goes in the payload: the configuration gains a reader of
-  evidence from a payload and a payload source that takes the evidence to
-  carry, with the law that the reader returns what was put in. *Recommended*
-  over a field of `Block`.
-* **D4. Exposure kept with each block.** The store keeps, for each block,
-  the authors it exposes, with the invariant that it is the union over its
-  references and its evidence. *Recommended* over recomputing from the
-  history at each check.
+* **D3. Evidence in the payload.** *Decided.* The block type is shared by
+  every rule, so evidence goes in the payload: the configuration gains a
+  reader of evidence and exposure from a payload (`Config.xp`) and a
+  payload source that takes the evidence and exposure to carry
+  (`Config.payload`), with the law that the reader returns what was put
+  in (`Config.Faithful`), a premise of the liveness claims only.
+* **D4. Exposure carried by each block.** *Decided:* the payload names
+  the authors the block exposes, and the validity clause checks it
+  against the references. This keeps the clause local, so the memory's
+  checks agree with the disk's, and needs no store invariant.
+* **D7. Authentic evidence.** *Decided: a premise.* The node checks that
+  an item names two distinct identifiers, not that they are signed
+  blocks of the author; the claims assume that no known block carries
+  evidence against an honest author (`EvidenceAuthentic`).
+* **D8. Too few authors left.** *Decided: both.* The node builds on the
+  references of a held valid next-round block, which the liveness proofs
+  use, and asks each peer for its block of the round.
+* **D9. Requests of convicted peers.** *Decided: ignored.* An
+  equivocator's copy that rejects every block built on its twin keeps a
+  low frontier, and each of its requests would stream the history above
+  it (411,549 blocks in 200 ticks at Orcaella with `n = 9`, against 323
+  in 1,000 ticks once ignored).
 * **D5. The fast path.** A broadcast block ready on arrival is accepted
   without a sync, as now. *Recommended*: it is the common case.
 * **D6. What stays with the environment.** Rate limits on streams from a
@@ -146,16 +167,17 @@ audits, the documents updated, and a commit.
   V1: at most `n − 1` syncs (`SyncsBound`). The simulator sends requests
   and streams; the outage sweep, the attacks and the withholding
   scenario ran again (`docs/validator.md` §6).
-* **Stage 2 — evidence and validity** (§2.2, D3, D4). Evidence in the
-  payload, exposure kept in the store, the validity clause, the builder
-  rule and conviction. The scheme's record is then at the stronger
-  validity; the scheme's results read only quorum, distinct authors and
-  references one round below, so they apply unchanged, and V12 states the
-  record at the row's validity with the clause. Liveness needs that honest
-  blocks pass the clause, which holds since an honest author never
-  equivocates and its builder drops the authors its block exposes, and
-  that the quorum survives the drop: exposed authors are Byzantine, and
-  the honest authors alone make a quorum.
+* **Stage 2 — evidence and validity** (§2.2, D3, D4, D7–D9). *Done.*
+  Evidence and exposure in the payload, the validity clause, the builder
+  rule, asks and conviction. The node checks blocks at `rowValid q E`;
+  V12's record stays at `ValidAt q Clause.none`, which the scheme's
+  results read. Liveness needs that honest blocks pass the clause, which
+  holds since the builder leaves out the authors its block exposes and
+  the payload is faithful, and that no reliable author is left out,
+  which holds by authentic evidence (`not_excluded`); V3′, V11, V11′ and
+  V12 gain the premise `EvidenceAuthentic`, and V11, V11′ and V12
+  `Faithful`. Where fewer than `q` authors are left, the proofs build on
+  a lent reference set (`lent_buildable`).
 * **Stage 3 — admission, later** (D1). The header pass and its cap;
   the simulator's attacks of `scripts/sync-reports.py` (trees of twins,
   twins per node, chains carried each round) on the node, with the blocks
@@ -170,9 +192,7 @@ audits, the documents updated, and a commit.
   the round above the highest round built by then, the node holds at most
   `n + f` blocks a round.
 
-Stages 1 and 2 are independent of each other; 3 needs both, and 4 needs 3.
-Stage 1 alone bounds what a node holds waiting, and Stage 2 alone stops
-honest nodes referencing convicted authors.
+Stage 3 needs Stages 1 and 2, and Stage 4 needs Stage 3.
 
 ## 5. What stays open
 
@@ -180,7 +200,8 @@ honest nodes referencing convicted authors.
   grows with the chain; the bound of Stage 4 is per round.
 * Before an equivocation is exposed, only a rate bounds what a node takes
   in (S4), and only with rate limits from the environment.
-* The cost of answering requests (D6).
+* The cost of answering requests (D6), before conviction.
+* V12's record at the exposure clause.
 * Catch-up after a long outage reads the headers of every round missed;
   the cap of D1 must allow it, or a node behind by more than the cap needs
   a bootstrap, which the core does not have.

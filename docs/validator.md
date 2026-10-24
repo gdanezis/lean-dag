@@ -16,12 +16,12 @@ asynchronous rows, the coin and `AsyncPace` are out of scope.
 The program is the scheme's consensus core: it builds blocks, receives
 them, syncs the histories it lacks, and decides. It keeps every block
 it accepts, and restarts after a crash from the state it persisted
-(§3.6). It detects an author whose twins it accepts and takes no
-announcement from it after (§3.4). Garbage collection, checkpoints,
-bootstrap, rate limiting and the exclusion of equivocators from validity
-are not part of it; a version with all of them is on branch
-`scheme-validator`, and the plan for the last here is
-`docs/node-sync.md`. Liveness holds across crashes (§5.6).
+(§3.6). It convicts an author whose twins it accepts, or whom evidence in
+a block it accepts names; it then takes no announcement from the author
+and answers none of its requests, and its blocks reference no author they
+expose (§3.4). Garbage collection, checkpoints, bootstrap and rate
+limiting are not part of it; a version with them is on branch
+`scheme-validator`. Liveness holds across crashes (§5.6).
 
 Out of scope as well: stake weights, a mempool (the payload comes from a
 configured source), execution, and an implementation of hashing and
@@ -51,26 +51,33 @@ a seeded network (`lake exe sim`).
 and `c` (crash-prone), the quorum `q`, the validator's own identity, the
 schedule (`per` rounds between slot rounds, `m` leaders a slot round,
 `elect`), the timeout per round, the vote rule `σ`, the hash `idOf`,
-and the payload source. A configuration is admissible (`Admissible`)
+what payloads say of equivocation (`xp`: the evidence a payload carries,
+each an author with two of its blocks, and the authors its block
+exposes), and the payload source, which takes the evidence to carry and
+the authors to expose. The source is faithful (`Faithful`) when a payload
+reads back what was put in; the liveness claims assume it. A configuration is admissible (`Admissible`)
 when the row is covered at the committee's size, `f` and `q`
 (`Params.Covered`), its certificates fit the quorum
 (`Params.CertFits`), its commit threshold is within `n − f − c`, and
 `0 < q ≤ n`; all of it is decidable, and the program does not start
 otherwise.
 
-**Validity.** Every row uses `ValidAt q Clause.distinct`: references one
-round below from `q` distinct authors, no author twice. It is decidable
-(`ValidAt.decidable`) and mechanised (`ValidAt.mechanised`), and quorate
-and distinct by `Validity.Quorate.of_validAt` and
-`Validity.Distinct.of_validAt`. A reference to the author's own previous
+**Validity.** Every row uses `rowValid q E`: references one round below
+from `q` distinct authors, no author twice, and the exposure clause
+(`Clause.exposes`): the block exposes the authors its evidence names and
+those its references expose, and references none of them. The clause
+reads only the references, as the quorum does, so the node checks it in
+memory as on disk. The record of the run (§4) is at `ValidAt q
+Clause.none`, which the scheme's results read. A reference to the author's own previous
 block is the build rule (§3.2, §8), not a validity clause.
 
 **State** (`State`). The accepted blocks, on disk (`disk`), and those
 from a round `floor` up in memory (`memory`, `floor`), with the proof
 that the memory is the disk's window there (`mirrors`, §3.1); the syncs,
 at most one for each peer, each with the peer, its block the node lacks
-and the identifiers asked for by name (`syncs`, §3.4); the authors whose
-twins the node accepted (`detected`); the top round and
+and the identifiers asked for by name (`syncs`, §3.4); the evidence the
+node holds (`evidence`) and the authors it convicted (`detected`); the top
+round and
 the node's own block there, the rounds whose timer fired, the next
 undecided slot `lo`, the decisions output, the latest first, and the
 round whose timer is set (`armed`). A timer drops the fired rounds below
@@ -80,13 +87,16 @@ the top, which the node no longer reads (`fire`).
 peer announced, with its identifier (`deliver`); a stream piece from a
 peer (`stream`); a timer for round `r` that fired; a request from a peer
 for the history of a block, with the peer's frontier and the identifiers
-it asks for by name (`syncRequest`); and a restart after a crash (§3.6).
+it asks for by name (`syncRequest`); a request from a peer for the node's
+block of a round (`ask`); and a restart after a crash (§3.6).
 
 **Outputs** (`Output`): persist one of its own blocks, before it is
 broadcast; broadcast a block; set a timer for round `r`; commit slot `k`
 with a decision `Option BlockId`; a request to a peer for the history of
 a block, with the node's frontier and the identifiers it asks for by
-name (`sync`); and a stream piece to a peer (`stream`).
+name (`sync`); a stream piece to a peer (`stream`); a request to every
+peer for its block of a round (`ask`); and one of the node's own blocks to
+one peer (`send`).
 
 Time is discrete (`ℕ`).
 
@@ -106,8 +116,8 @@ node's own, or which is on disk, is dropped, so that an identifier
 denotes one block. A block is accepted once its references are
 accepted, one round below it, and it is valid at the row (`ready`,
 `accept`); one that is not is synced (§3.4) or dropped. Accepting a
-block of an author whose block of that round the disk holds detects the
-author (`State.detected`).
+block keeps the evidence it gives and convicts the authors it names
+(§3.4).
 
 Each store is closed under references, every reference one round below
 its referrer, so it is a `BlockRecord.View` (`Store.toRecord`,
@@ -208,19 +218,28 @@ leader's, as soon as they exist, and prompt correct nodes to build round
 what the decider counts has arrived, and the timer is only the fallback
 for a leader block, or for votes, that do not arrive.
 
-The new block references one accepted block per round-`r` author: its
-own block of round `r` for itself, and the least identifier between
-twins otherwise (`refsFor`). Where these would wait, and a held
-round-`r + 1` block of another author has references that would not, it
-builds on those instead, with its own block for itself (`refsAt`,
-`lent`), provided they make a valid block (`buildable`). Without
+The new block references one accepted block per round-`r` author it does
+not leave out: its own block of round `r` for itself, and the least
+identifier between twins otherwise (`refsFor`). It leaves out the
+authors its evidence names and those a round-`r` block it holds exposes
+(`excluded`), so its block names no author it exposes (§3.4). Its
+payload carries the node's evidence against the authors it does not
+reference, and the authors it then exposes: those that evidence names and
+those its references expose (`payloadFor`). Where these references would
+wait, and a held round-`r + 1` block of another author has references that
+would not, it builds on those instead (`refsAt`, `lent`), provided they
+make a valid block (`buildable`). It does the same where leaving authors
+out leaves fewer than `q`: a valid block of round `r + 1` names `q`
+authors and none it exposes, so its references make a valid block for the
+node. Without
 this a Byzantine author could show one twin, through which the leader
 block is reached, to the nodes ahead and the other to a node behind: the
 node behind holds both once it receives the history of a block built on
 the first, but the least identifier may be the second, and it then waits
 its timer where its peers did not, by a timeout at each round the attack
 repeats. When it builds on being behind and the tests fail, it builds on
-`refsFor`'s references. The program builds rounds in sequence. It
+`refsFor`'s references if it can, and on a lent set otherwise. The
+program builds rounds in sequence. It
 persists the block, then broadcasts it, then sets the retry timer: the
 timer of round `r`, for twice its timeout (§3.6).
 
@@ -317,12 +336,34 @@ a block of that piece in the block's history that `v` lacks, at the
 least round, is not ready, so it references a block `v` lacks; that block
 was asked for by name, so the piece holds it, one round lower (V3′).
 
-**Detection.** Accepting a second block of an author at one round
-detects the author: the node takes no announcement from it after and
-drops its sync with it. Its blocks still arrive in the streams of other
-syncs, since honest blocks may reference them. An honest node never
-detects an honest one (`Converge.not_detected`), since an honest author
-makes one block a round.
+**Conviction.** Accepting a second block of an author at one round gives
+evidence of the author: the two blocks (`evidenceOf`). The evidence a
+block carries in its payload is kept too, and the node convicts the
+authors its evidence names (`State.evidence`, `State.detected`). It then
+takes no announcement from a convicted author, drops its sync with it,
+answers none of its requests, and leaves it out of its references
+(§3.2). A convicted author's blocks still arrive in the streams of other
+syncs, while honest blocks still reference them. Evidence travels in
+blocks: a block exposes the authors its evidence names and those its
+references expose, and is valid only if it references none of them
+(`Clause.exposes`), so once every honest block of a round exposes an
+author, no later block references it (`exposed_of_correct_exposed`). An
+honest node never convicts an honest one (`Converge.not_detected`): twins
+of an honest author do not exist, and evidence against one does not
+either, which is what signed headers give and the claims assume
+(`EvidenceAuthentic`). Ignoring a convicted peer's requests matters: an
+equivocator's copy that rejects every block built on its twin keeps a
+low frontier, and each of its requests would stream the history above
+it. At Orcaella with `n = 9` and an equivocator, the honest nodes
+streamed 411,549 blocks in 200 ticks to its copies before this rule, and
+323 in 1,000 ticks with it.
+
+**Asking authors.** When its retry timer fires and it does not build,
+the node asks every peer for its block of the node's top round (`ask`),
+and a peer it has not convicted answers with its own block of that round
+(`send`). A node short of authors it does not leave out thus gets the
+blocks of the authors that hold theirs. The liveness argument does not
+need this; it reads the lent references (§3.2).
 
 **Withholding.** A Byzantine node that shows one node `v` a block
 referencing a block it reveals only to the others stalls nothing: the
@@ -349,9 +390,9 @@ of the step's outputs take effect. A crash loses the timers set and not
 fired, the outputs of the last step that have not taken effect, and the
 messages that arrive while the node is down; the state survives. On a
 restart (`Input.restart`) the node resends (`resend`): it broadcasts its
-block at its top round, sets the retry timer again, and asks again in
-every sync (`resync`), since a request or its answer may have been
-lost. It also sets the timer of its top round
+block at its top round, sets the retry timer again, asks every peer for
+its block of that round (§3.4), and asks again in every sync (`resync`),
+since a request or its answer may have been lost. It also sets the timer of its top round
 again if it had set it (`rearm`). It then marks itself recovering
 (`State.recovering`) and settles. A block is persisted before it is
 broadcast, so a restarted node never builds a second block at a round it
@@ -415,10 +456,10 @@ four a round. It needs no bootstrap, since no block is collected.
 | V1 | Over any input sequence: the node's own blocks, those it persists, are its own and identified by their hash; they lie at strictly increasing rounds; each references only blocks it knew, and is valid at the row under every block map agreeing with what it knew; it broadcasts each block it persists, and only blocks it persists; it keeps the decisions it outputs, which are slots `0 … lo − 1`; it holds at most `n − 1` syncs. | `Node.Local.OneEach`, `Authored`, `Sends`, `ValidOut`, `Decisions`, `SyncsBound` (proved, `Local/Proof.lean`): `Node.syncsOn_run`, `Node.syncs_length_le` |
 | V2 | **The decisions are the scheme's**: at the bounded vote, a decision step of a node whose memory holds the round of its next undecided slot, as it always does (§3.1), outputs what `Scheme.tryDecide` decides on any record and view holding the disk's blocks, read alike; over successive views this is the scheme's loop. | `Node.Local.DecidesOnView` (proved): `Node.tryDecide_memory`, `Node.Store.Mirrors.viewsAbove`, `Node.tryDecide_window`, `Node.ViewsAbove.of_store`, `Node.ViewsAbove.tryDecide_eq` |
 | V3 | **Safety**: over a trace with timely authentication of blocks, an injective hash and `Params.Tolerates`, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` of which every honest disk is a cut, and any two honest nodes' decisions are prefix-comparable. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
-| V3′ | **Convergence**: over a trace with delivery, timely authentication and an injective hash, every block in the history of an honest node's own block at its top at the end is on every honest node's disk at the end. No fault bound is needed: an honest node given the block has a sync for it until it holds it, and the answer to the sync's last request leads to no request, which it would if the node still lacked the block (§3.4). | `Node.Converge.Converges` (proved): `Node.Converge.sync_made`, `Node.Converge.sync_stays`, `Node.Converge.last_ask`, `Node.step_stream_stuck`, `Node.Converge.not_detected`, `Node.eq_of_persists` |
+| V3′ | **Convergence**: over a trace with delivery, timely authentication, an injective hash and authentic evidence, every block in the history of an honest node's own block at its top at the end is on every honest node's disk at the end. No fault bound is needed: an honest node given the block has a sync for it until it holds it, and the answer to the sync's last request leads to no request, which it would if the node still lacked the block (§3.4). | `Node.Converge.Converges` (proved): `Node.Converge.sync_made`, `Node.Converge.sync_stays`, `Node.Converge.last_ask`, `Node.step_stream_stuck`, `Node.Converge.not_detected`, `Node.eq_of_persists` |
 | V8 | The claims are about the program that runs: its disk and memory are ordered maps, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` (§6) |
-| V11 | **Liveness**: over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, reliable nodes that do not restart, their timers on time, no honest node's timer early, and timeouts above `2(Δ + Δₛ)`, the reliable nodes produce a round per timeout and `Δ + Δₛ`, and a run of reliably led slots from a round that every reliable node was below at GST is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of a timeout and `Δ + Δₛ` per round. The honest nodes outside the reliable set need meet no other timing assumption. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy`, `Node.held_before` |
-| V11′ | **Liveness across crashes**: if the reliable nodes stay up from `t_r` to the horizon `t₁`, with delivery, synchronisation and timers assumed only from then on, and timers lost only to a restart, the conclusions of V11 hold with GST replaced by `max t_r gst + W`, for `W` twice the largest timeout of the round below the one a reliable node is at by `max t_r gst`. Crashes before GST are the case `t_r ≤ gst`. The honest nodes outside the reliable set may keep crashing and restarting; with every honest node reliable, after every node crashed and restarted, the nodes decide again. | `Node.Live.Recovers` (proved, §5.6): `Node.arrival_of_recovered`, `Node.sends_again`, `Node.retry_last`, `Node.recovered_by`, `Node.topTimerBy_of_up`, `Node.top_arrives`, `Node.quorum_below` |
+| V11 | **Liveness**: over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, reliable nodes that do not restart, their timers on time, no honest node's timer early, timeouts above `2(Δ + Δₛ)`, authentic evidence and a faithful payload source, the reliable nodes produce a round per timeout and `Δ + Δₛ`, and a run of reliably led slots from a round that every reliable node was below at GST is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of a timeout and `Δ + Δₛ` per round. The honest nodes outside the reliable set need meet no other timing assumption. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy`, `Node.held_before` |
+| V11′ | **Liveness across crashes**: if the reliable nodes stay up from `t_r` to the horizon `t₁`, with delivery, synchronisation and timers assumed only from then on, and timers lost only to a restart, with authentic evidence and a faithful payload source, the conclusions of V11 hold with GST replaced by `max t_r gst + W`, for `W` twice the largest timeout of the round below the one a reliable node is at by `max t_r gst`. Crashes before GST are the case `t_r ≤ gst`. The honest nodes outside the reliable set may keep crashing and restarting; with every honest node reliable, after every node crashed and restarted, the nodes decide again. | `Node.Live.Recovers` (proved, §5.6): `Node.arrival_of_recovered`, `Node.sends_again`, `Node.retry_last`, `Node.recovered_by`, `Node.topTimerBy_of_up`, `Node.top_arrives`, `Node.quorum_below` |
 | V12 | **Refinement**: for an admissible configuration at the bounded vote, over a trace with timely authentication, an injective hash and at most `f` nodes outside the honest set, there is a `BlockRecord` at quorum `q` of which every honest disk, before every event, is a cut; every honest node's decisions are none or `Scheme.tryDecide` from slot `0` on a view of it that the node's disk holds. Under the assumptions of V11 (no timer need fire) or of V11′, it has the scheme's `WaveFacts` over every window of rounds from one above every reliable node's round at GST, and every slot of a reliably led run is decided by every reliable node to a leader block. | `Node.Refines.HasRecord` (proved, §5.7): `Node.commitInv_before`, `Node.waveFacts_of_run`, `Node.run_commits`, `Refines.waves_leads` |
 
 Every claim depends only on the standard axioms (`propext`,
@@ -442,6 +483,13 @@ agrees on them (`ViewsAbove.of_store`, `ViewsAbove.tryDecide_eq`, for
 the bounded vote, which reads only histories). The decision step runs
 on the memory's window, which decides as the disk's view
 (`tryDecide_memory`, §3.1, §3.3).
+
+**Authentic evidence.** No block the honest nodes knew carries evidence
+naming an honest author with two distinct blocks
+(`Converge.EvidenceAuthentic`). An honest node carries only evidence it
+holds of twins, so this is assumed of the other nodes' blocks: what
+signed headers give. V3′, V11, V11′ and V12's timed parts assume it, so
+that no honest node convicts an honest one or leaves it out.
 
 **Authentication.** A block delivered to an honest node in an honest
 author's name was broadcast by that author earlier in the trace
@@ -510,7 +558,11 @@ assumptions up to a time `t₁`, over a reliable set `T ⊆ H` of at least
   **restart** by `t₁` (`UpFrom T tr time 0 t₁`), so none jumps (§3.6);
 * timely authentication of blocks, a block hash injective on every
   block, so no block on its disk has the identifier of the node's next one
-  (`fresh_before`), and `2 (Δ + Δₛ) < timeout r` at every round.
+  (`fresh_before`), and `2 (Δ + Δₛ) < timeout r` at every round;
+* authentic evidence (`EvidenceAuthentic`, §4), so no reliable author is
+  left out of a reference set, and a faithful payload source
+  (`Faithful`, §2), so the node's block carries the evidence and the
+  exposure the builder put in it.
 
 A step takes no time; the time it costs a node to act on what it holds is
 the catch-up bound below, not a processing constant.
@@ -579,7 +631,9 @@ which did not pass the tests either, or the references it lends would
 have and the node would have built on those (`ready_transfer`); the
 claim follows by induction on the event that built it. A reliable node
 building on the timer or behind therefore holds, and references, every
-reliable block of the round below.
+reliable block of the round below: its builder leaves out no reliable
+author (`not_excluded`), so the references it would lend are not taken
+while its own set is buildable.
 
 This needs of an honest node outside the reliable set only that its
 timers do not fire early. Without it the claim fails: at Orcaella with
@@ -612,7 +666,8 @@ above at `τ`, every reliable node is at `n` or above at `τ + A`
 `m + 1`, they are `f + 1` authors of that round; if one is above it, its
 history holds `q` of them (`quorum_below`). Either way the node is behind
 round `m + 1` and holds `q` authors of round `m`; settled, it would
-build. So once an honest node armed
+build, on the references of a held round-`m + 1` block if fewer than `q`
+of its authors are left out of nothing (`lent_buildable`). So once an honest node armed
 round `n`'s timer, every reliable node holds every reliable round-`n`
 block `2A` later: every reliable node is at round `n` `A` after the timer
 was armed, and its block arrives `A` after that, before the timer fires,
@@ -776,14 +831,20 @@ view of the record (`cut_before`), and verdicts on one slot agree
    ticks past GST and 49 before. Catch-up is cheap: over 650 ticks at
    Orcaella with `n = 9`, a 250-tick outage takes 17,194 inputs and 296
    requests, 90 of them naming blocks, against 21,114 inputs and 339
-   requests without it, and an 850-tick outage over 1,250 ticks takes 3.2
+   requests without it, and an 850-tick outage over 1,250 ticks takes 3.6
    seconds to simulate. Three outage scenarios run in the build
    (`LeanDagTest/Node/Sim.lean`).
 
    An equivocator's copies each drop blocks in their own name, so neither
    copy accepts blocks built on its twin, and it stops building. The
-   honest nodes that accept both twins detect it. From `byzUntil` on it
-   acts on nothing.
+   honest nodes that accept both twins convict it, put the evidence in
+   their next block, and leave it out of their references; the others
+   convict it on that evidence. The honest nodes then wait out the timer
+   at its slots: at the Mysticeti row with `n = 4` they build 20 rounds
+   in 150 ticks, skipping 4 or 5 slots. Over 1,000 ticks at Orcaella
+   with `n = 9`, they reach round 251 with 27 skips, and stream 323
+   blocks to the equivocator's copies (§3.4). From `byzUntil` on it acts
+   on nothing.
 4. **Attacks** (`LeanDagTest/Node/Adversary.lean`, `--adv` and
    `--attacks` of `lake exe sim`). An attacker runs the honest program
    and also mounts attacks: `invalidBlocks` (with each block it
@@ -796,7 +857,7 @@ view of the record (`cut_before`), and verdicts on one slot agree
    the claims over traces assume (`TimelyAuthentic`). At the Mysticeti
    row with `n = 4`, every attack leaves agreement,
    prefix-comparability and validity intact. A node that accepts two
-   blocks of the attacker at one round detects it, under `twinSplit` and
+   blocks of the attacker at one round convicts it, under `twinSplit` and
    under `invalidBlocks`, whose block without references at round `0` is
    a twin of the attacker's genesis block. It then takes no announcement
    from the attacker, whose blocks reach it only in streams, and the
@@ -870,9 +931,10 @@ no inclusion, so a node need not reference its own blocks.
 
 The restart, resending and liveness across crashes are done, including
 decisions resuming after every node crashed (§3.6, §5.6), and the syncs
-of `docs/sync.md` on the node (§3.4), Stage 1 of `docs/node-sync.md`.
-Stage 2 of that plan adds evidence of equivocation to blocks and
-excludes exposed authors from validity. Open:
+of `docs/sync.md` on the node (§3.4), and the evidence, conviction and
+exclusion of equivocators (§3.2, §3.4), Stages 1 and 2 of
+`docs/node-sync.md`. Stage 3 admits streamed blocks by header first, and
+Stage 4 bounds the blocks a node processes a round. Open:
 
 * the disk and the decisions grow with the chain, which they record;
   and the memory holds every block of its rounds, so an equivocator can
@@ -882,6 +944,10 @@ excludes exposed authors from validity. Open:
   latest, as a node that jumped, keeps its frontier at that round, so
   each stream carries its blocks above that round in the history of the
   stream's block, as it does a detected author's, whose frontier is `0`;
+* the record V12 builds is at `ValidAt q Clause.none`, not at the
+  exposure clause the node checks;
+* a node answers every request of a peer it has not convicted, so before
+  conviction a node can be made to stream any amount;
 * a recovering node jumps only if the history it syncs arrives before a
   timer fires (§3.6);
 * only a node that restarted jumps: a node that falls behind without

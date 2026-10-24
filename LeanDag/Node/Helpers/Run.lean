@@ -72,13 +72,14 @@ variable {T : Finset Validator} {time : ℕ → ℕ} {gst Δ Δₛ t₁ : ℕ}
 /-- **A window of rounds gives the scheme's wave facts**: from a round
 `n₀` above every reliable node's round at GST to a round `N` every
 reliable node has reached by `t`, with `t + A` within the assumptions. -/
-theorem waveFacts_of_run (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
+theorem waveFacts_of_run (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : cfg.Faithful)
     (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
-    (hinj : Converge.HashInjective cfg H tr) (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
+    (hinj : Converge.HashInjective cfg H tr) (hev : Converge.EvidenceAuthentic cfg H tr) (hTH : T ⊆
+        H) (hmono : Live.TimeMono tr time)
     (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁) (hq : 2 ≤ cfg.q)
     (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) (hwait : Live.TimersAfterSet cfg H tr time)
     (hid : Function.Injective cfg.idOf) (hstart : Live.StartedBy T tr time gst)
-    (hTc : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) {n₀ N t : ℕ}
+    (hTc : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) (hqT : cfg.q ≤ T.card) {n₀ N t : ℕ}
     (hbelow : ∀ v ∈ T, topAt cfg tr time v gst < n₀)
     (hst : ∀ v ∈ T, (stateAt cfg tr time v t).top.isSome)
     (htop : ∀ v ∈ T, N ≤ topAt cfg tr time v t) (ht₁ : t + (Δ + Δₛ) ≤ t₁) :
@@ -93,11 +94,13 @@ theorem waveFacts_of_run (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
       obtain ⟨h₁, h₂, h₃⟩ := built_mem hσ hadm hf htime hinj (hTH hw') hi he
       exact ⟨e.1, h₁, h₃, h₂.trans her⟩
     reach_or_refs := fun w hw' _ hRk hNk hlk L hL _ hm _ hc hcc hcr =>
-      reach_or_refs_node hσ hadm hf htime hinj hTH hmono harr hbelow hst htop ht₁ hq hto hwait
-        hid hstart hTc hw' hRk hlk hL hm (by omega) hc hcc hcr
+      reach_or_refs_node hσ hadm hfa hf htime hinj hev hTH hmono harr hbelow hst htop ht₁ hq hto
+          hwait
+        hid hstart hTc hqT hw' hRk hlk hL hm (by omega) hc hcc hcr
     cert_or_refs := fun hvc w hw' _ hRk hNk hlk L hL _ hc hcc hcr =>
-      cert_or_refs_node hσ hadm hf htime hinj hTH hmono harr hbelow hst htop ht₁ hq hto hwait
-        hid hstart hTc hvc hw' hRk hlk hL hNk hc hcc hcr }
+      cert_or_refs_node hσ hadm hfa hf htime hinj hev hTH hmono harr hbelow hst htop ht₁ hq hto
+          hwait
+        hid hstart hTc hqT hvc hw' hRk hlk hL hNk hc hcc hcr }
 
 /-- **On a reliable node's view, a reliably led run is decided**, from a
 round `n₀` above every reliable node's round at GST, `A` after every
@@ -106,11 +109,12 @@ run commits a leader block, certified by the wave facts
 (`WaveFacts.certifies`, `reliable_held`), and every slot below the run is
 decided within it (`decidedWithin_below_of_committed_run`). The view
 holds the node's disk. -/
-theorem run_commits (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
+theorem run_commits (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : cfg.Faithful)
     (hf : Hᶜ.card ≤ cfg.f) (hTH : T ⊆ H) (hqT : cfg.q ≤ T.card)
     (hTc : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) (hq : 2 ≤ cfg.q)
     (hid : Function.Injective cfg.idOf) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout r)
-    (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
+    (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr) (hev :
+        Converge.EvidenceAuthentic cfg H tr)
     (hmono : Live.TimeMono tr time) (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁)
     (hwait : Live.TimersAfterSet cfg H tr time) (hstart : Live.StartedBy T tr time gst) :
     letI := cfg.slots
@@ -144,8 +148,9 @@ theorem run_commits (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     rcases h : (stateAt cfg tr time w t).top with _ | r
     · rw [h] at this; simp at this; omega
     · rfl
-  have wf := waveFacts_of_run hσ hadm hf htime hinj hTH hmono harr hq hto hwait hid hstart hTc
-    hbelow hst htop ht₁
+  have wf := waveFacts_of_run hσ hadm hfa hf htime hinj hev hTH hmono harr hq hto hwait hid hstart
+      hTc
+    hqT hbelow hst htop ht₁
   -- the view of the node's disk `A` later
   set E := eventsBy tr time (t + (Δ + Δₛ)) with hE
   have hcut := (cut_before hσ hadm hf htime hinj E v (hTH hv)).1
@@ -167,7 +172,7 @@ theorem run_commits (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     refine ⟨L, hL, AnchoredRule.DecidedWithin.directCommit (by omega) hL
       (Scheme.commit_of_certified hcm (wf.populated _ (by omega) hsN) fun C hC hCT hCr => ⟨?_, ?_⟩)⟩
     · exact wf.certifies hw hadm.2.1.2 hTH hqT hsr hsN hlj' hL _ hCT C hC rfl hCr
-    · exact (hiff C).mpr (reliable_held hσ hadm hf htime hinj hTH
+    · exact (hiff C).mpr (reliable_held hσ hadm hfa hf htime hinj hev hTH
         hmono harr hbelow hst htop ht₁ hCT hv (r := (U.block C).round) (by omega) (by omega)
         hC rfl rfl)
   refine ⟨V, hiff, fun j hj => ?_, hcommit⟩

@@ -85,9 +85,10 @@ theorem IsCut.insert (hc : IsCut U st) {id : BlockId} {b : Block Validator Block
 omit [Fintype Validator] in
 /-- **Validity over the store is validity over the record**, at the
 quorum: it reads only the rounds and authors of the references. -/
-theorem validAt_of_cut (hc : IsCut U st) {q : ℕ} {id : BlockId}
-    {b : Block Validator BlockId Payload} (hnew : id ∉ st.ids) (hrefs : b.refs ⊆ st.ids)
-    (hv : rowValid q (Function.update st.blk id b) b) : ValidAt q Clause.none U.block b := by
+theorem validAt_of_cut (hc : IsCut U st) {q : ℕ} {E : Exposure Validator BlockId Payload}
+    {id : BlockId} {b : Block Validator BlockId Payload} (hnew : id ∉ st.ids)
+    (hrefs : b.refs ⊆ st.ids) (hv : rowValid q E (Function.update st.blk id b) b) :
+    ValidAt q Clause.none U.block b := by
   have hblk : ∀ j ∈ b.refs, Function.update st.blk id b j = st.blk j := fun j hj =>
     Function.update_of_ne (fun e => hnew (by rw [← e]; exact hrefs hj)) _ _
   refine ⟨fun j hj => ?_, fun h0 => ?_, trivial⟩
@@ -431,7 +432,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   | start =>
     by_cases h₁ : s.top = none ∧ cfg.Admissible
     · by_cases h₂ : cfg.idOf cfg.genesis ∉ s.disk.ids ∧
-          rowValid cfg.q (Function.update s.disk.blk (cfg.idOf cfg.genesis) cfg.genesis)
+          rowValid cfg.q cfg.xp (Function.update s.disk.blk (cfg.idOf cfg.genesis) cfg.genesis)
             cfg.genesis
       · let st := s.disk.insert (cfg.idOf cfg.genesis) cfg.genesis h₂.1
           (fun _ hj => absurd hj (Finset.notMem_empty _))
@@ -492,6 +493,12 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     have he : (Node.step cfg s (.syncRequest peer t fr ids)).1 = s := rfl
     have hc' : commitsOf (Node.step cfg s (.syncRequest peer t fr ids)).2 = [] := by
       simp only [Node.step]; split <;> rfl
+    rw [he, hc', List.append_nil]
+    exact ⟨h, hc⟩
+  | ask peer r =>
+    have he : (Node.step cfg s (.ask peer r)).1 = s := rfl
+    have hc' : commitsOf (Node.step cfg s (.ask peer r)).2 = [] := by
+      simp only [Node.step]; split <;> (try split) <;> rfl
     rw [he, hc', List.append_nil]
     exact ⟨h, hc⟩
   | restart =>

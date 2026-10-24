@@ -161,31 +161,34 @@ theorem ready_transfer [P.Mechanised] (hσ : cfg.σ = boundedSel)
     · rfl
 
 omit [Fintype Validator] in
+/-- A held round-`r + 1` block of another author lends its references. -/
+theorem lent_mem_lents {st : Store Validator BlockId Payload} {r : ℕ} {c : BlockId}
+    (hc : c ∈ st.ids) (hcr : (st.blk c).round = r + 1) (hcm : (st.blk c).creator ≠ cfg.me) :
+    lent st c ∈ lents cfg st r :=
+  List.mem_map.mpr ⟨c, List.mem_filter.mpr ⟨(Finset.mem_sort _).mpr
+    (Store.mem_atRound.mpr ⟨hc, hcr⟩), decide_eq_true hcm⟩, rfl⟩
+
+omit [Fintype Validator] in
 /-- **`refsAt` passes the tests when a held block's lent references do**:
-a round-`r + 1` block of the store by another author whose lent references pass
-the tests and can be built on. -/
+a round-`r + 1` block of the store by another author whose lent references
+pass the tests and can be built on. -/
 theorem refsAt_ready {st : Store Validator BlockId Payload} {r : ℕ} {o : Option BlockId}
+    {E : Finset (Validator × BlockId × BlockId)}
     {c : BlockId} (hc : c ∈ st.ids) (hcr : (st.blk c).round = r + 1)
     (hcm : (st.blk c).creator ≠ cfg.me)
-    (hready : reachReady cfg st (lent cfg st c o) r = true ∧
-      certReady cfg st (lent cfg st c o) r = true)
-    (hb : buildable cfg st r (lent cfg st c o) = true) :
-    reachReady cfg st (refsAt cfg st r o) r = true ∧
-      certReady cfg st (refsAt cfg st r o) r = true := by
+    (hready : reachReady cfg st (lent st c) r = true ∧ certReady cfg st (lent st c) r = true)
+    (hb : buildable cfg st r (lent st c) E = true) :
+    reachReady cfg st (refsAt cfg st r o E) r = true ∧
+      certReady cfg st (refsAt cfg st r o E) r = true := by
   unfold refsAt
   dsimp only
-  rw [Store.atRound_eq]
   split
   · rename_i h
-    simpa only [Bool.and_eq_true] using h
-  · set L := (((blocksAt st.toRecord (r + 1)).sort (· ≤ ·)).filter fun c =>
-        decide ((st.blk c).creator ≠ cfg.me)).map (lent cfg st · o) with hL
-    have hmem : lent cfg st c o ∈ L :=
-      List.mem_map.mpr ⟨c, List.mem_filter.mpr ⟨(Finset.mem_sort _).mpr
-        (Finset.mem_filter.mpr ⟨hc, hcr⟩), decide_eq_true hcm⟩, rfl⟩
-    have hs : (L.find? fun R => (reachReady cfg st R r && certReady cfg st R r) &&
-        buildable cfg st r R).isSome :=
-      List.find?_isSome.mpr ⟨_, hmem, by rw [hready.1, hready.2, hb]; rfl⟩
+    simp only [Bool.and_eq_true] at h
+    exact h.1
+  · have hs : ((lents cfg st r).find? fun R => (reachReady cfg st R r && certReady cfg st R r) &&
+        buildable cfg st r R E).isSome :=
+      List.find?_isSome.mpr ⟨_, lent_mem_lents hc hcr hcm, by rw [hready.1, hready.2, hb]; rfl⟩
     obtain ⟨R, hR⟩ := Option.isSome_iff_exists.mp hs
     rw [hR]
     have := List.find?_some hR
@@ -193,74 +196,17 @@ theorem refsAt_ready {st : Store Validator BlockId Payload} {r : ℕ} {o : Optio
     exact this.1
 
 omit [Fintype Validator] in
-/-- **A peer's block lends references the node can build on**: a
-round-`n + 1` block of the store by another author, whose references hold `q` distinct
-authors one round below, lends them with the node's own round-`n` block
-put in for its own, and they include the block's references. -/
-theorem lent_buildable {x Z : Store Validator BlockId Payload} (hx : IsCut U x) (hZ : IsCut U Z)
-    {R : Finset BlockId} {n : ℕ} {z o : BlockId} (hR : R ⊆ x.ids)
-    (hRq : cfg.q ≤ (creatorsOf x.blk R).card)
-    (hRd : ∀ i ∈ R, ∀ j ∈ R, (x.blk i).creator = (x.blk j).creator → i = j)
-    (hzZ : z ∈ Z.ids) (hzr : (Z.blk z).round = n + 1) (hzR : (Z.blk z).refs = R)
-    (hoZ : o ∈ Z.ids) (hor : (Z.blk o).round = n) (hoc : (Z.blk o).creator = cfg.me)
-    (hme : cfg.me ∈ H)
-    (hfresh : ∀ R, cfg.idOf ⟨n + 1, cfg.me, R, cfg.payload (n + 1)⟩ ∉ Z.ids) :
-    R ⊆ lent cfg Z z (some o) ∧ lent cfg Z z (some o) ⊆ Z.ids ∧
-      buildable cfg Z n (lent cfg Z z (some o)) = true := by
-  have hRZ : R ⊆ Z.ids := fun j hj => Z.complete z hzZ j (by rw [← hzR] at hj; exact hj)
-  have hcre : ∀ j ∈ R, (Z.blk j).creator = (x.blk j).creator := fun j hj => by
-    rw [← hZ.creator (hRZ hj), hx.creator (hR hj)]
-  have hsub : R ⊆ lent cfg Z z (some o) := by
-    intro j hj
-    by_cases hjm : (Z.blk j).creator = cfg.me
-    · have hjo : j = o := U.eq_of_creator_eq (hZ j (hRZ hj)).1 (hZ o hoZ).1 hme
-        (by rw [hZ.creator (hRZ hj)]; exact hjm) (by rw [hZ.creator hoZ]; exact hoc)
-        (by rw [hZ.round (hRZ hj), hZ.round hoZ, hor]
-            have := Z.pred z hzZ j (by rw [← hzR] at hj; exact hj)
-            change (Z.blk j).round + 1 = (Z.blk z).round at this
-            omega)
-      exact Finset.mem_union_right _ (by rw [hjo]; simp)
-    · have hjz : j ∈ (Z.blk z).refs := by rw [hzR]; exact hj
-      exact Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨hjz, hjm⟩)
-  -- the lent references: `z`'s other than the node's, and its own block
-  have hlent : ∀ j ∈ lent cfg Z z (some o),
-      (j ∈ (Z.blk z).refs ∧ (Z.blk j).creator ≠ cfg.me) ∨ j = o := by
-    intro j hj
-    rcases Finset.mem_union.mp hj with h | h
-    · exact Or.inl (Finset.mem_filter.mp h)
-    · exact Or.inr (by simpa using h)
-  have hlZ : lent cfg Z z (some o) ⊆ Z.ids := fun j hj => by
-    rcases hlent j hj with ⟨h, -⟩ | rfl
-    · exact Z.complete z hzZ j h
-    · exact hoZ
-  have hlr : ∀ j ∈ lent cfg Z z (some o), (Z.blk j).round = n := fun j hj => by
-    rcases hlent j hj with ⟨h, -⟩ | rfl
-    · have := Z.pred z hzZ j h
-      change (Z.blk j).round + 1 = (Z.blk z).round at this
-      omega
-    · exact hor
-  refine ⟨hsub, hlZ, ?_⟩
-  set b : Block Validator BlockId Payload := ⟨n + 1, cfg.me, lent cfg Z z (some o),
-    cfg.payload (n + 1)⟩ with hb
-  have hnin : ∀ j ∈ lent cfg Z z (some o), j ≠ cfg.idOf b :=
-    fun j hj h => hfresh _ (h ▸ hlZ hj)
-  unfold buildable
-  refine decide_eq_true ⟨hlZ, fun j hj => by rw [hlr j hj],
-    ⟨fun j hj => ?_, fun _ => ?_, fun i hi j hj hij => ?_⟩⟩
-  · rw [Function.update_of_ne (hnin j hj), hlr j hj]
-  · simp only [creators, creatorsOf]
-    rw [Finset.image_congr (g := fun i => (Z.blk i).creator)
-      (fun j hj => by simp only; rw [Function.update_of_ne (hnin j hj)])]
-    refine le_trans hRq (le_trans (le_of_eq ?_) (Finset.card_le_card
-      (Finset.image_subset_image hsub)))
-    exact congrArg Finset.card (Finset.image_congr fun j hj => (hcre j hj).symm)
-  · rw [Function.update_of_ne (hnin i hi), Function.update_of_ne (hnin j hj)] at hij
-    rcases hlent i hi with ⟨hi₁, hi₂⟩ | rfl <;> rcases hlent j hj with ⟨hj₁, hj₂⟩ | rfl
-    · rw [hzR] at hi₁ hj₁
-      exact hRd i hi₁ j hj₁ (by rw [← hcre i hi₁, ← hcre j hj₁]; exact hij)
-    · exact absurd (hij.trans hoc) hi₂
-    · exact absurd (hij.symm.trans hoc) hj₂
-    · rfl
+/-- **A peer's block lends references the node can build on**: a valid
+round-`n + 1` block of the store, under a faithful payload source, with no
+block on the store under the identifier of a block of the node's own above
+round `n`. -/
+theorem lent_buildable {Z : Store Validator BlockId Payload} (hZ : StoreValid cfg.q cfg.xp Z)
+    {n : ℕ} {z : BlockId} (hzZ : z ∈ Z.ids) (hzr : (Z.blk z).round = n + 1)
+    (hfa : cfg.Faithful) (hfresh : ∀ (P : Payload) R, cfg.idOf ⟨n + 1, cfg.me, R, P⟩ ∉ Z.ids)
+    (E : Finset (Validator × BlockId × BlockId)) :
+    lent Z z ⊆ Z.ids ∧ buildable cfg Z n (lent Z z) E = true :=
+  ⟨fun j hj => Z.complete z hzZ j hj,
+    lent_buildable_of E hfa hzZ hzr (hZ z hzZ) (hfresh _ _)⟩
 
 /-! ## Rounds and build times along a trace -/
 
@@ -390,12 +336,12 @@ omit [Fintype Validator] in
 on the store it was built on. -/
 theorem refs_of_rowValid {st : Store Validator BlockId Payload} {id : BlockId}
     {b : Block Validator BlockId Payload} (hnew : id ∉ st.ids) (hrefs : b.refs ⊆ st.ids)
-    (hr : 0 < b.round) (hv : rowValid cfg.q (Function.update st.blk id b) b) :
+    (hr : 0 < b.round) (hv : rowValid cfg.q cfg.xp (Function.update st.blk id b) b) :
     cfg.q ≤ (creatorsOf st.blk b.refs).card ∧
       ∀ i ∈ b.refs, ∀ j ∈ b.refs, (st.blk i).creator = (st.blk j).creator → i = j := by
   have hne : ∀ j ∈ b.refs, Function.update st.blk id b j = st.blk j := fun j hj =>
     Function.update_of_ne (fun h : j = id => hnew (h ▸ hrefs hj)) _ _
-  refine ⟨?_, fun i hi j hj hij => hv.clause i hi j hj (by rw [hne i hi, hne j hj]; exact hij)⟩
+  refine ⟨?_, fun i hi j hj hij => hv.clause.1 i hi j hj (by rw [hne i hi, hne j hj]; exact hij)⟩
   have hq := hv.quorum hr
   simp only [creators, creatorsOf] at hq ⊢
   rwa [Finset.image_congr (g := fun i => (st.blk i).creator) (fun j hj => by
@@ -578,7 +524,7 @@ theorem quorum_below (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H
       exact ih (hrefs i hi).1 (hrefs i hi).2 r (by omega)
 
 /-- **A reliable node has started** at any time from GST on. -/
-theorem started_at (hadm : cfg.Admissible) (hid : Function.Injective cfg.idOf)
+theorem started_at (hadm : cfg.Admissible) (hfa : cfg.Faithful) (hid : Function.Injective cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr) (hTH : T ⊆ H)
     (hmono : Live.TimeMono tr time) (hstart : Live.StartedBy T tr time gst) {v : Validator}
     (hv : v ∈ T) {τ : ℕ} (hτ : gst ≤ τ) : (stateAt cfg tr time v τ).top.isSome := by
@@ -586,14 +532,15 @@ theorem started_at (hadm : cfg.Admissible) (hid : Function.Injective cfg.idOf)
   have hstl : st < tr.length := (List.getElem?_eq_some_iff.mp hst).1
   have hstE : st + 1 ≤ eventsBy tr time τ := (lt_eventsBy hmono hstl).mpr (by omega)
   exact (rises_before (cfg := cfg) v hstE).2.1
-    (started_after hadm hid htime (hTH hv) hst)
+    (started_after hadm hfa hid htime (hTH hv) hst)
 
 /-- **Catch-up**: past GST, once `f + 1` reliable nodes are at round `n`
 or above at `τ`, every reliable node is at `n` or above at `τ + A`. Their
 top blocks arrive, so the node is behind the round above its top, with a
 quorum of its top round, and builds it. -/
 theorem catches_up (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
-    (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (hid : Function.Injective cfg.idOf)
+    (hadm : cfg.Admissible) (hfa : cfg.Faithful) (hf : Hᶜ.card ≤ cfg.f) (hid : Function.Injective
+        cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
     (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁) (hstart : Live.StartedBy T tr time gst)
@@ -604,7 +551,7 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
   set E := eventsBy tr time (τ + (Δ + Δₛ)) with hE
   by_contra hlt
   obtain ⟨m, hm⟩ := Option.isSome_iff_exists.mp
-    (started_at hadm hid htime hTH hmono hstart hv (τ := τ + (Δ + Δₛ)) (by omega))
+    (started_at hadm hfa hid htime hTH hmono hstart hv (τ := τ + (Δ + Δₛ)) (by omega))
   change (stateBefore cfg tr E v).top = some m at hm
   have hmn : m + 1 ≤ n := by
     change ¬ n ≤ (stateBefore cfg tr E v).top.getD 0 at hlt
@@ -646,11 +593,23 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
         le_antisymm (hup w hw) ((hSn w hw).2.trans' hmn)
       exact mem_authorsIn.mpr ⟨j, hj, hjr.trans hwm, hjc⟩
   obtain ⟨o, hoo, hoi, hor, hoc⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) E m hm
+  -- a round-`m + 1` block it holds is another author's, and lends references
+  obtain ⟨a, ha⟩ : (Z.disk.authorsAt (m + 1)).Nonempty := Finset.card_pos.mp (by
+    have := hbeh; unfold behind at this; omega)
+  obtain ⟨z, hzR, hza⟩ := mem_creatorsOf.mp ha
+  obtain ⟨hzZ, hzr⟩ := Store.mem_atRound.mp hzR
+  have hzm : (Z.disk.blk z).creator ≠ (cfg.at v).me := fun h => by
+    have h₁ : (Z.disk.blk z).round ≤ m := own_le_top htime (hTH hv) hm hzZ h
+    have h₂ : (Z.disk.blk z).round = m + 1 := hzr
+    omega
   have hsome := tryBuild_isSome (cfg := cfg.at v) hm
     (harr.recovered (by omega) v hv E (eventsBy_mono (tr := tr) (time := time) (by omega))
       (eventsBy_mono (by omega)))
     (Or.inr hbeh) hcard
     (fun j hj => by rw [hoo] at hj; cases hj; exact ⟨hoi, hor, hoc⟩)
+    (Or.inr ⟨_, lent_mem_lents hzZ hzr hzm, (lent_buildable (cfg := cfg.at v)
+      (Converge.inv_before (cfg := cfg) (tr := tr) E v).valid hzZ hzr hfa
+      (fresh_before hid htime (hTH hv) hm) _).2⟩)
     (fresh_before hid htime (hTH hv) hm) ((Converge.floor_before hm).trans (Nat.sub_le _ _))
   rw [hSet.build] at hsome
   cases hsome

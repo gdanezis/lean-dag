@@ -41,7 +41,8 @@ def cfg (me : Fin 4) : Config (Fin 4) ℕ Unit where
   timeout := fun _ => 10
   σ := boundedSel
   idOf := idOf
-  payload := fun _ => ()
+  xp := ⟨fun _ => ∅, fun _ => ∅⟩
+  payload := fun _ _ _ => ()
 
 /-- A network of four nodes: their states, the inputs in flight with the
 time each arrives, ordered by it, and the commits each node output. -/

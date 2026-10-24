@@ -243,7 +243,7 @@ A block built from `t_r` on is delivered and synchronised as before; one
 built earlier is then its author's block of its round at `t₀`, which its
 author sends again within `W` (`sends_again`), delivered and
 synchronised. -/
-theorem arrives_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
+theorem arrives_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : cfg.Faithful)
     (hf : Hᶜ.card ≤ cfg.f) (hid : Function.Injective cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
@@ -287,7 +287,7 @@ theorem arrives_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     exact hheld hb hep hj hbj hbr (by omega)
   · -- built before: at `u`'s round at `t₀`, the block `u` sends again
     have hus : (stateAt cfg tr time u t₀).top.isSome :=
-      started_at hadm hid htime hTH hmono hstart hu (le_max_right _ _)
+      started_at hadm hfa hid htime hTH hmono hstart hu (le_max_right _ _)
     obtain ⟨m, hm⟩ := Option.isSome_iff_exists.mp hus
     have htm : topAt cfg tr time u t₀ = m := by unfold topAt; rw [hm]; rfl
     have hem : e.2.round ≤ m := by
@@ -314,7 +314,8 @@ theorem arrives_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
 /-- **The reliable nodes have recovered by `G`**: a reliable node restarts
 before `t_r` at its round at `t₀`, so the retry timer the restart sets
 fires within `W`, before `G`, and a timer ends the recovery. -/
-theorem recovered_by (hadm : cfg.Admissible) (hid : Function.Injective cfg.idOf)
+theorem recovered_by (hadm : cfg.Admissible) (hfa : cfg.Faithful) (hid : Function.Injective
+    cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr) (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
     (hup : Live.UpFrom T tr time t_r t₁) (hfire : Live.TimersFireUp cfg T tr time t₁)
     (hstart : Live.StartedBy T tr time gst)
@@ -336,7 +337,7 @@ theorem recovered_by (hadm : cfg.Admissible) (hid : Function.Injective cfg.idOf)
   have hE₀k : eventsBy tr time t₀ ≤ k := (eventsBy_mono (by omega)).trans hk
   have hks : (stateBefore cfg tr k v).top.isSome :=
     (rises_before (cfg := cfg) (tr := tr) v ((eventsBy_mono (le_max_right t_r gst)).trans hE₀k)).2.1
-      (started_at hadm hid htime hTH hmono hstart hv le_rfl)
+      (started_at hadm hfa hid htime hTH hmono hstart hv le_rfl)
   rw [htop] at hks
   obtain ⟨m, hm⟩ := Option.isSome_iff_exists.mp hks
   have hjE : j + 1 ≤ eventsBy tr time t₀ := (lt_eventsBy hmono hjl).mpr (by omega)
@@ -380,7 +381,7 @@ theorem recovered_by (hadm : cfg.Admissible) (hid : Function.Injective cfg.idOf)
 /-- **The run past the recovery**: reliable blocks at their author's round
 at `G` arrive (`arrives_recovered`), no reliable node recovers from `G`
 on (`recovered_by`), and none restarts past `t_r`. -/
-theorem arrival_of_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
+theorem arrival_of_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : cfg.Faithful)
     (hf : Hᶜ.card ≤ cfg.f) (hid : Function.Injective cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
@@ -391,8 +392,8 @@ theorem arrival_of_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     Arrival cfg T tr time
       (max t_r gst + T.sup fun u => 2 * cfg.timeout (topAt cfg tr time u (max t_r gst) - 1))
       (Δ + Δₛ) t₁ :=
-  ⟨arrives_recovered hσ hadm hf hid htime hinj hTH hmono hdel hsync hup hfire hstart,
-    fun hG _ hv _ hk hk₁ => recovered_by hadm hid htime hTH hmono hup hfire hstart hG hv hk hk₁,
+  ⟨arrives_recovered hσ hadm hfa hf hid htime hinj hTH hmono hdel hsync hup hfire hstart,
+    fun hG _ hv _ hk hk₁ => recovered_by hadm hfa hid htime hTH hmono hup hfire hstart hG hv hk hk₁,
     fun v hv k inp hk hGk hk₁ h => by
       subst h
       have := hup k v hk hv hk₁

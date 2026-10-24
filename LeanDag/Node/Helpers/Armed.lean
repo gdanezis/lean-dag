@@ -113,6 +113,7 @@ theorem armsBy_step (s : State Validator BlockId Payload) (inp : Input Validator
     · exact ArmsBy.congr rfl (armsBy_quiesce _ _) (List.Subset.refl _)
     · exact ArmsBy.congr rfl (armsBy_quiesce _ _) (List.subset_append_left _ _)
   | syncRequest p t fr ids => exact ArmsBy.of_armed rfl
+  | ask p r => exact ArmsBy.of_armed rfl
   | restart =>
     exact ArmsBy.congr (x := { s with recovering := true }) rfl (armsBy_quiesce _ _)
       (List.subset_append_right _ _)

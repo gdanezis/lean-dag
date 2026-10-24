@@ -48,7 +48,8 @@ def cfg (p : Scheme.Params) (per : ℕ) (hper : 0 < per) (elect : ℕ → Fin 4)
   timeout := fun _ => 10
   σ := boundedSel
   idOf := idIn blk
-  payload := fun _ => ()
+  xp := ⟨fun _ => ∅, fun _ => ∅⟩
+  payload := fun _ _ _ => ()
 
 /-- The record's blocks, in order of round, through the acceptance path onto
 an empty disk: the number of blocks the disk accepted, the number it did

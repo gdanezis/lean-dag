@@ -224,6 +224,12 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger s)
     refine ⟨Appends.quiet rfl ?_, hL⟩
     simp only [Node.step]
     split <;> rfl
+  | ask peer r =>
+    refine ⟨Appends.quiet rfl ?_, hL⟩
+    simp only [Node.step]
+    split
+    · rfl
+    · split <;> rfl
   | restart =>
     exact hset { s with recovering := true } (Node.resend cfg s ++ Node.rearm cfg s) rfl rfl
       (by rw [commitsOf_append, commitsOf_resend, commitsOf_rearm, List.append_nil])

@@ -110,7 +110,7 @@ theorem below_build {R : ℕ} (hq : 2 ≤ cfg.q) {s s' : State Validator BlockId
     (hb : Node.tryBuild cfg s = some (s', out)) :
     ∃ r, s'.top = some (r + 1) ∧ s.top.getD 0 ≤ r ∧ r ≤ R := by
   obtain ⟨t, r, o, ht, hb, hro⟩ := tryBuild_cases hb
-  obtain ⟨-, -, -, -, -, -, -, -, -, -, -, htop, -⟩ := buildAbove_some hb
+  obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, htop, -⟩ := buildAbove_some hb
   refine ⟨r, htop, by rw [ht]; rcases hro with ⟨rfl, -⟩ | ⟨-, hlt, -⟩ <;> simp <;> omega, ?_⟩
   unfold buildAbove at hb
   dsimp only at hb
@@ -367,12 +367,13 @@ block, fired timers, syncs and whether it recovers. -/
 theorem tryBuild_none_of {s s' : State Validator BlockId Payload}
     (h : Node.tryBuild cfg s = none) (hst : s'.disk = s.disk) (hm : s'.memory = s.memory)
     (ht : s'.top = s.top) (ho : s'.own = s.own) (hf : s'.fired = s.fired)
-    (hrc : s'.recovering = s.recovering) (hp : s'.syncs = s.syncs) :
+    (hrc : s'.recovering = s.recovering) (hp : s'.syncs = s.syncs)
+    (he : s'.evidence = s.evidence) :
     Node.tryBuild cfg s' = none := by
-  obtain ⟨st, mem, fl, mir, pd, dt, top, own, fired, lo, dc, ar, rc⟩ := s
-  obtain ⟨st', mem', fl', mir', pd', dt', top', own', fired', lo', dc', ar', rc'⟩ := s'
-  simp only at hst hm ht ho hf hrc hp
-  subst hst hm ht ho hf hrc hp
+  obtain ⟨st, mem, fl, mir, pd, dt, ev, top, own, fired, lo, dc, ar, rc⟩ := s
+  obtain ⟨st', mem', fl', mir', pd', dt', ev', top', own', fired', lo', dc', ar', rc'⟩ := s'
+  simp only at hst hm ht ho hf hrc hp he
+  subst hst hm ht ho hf hrc hp he
   unfold Node.tryBuild Node.buildAbove Node.syncTop at h ⊢
   cases top' with
   | none => rfl
@@ -397,7 +398,8 @@ theorem Stops.settled {s : State Validator BlockId Payload} (h : Stops cfg s) :
     Settled cfg (Node.advance cfg s).1 := by
   suffices hp : Settled cfg (Node.pass cfg s).1 from
     ⟨tryBuild_none_of hp.build (advance_disk s) (advance_memory s) (advance_top s)
-        (advance_own s) (advance_fired s) (advance_recovering s) (advance_syncs s),
+        (advance_own s) (advance_fired s) (advance_recovering s) (advance_syncs s)
+        (advance_evidence s),
       by unfold NoReady; rw [advance_syncs, advance_disk]; exact hp.ready,
       by rw [advance_lo, advance_disk, advance_floor, advance_memory]; exact hp.decided⟩
   obtain ⟨htop, hpend, hlo⟩ := (stops_iff s).1 h

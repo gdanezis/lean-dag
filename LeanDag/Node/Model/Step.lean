@@ -15,15 +15,19 @@ input `i` in the state `s`: the new state and the outputs.
   undecided slot and `voteOffset` below its top (`floorOf`).
 * **Receipt** (`deliver`, `stream`): a block a peer sends in its own
   name, under its hash, not on disk, from a peer not detected, is
-  accepted if its references are accepted and it satisfies `rowValid q`,
+  accepted if its references are accepted and it satisfies `rowValid q E`,
   checked in memory if its round is above the floor and on disk otherwise
   (`ready`, `accept`). Otherwise, if it names `q` references unless it is
   at round `0`, it becomes the block of the sync with that peer if it lies
   above the sync's block, and the node asks the peer for its history
-  (`syncs`, `request`). A block accepted while the disk holds
-  a block of its author at its round detects the author (`detected`), and
-  the syncs with detected peers and the syncs whose block is held are
-  dropped (`tidy`).
+  (`syncs`, `request`).
+* **Conviction** (`evidenceOf`, `accept`): accepting a block of an author
+  whose block of that round the disk holds gives evidence of the author,
+  the two blocks; the evidence an accepted block carries is kept too
+  (`evidence`), and the authors the evidence names are convicted
+  (`detected`). The syncs with convicted peers and the syncs whose block
+  is held are dropped (`tidy`), and the requests of convicted peers are
+  not answered.
 * **Building** (`tryBuild`): round `r + 1`, above the node's top `r`,
   once the memory holds `q` authors of round `r` and either the round's
   timer fired, or the memory holds round-`r + 1` blocks of `f + 1`
@@ -32,13 +36,16 @@ input `i` in the state `s`: the new state and the outputs.
   whose wave is at a vote round (`reachReady`) and certify one at a
   decision round (`certReady`). A node behind thus builds each round
   below the highest block it holds without waiting its timers. The block
-  references one accepted block per author of round `r`, the node's own
-  for itself when it built there, which is the self-parent rule of an
-  honest node, and the least identifier otherwise; where these fail the
-  tests and the references of a held round-`r + 1` block of another
-  author pass them, it takes those, with its own block for itself
-  (`refsAt`). It is persisted, then broadcast, and the retry timer is
-  set: the timer of the round below it, for twice that round's timeout.
+  references one accepted block per author of round `r` that it does not
+  leave out, the node's own for itself when it built there and the least
+  identifier otherwise; it leaves out the authors its evidence names and
+  those a round-`r` block it holds exposes (`excluded`, `refsFor`). Where
+  these fail the tests, or cannot be built on, it takes the references of
+  a held round-`r + 1` block of another author (`lent`, `refsAt`). Its
+  payload carries the node's evidence against the authors it does not
+  reference, and the authors it then exposes (`payloadFor`). It is
+  persisted, then broadcast, and the retry timer is set: the timer of the
+  round below it, for twice that round's timeout.
 * **The jump** (`jumpRound`): a node that restarted, until it builds or
   a timer fires (`State.recovering`), builds above the highest round `r`
   above its top at which the memory holds `q` authors and is behind,
@@ -66,7 +73,9 @@ input `i` in the state `s`: the new state and the outputs.
 * **Resending** (`resend`): when the retry timer, or the top round's,
   fires and the node does not build, and when it restarts, before it
   settles, the node broadcasts its top block again, sets the retry timer
-  again, and asks again in every sync (`resync`). A node with a quorum of
+  again, asks every peer for its block of its top round (`ask`), and asks
+  again in every sync (`resync`). A peer not convicted answers with its
+  own block of that round (`ownAt`). A node with a quorum of
   its round builds within its timeout and the time the quorum takes to
   arrive, before the retry timer fires, so it resends only when it is
   stuck. A crash loses the messages sent to a node while it is down, and
@@ -102,8 +111,11 @@ structure State where
   /-- The syncs with peers, at most one each: the peer, its block the
   node lacks, and the identifiers asked for by name. -/
   syncs : List (Validator × (BlockId × Block Validator BlockId Payload) × List BlockId)
-  /-- The authors whose twins the node accepted. -/
+  /-- The authors the node convicted: whose twins it accepted, or whom the
+  evidence of a block it accepted names. -/
   detected : Finset Validator
+  /-- The evidence the node holds: an author with two of its blocks. -/
+  evidence : Finset (Validator × BlockId × BlockId)
   /-- The highest round the node built, once started. -/
   top : Option ℕ
   /-- The node's block at `top`. -/
@@ -123,12 +135,12 @@ structure State where
 variable (cfg : Config Validator BlockId Payload)
 
 /-- The node's genesis block. -/
-def Config.genesis : Block Validator BlockId Payload := ⟨0, cfg.me, ∅, cfg.payload 0⟩
+def Config.genesis : Block Validator BlockId Payload := ⟨0, cfg.me, ∅, cfg.payload 0 ∅ ∅⟩
 
 /-- The state before start. -/
 def State.init : State Validator BlockId Payload :=
-  ⟨Store.empty cfg.genesis, Store.empty cfg.genesis, 0, Store.Mirrors.empty, [], ∅, none, none,
-    ∅, 0, [], none, false⟩
+  ⟨Store.empty cfg.genesis, Store.empty cfg.genesis, 0, Store.Mirrors.empty, [], ∅, ∅, none,
+    none, ∅, 0, [], none, false⟩
 
 /-- **Keep a block**: on disk, and in memory if its round is the floor or
 above. -/
@@ -146,17 +158,31 @@ it, and it is valid at the row: checked in memory if its round is above
 the floor, on disk otherwise. -/
 def ready (s : State Validator BlockId Payload) (e : BlockId × Block Validator BlockId Payload) :
     Bool :=
-  decide ((Store.pick s.memory s.disk s.floor e.2.round).Checks cfg.q e.1 e.2)
+  decide ((Store.pick s.memory s.disk s.floor e.2.round).Checks cfg.q cfg.xp e.1 e.2)
 
-/-- **Accept a block**: it is kept if it is new and ready; a block of an
-author the disk holds at the block's round detects the author. -/
+/-- **The twin of a block on a store**: the least block of its author at its
+round. -/
+def twinOf (st : Store Validator BlockId Payload) (b : Block Validator BlockId Payload) :
+    Option BlockId :=
+  Scheme.leastOf ((st.atRound b.round).filter fun i => (st.blk i).creator = b.creator)
+
+/-- **The evidence accepting the block `b` under `id` gives**: its author
+with its twin on the store, and the evidence `b` carries that names an
+author. -/
+def evidenceOf (st : Store Validator BlockId Payload) (id : BlockId)
+    (b : Block Validator BlockId Payload) : Finset (Validator × BlockId × BlockId) :=
+  ((twinOf st b).map fun i => (b.creator, i, id)).toFinset ∪
+    (cfg.xp.ev b.payload).filter fun e => e.2.1 ≠ e.2.2
+
+/-- **Accept a block**: it is kept if it is new and ready; the node keeps
+the evidence it gives and convicts the authors that evidence names. -/
 def accept (s : State Validator BlockId Payload) (id : BlockId)
     (b : Block Validator BlockId Payload) : State Validator BlockId Payload :=
-  if h : id ∉ s.disk.ids ∧ (Store.pick s.memory s.disk s.floor b.round).Checks cfg.q id b then
+  if h : id ∉ s.disk.ids ∧
+      (Store.pick s.memory s.disk s.floor b.round).Checks cfg.q cfg.xp id b then
     let s' := keep s id b h.1 (s.mirrors.checks_pick.mp h.2).1 (s.mirrors.checks_pick.mp h.2).2.1
-    if b.creator ∈ s.disk.authorsAt b.round then
-      { s' with detected := insert b.creator s'.detected }
-    else s'
+    let E := evidenceOf cfg s.disk id b
+    { s' with detected := s'.detected ∪ named E, evidence := s'.evidence ∪ E }
   else s
 
 /-- **Drop the syncs done**: those whose block is held, and those with a
@@ -164,14 +190,34 @@ detected peer. -/
 def tidy (s : State Validator BlockId Payload) : State Validator BlockId Payload :=
   { s with syncs := s.syncs.filter fun e => decide (e.2.1.1 ∉ s.disk.ids ∧ e.1 ∉ s.detected) }
 
+/-- **The authors the node's next block above round `r` leaves out**: those
+its evidence `E` names, and those a round-`r` block of the store exposes. -/
+def excluded (s : Store Validator BlockId Payload) (r : ℕ)
+    (E : Finset (Validator × BlockId × BlockId)) : Finset Validator :=
+  named E ∪ (s.atRound r).biUnion fun i => cfg.xp.ex (s.blk i).payload
+
 /-- **The references of the node's next block**, above round `r`: one
-accepted block per author of round `r`, the node's own block `o` there
-for itself if it built one, and the least identifier otherwise. -/
-def refsFor (s : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId) : Finset BlockId :=
+accepted block per author of round `r` not left out, the node's own block
+`o` there for itself if it built one, and the least identifier otherwise. -/
+def refsFor (s : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId)
+    (E : Finset (Validator × BlockId × BlockId)) : Finset BlockId :=
   let R := s.atRound r
-  (creatorsOf s.blk R).biUnion fun a =>
+  (creatorsOf s.blk R \ excluded cfg s r E).biUnion fun a =>
     if a = cfg.me ∧ o.isSome then o.toFinset
     else (Scheme.leastOf (R.filter fun i => (s.blk i).creator = a)).toFinset
+
+/-- **The payload of the node's block above round `r` on the references
+`R`**: the evidence `E` against the authors it does not reference, and the
+authors that evidence names and the references expose. -/
+def payloadFor (s : Store Validator BlockId Payload) (r : ℕ) (R : Finset BlockId)
+    (E : Finset (Validator × BlockId × BlockId)) : Payload :=
+  let E' := E.filter fun e => e.1 ∉ creatorsOf s.blk R
+  cfg.payload (r + 1) E' (named E' ∪ R.biUnion fun j => cfg.xp.ex (s.blk j).payload)
+
+/-- **The node's block above round `r` on the references `R`.** -/
+def blockOn (s : Store Validator BlockId Payload) (r : ℕ) (R : Finset BlockId)
+    (E : Finset (Validator × BlockId × BlockId)) : Block Validator BlockId Payload :=
+  ⟨r + 1, cfg.me, R, payloadFor cfg s r R E⟩
 
 /-- **The reach test** for a block at round `r + 1` referencing `refs`:
 for each slot whose wave has `r + 1` at or below its vote round, the
@@ -201,32 +247,38 @@ def certReady (s : Store Validator BlockId Payload) (refs : Finset BlockId) (r :
           (creatorsOf s.blk (refs.filter fun b => cfg.σ.Votes s.toRecord b L)).card)
   else true
 
-/-- **The references a held round-`r + 1` block `c` lends**: `c`'s, with
-the node's own block `o` put in for itself. -/
-def lent (s : Store Validator BlockId Payload) (c : BlockId) (o : Option BlockId) :
-    Finset BlockId :=
-  ((s.blk c).refs.filter fun j => (s.blk j).creator ≠ cfg.me) ∪ o.toFinset
+/-- **The references a held round-`r + 1` block `c` lends**: `c`'s. -/
+def lent (s : Store Validator BlockId Payload) (c : BlockId) : Finset BlockId := (s.blk c).refs
 
-/-- **References `R` the node can build on above round `r`**: they are
-accepted and one round below the block they make, which is valid at the
-row. -/
-def buildable (s : Store Validator BlockId Payload) (r : ℕ) (R : Finset BlockId) : Bool :=
-  let b : Block Validator BlockId Payload := ⟨r + 1, cfg.me, R, cfg.payload (r + 1)⟩
-  decide (s.Checks cfg.q (cfg.idOf b) b)
+/-- **References `R` the node can build on above round `r`**, with the
+evidence `E`: they are accepted and one round below the block they make,
+which is valid at the row. -/
+def buildable (s : Store Validator BlockId Payload) (r : ℕ) (R : Finset BlockId)
+    (E : Finset (Validator × BlockId × BlockId)) : Bool :=
+  decide (s.Checks cfg.q cfg.xp (cfg.idOf (blockOn cfg s r R E)) (blockOn cfg s r R E))
 
-/-- **The references of the node's next block**, above round `r`: those of
-`refsFor` if they pass the reach and certificate tests; else those lent
-by the first held round-`r + 1` block of another author that pass them
-and can be built on; else those of `refsFor`. A node behind then reaches
-what a peer reached. -/
-def refsAt (s : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId) :
-    Finset BlockId :=
+/-- **The references lent by the held round-`r + 1` blocks of other
+authors**, in order of identifier. -/
+def lents (s : Store Validator BlockId Payload) (r : ℕ) : List (Finset BlockId) :=
+  (((s.atRound (r + 1)).sort (· ≤ ·)).filter fun c =>
+    decide ((s.blk c).creator ≠ cfg.me)).map (lent s ·)
+
+/-- **The references of the node's next block**, above round `r`, with the
+evidence `E`: those of `refsFor` if they pass the reach and certificate
+tests and can be built on; else the first lent ones that pass the tests
+and can be built on; else those of `refsFor` if they can be built on; else
+the first lent ones that can be built on; else those of `refsFor`. A node
+behind then reaches what a peer reached, and a node that leaves out
+too many authors builds on what a peer built on. -/
+def refsAt (s : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId)
+    (E : Finset (Validator × BlockId × BlockId)) : Finset BlockId :=
   let ready := fun R => reachReady cfg s R r && certReady cfg s R r
-  let own := refsFor cfg s r o
-  if ready own then own
-  else ((((s.atRound (r + 1)).sort (· ≤ ·)).filter fun c =>
-      decide ((s.blk c).creator ≠ cfg.me)).map (lent cfg s · o) |>.find? fun R =>
-        ready R && buildable cfg s r R).getD own
+  let ok := fun R => buildable cfg s r R E
+  let own := refsFor cfg s r o E
+  if ready own && ok own then own
+  else match (lents cfg s r).find? fun R => ready R && ok R with
+    | some R => R
+    | none => if ok own then own else ((lents cfg s r).find? ok).getD own
 
 /-- **The node is behind round `r + 1`**: the store `st` holds round-`r + 1`
 blocks of `f + 1` authors, so a node other than a Byzantine one built the
@@ -266,12 +318,12 @@ there, if the build rule allows it, and release the memory below the
 lowest round the node then reads. -/
 def buildAbove (s : State Validator BlockId Payload) (r : ℕ) (o : Option BlockId) :
     Option (State Validator BlockId Payload × List (Output Validator BlockId Payload)) :=
-  let refs := refsAt cfg s.memory r o
+  let refs := refsAt cfg s.memory r o s.evidence
   if cfg.q ≤ (s.memory.authorsAt r).card ∧ (r ∈ s.fired ∨ behind cfg s.memory r ∨
       (reachReady cfg s.memory refs r ∧ certReady cfg s.memory refs r)) then
-    let b : Block Validator BlockId Payload := ⟨r + 1, cfg.me, refs, cfg.payload (r + 1)⟩
+    let b := blockOn cfg s.memory r refs s.evidence
     let id := cfg.idOf b
-    if h : id ∉ s.disk.ids ∧ s.memory.Checks cfg.q id b then
+    if h : id ∉ s.disk.ids ∧ s.memory.Checks cfg.q cfg.xp id b then
       let s' := keep s id b h.1 (s.mirrors.checks_disk h.2).1 (s.mirrors.checks_disk h.2).2.1
       some (release cfg { s' with top := some (r + 1), own := some id, recovering := false },
         [.persist id b, .broadcast id b, .setTimer r (2 * cfg.timeout r)])
@@ -290,8 +342,8 @@ def tryBuild (s : State Validator BlockId Payload) :
       let r := jumpRound cfg s.memory t
       if t < r then
         if syncTop s ≤ r + 1 ∧
-            reachReady cfg s.memory (refsAt cfg s.memory r none) r = true ∧
-            certReady cfg s.memory (refsAt cfg s.memory r none) r = true then
+            reachReady cfg s.memory (refsAt cfg s.memory r none s.evidence) r = true ∧
+            certReady cfg s.memory (refsAt cfg s.memory r none s.evidence) r = true then
           buildAbove cfg s r none
         else none
       else if syncTop s ≤ t + 1 then buildAbove cfg s t s.own else none
@@ -413,12 +465,17 @@ def resync (s : State Validator BlockId Payload) : List (Output Validator BlockI
   s.syncs.map (request s)
 
 /-- **Send the node's top block again**: broadcast its block at its top
-round and set the retry timer again, then ask again in every sync. -/
+round, set the retry timer again and ask every peer for its block of that
+round, then ask again in every sync. -/
 def resend (s : State Validator BlockId Payload) : List (Output Validator BlockId Payload) :=
   (match s.top, s.own with
     | some r, some id =>
-      [.broadcast id (s.disk.blk id), .setTimer (r - 1) (2 * cfg.timeout (r - 1))]
+      [.broadcast id (s.disk.blk id), .setTimer (r - 1) (2 * cfg.timeout (r - 1)), .ask r]
     | _, _ => []) ++ resync s
+
+/-- **The node's own block of round `r`** on its disk. -/
+def ownAt (s : State Validator BlockId Payload) (r : ℕ) : Option BlockId :=
+  Scheme.leastOf ((s.disk.atRound r).filter fun i => (s.disk.blk i).creator = cfg.me)
 
 /-- **Set the top round's timer again**, after a restart, if it was set. -/
 def rearm (s : State Validator BlockId Payload) : List (Output Validator BlockId Payload) :=
@@ -488,7 +545,7 @@ def step (s : State Validator BlockId Payload) :
     if s.top = none ∧ cfg.Admissible then
       let b := cfg.genesis
       let id := cfg.idOf b
-      if h : id ∉ s.disk.ids ∧ rowValid cfg.q (Function.update s.disk.blk id b) b then
+      if h : id ∉ s.disk.ids ∧ rowValid cfg.q cfg.xp (Function.update s.disk.blk id b) b then
         let s' := keep s id b h.1 (fun _ hj => absurd hj (Finset.notMem_empty _))
           (fun j hj => absurd hj (Finset.notMem_empty j))
         let r := settle cfg { s' with top := some 0, own := some id, recovering := false }
@@ -528,7 +585,11 @@ def step (s : State Validator BlockId Payload) :
     else res
   | .syncRequest peer t fr ids =>
     let L := streamOf s.disk t fr ids
-    (s, if L.isEmpty then [] else [.stream peer L])
+    (s, if peer ∈ s.detected ∨ L.isEmpty then [] else [.stream peer L])
+  | .ask peer r =>
+    (s, if peer ∈ s.detected then [] else match ownAt cfg s r with
+      | some i => [.send peer i (s.disk.blk i)]
+      | none => [])
   | .restart =>
     let r := settle cfg { s with recovering := true }
     (r.1, resend cfg s ++ rearm cfg s ++ r.2)

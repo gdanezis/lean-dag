@@ -1,5 +1,6 @@
 import LeanDag.Node.Helpers.Agree
 import LeanDag.Node.Helpers.Wait
+import LeanDag.Node.Helpers.SyncInv
 import LeanDag.Node.Live.Statement
 /-!
 # A reliable node's builds along a trace
@@ -42,7 +43,7 @@ theorem build_witness (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : 
   rcases step_witness (cfg := cfg.at v) hg
       (hinv.mono fun x hx => hK x (knownBefore_knownOf hx))
       (cut_before hσ hadm hf htime hinj i v hv).1 (Held.run _ Held.init)
-      (ownTop_before (cfg := cfg) i)
+      (ownTop_before (cfg := cfg) i) (Converge.evidenceOn_before (cfg := cfg) (tr := tr) v i)
       (fun x hx => hK _ (knownBefore_knownOf (hinv.pend x hx)))
       (fun x hx => hK x (hd x hx)) (fun x hx => hK x (hb x hx)) e he with h | h
   · exact absurd h hr
@@ -116,8 +117,8 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
         (authentic_of_timely htime)) (knownAll cfg H tr) (stateBefore cfg tr i₀ v) inp x ∧
         (x.top.isSome ∧ x.top.getD 0 ≤ r ∧
           ((x.top = some r ∧ ow = x.own) ∨ (x.recovering = true ∧ ow = none ∧
-            reachReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow) r = true ∧
-            certReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow) r = true))) ∧
+            reachReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow x.evidence) r = true ∧
+            certReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow x.evidence) r = true))) ∧
         c ∉ x.disk.ids ∧
       (∃ y o, tryBuild (cfg.at v) x = some (y, o) ∧
         (c, (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c) ∈
@@ -125,15 +126,15 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
         (c, (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c) ∈
           persists (outputsAt cfg tr i₀)) ∧
       ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c).refs =
-        refsAt (cfg.at v) x.disk r ow ∧
-      refsAt (cfg.at v) x.disk r ow ⊆ x.disk.ids ∧
+        refsAt (cfg.at v) x.disk r ow x.evidence ∧
+      refsAt (cfg.at v) x.disk r ow x.evidence ⊆ x.disk.ids ∧
       Grows x.disk (stateBefore cfg tr (i₀ + 1) v).disk ∧
-      ((reachReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow) r = true ∧
-          certReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow) r = true) ∨
-        (x.top = some r ∧ r ∈ x.fired ∧
-          refsAt (cfg.at v) x.disk r ow = refsFor (cfg.at v) x.disk r ow) ∨
-        (behind (cfg.at v) x.disk r ∧
-          refsAt (cfg.at v) x.disk r ow = refsFor (cfg.at v) x.disk r ow))
+      ((reachReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow x.evidence) r = true ∧
+          certReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow x.evidence) r = true) ∨
+        ((x.top = some r ∧ r ∈ x.fired ∨ behind (cfg.at v) x.disk r) ∧
+          (refsAt (cfg.at v) x.disk r ow x.evidence = refsFor (cfg.at v) x.disk r ow x.evidence ∨
+            buildable (cfg.at v) x.disk r (refsFor (cfg.at v) x.disk r ow x.evidence)
+              x.evidence = false)))
     := by
   have hinjR := hashInjective_of_trace hinj
   have hauthR := authentic_of_timely htime
@@ -164,17 +165,26 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     (by rw [he₀r]; omega)
   obtain ⟨r', ow, hsome, hle, hro, -, hexit, hout⟩ := tryBuild_exit hb
   -- the build read in memory as on disk
-  have hreads := x'.mirrors.build_reads (cfg := cfg.at v) hσ (r := r') (o := ow) (by
-      obtain ⟨B, hi⟩ := hbs.inv
-      exact hi.floor.trans ((min_le_right _ _).trans (Nat.sub_le_sub_right hle _)))
-    (fun j hj => by
-      rcases hro with ⟨hr', rfl⟩ | ⟨-, hnone, -⟩
-      · obtain ⟨j', hj', hjd, hjr, -⟩ := hbs.own r' hr'
-        rw [hj', Option.some.injEq] at hj
-        exact hj ▸ ⟨hjd, hjr⟩
-      · rw [hnone] at hj; cases hj)
-  obtain ⟨e₁, e₂, e₃, e₄, e₅⟩ := hreads
-  rw [e₁, e₂, e₄, e₅, e₃] at hexit
+  have hF : x'.floor ≤ r' - (cfg.at v).p.voteOffset := by
+    obtain ⟨B, hi⟩ := hbs.inv
+    exact hi.floor.trans ((min_le_right _ _).trans (Nat.sub_le_sub_right hle _))
+  have ho : ∀ j, ow = some j → j ∈ x'.disk.ids ∧ (x'.disk.blk j).round = r' := fun j hj => by
+    rcases hro with ⟨hr', rfl⟩ | ⟨-, hnone, -⟩
+    · obtain ⟨j', hj', hjd, hjr, -⟩ := hbs.own r' hr'
+      rw [hj', Option.some.injEq] at hj
+      exact hj ▸ ⟨hjd, hjr⟩
+    · rw [hnone] at hj; cases hj
+  have hreads := x'.mirrors.build_reads (cfg := cfg.at v) hσ (r := r') (o := ow)
+    (E := x'.evidence) hF ho
+  obtain ⟨e₁, e₂, e₃, e₄, e₅, e₆⟩ := hreads
+  have hbl : buildable (cfg.at v) x'.memory r' (refsFor (cfg.at v) x'.disk r' ow x'.evidence)
+      x'.evidence = buildable (cfg.at v) x'.disk r' (refsFor (cfg.at v) x'.disk r' ow x'.evidence)
+      x'.evidence :=
+    x'.mirrors.buildable_eq (le_trans hF (Nat.sub_le _ _)) (fun c hc => by
+      rcases mem_refsFor_of hc with hc | hc
+      · exact Store.mem_atRound.mp hc
+      · exact ho c hc) _
+  rw [e₁, e₂, e₄, e₅, e₃, hbl] at hexit
   rw [e₁, e₄, e₅] at hro
   rw [e₁] at hout
   obtain ⟨r'', id, b, hnew, hrefs, hpred, -, hbr, -, hid, -, hst, -, -, -, hout'⟩ :=
@@ -183,13 +193,13 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     have h1 := congrArg persists (hout.symm.trans hout')
     rw [persists_built, persists_built, List.singleton_inj] at h1
     have := congrArg (fun e => e.2.round) h1
-    simp only at this
+    simp only [blockOn] at this
     omega
   subst r''
   rw [hout, persists_built, List.mem_singleton] at heo
   have hrr : r' = r := by
     have := congrArg (fun e => e.2.round) heo
-    simp only at this
+    simp only [blockOn] at this
     omega
   subst hrr
   -- the record reads the block as built
@@ -206,7 +216,7 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     rw [heo', hst]
     simp [Store.blk, Store.insert, Std.TreeMap.getD_insert_self]
   have hUb : U.block e₀.1 = b := (hy.cut.eq hcy).trans hyb
-  have hbrefs : b.refs = refsAt (cfg.at v) x'.disk r' ow := by
+  have hbrefs : b.refs = refsAt (cfg.at v) x'.disk r' ow x'.evidence := by
     have := congrArg (fun e => e.2.refs) hAB
     simp only at this
     exact this.symm

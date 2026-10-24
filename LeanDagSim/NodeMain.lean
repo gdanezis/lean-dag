@@ -1,5 +1,6 @@
 import LeanDagSim.Net
 import Lean.Data.Json
+import Mathlib.Data.Prod.Lex
 /-!
 # `lake exe node`
 
@@ -14,13 +15,19 @@ output:
   piece of peer `v`'s stream), and
   `{"syncRequest":{"peer":v,"target":t,"frontier":[…],"ids":[…]}}` (peer
   `v` asks for the history of `t` from its frontier, one round per
-  validator, and for the blocks `ids` by name), with a block
-  `{"id":i,"round":r,"creator":v,"refs":[…],"payload":p}`;
+  validator, and for the blocks `ids` by name), and
+  `{"ask":{"peer":v,"round":r}}` (peer `v` asks for the node's block of
+  round `r`), with a block
+  `{"id":i,"round":r,"creator":v,"refs":[…],"payload":p}` whose payload is
+  `{"nonce":k,"ev":[[a,i,j],…],"ex":[a,…]}`: evidence that author `a`
+  made the blocks `i` and `j` at one round, and the authors the block
+  exposes;
 * outputs: `{"persist":block}`, `{"broadcast":block}`,
   `{"setTimer":{"round":r,"after":t}}`, `{"commit":{"slot":k,"block":i}}`
   (`null` for a skip), `{"sync":{"peer":v,"target":t,"frontier":[…],"ids":[…]}}`
-  (ask peer `v` for the history of `t`), and
-  `{"stream":{"peer":v,"blocks":[…]}}` (answer one).
+  (ask peer `v` for the history of `t`), `{"stream":{"peer":v,"blocks":[…]}}`
+  (answer one), `{"ask":{"round":r}}` (ask every peer for its block of
+  round `r`), and `{"send":{"peer":v,"block":block}}` (answer one).
 
 A delivered block's identifier, if given, must be its hash
 (`LeanDagSim.idOf`), and the node drops one that is not; if it is left
@@ -34,14 +41,23 @@ def natField (j : Json) (k : String) : Except String ℕ := do
   let v ← j.getObjVal? k
   v.getNat?
 
+/-- A payload as JSON: its nonce, its evidence and the authors it exposes. -/
+def payJson {n : ℕ} (p : Pay n) : Json :=
+  Json.mkObj [("nonce", p.nonce),
+    ("ev", Json.arr (((p.ev.image fun (e : Fin n × ℕ × ℕ) =>
+        (toLex (e.1.val, toLex (e.2.1, e.2.2)) : Lex (ℕ × Lex (ℕ × ℕ)))).sort (· ≤ ·)).map
+      fun e => Json.arr #[((ofLex e).1 : Json), ((ofLex (ofLex e).2).1 : Json),
+        ((ofLex (ofLex e).2).2 : Json)]).toArray),
+    ("ex", Json.arr ((p.ex.image Fin.val).sort (· ≤ ·) |>.map fun a => (a : Json)).toArray)]
+
 /-- A block, with its identifier, as JSON. -/
-def blockJson {n : ℕ} (id : ℕ) (b : Block (Fin n) ℕ ℕ) : Json :=
+def blockJson {n : ℕ} (id : ℕ) (b : Block (Fin n) ℕ (Pay n)) : Json :=
   Json.mkObj [("id", id), ("round", b.round), ("creator", b.creator.val),
     ("refs", Json.arr ((b.refs.sort (· ≤ ·)).map fun r => (r : Json)).toArray),
-    ("payload", b.payload)]
+    ("payload", payJson b.payload)]
 
 /-- An output, as JSON. -/
-def outputJson {n : ℕ} : Output (Fin n) ℕ ℕ → Json
+def outputJson {n : ℕ} : Output (Fin n) ℕ (Pay n) → Json
   | .persist id b => Json.mkObj [("persist", blockJson id b)]
   | .broadcast id b => Json.mkObj [("broadcast", blockJson id b)]
   | .setTimer r t => Json.mkObj [("setTimer", Json.mkObj [("round", r), ("after", t)])]
@@ -52,22 +68,40 @@ def outputJson {n : ℕ} : Output (Fin n) ℕ ℕ → Json
       ("ids", Json.arr (ids.map fun i => (i : Json)).toArray)])]
   | .stream peer L => Json.mkObj [("stream", Json.mkObj [("peer", peer.val),
       ("blocks", Json.arr (L.map fun e => blockJson e.1 e.2).toArray)])]
+  | .ask r => Json.mkObj [("ask", Json.mkObj [("round", r)])]
+  | .send peer id b => Json.mkObj [("send", Json.mkObj [("peer", peer.val),
+      ("block", blockJson id b)])]
 
 /-- A block with its identifier, from JSON; the identifier is its hash
 when left out. -/
-def blockOf {n : ℕ} (d : Json) : Except String (ℕ × Block (Fin n) ℕ ℕ) := do
+def blockOf {n : ℕ} (d : Json) : Except String (ℕ × Block (Fin n) ℕ (Pay n)) := do
   let round ← natField d "round"
   let creator ← natField d "creator"
-  let payload ← natField d "payload"
+  let pj ← d.getObjVal? "payload"
+  let nonce := (natField pj "nonce").toOption.getD (pj.getNat?.toOption.getD 0)
+  let ev ← match pj.getObjVal? "ev" with
+    | .ok a => a.getArr? >>= fun a => a.toList.mapM fun e => do
+        let e ← e.getArr?
+        let a ← (e[0]?.getD Json.null).getNat?
+        let i ← (e[1]?.getD Json.null).getNat?
+        let j ← (e[2]?.getD Json.null).getNat?
+        if h : a < n then pure (⟨a, h⟩, i, j) else throw s!"author {a} out of range"
+    | .error _ => pure []
+  let ex ← match pj.getObjVal? "ex" with
+    | .ok a => a.getArr? >>= fun a => a.toList.mapM fun x => do
+        let x ← x.getNat?
+        if h : x < n then pure (⟨x, h⟩ : Fin n) else throw s!"author {x} out of range"
+    | .error _ => pure []
   let refs ← (← d.getObjVal? "refs").getArr?
   let refs ← refs.toList.mapM Json.getNat?
   if h : creator < n then
-    let b : Block (Fin n) ℕ ℕ := ⟨round, ⟨creator, h⟩, refs.toFinset, payload⟩
+    let b : Block (Fin n) ℕ (Pay n) :=
+      ⟨round, ⟨creator, h⟩, refs.toFinset, ⟨nonce, ev.toFinset, ex.toFinset⟩⟩
     return ((natField d "id").toOption.getD (idOf b), b)
   else throw s!"creator {creator} out of range"
 
 /-- An input, from JSON. -/
-def inputOf {n : ℕ} (hn : 0 < n) (j : Json) : Except String (Input (Fin n) ℕ ℕ) := do
+def inputOf {n : ℕ} (hn : 0 < n) (j : Json) : Except String (Input (Fin n) ℕ (Pay n)) := do
   if (j.getObjVal? "start").isOk then return .start
   if (j.getObjVal? "restart").isOk then return .restart
   if let .ok r := natField j "timer" then return .timer r
@@ -77,6 +111,11 @@ def inputOf {n : ℕ} (hn : 0 < n) (j : Json) : Except String (Input (Fin n) ℕ
     let fr ← ((← f.getObjVal? "frontier").getArr?) >>= fun a => a.toList.mapM Json.getNat?
     let ids ← ((← f.getObjVal? "ids").getArr?) >>= fun a => a.toList.mapM Json.getNat?
     if h : peer < n then return .syncRequest ⟨peer, h⟩ t (fun v => fr.getD v.val 0) ids
+    else throw s!"peer {peer} out of range"
+  if let .ok f := j.getObjVal? "ask" then
+    let peer ← natField f "peer"
+    let r ← natField f "round"
+    if h : peer < n then return .ask ⟨peer, h⟩ r
     else throw s!"peer {peer} out of range"
   if let .ok f := j.getObjVal? "stream" then
     let peer ← natField f "peer"
