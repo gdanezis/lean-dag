@@ -435,9 +435,11 @@ determines its top. Anchored at the first unexposed adopter, with
 > (`card_topsOf_le_of_exposed`);
 > per author per round **`c(f) = 1 + (n−1)·f^(f−1)`**
 > (`card_historyBlocksOf_le'`);
-> in total **`|H(b)| ≤ (n + (n−1)·f^f)·(r+1)`** (`card_history_le'`) — at
-> `n = 3f+1`: exactly `7(r+1)` at `f = 1`, constant `31` at `f = 2`
-> against a floor of `5r+1`.
+> per round **`n + (n−1)·f^f`** blocks of the history (`card_historyAt_le`);
+> in total **`|H(b)| ≤ (n + (n−1)·f^f)·(r+1)`**, and at most
+> `(n + (n−1)·f^f)·(r+1−lo)` blocks at rounds `lo` and above
+> (`card_history_le'`) — at `n = 3f+1`: exactly `7(r+1)` at `f = 1`,
+> constant `31` at `f = 2` against a floor of `5r+1`.
 
 Under at most one exposed author the constant is `2n−1` (**B1**), and at
 `f ≤ 1` the bound is unconditional. Linear in `r` at every fault budget:
@@ -789,7 +791,7 @@ form — `card_viewUpto_le` / `card_viewUpto_le'`,
 | — | anchored pedigrees | `PedigreeVia`, `exists_pedigreeVia`, `pedigreeVia_deterministic` | `Pedigree` |
 | — | the sharp top count: `(n−e)·e^(e-1)` | `card_topsOf_le_of_exposed` | `Pedigree` |
 | **C1′ sharp** | per-author per-round `≤ 1 + (n−1)·f^(f-1)` | `card_historyBlocksOf_le'` | `Pedigree` |
-| **B2 sharp** | `\|H(b)\| ≤ (n + (n−1)·f^f)·(r+1)` | `card_history_le'` | `Pedigree` |
+| **B2 sharp** | per round `≤ n + (n−1)·f^f`; at rounds `≥ lo`, `≤ (n + (n−1)·f^f)·(r+1−lo)` | `card_historyAt_le`, `card_history_le'` | `Pedigree` |
 | **D25** | density: all but `f` correct per round appear | `card_missingAt_le` | `Density` |
 | — | novelty: the measure, antitone in the view | `novelty`, `novelty_anti`, `card_history_le_card_add_card_novelty` | `Novelty` |
 | **D26** | the telescope: stepwise novelty ⇒ linear history | `StepNovelty`, `card_history_le_of_stepNovelty` | `Novelty` |

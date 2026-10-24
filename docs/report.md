@@ -3148,11 +3148,16 @@ its blocks entered the cone — and is linear in the round with a constant
 exponential in `f`:
 
 ```lean
-theorem card_history_le' (hdos : DoSValid U) (hb : b ∈ U.ids) :
-    (history U b).card
+theorem card_history_le' (hdos : DoSValid U) (hb : b ∈ U.ids) (lo : ℕ) :
+    ((history U b).filter fun i => lo ≤ (U.block i).round).card
       ≤ (Fintype.card Validator + (Fintype.card Validator - 1) * F.f ^ F.f) *
-          ((U.block b).round + 1)
+          ((U.block b).round + 1 - lo)
 ```
+
+At `lo = 0` this is the whole history. It is the sum over rounds of the
+per-round bound `card_historyAt_le`: at most `n + (n−1)·f^f` blocks of a
+history lie at one round, so the blocks of a history within `L` rounds of
+any round number at most `(n + (n−1)·f^f)·L`, whatever the round.
 
 The exponential constant is not an artefact of the proof: a matching family of
 witnesses (`Udouble` (C5), §28) realises `2^(e−2)` growth from `e` equivocators,
@@ -20783,7 +20788,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 634 theorems the body or Appendix A names, each
+The 635 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -22029,17 +22034,30 @@ theorem card_missingAt_le {b : BlockId} (hb : b ∈ U.ids) {δ : ℕ}
 
 **D25 (density).** A valid block's history contains a block by all but at most `f` of the correct validators at every round strictly below it.
 
+#### `card_historyAt_le`
+
+*theorem, `DoS.Pedigree.lean`*
+
+```lean
+theorem card_historyAt_le (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids) (k : ℕ) :
+    ((history U b).filter fun i => (U.block i).round = k).card
+      ≤ Fintype.card Validator + (Fintype.card Validator - 1) * F.f ^ F.f
+```
+
+**C1′ per round.** A DoS-valid history holds at most `n + (n−1)·f^f` blocks at one round: at most one for each unexposed author, and at most `(n−1)·f^(f−1)` for each of the at most `f` exposed ones.
+
 #### `card_history_le'`
 
 *theorem, `DoS.Pedigree.lean`*
 
 ```lean
-theorem card_history_le' (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids) :
-    (history U b).card
-      ≤ (Fintype.card Validator + (Fintype.card Validator - 1) * F.f ^ F.f) * ((U.block b).round + 1)
+theorem card_history_le' (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids) (lo : ℕ) :
+    ((history U b).filter fun i => lo ≤ (U.block i).round).card
+      ≤ (Fintype.card Validator + (Fintype.card Validator - 1) * F.f ^ F.f) *
+          ((U.block b).round + 1 - lo)
 ```
 
-**The tightened total.** `|H(b)| ≤ (3f+1 + 3f^(f+1))·(r+1)`: the unexposed authors contribute one chain each, the at-most-`f` exposed ones at most `3f·f^(f-1)` chains each. At `f = 1` this is `7(r+1)`, recovering the adoption theorem's constant exactly.
+**The tightened total, from any round.** The blocks of a DoS-valid history at round `lo` or above number at most `(n + (n−1)·f^f)·(r+1−lo)`; at `lo = 0` this is the whole history, `7(r+1)` at `f = 1`.
 
 #### `card_creators_accepted_of_eventuallyDelivers`
 
