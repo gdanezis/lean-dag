@@ -7,11 +7,12 @@ of a block for an author that a block passes whenever one of its
 references does (`InheritedOn`): twins in the history are one, evidence of
 an equivocation carried by a block of the history another. Under the
 matching DoS condition (`DoSValidOn`), a block may not reference an author
-it exposes. Once every reliable block of a round exposes `X`, so does every
-later block, since each references a reliable block one round below; no
-block from one round up names `X` (D17), no block of a history from the
-round up other than its top is by `X` (D27), and a union of histories holds
-at most one block a round for each author not exposed (D28).
+it exposes. Let each block reference a block of an author of `T` one
+round below (`CorrectBelow`). Once every block of `T` of a round exposes
+`X`, so does every later block; no block from one round up names `X`
+(D17), no block of a history from the round up other than its top is by
+`X` (D27), and a union of histories holds at most one block a round for
+each author not exposed (D28).
 -/
 
 namespace LeanDag
@@ -19,7 +20,7 @@ namespace LeanDag
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type*} {Payload : Type*}
 variable {blk : BlockId → Block Validator BlockId Payload} {ids : Finset BlockId}
-variable {rel : Reliability Validator} {Exp : BlockId → Validator → Prop}
+variable {T : Finset Validator} {Exp : BlockId → Validator → Prop}
 
 /-- **An exposure carried upward**: a block passes the test for `X` whenever
 one of its references does. -/
@@ -33,64 +34,65 @@ def DoSValidOn (blk : BlockId → Block Validator BlockId Payload) (ids : Finset
     (Exp : BlockId → Validator → Prop) : Prop :=
   ∀ b ∈ ids, ∀ i ∈ (blk b).refs, ¬ Exp b (blk i).creator
 
-/-- **D17 — exclusion is total, and permanent.** If every reliable block of
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- **D17 — exclusion is total, and permanent.** If every block of `T` of
 round `n+1` exposes `X`, so does every block from round `n+2` on, whoever
 authored it. -/
-theorem exposed_of_correct_exposed (C : CausalStructure blk ids) (hq : QuorateOn blk ids rel)
+theorem exposed_of_correct_exposed (hq : CorrectBelow blk ids T)
     (hup : InheritedOn blk ids Exp) {X : Validator} {n : ℕ}
-    (hexp : ∀ c ∈ ids, (blk c).round = n + 1 → (blk c).creator ∈ rel.correct → Exp c X) :
+    (hexp : ∀ c ∈ ids, (blk c).round = n + 1 → (blk c).creator ∈ T → Exp c X) :
     ∀ k, ∀ b ∈ ids, (blk b).round = n + 2 + k → Exp b X := by
   intro k
   induction k with
   | zero =>
       intro b hb hbr
-      obtain ⟨i, hi, hi_ids, hi_correct, hi_round⟩ := exists_correct_memRefs C hq hb (by omega)
+      obtain ⟨i, hi, hi_ids, hi_correct, hi_round⟩ := hq b hb (by omega)
       exact hup b hb i hi X (hexp i hi_ids (by omega) hi_correct)
   | succ k ih =>
       intro b hb hbr
-      obtain ⟨i, hi, hi_ids, _, hi_round⟩ := exists_correct_memRefs C hq hb (by omega)
+      obtain ⟨i, hi, hi_ids, _, hi_round⟩ := hq b hb (by omega)
       exact hup b hb i hi X (ih i hi_ids (by omega))
 
+omit [Fintype Validator] in
 /-- The form the condition consumes: from `n+2` on, nobody may name `X`. -/
-theorem not_mem_creators_refs_of_correct_exposed (C : CausalStructure blk ids)
-    (hq : QuorateOn blk ids rel) (hdos : DoSValidOn blk ids Exp) (hup : InheritedOn blk ids Exp)
-    {X : Validator} {n : ℕ}
-    (hexp : ∀ c ∈ ids, (blk c).round = n + 1 → (blk c).creator ∈ rel.correct → Exp c X)
+theorem not_mem_creators_refs_of_correct_exposed (hq : CorrectBelow blk ids T)
+    (hdos : DoSValidOn blk ids Exp) (hup : InheritedOn blk ids Exp) {X : Validator} {n : ℕ}
+    (hexp : ∀ c ∈ ids, (blk c).round = n + 1 → (blk c).creator ∈ T → Exp c X)
     {b : BlockId} (hb : b ∈ ids) (hbr : n + 2 ≤ (blk b).round) :
     X ∉ creatorsOf blk (blk b).refs := by
   obtain ⟨k, hk⟩ : ∃ k, (blk b).round = n + 2 + k := ⟨(blk b).round - (n + 2), by omega⟩
   intro hX
   obtain ⟨i, hi, rfl⟩ := mem_creatorsOf.mp hX
-  exact hdos b hb i hi (exposed_of_correct_exposed C hq hup hexp k b hb hk)
+  exact hdos b hb i hi (exposed_of_correct_exposed hq hup hexp k b hb hk)
 
 variable [DecidableEq BlockId]
 
+omit [Fintype Validator] in
 /-- **D27 — a history names no exposed author from the exposure up.** Once
-every reliable block of round `n+1` exposes `X`, no block of a history at
+every block of `T` of round `n+1` exposes `X`, no block of a history at
 round `n+1` or above other than its top is by `X`. -/
-theorem creator_ne_of_correct_exposed (C : CausalStructure blk ids) (hq : QuorateOn blk ids rel)
+theorem creator_ne_of_correct_exposed (C : CausalStructure blk ids) (hq : CorrectBelow blk ids T)
     (hdos : DoSValidOn blk ids Exp) (hup : InheritedOn blk ids Exp) {X : Validator} {n : ℕ}
-    (hexp : ∀ c ∈ ids, (blk c).round = n + 1 → (blk c).creator ∈ rel.correct → Exp c X)
+    (hexp : ∀ c ∈ ids, (blk c).round = n + 1 → (blk c).creator ∈ T → Exp c X)
     {b i : BlockId} (hb : b ∈ ids) (hi : i ∈ historyFrom blk b) (hne : i ≠ b)
     (hir : n + 1 ≤ (blk i).round) : (blk i).creator ≠ X := by
   obtain ⟨j, hj, hij⟩ := C.exists_mem_refs_of_mem_history hb hi hne
   have hj_ids := C.history_subset_ids hb hj
   have hjr := C.refs_round j hj_ids i hij
   intro hX
-  exact not_mem_creators_refs_of_correct_exposed C hq hdos hup hexp hj_ids (by omega)
+  exact not_mem_creators_refs_of_correct_exposed hq hdos hup hexp hj_ids (by omega)
     (mem_creatorsOf.mpr ⟨i, hij, hX⟩)
 
 /-- **D28 — one block a round for each author not exposed.** Let every
-reliable block of round `n+1` expose each author of `E`, and let `S` be the
+block of `T` of round `n+1` expose each author of `E`, and let `S` be the
 union of the histories of the blocks `B`. If no author outside `E` has two
 blocks of `S` at round `k ≥ n+1`, then `S` holds at most one block of round
 `k` for each author outside `E`, besides the blocks of `B` by authors of
 `E`. -/
-theorem card_union_history_round_le (C : CausalStructure blk ids) (hq : QuorateOn blk ids rel)
+theorem card_union_history_round_le (C : CausalStructure blk ids) (hq : CorrectBelow blk ids T)
     (hdos : DoSValidOn blk ids Exp) (hup : InheritedOn blk ids Exp) {E : Finset Validator}
     {n k : ℕ}
-    (hexp : ∀ X ∈ E, ∀ c ∈ ids, (blk c).round = n + 1 → (blk c).creator ∈ rel.correct →
-      Exp c X)
+    (hexp : ∀ X ∈ E, ∀ c ∈ ids, (blk c).round = n + 1 → (blk c).creator ∈ T → Exp c X)
     {B : Finset BlockId} (hB : B ⊆ ids) (hk : n + 1 ≤ k)
     (htw : ∀ i ∈ B.biUnion (historyFrom blk), ∀ j ∈ B.biUnion (historyFrom blk),
       (blk i).round = k → (blk j).round = k →

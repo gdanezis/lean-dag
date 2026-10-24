@@ -1161,11 +1161,8 @@ theorem Inv.step {s : State Validator BlockId Payload}
     · exact hnil'
     · rename_i e he
       have hL : ∀ x ∈ inHistory cfg e.2.1 L, x ∈ K' := fun x hx => by
-        unfold inHistory at hx
-        have hx' := (List.mem_mergeSort.mp hx)
-        obtain ⟨hxL, hxp⟩ := List.mem_filter.mp hx'
-        simp only [Bool.and_eq_true, decide_eq_true_eq] at hxp
-        exact Or.inr (by simp [delivered, List.mem_filter, hxL, hxp.1.1])
+        obtain ⟨hxL, hxh⟩ := mem_of_mem_inHistory hx
+        exact Or.inr (by simp [delivered, List.mem_filter, hxL, hxh])
       have hi₁ : Inv cfg (Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 L)) K' B := by
         unfold Node.takeIn
         split

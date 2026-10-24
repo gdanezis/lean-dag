@@ -11,7 +11,7 @@ the stages, and what each stage keeps proved.
 
 ## 1. Where the node stands
 
-Stages 0 to 3 are done (§4). The node receives blocks by
+Stages 0 to 4 are done (§4), but for the premise in time of Stage 4. The node receives blocks by
 announcements and syncs, one sync for each peer (`docs/validator.md`
 §3.4); it holds at most `n − 1` syncs (V1, `SyncsBound`), and the honest
 nodes converge (V3′). Its blocks carry evidence of equivocation and the
@@ -23,9 +23,10 @@ and leaves them out of its references.
 A stream piece is taken in only if it brings the whole history of the
 sync's block, every block of which passes the checks (`takeIn`), so a
 convicted author's twins under blocks that break the exposure rule are
-not taken in. What remains is Stage 4: to prove on the node the bound of
-S5 (`docs/sync.md`) on what a node holds a round once every equivocator
-is exposed, and the round from which its premise holds.
+not taken in. The node holds at most `n + |D|` blocks of each round once
+every honest block of a round exposes the convicted authors `D` (V13 of
+`docs/validator.md`), the bound of S5 (`docs/sync.md`) on the node. What
+remains is the round from which that premise holds.
 
 ## 2. The design
 
@@ -185,15 +186,22 @@ audits, the documents updated, and a commit.
   give the same results as in Stage 2. The attacks of
   `scripts/sync-reports.py` (trees of twins, twins per node, chains
   carried each round) are not ported to the node's simulator.
-* **Stage 4 — the exposure bound on the node, later.** S5's proof read
-  on the node's disk: D27 (`creator_ne_of_correct_exposed`) on an admitted
-  history, a convicted author's blocks taken in only as its own target
-  before conviction, and an author not convicted holding one block a
-  round. Then the premise in time, which the Sync model does not prove:
-  past GST, every honest block built `Δ + Δₛ` after an honest node
-  convicted `X` carries or inherits the evidence, from `Arrival`; so from
-  the round above the highest round built by then, the node holds at most
-  `n + f` blocks a round.
+* **Stage 4 — the exposure bound on the node.** *Done, but for the
+  premise in time.* V13 (`Node.Bound.Bounded`): a node takes a block of
+  an author in the author's own name only while it has not convicted the
+  author, and the other blocks of a piece it takes in are referenced by
+  blocks taken in with them, so each author has at most two blocks a
+  round that no block of the disk references, one if not convicted
+  (`steady_before`); once every honest block of round `m + 1` exposes the
+  convicted authors, D17 (`not_mem_creators_refs_of_correct_exposed`,
+  generalised to `CorrectBelow`) leaves their blocks from round `m + 1` on
+  unreferenced, and the disk holds at most `n + |D|` blocks a round. The
+  walk through a piece goes only through blocks under their hash
+  (`hashed`); were it to go through blocks under another identifier too,
+  a peer could have any valid block taken in. Open: the premise in time, which the Sync
+  model does not prove either: past GST, every honest block built
+  `Δ + Δₛ` after an honest node convicted `X` carries or inherits the
+  evidence, from `Arrival`.
 
 Stage 3 needs Stages 1 and 2, and Stage 4 needs Stage 3.
 

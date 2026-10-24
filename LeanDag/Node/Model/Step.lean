@@ -67,12 +67,12 @@ input `i` in the state `s`: the new state and the outputs.
   `frontierOf`), and the identifiers asked for by name. It is answered with
   the blocks of the disk in the block's history that are the block, asked
   for, or at or above their author's frontier, in order of round. Of a
-  stream piece the node reads the blocks in the history of the sync's
-  block, and takes them in, in order of round, each accepted if it is
-  ready, only if they are at most `cap` and the sync's block is then
-  held: all of them or none (`takeIn`). Otherwise the references that
-  neither the disk nor the piece holds are asked for by name in the next
-  request (`missingIn`).
+  stream piece the node reads the blocks under their hash reached from the
+  sync's block through such blocks (`hashed`, `inHistory`). It takes them
+  in, in order of round, each accepted if it is ready, only if they are at
+  most `cap` and the sync's block is then held: all of them or none
+  (`takeIn`). Otherwise the references that neither the disk nor the
+  piece holds are asked for by name in the next request (`missingIn`).
 * **Resending** (`resend`): when the retry timer, or the top round's,
   fires and the node does not build, and when it restarts, before it
   settles, the node broadcasts its top block again, sets the retry timer
@@ -426,14 +426,19 @@ def pieceLevel (L : List (BlockId × Block Validator BlockId Payload))
   (front.flatMap fun x => ((L.find? fun e => decide (e.1 = x)).map fun e =>
     e.2.refs.sort (· ≤ ·)).getD [], w.2 ++ front)
 
+/-- **The blocks of a stream piece under their hash.** -/
+def hashed (L : List (BlockId × Block Validator BlockId Payload)) :
+    List (BlockId × Block Validator BlockId Payload) :=
+  L.filter fun e => decide (e.1 = cfg.idOf e.2)
+
 /-- **The part of a stream piece in the history of the block `t`**: its
-blocks reached from `t` through its blocks, identified by their hash and
-not the node's own, in order of round. -/
+blocks under their hash reached from `t` through such blocks, not the
+node's own, in order of round. -/
 def inHistory (t : BlockId × Block Validator BlockId Payload)
     (L : List (BlockId × Block Validator BlockId Payload)) :
     List (BlockId × Block Validator BlockId Payload) :=
-  let found := ((pieceLevel L)^[L.length + 1] ([t.1], [])).2
-  (L.filter fun e => decide (e.1 = cfg.idOf e.2) && decide (e.2.creator ≠ cfg.me) &&
+  let found := ((pieceLevel (hashed cfg L))^[(hashed cfg L).length + 1] ([t.1], [])).2
+  ((hashed cfg L).filter fun e => decide (e.2.creator ≠ cfg.me) &&
     decide (e.1 ∈ found)).mergeSort fun x y => decide (x.2.round ≤ y.2.round)
 
 /-- **The identifiers to ask for by name** after a stream piece: the

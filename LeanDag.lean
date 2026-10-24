@@ -589,6 +589,8 @@ import LeanDag.Node.Helpers.Steps
 import LeanDag.Node.Helpers.Trace
 import LeanDag.Node.Helpers.Converge
 import LeanDag.Node.Converge.Proof
+import LeanDag.Node.Bound.Statement
+import LeanDag.Node.Bound.Proof
 import LeanDag.Node.Helpers.Verdict
 import LeanDag.Node.Helpers.Agree
 import LeanDag.Node.Live.Statement
@@ -602,6 +604,7 @@ import LeanDag.Node.Helpers.Arrive
 import LeanDag.Node.Helpers.SyncWalk
 import LeanDag.Node.Helpers.SyncSteps
 import LeanDag.Node.Helpers.SyncInv
+import LeanDag.Node.Helpers.Bound
 import LeanDag.Node.Helpers.SyncTrace
 import LeanDag.Node.Helpers.Armed
 import LeanDag.Node.Helpers.Catch

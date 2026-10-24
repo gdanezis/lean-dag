@@ -419,10 +419,8 @@ theorem step_receipt_stream (s : State Validator BlockId Payload) (u : Validator
     rw [step_stream_eq s u L hf]
     have hL : ∀ x ∈ inHistory cfg e.2.1 L, x ∈ s.syncs.map (·.2.1) ∨
         x ∈ delivered cfg [Input.stream u L] := fun x hx => by
-      unfold inHistory at hx
-      obtain ⟨hxL, hxp⟩ := List.mem_filter.mp (List.mem_mergeSort.mp hx)
-      simp only [Bool.and_eq_true, decide_eq_true_eq] at hxp
-      exact Or.inr (by simp [delivered, List.mem_filter, hxL, hxp.1.1])
+      obtain ⟨hxL, hxh⟩ := mem_of_mem_inHistory hx
+      exact Or.inr (by simp [delivered, List.mem_filter, hxL, hxh])
     have hr : Received cfg (.stream u L) s (takeIn cfg s e.2.1 (inHistory cfg e.2.1 L)) := by
       unfold takeIn
       split

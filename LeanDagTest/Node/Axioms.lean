@@ -3,6 +3,7 @@ import LeanDag.Node.Store
 import LeanDag.Node.Local.Proof
 import LeanDag.Node.Runs.Proof
 import LeanDag.Node.Converge.Proof
+import LeanDag.Node.Bound.Proof
 import LeanDag.Node.Live.Proof
 import LeanDag.Node.Refines.Proof
 import LeanDag.Node.Sync.Proof
@@ -45,6 +46,12 @@ info: 'LeanDag.Node.Converge.holds' depends on axioms: [propext, Classical.choic
 -/
 #guard_msgs in
 #print axioms LeanDag.Node.Converge.holds
+
+/--
+info: 'LeanDag.Node.Bound.holds' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms LeanDag.Node.Bound.holds
 
 /--
 info: 'LeanDag.Node.Live.holds' depends on axioms: [propext, Classical.choice, Quot.sound]

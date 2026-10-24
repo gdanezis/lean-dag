@@ -19,7 +19,9 @@ it accepts, and restarts after a crash from the state it persisted
 (§3.6). It convicts an author whose twins it accepts, or whom evidence in
 a block it accepts names; it then takes no announcement from the author
 and answers none of its requests, and its blocks reference no author they
-expose (§3.4). Garbage collection, checkpoints, bootstrap and rate
+expose (§3.4). Once every honest block of a round exposes the authors it
+convicted, its disk holds at most `n + |D|` blocks of each later round
+(V13). Garbage collection, checkpoints, bootstrap and rate
 limiting are not part of it; a version with them is on branch
 `scheme-validator`. Liveness holds across crashes (§5.6).
 
@@ -32,7 +34,8 @@ executables check no signature and trust their inputs. The links are
 authenticated: an input from a peer names the peer. Synchronisation
 follows the Sync model (`docs/sync.md`): one sync for each peer, which
 asks the peer for a block's history above the node's frontier and takes
-in what is ready on arrival (§3.4). The program proves that the syncs
+the part of the answer in that history in only if the block is then
+held (§3.4). The program proves that the syncs
 complete (V3′), not how fast; the liveness claim assumes of the network
 and the syncs together that a reliable block given to a reliable node is
 on its disk within `Δₛ` past GST (§5.1).
@@ -314,11 +317,12 @@ their author's frontier, reached from `t` through such blocks, in order
 of round (`streamOf`), and with nothing if it holds none.
 
 **Taking a stream in, header first.** Of a stream piece from a peer with
-which it has a sync, the node reads the blocks reached from the sync's
-block through blocks of the piece, identified by their hash and not its
-own (`inHistory`). It takes them in, in order of round, each accepted if
-it is ready then (`absorb`), only if they are at most `cap` and the
-sync's block is then held; otherwise it takes none of them (`takeIn`).
+which it has a sync, the node reads the blocks of the piece under their
+hash reached from the sync's block through such blocks, other than its
+own (`hashed`, `inHistory`). It takes them in, in order of round, each
+accepted if it is ready then (`absorb`), only if they are at most `cap`
+and the sync's block is then held; otherwise it takes none of them
+(`takeIn`).
 So a block of a stream enters the disk only with the whole history of
 the sync's block, every block of which passes the checks: a block that
 breaks the exposure rule keeps out the blocks below it in the piece,
@@ -371,6 +375,25 @@ and a peer it has not convicted answers with its own block of that round
 (`send`). A node short of authors it does not leave out thus gets the
 blocks of the authors that hold theirs. The liveness argument does not
 need this; it reads the lent references (§3.2).
+
+**The blocks a node holds a round.** A node takes a block of an author
+in the author's own name, as an announcement or as the block of the
+author's sync, only while it has not convicted the author; the other
+blocks of a stream piece it takes in are each referenced by a block
+taken in with them, since the walk through the piece goes only through
+blocks under their hash (`hashed`). So each step adds at most one block
+of an author that no block of the disk references, and none of a
+convicted author; and two blocks of an author at one round convict it.
+Along a trace each author other than the node therefore has at most two
+blocks a round on the disk that no block of it references, and one if
+not convicted (`steady_before`). Once every honest block of round `m + 1`
+on the disk exposes the convicted authors, no block of the disk from
+round `m + 2` on references one, since each references an honest block
+one round below when fewer than `q` nodes are not honest (D17); so the
+disk holds at most `n + |D|` blocks of each round from `m + 1` on, for
+`D` the authors convicted (V13). Were the walk to go through blocks
+under another identifier too, a peer could list any valid block as a
+reference of such a block, and have it taken in.
 
 **Withholding.** A Byzantine node that shows one node `v` a block
 referencing a block it reveals only to the others stalls nothing: the
@@ -464,6 +487,7 @@ four a round. It needs no bootstrap, since no block is collected.
 | V2 | **The decisions are the scheme's**: at the bounded vote, a decision step of a node whose memory holds the round of its next undecided slot, as it always does (§3.1), outputs what `Scheme.tryDecide` decides on any record and view holding the disk's blocks, read alike; over successive views this is the scheme's loop. | `Node.Local.DecidesOnView` (proved): `Node.tryDecide_memory`, `Node.Store.Mirrors.viewsAbove`, `Node.tryDecide_window`, `Node.ViewsAbove.of_store`, `Node.ViewsAbove.tryDecide_eq` |
 | V3 | **Safety**: over a trace with timely authentication of blocks, an injective hash and `Params.Tolerates`, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` of which every honest disk is a cut, and any two honest nodes' decisions are prefix-comparable. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
 | V3′ | **Convergence**: over a trace with delivery, timely authentication, an injective hash, authentic evidence and streams within the cap, every block in the history of an honest node's own block at its top at the end is on every honest node's disk at the end. No fault bound is needed: an honest node given the block has a sync for it until it holds it, and the answer to the sync's last request leads to no request, which it would if the node still lacked the block (§3.4). | `Node.Converge.Converges` (proved): `Node.Converge.sync_made`, `Node.Converge.sync_stays`, `Node.Converge.last_ask`, `Node.step_stream_stuck`, `Node.foldl_all`, `Node.Converge.not_detected`, `Node.eq_of_persists` |
+| V13 | **The blocks a node holds a round**: over a trace with timely authentication and an injective hash, with fewer than `q` nodes outside the honest set, if every block of an honest author at round `m + 1` on an honest node's disk exposes every author the node convicted, its disk holds at most `n + |D|` blocks of each round from `m + 1` on, for `D` the authors it convicted: one of each author not convicted and two of each convicted. | `Node.Bound.Bounded` (proved, §3.4): `Node.steady_before`, `Node.Steady.step`, `Node.takeIn_referenced`, `not_mem_creators_refs_of_correct_exposed`, `Node.own_known` |
 | V8 | The claims are about the program that runs: its disk and memory are ordered maps, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` (§6) |
 | V11 | **Liveness**: over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, reliable nodes that do not restart, their timers on time, no honest node's timer early, timeouts above `2(Δ + Δₛ)`, authentic evidence and a faithful payload source, the reliable nodes produce a round per timeout and `Δ + Δₛ`, and a run of reliably led slots from a round that every reliable node was below at GST is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of a timeout and `Δ + Δₛ` per round. The honest nodes outside the reliable set need meet no other timing assumption. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy`, `Node.held_before` |
 | V11′ | **Liveness across crashes**: if the reliable nodes stay up from `t_r` to the horizon `t₁`, with delivery, synchronisation and timers assumed only from then on, and timers lost only to a restart, with authentic evidence and a faithful payload source, the conclusions of V11 hold with GST replaced by `max t_r gst + W`, for `W` twice the largest timeout of the round below the one a reliable node is at by `max t_r gst`. Crashes before GST are the case `t_r ≤ gst`. The honest nodes outside the reliable set may keep crashing and restarting; with every honest node reliable, after every node crashed and restarted, the nodes decide again. | `Node.Live.Recovers` (proved, §5.6): `Node.arrival_of_recovered`, `Node.sends_again`, `Node.retry_last`, `Node.recovered_by`, `Node.topTimerBy_of_up`, `Node.top_arrives`, `Node.quorum_below` |
@@ -948,9 +972,8 @@ The restart, resending and liveness across crashes are done, including
 decisions resuming after every node crashed (§3.6, §5.6), and the syncs
 of `docs/sync.md` on the node (§3.4), the evidence, conviction and
 exclusion of equivocators (§3.2, §3.4), Stages 1 and 2 of
-`docs/node-sync.md`, and header-first admission of streams (§3.4), Stage
-3. Stage 4 proves on the node the bound on the blocks a node holds a
-round. Open:
+`docs/node-sync.md`, header-first admission of streams (§3.4), Stage 3,
+and the bound on the blocks a node holds a round (V13), Stage 4. Open:
 
 * the disk and the decisions grow with the chain, which they record;
   and the memory holds every block of its rounds, so an equivocator can
@@ -960,6 +983,8 @@ round. Open:
   latest, as a node that jumped, keeps its frontier at that round, so
   each stream carries its blocks above that round in the history of the
   stream's block, as it does a detected author's, whose frontier is `0`;
+* V13 assumes that every honest block of a round exposes the convicted
+  authors; the round from which this holds past GST is not proved;
 * the record V12 builds is at `ValidAt q Clause.none`, not at the
   exposure clause the node checks;
 * a node answers every request of a peer it has not convicted, so before

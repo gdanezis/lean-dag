@@ -152,7 +152,8 @@ theorem eq_of_mem_admitted {H : Finset Validator} (hHc : Hᶜ.card ≤ f)
       (blk c).creator ∈ rel.correct → Exposes blk ev c X :=
     fun c hc hcr hcH => hexp c (fun x hx => ht x (C.history_subset_ids hc hx)) hcr hcH
   by_contra hne
-  exact creator_ne_of_correct_exposed C hq hdos hup hexp' mem_historyFrom_self hi hne hir hic
+  exact creator_ne_of_correct_exposed C (hq.correctBelow C) hdos hup hexp' mem_historyFrom_self hi
+    hne hir hic
 
 omit [Fintype Validator] in
 /-- An author not detected holds at most one block a round on the disk of a

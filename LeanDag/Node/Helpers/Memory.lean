@@ -58,6 +58,17 @@ section Accept
 variable (s : State Validator BlockId Payload) (id : BlockId) (b : Block Validator BlockId Payload)
 
 omit [Fintype Validator] in
+/-- A block of a piece's part in a block's history is a block of the piece
+under its hash. -/
+theorem mem_of_mem_inHistory {t : BlockId × Block Validator BlockId Payload}
+    {L : List (BlockId × Block Validator BlockId Payload)}
+    {e : BlockId × Block Validator BlockId Payload} (he : e ∈ inHistory cfg t L) :
+    e ∈ L ∧ e.1 = cfg.idOf e.2 := by
+  unfold inHistory hashed at he
+  obtain ⟨hx, -⟩ := List.mem_filter.mp (List.mem_mergeSort.mp he)
+  simpa using List.mem_filter.mp hx
+
+omit [Fintype Validator] in
 /-- **Accepting a block changes the disk as accepting on the disk alone.** -/
 theorem accept_disk : (accept cfg s id b).disk = acceptOn cfg s.disk id b := by
   unfold accept acceptOn

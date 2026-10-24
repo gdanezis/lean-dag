@@ -101,18 +101,23 @@ theorem converges : Converges := by
   obtain ⟨hadm, hasked⟩ := step_stream_stuck (syncsOn_before v R'') heA hno hheld hdet
   -- the piece's part in `j`'s history, which fits the cap
   set P := inHistory (cfg.at v) (j, b) Lu with hP
-  have hjP : (j, b) ∈ P := by
+  set Lh := hashed (cfg.at v) Lu with hLh
+  have hLhmap : ∀ e ∈ Lh, e.2 = st.blk e.1 := fun e he => hLmap e ((mem_hashed Lu).mp he).1
+  have hjLh : (j, b) ∈ Lh := by
     obtain ⟨e, he, hej⟩ := List.mem_map.mp hjLu
     have hjb : e = (j, b) := Prod.ext hej (by rw [hLmap e he, hej, hjbu])
-    exact (mem_inHistory Lu).mpr ⟨hjb ▸ he, hid, by change b.creator ≠ v; rw [hc]; exact huv,
-      found_self Lu j hjLu⟩
+    exact (mem_hashed Lu).mpr ⟨hjb ▸ he, hid⟩
+  have hjP : (j, b) ∈ P :=
+    (mem_inHistory Lu).mpr ⟨hjLh, by change b.creator ≠ v; rw [hc]; exact huv,
+      found_self Lh j (List.mem_map_of_mem (f := Prod.fst) hjLh)⟩
   have hcap : P.length ≤ (cfg.at v).cap := by
     have h₁ : P.length ≤ Lu.length := by
-      rw [hP]; unfold inHistory; rw [List.length_mergeSort]; exact List.length_filter_le _ _
+      rw [hP]; unfold inHistory hashed; rw [List.length_mergeSort]
+      exact (List.length_filter_le _ _).trans (List.length_filter_le _ _)
     exact h₁.trans (hfit R' u _ hR' hu v Lu hout hv)
   have hRu := reads_before hinj hu R'
   have hPLu : ∀ e ∈ P, e ∈ Lu ∧ e.1 ∈ st.ids ∧ e.2 = st.blk e.1 := fun e he => by
-    have heL := ((mem_inHistory Lu).mp he).1
+    have heL := ((mem_hashed Lu).mp ((mem_inHistory Lu).mp he).1).1
     exact ⟨heL, (mem_streamOf st j heL).1, hLmap e heL⟩
   -- some block of the part references a block neither `v` nor the part holds
   obtain ⟨x, hxP, y', hy', hyn, hyP⟩ :
@@ -141,11 +146,13 @@ theorem converges : Converges := by
       · exact Or.inl hyd
       · exact Or.inr (hall' e he y hy hyd)
   obtain ⟨hxLu, hxst, hxb⟩ := hPLu x hxP
-  have hxf := ((mem_inHistory Lu).mp hxP).2.2.2
+  have hxf := ((mem_inHistory Lu).mp hxP).2.2
+  have hxLh := ((mem_inHistory Lu).mp hxP).1
   obtain ⟨xi, xb⟩ := x
   change xb = st.blk xi at hxb
   subst hxb
   have hxi : xi ∈ Lu.map Prod.fst := List.mem_map_of_mem (f := Prod.fst) hxLu
+  have hxi' : xi ∈ Lh.map Prod.fst := List.mem_map_of_mem (f := Prod.fst) hxLh
   -- that block was asked for by name, so the stream holds it, and so does the part
   have hyids : y' ∈ ids := hAids y' (hasked _ (List.mem_cons_of_mem _ hxP) y' hy' hyn (by
     intro h
@@ -158,9 +165,12 @@ theorem converges : Converges := by
     obtain ⟨e, he, hey⟩ := List.mem_map.mp hyLu
     have : e = (y', st.blk y') := Prod.ext hey (by rw [hLmap e he, hey])
     exact this ▸ he
+  have hyLh : (y', st.blk y') ∈ Lh :=
+    (mem_hashed Lu).mpr ⟨hyLu', id_of_knownIn (stored_known hu hyst)⟩
   have hyP' : (y', st.blk y') ∈ P := by
-    refine (mem_inHistory Lu).mpr ⟨hyLu', id_of_knownIn (stored_known hu hyst), fun hcv => ?_,
-      found_closed Lu j hxf ((pieceRefs_of_map Lu hLmap hxi).mpr hy') hyLu⟩
+    refine (mem_inHistory Lu).mpr ⟨hyLh, fun hcv => ?_,
+      found_closed Lh j hxf ((pieceRefs_of_map Lh hLhmap hxi').mpr hy')
+        (List.mem_map_of_mem (f := Prod.fst) hyLh)⟩
     exact hyn (own_stored (own_known (v := v) htime hu hv (show R' ≤ R'' by omega)
       ((inv_before R' u).known y' hyst) hcv)).1
   exact hyP (List.mem_map_of_mem (f := Prod.fst) hyP')

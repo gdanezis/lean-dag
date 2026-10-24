@@ -245,14 +245,20 @@ omit [Fintype Validator] in
 /-- **Membership of the part of a piece in a block's history.** -/
 theorem mem_inHistory {b : BlockId × Block Validator BlockId Payload}
     {e : BlockId × Block Validator BlockId Payload} :
-    e ∈ inHistory cfg b L ↔ e ∈ L ∧ e.1 = cfg.idOf e.2 ∧ e.2.creator ≠ cfg.me ∧
-      e.1 ∈ (pieceAt L b.1 (L.length + 1)).2 := by
+    e ∈ inHistory cfg b L ↔ e ∈ hashed cfg L ∧ e.2.creator ≠ cfg.me ∧
+      e.1 ∈ (pieceAt (hashed cfg L) b.1 ((hashed cfg L).length + 1)).2 := by
   unfold inHistory
   rw [List.mem_mergeSort, List.mem_filter]
   simp only [Bool.and_eq_true, decide_eq_true_eq]
   constructor
-  · rintro ⟨h, ⟨h₁, h₂⟩, h₃⟩; exact ⟨h, h₁, h₂, h₃⟩
-  · rintro ⟨h, h₁, h₂, h₃⟩; exact ⟨h, ⟨h₁, h₂⟩, h₃⟩
+  · rintro ⟨h, h₁, h₂⟩; exact ⟨h, h₁, h₂⟩
+  · rintro ⟨h, h₁, h₂⟩; exact ⟨h, h₁, h₂⟩
+
+omit [Fintype Validator] in
+theorem mem_hashed {e : BlockId × Block Validator BlockId Payload} :
+    e ∈ hashed cfg L ↔ e ∈ L ∧ e.1 = cfg.idOf e.2 := by
+  unfold hashed
+  simp
 
 omit [Fintype Validator] [DecidableEq Validator] in
 /-- **A piece of a block map's blocks** gives each identifier it holds the
