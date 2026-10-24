@@ -316,6 +316,8 @@ after GST is the same.
 
 ## 8. Open
 
+The plan to run these syncs and checks on the node is `docs/node-sync.md`.
+
 * **A budget that admits honest blocks.** §6 rules out the three rules
   tried as they stand. The catch-up chain reaches the frontier block only
   through the node's references to its own blocks.

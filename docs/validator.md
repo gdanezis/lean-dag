@@ -849,7 +849,9 @@ no inclusion, so a node need not reference its own blocks.
 ## 9. Next
 
 The restart, resending and liveness across crashes are done, including
-decisions resuming after every node crashed (§3.6, §5.6). Open:
+decisions resuming after every node crashed (§3.6, §5.6). The plan to
+replace receipt and fetching by the syncs of `docs/sync.md`, and to add
+its DoS protections, is `docs/node-sync.md`. Open:
 
 * the disk and the decisions grow with the chain, which they record;
   `pending` grows under attack, by about two blocks a round when an
