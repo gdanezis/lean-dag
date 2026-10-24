@@ -11,14 +11,15 @@ the stages, and what each stage keeps proved.
 
 ## 1. Where the node stands
 
-Stages 0 to 4 are done (§4), but for the premise in time of Stage 4. The node receives blocks by
-announcements and syncs, one sync for each peer (`docs/validator.md`
-§3.4); it holds at most `n − 1` syncs (V1, `SyncsBound`), and the honest
-nodes converge (V3′). Its blocks carry evidence of equivocation and the
-authors they expose; a block is valid only if it references no author it
-exposes (`Clause.exposes`). The node convicts the authors its evidence
-names, takes no announcement from them, answers none of their requests,
-and leaves them out of its references.
+Stages 0 to 4 are done (§4), but for the premise in time of Stage 4. The
+node receives blocks by announcements and syncs, one sync for each peer
+(`docs/validator.md` §3.4); it holds at most `n − 1` syncs (V1,
+`SyncsBound`), and the honest nodes converge (V3′). Its blocks carry
+evidence of equivocation and the authors they expose; a block is valid
+only if it references no author it exposes (`Clause.exposes`). The node
+convicts the authors its evidence names, takes no announcement from
+them, answers none of their requests, and leaves them out of its
+references.
 
 A stream piece is taken in only if it brings the whole history of the
 sync's block, every block of which passes the checks (`takeIn`), so a
@@ -198,10 +199,15 @@ audits, the documents updated, and a commit.
   unreferenced, and the disk holds at most `n + |D|` blocks a round. The
   walk through a piece goes only through blocks under their hash
   (`hashed`); were it to go through blocks under another identifier too,
-  a peer could have any valid block taken in. Open: the premise in time, which the Sync
-  model does not prove either: past GST, every honest block built
-  `Δ + Δₛ` after an honest node convicted `X` carries or inherits the
-  evidence, from `Arrival`.
+  a peer could have any valid block taken in. Open: the premise in time,
+  which the Sync model does not prove either. It does not hold with the
+  builder as it is: a reliable node that convicted `X` and lends the
+  references of another author's next-round block, because its own fail
+  the tests, can reference a block of `X`, and its block then does not
+  expose `X` (`docs/validator.md` §9). Lending only sets that avoid the
+  authors the builder leaves out, while its own set can be built, would
+  give it, if the wave facts can do without a lent set that references
+  such an author.
 
 Stage 3 needs Stages 1 and 2, and Stage 4 needs Stage 3.
 

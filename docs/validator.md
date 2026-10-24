@@ -984,7 +984,16 @@ and the bound on the blocks a node holds a round (V13), Stage 4. Open:
   each stream carries its blocks above that round in the history of the
   stream's block, as it does a detected author's, whose frontier is `0`;
 * V13 assumes that every honest block of a round exposes the convicted
-  authors; the round from which this holds past GST is not proved;
+  authors, and past GST this need not hold with the builder of §3.2. A
+  reliable node that convicted `X` and builds on the references of
+  another author's block of the next round, because its own fail the
+  tests, can reference a block of `X`; its block is then valid, does not
+  expose `X`, and a later block may inherit the omission. Lending only
+  sets that avoid the authors the builder leaves out, while its own set
+  can be built, would give the premise from the round above the highest
+  reliable round built `Δ + Δₛ` after a reliable conviction, but the
+  wave facts (§5.3) take a lent set that passes the tests whenever one
+  exists (`ready_transfer`);
 * the record V12 builds is at `ValidAt q Clause.none`, not at the
   exposure clause the node checks;
 * a node answers every request of a peer it has not convicted, so before
