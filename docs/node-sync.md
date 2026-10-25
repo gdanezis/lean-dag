@@ -107,10 +107,10 @@ at before every reliable node held the evidence.
   target's history in only if the target is then held, and none of it
   otherwise (`takeIn`). The piece is the buffer: a part not taken in is
   dropped, and the next answer streams it again with the names asked
-  for, so the node keeps no buffer across pieces. A part above the cap
-  (`Config.cap`) is not taken in; the cap must exceed the history of any
-  honest target above the frontier, which V3′ assumes (`StreamsFit`). A
-  target refused does not mark its announcer: the node keeps no record
+  for, so the node keeps no buffer across pieces. A piece has no size
+  limit: the history of an honest target above the frontier grows with
+  the time the node is behind, and with a limit a node behind by more
+  than it does not catch up. A target refused does not mark its announcer: the node keeps no record
   of faults that it cannot pass on as evidence.
 * **D2. Authenticated links.** An announcement and a stream must name
   their sender: `Input.deliver` gains the peer. The proofs already assume
@@ -178,8 +178,8 @@ audits, the documents updated, and a commit.
   V12 gain the premise `EvidenceAuthentic`, and V11, V11′ and V12
   `Faithful`. Where fewer than `q` authors are left, the proofs build on
   a lent reference set (`lent_buildable`).
-* **Stage 3 — admission** (D1). *Done.* `takeIn` and `Config.cap`; V3′
-  re-proved with the premise `StreamsFit`: a valid part in order of
+* **Stage 3 — admission** (D1). *Done.* `takeIn`; V3′ re-proved: a
+  valid part in order of
   round whose references are held or in it is taken in whole
   (`foldl_all`), so the last request's piece lacks a reference, which was
   asked for. The simulator reports the most blocks of one round on an
@@ -219,6 +219,8 @@ Stage 3 needs Stages 1 and 2, and Stage 4 needs Stage 3.
   in (S4), and only with rate limits from the environment.
 * The cost of answering requests (D6), before conviction.
 * V12's record at the exposure clause.
-* Catch-up after a long outage reads the headers of every round missed;
-  the cap of D1 must allow it, or a node behind by more than the cap needs
-  a bootstrap, which the core does not have.
+* Catch-up after a long outage takes in one piece holding the history of
+  the target above the frontier, which grows with the time the node was
+  behind. The frontier is an author's least round not held, so after a
+  restart's jump every stream carries the restarted author's blocks from
+  the jump up.

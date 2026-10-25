@@ -99,8 +99,6 @@ structure Config where
   /-- The payload of the node's round-`r` block, carrying the evidence `E`
   and exposing the authors `X`. -/
   payload : ℕ → Finset (Validator × BlockId × BlockId) → Finset Validator → Payload
-  /-- The most blocks of a stream piece the node takes in at once. -/
-  cap : ℕ
 
 variable {Validator BlockId Payload}
 

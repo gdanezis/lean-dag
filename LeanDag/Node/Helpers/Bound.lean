@@ -472,7 +472,7 @@ theorem Steady.takeIn {g : BlockId → Block Validator BlockId Payload}
           i ∉ ((Node.absorb cfg s (inHistory cfg t L)).disk.blk j).refs) → i = t.1 := by
       intro i hi hin hiu
       by_contra hit
-      obtain ⟨z, hz, hiz⟩ := takeIn_referenced hst' hL hc.2 hi hin hit
+      obtain ⟨z, hz, hiz⟩ := takeIn_referenced hst' hL hc hi hin hit
       exact hiu z hz hiz
     obtain rfl := hone i hi hin hiu
     have hb : (Node.absorb cfg s (inHistory cfg t L)).disk.blk t.1 = t.2 := by

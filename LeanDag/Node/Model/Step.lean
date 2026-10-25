@@ -69,10 +69,10 @@ input `i` in the state `s`: the new state and the outputs.
   for, or at or above their author's frontier, in order of round. Of a
   stream piece the node reads the blocks under their hash reached from the
   sync's block through such blocks (`hashed`, `inHistory`). It takes them
-  in, in order of round, each accepted if it is ready, only if they are at
-  most `cap` and the sync's block is then held: all of them or none
-  (`takeIn`). Otherwise the references that neither the disk nor the
-  piece holds are asked for by name in the next request (`missingIn`).
+  in, in order of round, each accepted if it is ready, only if the sync's
+  block is then held: all of them or none (`takeIn`). Otherwise the
+  references that neither the disk nor the piece holds are asked for by
+  name in the next request (`missingIn`).
 * **Resending** (`resend`): when the retry timer, or the top round's,
   fires and the node does not build, and when it restarts, before it
   settles, the node broadcasts its top block again, sets the retry timer
@@ -455,11 +455,11 @@ def absorb (s : State Validator BlockId Payload)
   L.foldl (fun s e => accept cfg s e.1 e.2) s
 
 /-- **Take a stream piece in, header first**: its part `L` in the history
-of the sync's block `t`, if `L` has at most `cap` blocks and taking it in
-makes `t` held; otherwise nothing. -/
+of the sync's block `t`, if taking it in makes `t` held; otherwise
+nothing. -/
 def takeIn (s : State Validator BlockId Payload) (t : BlockId × Block Validator BlockId Payload)
     (L : List (BlockId × Block Validator BlockId Payload)) : State Validator BlockId Payload :=
-  if L.length ≤ cfg.cap ∧ t.1 ∈ (absorb cfg s L).disk.ids then tidy (absorb cfg s L) else s
+  if t.1 ∈ (absorb cfg s L).disk.ids then tidy (absorb cfg s L) else s
 
 /-- **Accept the syncs' blocks that are ready**, and drop the syncs done, in
 passes, at most `fuel`. -/

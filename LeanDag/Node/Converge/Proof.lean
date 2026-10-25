@@ -9,7 +9,7 @@ Let honest `u` end with its own block `(j, b)` at its top, so every block
 with `u` since (`sync_made`, `sync_stays`). Take the sync's last request,
 at `R` (`last_ask`). `u` answered it with the stream of `j`'s history,
 which `v` received and which led to no request. So `v` did not take the
-piece's part in `j`'s history in, which fits the cap, and each reference of
+piece's part in `j`'s history in, and each reference of
 `b` or of that part that neither `v` nor the part holds was asked for by
 name at `R` (`step_stream_stuck`). The part is valid and in order of
 round, so if each of its references were held or in it, it would have
@@ -25,7 +25,7 @@ namespace Node
 namespace Converge
 
 theorem converges : Converges := by
-  intro Validator BlockId Payload _ _ _ cfg H tr hdel htime hinj hev hfit u hu j hown y hy v hv
+  intro Validator BlockId Payload _ _ _ cfg H tr hdel htime hinj hev u hu j hown y hy v hv
   have hiu := inv_before (cfg := cfg) (tr := tr) tr.length u
   obtain ⟨hjd, hjB⟩ := hiu.own j hown
   set b := (stateBefore cfg tr tr.length u).disk.blk j with hb
@@ -99,7 +99,7 @@ theorem converges : Converges := by
   have hdet : u ∉ (Node.step (cfg.at v) s (.stream u Lu)).1.detected := by
     rw [← step_before hR'']; exact not_detected htime hev hu hv _
   obtain ⟨hadm, hasked⟩ := step_stream_stuck (syncsOn_before v R'') heA hno hheld hdet
-  -- the piece's part in `j`'s history, which fits the cap
+  -- the piece's part in `j`'s history
   set P := inHistory (cfg.at v) (j, b) Lu with hP
   set Lh := hashed (cfg.at v) Lu with hLh
   have hLhmap : ∀ e ∈ Lh, e.2 = st.blk e.1 := fun e he => hLmap e ((mem_hashed Lu).mp he).1
@@ -110,11 +110,6 @@ theorem converges : Converges := by
   have hjP : (j, b) ∈ P :=
     (mem_inHistory Lu).mpr ⟨hjLh, by change b.creator ≠ v; rw [hc]; exact huv,
       found_self Lh j (List.mem_map_of_mem (f := Prod.fst) hjLh)⟩
-  have hcap : P.length ≤ (cfg.at v).cap := by
-    have h₁ : P.length ≤ Lu.length := by
-      rw [hP]; unfold inHistory hashed; rw [List.length_mergeSort]
-      exact (List.length_filter_le _ _).trans (List.length_filter_le _ _)
-    exact h₁.trans (hfit R' u _ hR' hu v Lu hout hv)
   have hRu := reads_before hinj hu R'
   have hPLu : ∀ e ∈ P, e ∈ Lu ∧ e.1 ∈ st.ids ∧ e.2 = st.blk e.1 := fun e he => by
     have heL := ((mem_hashed Lu).mp ((mem_inHistory Lu).mp he).1).1
@@ -124,7 +119,7 @@ theorem converges : Converges := by
       ∃ x ∈ P, ∃ y' ∈ x.2.refs, y' ∉ s.disk.ids ∧ y' ∉ P.map Prod.fst := by
     by_contra hall'
     push Not at hall'
-    refine hadm ⟨hcap, ?_⟩
+    refine hadm ?_
     rw [absorb_disk]
     refine foldl_all (g := gT cfg H tr) P s.disk ?_ (reads_before hinj hv R'') (fun e he => ?_)
       (fun e he => ?_) (fun e he y hy => ?_) (j, b) hjP

@@ -15,9 +15,7 @@ adversary, assume:
   nodes knew have one identifier;
 * **authentic evidence** (`EvidenceAuthentic`): no block the honest
   nodes knew carries evidence naming an honest author with two distinct
-  blocks, which is what signed headers give;
-* **streams fit** (`StreamsFit`): every stream an honest node sends
-  another has at most `cap` blocks.
+  blocks, which is what signed headers give.
 
 Then **every block in the history of an honest node's block at its top
 is on every honest node's disk at the end** (`Converges`).
@@ -69,13 +67,6 @@ def EvidenceAuthentic (cfg : Config Validator BlockId Payload) (H : Finset Valid
     (tr : Trace Validator BlockId Payload) : Prop :=
   ∀ x ∈ knownIn cfg H tr, ∀ e ∈ cfg.xp.ev x.2.payload, e.2.1 ≠ e.2.2 → e.1 ∉ H
 
-/-- **Streams fit**: every stream an honest node sends another has at most
-`cap` blocks. -/
-def StreamsFit (cfg : Config Validator BlockId Payload) (H : Finset Validator)
-    (tr : Trace Validator BlockId Payload) : Prop :=
-  ∀ i u inp, tr[i]? = some (u, inp) → u ∈ H → ∀ v L, Output.stream v L ∈ outputsAt cfg tr i →
-    v ∈ H → L.length ≤ cfg.cap
-
 /-- **Every block in the history of an honest node's block at its top is on
 every honest node's disk at the end.** -/
 def Converges : Prop :=
@@ -83,7 +74,7 @@ def Converges : Prop :=
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload),
     Delivered cfg H tr → TimelyAuthentic cfg H tr → HashInjective cfg H tr →
-    EvidenceAuthentic cfg H tr → StreamsFit cfg H tr →
+    EvidenceAuthentic cfg H tr →
     ∀ u ∈ H, ∀ j, (stateBefore cfg tr tr.length u).own = some j →
       ∀ y ∈ historyFrom (stateBefore cfg tr tr.length u).disk.blk j, ∀ v ∈ H,
         y ∈ (stateBefore cfg tr tr.length v).disk.ids

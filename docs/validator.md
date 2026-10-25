@@ -320,9 +320,8 @@ of round (`streamOf`), and with nothing if it holds none.
 which it has a sync, the node reads the blocks of the piece under their
 hash reached from the sync's block through such blocks, other than its
 own (`hashed`, `inHistory`). It takes them in, in order of round, each
-accepted if it is ready then (`absorb`), only if they are at most `cap`
-and the sync's block is then held; otherwise it takes none of them
-(`takeIn`).
+accepted if it is ready then (`absorb`), only if the sync's block is
+then held; otherwise it takes none of them (`takeIn`).
 So a block of a stream enters the disk only with the whole history of
 the sync's block, every block of which passes the checks: a block that
 breaks the exposure rule keeps out the blocks below it in the piece,
@@ -343,7 +342,7 @@ peer holds the history of every block it holds, so it streams the block
 asked for. If `v` never held honest `u`'s top block, the last request of
 `v`'s sync for it was answered with a piece that was not taken in and
 asked nothing. The piece's part in the block's history is valid, in
-order of round and within the cap (`StreamsFit`), so some reference of
+order of round, so some reference of
 it is neither held by `v` nor in it (`foldl_all`); that reference was
 asked for by name, so the piece holds it, in the part (V3′).
 
@@ -486,7 +485,7 @@ four a round. It needs no bootstrap, since no block is collected.
 | V1 | Over any input sequence: the node's own blocks, those it persists, are its own and identified by their hash; they lie at strictly increasing rounds; each references only blocks it knew, and is valid at the row under every block map agreeing with what it knew; it broadcasts each block it persists, and only blocks it persists; it keeps the decisions it outputs, which are slots `0 … lo − 1`; it holds at most `n − 1` syncs. | `Node.Local.OneEach`, `Authored`, `Sends`, `ValidOut`, `Decisions`, `SyncsBound` (proved, `Local/Proof.lean`): `Node.syncsOn_run`, `Node.syncs_length_le` |
 | V2 | **The decisions are the scheme's**: at the bounded vote, a decision step of a node whose memory holds the round of its next undecided slot, as it always does (§3.1), outputs what `Scheme.tryDecide` decides on any record and view holding the disk's blocks, read alike; over successive views this is the scheme's loop. | `Node.Local.DecidesOnView` (proved): `Node.tryDecide_memory`, `Node.Store.Mirrors.viewsAbove`, `Node.tryDecide_window`, `Node.ViewsAbove.of_store`, `Node.ViewsAbove.tryDecide_eq` |
 | V3 | **Safety**: over a trace with timely authentication of blocks, an injective hash and `Params.Tolerates`, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` of which every honest disk is a cut, and any two honest nodes' decisions are prefix-comparable. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
-| V3′ | **Convergence**: over a trace with delivery, timely authentication, an injective hash, authentic evidence and streams within the cap, every block in the history of an honest node's own block at its top at the end is on every honest node's disk at the end. No fault bound is needed: an honest node given the block has a sync for it until it holds it, and the answer to the sync's last request leads to no request, which it would if the node still lacked the block (§3.4). | `Node.Converge.Converges` (proved): `Node.Converge.sync_made`, `Node.Converge.sync_stays`, `Node.Converge.last_ask`, `Node.step_stream_stuck`, `Node.foldl_all`, `Node.Converge.not_detected`, `Node.eq_of_persists` |
+| V3′ | **Convergence**: over a trace with delivery, timely authentication, an injective hash, and authentic evidence, every block in the history of an honest node's own block at its top at the end is on every honest node's disk at the end. No fault bound is needed: an honest node given the block has a sync for it until it holds it, and the answer to the sync's last request leads to no request, which it would if the node still lacked the block (§3.4). | `Node.Converge.Converges` (proved): `Node.Converge.sync_made`, `Node.Converge.sync_stays`, `Node.Converge.last_ask`, `Node.step_stream_stuck`, `Node.foldl_all`, `Node.Converge.not_detected`, `Node.eq_of_persists` |
 | V13 | **The blocks a node holds a round**: over a trace with timely authentication and an injective hash, with fewer than `q` nodes outside the honest set, if every block of an honest author at round `m + 1` on an honest node's disk exposes every author the node convicted, its disk holds at most `n + |D|` blocks of each round from `m + 1` on, for `D` the authors it convicted: one of each author not convicted and two of each convicted. | `Node.Bound.Bounded` (proved, §3.4): `Node.steady_before`, `Node.Steady.step`, `Node.takeIn_referenced`, `not_mem_creators_refs_of_correct_exposed`, `Node.own_known` |
 | V8 | The claims are about the program that runs: its disk and memory are ordered maps, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` (§6) |
 | V11 | **Liveness**: over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, reliable nodes that do not restart, their timers on time, no honest node's timer early, timeouts above `2(Δ + Δₛ)`, authentic evidence and a faithful payload source, the reliable nodes produce a round per timeout and `Δ + Δₛ`, and a run of reliably led slots from a round that every reliable node was below at GST is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of a timeout and `Δ + Δₛ` per round. The honest nodes outside the reliable set need meet no other timing assumption. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy`, `Node.held_before` |
@@ -998,9 +997,12 @@ and the bound on the blocks a node holds a round (V13), Stage 4. Open:
   exposure clause the node checks;
 * a node answers every request of a peer it has not convicted, so before
   conviction a node can be made to stream any amount;
-* a piece above the cap is never taken in, so a node behind by more than
-  the cap's blocks above its frontier does not catch up by syncing; V3′
-  assumes the streams fit (`StreamsFit`), and the core has no bootstrap;
+* a piece has no size limit. The frontier is an author's least round not
+  held, so after a restart's jump every stream carries the restarted
+  author's blocks from the jump up: at Mysticeti with `n = 4` and node 2
+  down from tick 100 to 250, the longest piece an honest node receives
+  is 65 blocks over 400 ticks and 586 over 1,600, against 4 with no
+  outage;
 * a piece not taken in is streamed again whole with the names it lacked,
   since the node keeps no part of it;
 * a recovering node jumps only if the history it syncs arrives before a

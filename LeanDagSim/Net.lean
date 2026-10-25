@@ -90,8 +90,6 @@ structure Scenario where
   an equivocator accepts blocks built on its twin; it stops building, and
   it falls behind. -/
   byzUntil : ℕ := 200
-  /-- The most blocks of a stream piece a node takes in at once. -/
-  cap : ℕ := 100000
   /-- A withholding attack `(z, v, R)`: node `z` holds back its round-`R`
   block `x`, sends its round-`R + 1` block, which references `x`, to `v`
   alone, reveals `x` to the others `revealAfter` ticks later, and never
@@ -162,7 +160,6 @@ def cfgFor (sc : Scenario) (p : Scheme.Params) (q : ℕ) {n : ℕ} (hn : 0 < n) 
   idOf := idOf
   xp := payXp
   payload := fun _ E X => ⟨twin, E, X⟩
-  cap := sc.cap
 
 /-- An agent: a node, and which copy of it (`0` unless it equivocates). -/
 structure Agent (n : ℕ) where

@@ -717,8 +717,7 @@ theorem step_stream_stuck {s : State Validator BlockId Payload} (hs : SyncsOn s)
     (hno : ∀ fr ids, Output.sync u t.1 fr ids ∉ (Node.step cfg s (.stream u L)).2)
     (hheld : t.1 ∉ (Node.step cfg s (.stream u L)).1.disk.ids)
     (hdet : u ∉ (Node.step cfg s (.stream u L)).1.detected) :
-    ¬ ((inHistory cfg t L).length ≤ cfg.cap ∧
-        t.1 ∈ (absorb cfg s (inHistory cfg t L)).disk.ids) ∧
+    t.1 ∉ (absorb cfg s (inHistory cfg t L)).disk.ids ∧
       ∀ x ∈ t :: inHistory cfg t L, ∀ y ∈ x.2.refs, y ∉ s.disk.ids →
         y ∉ (t :: inHistory cfg t L).map Prod.fst → y ∈ A := by
   have h₁ := Thins.takeIn (cfg := cfg) s t (inHistory cfg t L)
@@ -728,14 +727,13 @@ theorem step_stream_stuck {s : State Validator BlockId Payload} (hs : SyncsOn s)
     · exact absurd h' hnin
     · exact absurd ((Thins.settle _).grows.1 h') hheld
     · exact absurd ((Thins.settle _).det h') hdet
-  · have hadm : ¬ ((inHistory cfg t L).length ≤ cfg.cap ∧
-        t.1 ∈ (absorb cfg s (inHistory cfg t L)).disk.ids) := by
+  · have hadm : t.1 ∉ (absorb cfg s (inHistory cfg t L)).disk.ids := by
       intro hc
       unfold takeIn at hin
       rw [if_pos hc] at hin
       have := (List.mem_filter.mp hin).2
       simp only [decide_eq_true_eq] at this
-      exact this.1 hc.2
+      exact this.1 hc
     have hs₁ : takeIn cfg s t (inHistory cfg t L) = s := by unfold takeIn; rw [if_neg hadm]
     rw [h, hs₁] at hno
     have hnm : (A ++ missingIn s (t :: inHistory cfg t L)).dedup.length = A.length := by

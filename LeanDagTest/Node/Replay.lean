@@ -50,7 +50,6 @@ def cfg (p : Scheme.Params) (per : ℕ) (hper : 0 < per) (elect : ℕ → Fin 4)
   idOf := idIn blk
   xp := ⟨fun _ => ∅, fun _ => ∅⟩
   payload := fun _ _ _ => ()
-  cap := 1000
 
 /-- The record's blocks, in order of round, through the acceptance path onto
 an empty disk: the number of blocks the disk accepted, the number it did
