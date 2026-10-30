@@ -236,7 +236,7 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
       exact (Local.authored _ _ _ (cfg.at w') _ z (persists_of_event hj' hz)).2
     have hzr' : (U.block z.1).round = n + 1 := by rw [hzB, hzr]
     obtain ⟨iw, inpw, xw, oww, hiw, -, hbsw, hshw, hzxw, ⟨yw, ow, hbw, heow, hew⟩, hzrefs, hzsub,
-      hgxw, hexitw⟩ := built_block time hσ hadm hf htime hinj hw'H hzU hzc hzr'
+      hgxw, hexitw, -⟩ := built_block time hσ hadm hf htime hinj hw'H hzU hzc hzr'
     have hiwj : iw = j' := persist_events_eq hiw hj' hew hz (by rw [hzr', hzr])
     subst hiwj
     -- the earlier block did not pass the tests, else the node would have
@@ -451,7 +451,7 @@ theorem reach_or_refs_node (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < c
           b).round = cfg.slots.slotRound k + m →
         b ∈ ((globalRecord (hashInjective_of_trace hinj)
           (authentic_of_timely htime)).block c).refs := by
-  obtain ⟨i₀, inp, x, ow, hi₀, hbt, hbs, hsh, hcx, hbuild, hcrefs, hsub, hgx, hexit⟩ :=
+  obtain ⟨i₀, inp, x, ow, hi₀, hbt, hbs, hsh, hcx, hbuild, hcrefs, hsub, hgx, hexit, -⟩ :=
     built_block time hσ hadm hf htime hinj (hTH hv) hcU hcv hcr
   by_cases hready : reachReady (cfg.at v) x.disk
         (refsAt (cfg.at v) x.disk (cfg.slots.slotRound k + m) ow x.evidence)
@@ -517,7 +517,7 @@ theorem cert_or_refs_node (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cf
           (authentic_of_timely htime)) b L →
         b ∈ ((globalRecord (hashInjective_of_trace hinj)
           (authentic_of_timely htime)).block c).refs := by
-  obtain ⟨i₀, inp, x, ow, hi₀, hbt, hbs, hsh, hcx, hbuild, hcrefs, hsub, hgx, hexit⟩ :=
+  obtain ⟨i₀, inp, x, ow, hi₀, hbt, hbs, hsh, hcx, hbuild, hcrefs, hsub, hgx, hexit, -⟩ :=
     built_block time hσ hadm hf htime hinj (hTH hv) hcU hcv hcr
   by_cases hready : reachReady (cfg.at v) x.disk
         (refsAt (cfg.at v) x.disk (cfg.slots.slotRound k + cfg.p.voteOffset) ow x.evidence)

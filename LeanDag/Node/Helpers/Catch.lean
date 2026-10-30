@@ -407,7 +407,7 @@ theorem lent_avoids_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
       z).creator = (Z.disk.blk z).creator := by rw [hcut.eq hz]
   have hzr' : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
       z).round = m + 1 := by rw [hcut.eq hz]; exact hzr
-  obtain ⟨iw, inpw, xw, oww, hiw, -, hbsw, hshw, -, ⟨-, -, -, -, hew⟩, hzrefs, hzsub, -, -⟩ :=
+  obtain ⟨iw, inpw, xw, oww, hiw, -, hbsw, hshw, -, ⟨-, -, -, -, hew⟩, hzrefs, hzsub, -, -, -⟩ :=
     built_block time hσ hadm hf htime hinj hzH hzU hzc hzr'
   have ho : ∀ j, oww = some j →
       (xw.disk.blk j).creator = (cfg.at (Z.disk.blk z).creator).me := fun j hj => by

@@ -3,6 +3,7 @@ import LeanDag.Node.Helpers.Bound
 import LeanDag.Node.Helpers.Arrive
 import LeanDag.Node.Local.Proof
 import LeanDag.Common.Exclusion
+import LeanDag.Node.Helpers.Catch
 /-!
 # The blocks a node holds a round — proof
 
@@ -96,7 +97,67 @@ theorem bounded : Bounded := by
         rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, smul_eq_mul, mul_one,
           Finset.sum_boole, Finset.filter_mem_eq_inter, Finset.univ_inter, Nat.cast_id]
 
-theorem holds : Statement := bounded
+/-- **Under spread evidence, an honest block above `nE` exposes every
+author an honest node convicted**: those authors are in `D`, its builder
+convicted all of `D` and references none of them, so its payload names
+them. -/
+theorem exposes_spread {Validator BlockId Payload : Type} [Fintype Validator]
+    [DecidableEq Validator] [LinearOrder BlockId] {cfg : Config Validator BlockId Payload} {H : Finset Validator}
+    {tr : Trace Validator BlockId Payload} {D : Finset Validator} {nE : ℕ}
+    (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : cfg.Faithful)
+    (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
+    (hinj : Converge.HashInjective cfg H tr) (hsp : Live.Spread cfg H tr D nE)
+    {v : Validator} (hv : v ∈ H) (i : ℕ) {c : BlockId} {r : ℕ}
+    (hc : c ∈ (stateBefore cfg tr i v).disk.ids)
+    (hcr : ((stateBefore cfg tr i v).disk.blk c).round = r + 1)
+    (hcH : ((stateBefore cfg tr i v).disk.blk c).creator ∈ H) (hrE : nE ≤ r) :
+    ∀ X ∈ (stateBefore cfg tr i v).detected,
+      X ∈ cfg.xp.ex ((stateBefore cfg tr i v).disk.blk c).payload := by
+  intro X hX
+  set s := stateBefore cfg tr i v with hs
+  -- the author is in `D`
+  have hXD : X ∈ D := by
+    obtain ⟨e, he, he1, hne⟩ := (Converge.evidenceOn_before (cfg := cfg) (tr := tr) v i).1 X hX
+    exact excluded_before_spread hsp hv i 0 (Finset.mem_union_left _
+      (Finset.mem_image.mpr ⟨e, Finset.mem_filter.mpr ⟨he, hne⟩, he1⟩))
+  -- the block as its builder built it
+  have hcut := (cut_before hσ hadm hf htime hinj i v hv).1
+  have hcU := (hcut _ hc).1
+  have hcc : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
+      c).creator = (s.disk.blk c).creator := by rw [hcut.eq hc]
+  have hcr' : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
+      c).round = r + 1 := by rw [hcut.eq hc]; exact hcr
+  obtain ⟨iw, inpw, xw, oww, hiw, -, hbsw, hshw, -, ⟨-, -, -, -, hew⟩, -, -, -, -, hpay⟩ :=
+    built_block (fun _ => 0) hσ hadm hf htime hinj hcH hcU hcc hcr'
+  have ho : ∀ j, oww = some j →
+      (xw.disk.blk j).creator = (cfg.at (s.disk.blk c).creator).me := fun j hj => by
+    rcases hshw.2.2 with ⟨ht, hoe⟩ | ⟨-, hon, -⟩
+    · obtain ⟨j', hj', -, -, hjc⟩ := hbsw.own r ht
+      rw [hoe, hj'] at hj
+      cases hj
+      exact hjc
+    · rw [hon] at hj; cases hj
+  have hAD := refs_avoid_spread (r := r) hsp hiw hcH hbsw hew (by rw [hcr']; omega) ho
+  -- its builder had convicted the author
+  obtain ⟨e, he, he1, hne⟩ := hbsw.ev.1 X
+    (hbsw.det (hsp.2.2 iw _ inpw hiw hcH _ hew (by rw [hcr']; omega) hXD))
+  rw [← hcut.eq hc, hpay]
+  unfold payloadFor
+  erw [(hfa _ _ _).2]
+  refine Finset.mem_union_left _ (Finset.mem_image.mpr ⟨e, Finset.mem_filter.mpr
+    ⟨Finset.mem_filter.mpr ⟨he, fun hm => ?_⟩, hne⟩, he1⟩)
+  obtain ⟨k, hk, hkc⟩ := mem_creatorsOf.mp hm
+  exact hAD k hk (by rw [hkc, he1]; exact hXD)
+
+/-- **Under spread evidence the bound holds from round `nE + 1`.** -/
+theorem spreads : Spreads := by
+  intro Validator BlockId Payload _ _ _ cfg H tr D nE v i k hσ hadm hfa hf hq htime hinj hsp hv
+    hk
+  exact bounded Validator BlockId Payload cfg H tr v i nE k htime hinj hv hq
+    (fun c hc hcr hcH X hX => exposes_spread hσ hadm hfa hf htime hinj hsp hv i hc hcr hcH le_rfl
+      X hX) hk
+
+theorem holds : Statement := ⟨bounded, spreads⟩
 
 end Bound
 

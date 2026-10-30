@@ -134,7 +134,9 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
         ((x.top = some r ∧ r ∈ x.fired ∨ behind (cfg.at v) x.disk r) ∧
           (refsAt (cfg.at v) x.disk r ow x.evidence = refsFor (cfg.at v) x.disk r ow x.evidence ∨
             buildable (cfg.at v) x.disk r (refsFor (cfg.at v) x.disk r ow x.evidence)
-              x.evidence = false)))
+              x.evidence = false))) ∧
+      ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c).payload =
+        payloadFor (cfg.at v) x.disk r (refsAt (cfg.at v) x.disk r ow x.evidence) x.evidence
     := by
   have hinjR := hashInjective_of_trace hinj
   have hauthR := authentic_of_timely htime
@@ -220,10 +222,15 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     have := congrArg (fun e => e.2.refs) hAB
     simp only at this
     exact this.symm
+  have hbpay : b.payload = payloadFor (cfg.at v) x'.disk r'
+      (refsAt (cfg.at v) x'.disk r' ow x'.evidence) x'.evidence := by
+    have := congrArg (fun e => e.2.payload) hAB
+    simp only [blockOn] at this
+    rw [← e₆]; exact this.symm
   have hce : (e₀.1, U.block e₀.1) = e₀ := by rw [hUb, heo']
   refine ⟨i₀, inp, x', ow, hi₀, hbt, hbs, ⟨hsome, hle, hro⟩, by rw [heo']; exact hnew,
     ⟨y, o, hb, by rw [hce, hout, persists_built, List.mem_singleton]; exact heo,
-      by rw [hce]; exact he₀⟩, by rw [hUb, hbrefs], ?_, hgx, hexit⟩
+      by rw [hce]; exact he₀⟩, by rw [hUb, hbrefs], ?_, hgx, hexit, by rw [hUb, hbpay]⟩
   rw [← hbrefs]
   exact hrefs
 

@@ -1,4 +1,5 @@
 import LeanDag.Node.Converge.Statement
+import LeanDag.Node.Live.Statement
 /-!
 # The blocks a node holds a round — statement
 
@@ -9,6 +10,12 @@ an injective hash, let fewer than `q` nodes lie outside the honest set
 most `n + |D|` blocks of each round from `m + 1` on**, for `D` the authors
 `v` convicted (`Bounded`): one of each author not convicted, and two of
 each convicted.
+
+Under spread evidence (`Live.Spread`) for a set `D` and a round `nE`, at
+the bounded vote of an admissible configuration with a faithful payload
+source and at most `f` nodes outside `H`, every honest block above `nE`
+exposes the authors an honest node convicted, so the bound holds from
+round `nE + 1` (`Spreads`).
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -31,8 +38,21 @@ def Bounded : Prop :=
       ∀ X ∈ s.detected, X ∈ cfg.xp.ex (s.disk.blk c).payload) →
     m + 1 ≤ k → (s.disk.atRound k).card ≤ Fintype.card Validator + s.detected.card
 
+/-- **At most `n + |D|` blocks a round above `nE`, under spread
+evidence.** -/
+def Spreads : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
+    (tr : Trace Validator BlockId Payload) (D : Finset Validator) (nE : ℕ) (v : Validator)
+    (i k : ℕ),
+    cfg.σ = boundedSel → cfg.Admissible → cfg.Faithful → Hᶜ.card ≤ cfg.f → Hᶜ.card < cfg.q →
+    Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr →
+    Live.Spread cfg H tr D nE → v ∈ H → nE + 1 ≤ k →
+    ((stateBefore cfg tr i v).disk.atRound k).card ≤
+      Fintype.card Validator + (stateBefore cfg tr i v).detected.card
+
 /-- The blocks a node holds a round. -/
-def Statement : Prop := Bounded
+def Statement : Prop := Bounded ∧ Spreads
 
 end Bound
 
