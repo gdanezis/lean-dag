@@ -32,17 +32,14 @@ section Core
 variable {P : Validity Validator BlockId Payload} {honest : Finset Validator}
 variable {U : BlockRecord Validator BlockId Payload P honest}
 
-/-- **The reactive timing**, at any record: `PaceCore` with the ceiling
-and the round-advance clause in place of `ViewPace`'s full-timeout
-floor. What a reactive discipline's wait clauses are stated over. -/
+/-- **The reactive timing**, at any record: `PaceCore` with the
+round-advance clause in place of `ViewPace`'s full-timeout floor. What a
+reactive discipline's wait clauses are stated over. -/
 structure ReactiveCore (U : BlockRecord Validator BlockId Payload P honest)
     (T : Finset Validator) (N : ℕ) extends PaceCore U T N where
   /-- Time advances with rounds — the only lower bound a reactive
   schedule keeps, over the rounds `v` reached. -/
   built_lt : ∀ v ∈ T, ∀ n < top v, built v n < built v (n + 1)
-  /-- **The reactive ceiling.** A validator never waits past the
-  timeout; it may build any time before it. -/
-  deadline : ∀ v ∈ T, ∀ n < top v, built v (n + 1) ≤ built v n + timeout n
 
 namespace ReactiveCore
 
@@ -189,7 +186,7 @@ theorem built_succ_le_of_fast {δ : ℕ}
 omit [DecidableEq BlockId] in
 /-- **The timeout never fires.** When delivery, drift and processing
 together undercut the timeout, every reliable validator builds strictly
-before its deadline — the fallback branch of `vote_or_wait` is never
+before its timeout expires — the fallback branch of `vote_or_wait` is never
 taken, and consensus proceeds at network speed. -/
 theorem no_timeout_of_fast {δ : ℕ}
     (hδ : ∀ v ∈ T, ∀ b ∈ U.ids, (U.block b).creator ∈ T →

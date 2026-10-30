@@ -12,16 +12,18 @@ than incomparable; agreement across such horizons follows by chaining
 `viewUpto_subset_viewUpto_succ` is the depth rule: post-`R`, everything
 any correct validator retains by round `m` is in every correct
 validator's store by `m + 1`, so a horizon trailing the frontier by
-`Λ ≥ 1` discards nothing a correct peer still lacks.
+`Λ ≥ 1` discards nothing a correct peer still lacks. Stated on any block
+record, the correct validators read as the receivers `T` inside its
+honest set.
 -/
 
 namespace LeanDag
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
-variable [F : Faults Validator]
 variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
-variable {U : BlockUniverse Validator BlockId Payload}
-variable {D : Delivery U} {v w : Validator} {G : ℕ}
+variable {P : Validity Validator BlockId Payload} {honest : Finset Validator} [P.Mechanised]
+variable {U : BlockRecord Validator BlockId Payload P honest}
+variable {D : Delivery U} {v w : Validator} {G : ℕ} {T : Finset Validator}
 
 /-! ## G8 — the composition law -/
 
@@ -31,7 +33,7 @@ private theorem block_eq_of {b₁ b₂ : Block Validator BlockId Payload}
   cases b₁; cases b₂
   simp_all
 
-private theorem universe_eq_of {U₁ U₂ : BlockUniverse Validator BlockId Payload}
+private theorem universe_eq_of {U₁ U₂ : BlockRecord Validator BlockId Payload P honest}
     (hids : U₁.ids = U₂.ids) (hblock : U₁.block = U₂.block) : U₁ = U₂ := by
   cases U₁; cases U₂
   cases hids; cases hblock
@@ -73,17 +75,16 @@ retains by round `m` is in **every** correct validator's store by
 (`viewUpto_subset_history`, S10 + `includes`), and post-`R` that block is
 delivered to and accepted by every correct validator. Possession is
 universal one round deep. -/
-theorem viewUpto_subset_viewUpto_succ {R m : ℕ}
-    (hED : EventuallyDelivers D R) (hcar : Populated U (m + 1))
-    (hv : v ∈ (Correct : Finset Validator))
-    (hw : w ∈ (Correct : Finset Validator)) (hR : R ≤ m + 1) :
+theorem viewUpto_subset_viewUpto_succ [P.SelfParent] {R m : ℕ}
+    (hED : EventuallyDeliversOn D T R) (hT : T ⊆ honest) (hcar : PopulatedOn U T (m + 1))
+    (hv : v ∈ T) (hw : w ∈ T) (hR : R ≤ m + 1) :
     viewUpto D v m ⊆ viewUpto D w (m + 1) := by
   obtain ⟨b, hb, hbc, hbr⟩ := hcar v hv
   have hacc : b ∈ D.accepted w (m + 1) :=
-    D.accepts_correct w hw (m + 1) b
-      (hED (m + 1) hR w hw b hb hbr (by rw [hbc]; exact hv))
-      (by rw [hbc]; exact hv)
-  exact (viewUpto_subset_history hv hb hbc hbr).trans
+    D.accepts_correct w (hT hw) (m + 1) b
+      (hED (m + 1) hR w hw b hb hbr (by rw [hbc]; exact hT hv))
+      (by rw [hbc]; exact hT hv)
+  exact (viewUpto_subset_history (hT hv) hb hbc hbr).trans
     (history_subset_viewUpto (le_refl _) hacc)
 
 /-- **G9 (no desync).** What a validator prunes at any horizon, every
@@ -91,13 +92,12 @@ correct peer already holds one round later: pruning below a correct
 frontier at depth `Λ ≥ 1` discards nothing a correct peer still lacks.
 A validator outside the envelope is on the bootstrap path, where the
 attested base takes over (G10–G12). -/
-theorem pruned_subset_peer_store {R m : ℕ}
-    (hED : EventuallyDelivers D R) (hcar : Populated U (m + 1))
-    (hv : v ∈ (Correct : Finset Validator))
-    (hw : w ∈ (Correct : Finset Validator)) (hR : R ≤ m + 1) :
+theorem pruned_subset_peer_store [P.SelfParent] {R m : ℕ}
+    (hED : EventuallyDeliversOn D T R) (hT : T ⊆ honest) (hcar : PopulatedOn U T (m + 1))
+    (hv : v ∈ T) (hw : w ∈ T) (hR : R ≤ m + 1) :
     (viewUpto D v m).filter (fun i => (U.block i).round < G) ⊆
       viewUpto D w (m + 1) :=
   (Finset.filter_subset _ _).trans
-    (viewUpto_subset_viewUpto_succ hED hcar hv hw hR)
+    (viewUpto_subset_viewUpto_succ hED hT hcar hv hw hR)
 
 end LeanDag

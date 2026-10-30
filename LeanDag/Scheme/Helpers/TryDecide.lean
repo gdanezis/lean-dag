@@ -503,31 +503,23 @@ theorem mem_takeWhile_of {β : Type} {q : ℕ × β → Bool} :
     · exact List.mem_cons_of_mem _ (ih (a + 1) hr.2 he
         fun e' he' h => hq e' (List.mem_cons_of_mem _ he') h)
 
-/-- **`TryDecide` outputs every derived verdict** once every slot from `lo`
-to `k` has one and the scan reaches far enough. -/
-theorem tryDecide_eventually (hl : 1 ≤ p.linkSize) (hcm : 1 ≤ p.commitThreshold)
+/-- **`TryDecide` outputs every verdict derived within a bound** `B`, once
+every slot from `lo` to `k` has one and the scan reaches `B - 1` and `k`. -/
+theorem tryDecide_within (hl : 1 ≤ p.linkSize) (hcm : 1 ≤ p.commitThreshold)
     (hc : p.voteIsCert = false → 1 ≤ p.certThreshold)
     {I : Slots Validator → BlockRecord Validator BlockId Payload P honest → Prop}
-    (hlaws : (schemeAnchored p σ).Laws I) (hI : I S U) {lo k : ℕ} (hlok : lo ≤ k)
-    (hall : ∀ m, lo ≤ m → m ≤ k → ∃ v, (schemeAnchored p σ).Decided U V m v) :
-    ∃ N₀, ∀ N, N₀ ≤ N → ∀ v, (schemeAnchored p σ).Decided U V k v →
-      (k, v) ∈ tryDecide p σ U V lo N := by
+    (hlaws : (schemeAnchored p σ).Laws I) (hI : I S U) {lo k B N : ℕ} (hlok : lo ≤ k)
+    (hkN : k ≤ N) (hBN : B ≤ N + 1)
+    (hall : ∀ m, lo ≤ m → m ≤ k → ∃ v, (schemeAnchored p σ).DecidedWithin U V B m v) :
+    ∀ v, (schemeAnchored p σ).Decided U V k v → (k, v) ∈ tryDecide p σ U V lo N := by
   classical
-  have hb : ∀ m, ∃ B, lo ≤ m → m ≤ k → ∀ v, (schemeAnchored p σ).Decided U V m v →
-      ∀ N, B ≤ N → decisionAt p σ U V N m = some v := by
-    intro m
-    by_cases hm : lo ≤ m ∧ m ≤ k
-    · obtain ⟨v, hv⟩ := hall m hm.1 hm.2
-      obtain ⟨B, hB⟩ := decisionAt_eventually hl hcm hc hlaws hI hv
-      refine ⟨B, fun _ _ v' hv' N hN => ?_⟩
-      rw [AnchoredRule.decided_unique hlaws hI hv' V v hv]
-      exact hB N hN
-    · exact ⟨0, fun h1 h2 => absurd ⟨h1, h2⟩ hm⟩
-  choose B hB using hb
-  refine ⟨(Finset.range (k + 1)).sup B + k, fun N hN v hv => ?_⟩
-  have hBm : ∀ m, m ≤ k → B m ≤ N := fun m hm => by
-    have := Finset.le_sup (f := B) (Finset.mem_range.mpr (show m < k + 1 by omega))
-    omega
+  have hB : ∀ m, lo ≤ m → m ≤ k → ∀ v, (schemeAnchored p σ).Decided U V m v →
+      decisionAt p σ U V N m = some v := by
+    intro m h1 h2 v hv
+    obtain ⟨w, hw⟩ := hall m h1 h2
+    rw [AnchoredRule.decided_unique hlaws hI hv V w hw.toDecided]
+    exact decisionAt_complete hl hcm hc hlaws hI hBN hw
+  intro v hv
   obtain ⟨hrange, -⟩ := scan_sound (σ := σ) (U := U) (V := V) hl hc N (N + 1 - lo) (by omega)
   have hent := scan_entry (p := p) (σ := σ) (U := U) (V := V) N (N + 1 - lo) (by omega)
   have hlen : (scan p σ U V N (N + 1 - lo)).length = N + 1 - lo := by
@@ -540,7 +532,7 @@ theorem tryDecide_eventually (hl : 1 ≤ p.linkSize) (hcm : 1 ≤ p.commitThresh
     have := hent e he
     rw [hek] at this
     rwa [show (k, decisionAt p σ U V N k) = e from Prod.ext hek.symm this.symm]
-  have hkv : decisionAt p σ U V N k = some v := hB k hlok le_rfl v hv N (hBm k le_rfl)
+  have hkv : decisionAt p σ U V N k = some v := hB k hlok le_rfl v hv
   unfold tryDecide
   refine List.mem_map.mpr ⟨(k, decisionAt p σ U V N k), mem_takeWhile_of _ lo
     (by rw [hrange, hlen]) hmem fun e' he' hle => ?_, by simp [hkv]⟩
@@ -550,8 +542,31 @@ theorem tryDecide_eventually (hl : 1 ≤ p.linkSize) (hcm : 1 ≤ p.commitThresh
     rw [hrange, List.mem_range'_1] at this
     omega
   obtain ⟨w, hw⟩ := hall e'.1 hlo' hle
-  rw [hee, hB e'.1 hlo' hle w hw N (hBm e'.1 hle)]
+  rw [hee, hB e'.1 hlo' hle w hw.toDecided]
   rfl
+
+/-- **`TryDecide` outputs every derived verdict** once every slot from `lo`
+to `k` has one and the scan reaches far enough. -/
+theorem tryDecide_eventually (hl : 1 ≤ p.linkSize) (hcm : 1 ≤ p.commitThreshold)
+    (hc : p.voteIsCert = false → 1 ≤ p.certThreshold)
+    {I : Slots Validator → BlockRecord Validator BlockId Payload P honest → Prop}
+    (hlaws : (schemeAnchored p σ).Laws I) (hI : I S U) {lo k : ℕ} (hlok : lo ≤ k)
+    (hall : ∀ m, lo ≤ m → m ≤ k → ∃ v, (schemeAnchored p σ).Decided U V m v) :
+    ∃ N₀, ∀ N, N₀ ≤ N → ∀ v, (schemeAnchored p σ).Decided U V k v →
+      (k, v) ∈ tryDecide p σ U V lo N := by
+  classical
+  have hb : ∀ m, ∃ B, lo ≤ m → m ≤ k → ∃ v, (schemeAnchored p σ).DecidedWithin U V B m v := by
+    intro m
+    by_cases hm : lo ≤ m ∧ m ≤ k
+    · obtain ⟨v, hv⟩ := hall m hm.1 hm.2
+      obtain ⟨B, hB⟩ := AnchoredRule.exists_bound hv
+      exact ⟨B, fun _ _ => ⟨v, hB⟩⟩
+    · exact ⟨0, fun h1 h2 => absurd ⟨h1, h2⟩ hm⟩
+  choose B hB using hb
+  refine ⟨(Finset.range (k + 1)).sup B + k, fun N hN => tryDecide_within hl hcm hc hlaws hI hlok
+    (by omega) (B := (Finset.range (k + 1)).sup B) (by omega) fun m h1 h2 => ?_⟩
+  obtain ⟨v, hv⟩ := hB m h1 h2
+  exact ⟨v, hv.mono (Finset.le_sup (f := B) (Finset.mem_range.mpr (by omega)))⟩
 
 end Scheme
 

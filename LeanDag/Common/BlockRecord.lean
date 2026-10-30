@@ -492,6 +492,20 @@ theorem Distinct.of_validAt [DecidableEq Validator] {P : Validity Validator Bloc
     (hC : ∀ blk b, C blk b → Clause.distinct blk b) : P.Distinct where
   distinct := fun blk b hp => hC blk b ((h blk b).mp hp).clause
 
+/-- Non-genesis blocks reference a block by their own author: the clause
+the novelty telescope and the retained store read. -/
+class SelfParent (P : Validity Validator BlockId Payload) : Prop where
+  self_parent : ∀ (blk : BlockId → Block Validator BlockId Payload)
+    (b : Block Validator BlockId Payload), P blk b → Clause.selfParent blk b
+
+/-- A predicate equivalent to the family with a clause implying the
+self-parent clause has it. -/
+theorem SelfParent.of_validAt [DecidableEq Validator] {P : Validity Validator BlockId Payload}
+    {q : ℕ} {C : Clause Validator BlockId Payload}
+    (h : ∀ blk b, P blk b ↔ ValidAt q C blk b)
+    (hC : ∀ blk b, C blk b → Clause.selfParent blk b) : P.SelfParent where
+  self_parent := fun blk b hp => hC blk b ((h blk b).mp hp).clause
+
 /-- A predicate equivalent to the family at `q` is quorate at `q`. -/
 theorem Quorate.of_validAt [DecidableEq Validator] {P : Validity Validator BlockId Payload}
     {q : ℕ} {C : Clause Validator BlockId Payload} (hq : 0 < q)
@@ -524,6 +538,12 @@ theorem eq_of_creator_eq {v : Validator} {i j : BlockId}
     (hic : (U.block i).creator = v) (hjc : (U.block j).creator = v)
     (hround : (U.block i).round = (U.block j).round) : i = j :=
   U.no_equivocation i hi j hj (hic ▸ hv) (hic.trans hjc.symm) hround
+
+/-- A non-genesis block references a block by its own author. -/
+theorem self_parent [P.SelfParent] {i : BlockId} (hi : i ∈ U.ids)
+    (hround : 0 < (U.block i).round) :
+    ∃ j ∈ (U.block i).refs, (U.block j).creator = (U.block i).creator :=
+  Validity.SelfParent.self_parent U.block (U.block i) (U.valid i hi) hround
 
 /-- Two references of one block by one author are one reference. -/
 theorem distinct_creators [P.Distinct] {i j k : BlockId} (hi : i ∈ U.ids)

@@ -39,9 +39,10 @@ theorem quorate : Quorate (odontocetiRule (Validator := Validator) (BlockId := B
   fun U => BlockUniverse.quorateOn U
 
 /-- **P3′ at the carrier.** -/
-theorem selfParent : SelfParent (odontocetiRule (Validator := Validator) (BlockId := BlockId)
-    (Payload := Payload)) :=
-  fun U b hb hr => (U.valid b hb).self_parent hr
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} :
+    SelfParent (odontocetiRule (Validator := Validator) (BlockId := BlockId)
+    (Payload := Payload)) rel R₀ :=
+  fun U b hb _ hr => (U.valid b hb).self_parent (Nat.lt_of_le_of_lt (Nat.zero_le _) hr)
 
 /-- **One block per correct author per round.** -/
 theorem noEquiv : NoEquiv (odontocetiRule (Validator := Validator) (BlockId := BlockId)

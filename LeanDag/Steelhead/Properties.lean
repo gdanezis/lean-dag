@@ -47,9 +47,10 @@ theorem quorate (w : ℕ → ℕ) : Quorate (steelheadRule (Validator := Validat
   fun U => BlockUniverse.quorateOn U
 
 /-- **P3′ at the carrier.** -/
-theorem selfParent (w : ℕ → ℕ) : SelfParent (steelheadRule (Validator := Validator)
-    (BlockId := BlockId) (Payload := Payload) w) :=
-  fun U b hb hr => (U.valid b hb).self_parent hr
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} (w : ℕ → ℕ) :
+    SelfParent (steelheadRule (Validator := Validator)
+    (BlockId := BlockId) (Payload := Payload) w) rel R₀ :=
+  fun U b hb _ hr => (U.valid b hb).self_parent (Nat.lt_of_le_of_lt (Nat.zero_le _) hr)
 
 /-- **One block per correct author per round.** -/
 theorem noEquiv (w : ℕ → ℕ) : NoEquiv (steelheadRule (Validator := Validator)
@@ -300,7 +301,7 @@ theorem shSupport_commits {w : ℕ → ℕ} (hw : ∀ κ, 2 ≤ w κ) :
 
 theorem liveness {w : ℕ → ℕ} (hw : ∀ κ, 2 ≤ w κ) :
     Properties.Support.Lives (shSupport (Validator := Validator) (BlockId := BlockId)
-      (Payload := Payload) w) (coreReliability Validator) :=
+      (Payload := Payload) w) (coreReliability Validator) 0 :=
   Properties.Support.liveness (shSupport_commits hw) (commitsCandidate w) (selfParent w)
     (noEquiv w)
 

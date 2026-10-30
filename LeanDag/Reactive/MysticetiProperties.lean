@@ -127,7 +127,7 @@ theorem committed_of_correct_block
     (R := MysticetiProperties.mysticetiRule) MysticetiProperties.selfParent
     MysticetiProperties.noEquiv MysticetiProperties.commitsCandidate
     MysticetiProperties.leaderCommits_cert S hT (by rw [hlead]; exact hu) (le_of_lt hm)
-    U (View.full U) (MysticetiProperties.certLive_of_reactiveLive hlive)
+    (Nat.zero_le _) U (View.full U) (MysticetiProperties.certLive_of_reactiveLive hlive)
   obtain ⟨hmem, hledger⟩ := hL b hb (by change (U.block b).creator = S.leader k'; rw [hbc, hlead]) hbr
   have hcand := MysticetiProperties.commitsCandidate S U (View.full U) k' L hdec
   exact ⟨L, hcand, hdec, (mem_history_iff hcand.1).mp hmem, hledger⟩

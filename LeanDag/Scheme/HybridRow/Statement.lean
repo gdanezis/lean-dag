@@ -69,7 +69,7 @@ def WithSelfParent : Prop :=
     p.commitThreshold ≤ Hydrozoan.q Replica →
     Safe (schemeRule p σ) ∧
     Support.Lives (R := schemeRule p σ)
-      (familySupport p σ) (Hydrozoan.hzReliability Replica)
+      (familySupport p σ) (Hydrozoan.hzReliability Replica) 0
 
 /-- The row against Hydrozoan. -/
 def Statement : Prop := SlowRow ∧ OnHydrozoan ∧ WithSelfParent

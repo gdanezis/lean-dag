@@ -63,13 +63,12 @@ theorem ugrow_mm_certifies {N c L : ℕ} (hc : c ∈ (Ugrow N).ids) (hL : L ∈ 
   omega
 
 /-- **The reactive discipline, inhabited.** Steelhead's `ReactiveS` on `Ugrow`, at any
-wavelength function `w` and any rounds `waits`: the core's reactive witness for the trunk, the
-deadline and the leader wait, and the reactive exit for the certificate wait. -/
+wavelength function `w` and any rounds `waits`: the core's reactive witness for the trunk and the
+leader wait, and the reactive exit for the certificate wait. -/
 def ugrowReactiveS (N : ℕ) (w : ℕ → ℕ) (waits : ℕ → Prop) :
     ReactiveS (Ugrow N) {1, 2, 3} N w waits :=
   { (ugrowReactive N).toPaceCore with
     built_lt := (ugrowReactive N).built_lt
-    deadline := (ugrowReactive N).deadline
     vote_or_wait := fun v hv k _ hN hlead L hL c hc hcc hcr =>
       (ugrowReactive N).vote_or_wait v hv k hN hlead L hL c hc hcc hcr
     cert_or_wait := fun _ _ _ _ _ _ _ L hL c hc _ hcr =>

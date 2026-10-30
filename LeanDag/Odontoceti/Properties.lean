@@ -254,7 +254,7 @@ theorem safety : Properties.Safe (odontocetiRule (Validator := Validator) (Block
 
 theorem liveness : Properties.Support.Lives (Properties.voteSupport (odontocetiRule
     (Validator := Validator) (BlockId := BlockId) (Payload := Payload)))
-    (coreReliability Validator) :=
+    (coreReliability Validator) 0 :=
   Properties.Support.liveness voteSupport_commits commitsCandidate selfParent noEquiv
 
 end OdontocetiProperties
