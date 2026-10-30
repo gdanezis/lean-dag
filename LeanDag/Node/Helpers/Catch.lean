@@ -338,6 +338,41 @@ end Record
 
 /-! ## Catch-up -/
 
+section Lend
+
+/-- **A borrower leaves out every author the lender left out**: the lender
+left out only authors its evidence names, its block carries that evidence
+against each, since it references none of them, and the borrower holds
+the block, so holds the evidence. -/
+theorem excluded_lent {K : Set (BlockId × Block Validator BlockId Payload)}
+    (hfa : cfg.Faithful) {w h : Validator}
+    {s s' xw x : State Validator BlockId Payload} {inp inp' : Input Validator BlockId Payload}
+    (hbsw : BuildState (cfg.at w) U K s inp xw) (hbs : BuildState (cfg.at h) U K s' inp' x)
+    {n : ℕ} {ow : Option BlockId}
+    (ho : ∀ j, ow = some j → (xw.disk.blk j).creator = (cfg.at w).me)
+    {z : BlockId} (hz : z ∈ x.disk.ids)
+    (hzrefs : (U.block z).refs = refsAt (cfg.at w) xw.disk n ow xw.evidence)
+    (hzpay : (U.block z).payload =
+      payloadFor (cfg.at w) xw.disk n (refsAt (cfg.at w) xw.disk n ow xw.evidence) xw.evidence) :
+    excluded (cfg.at w) xw.disk n xw.evidence ⊆ excluded (cfg.at h) x.disk n x.evidence := by
+  intro a ha
+  obtain ⟨e, hef, rfl⟩ := Finset.mem_image.mp (hbsw.excluded_sub_named hfa n ha)
+  obtain ⟨he, hne⟩ := Finset.mem_filter.mp hef
+  -- the lent block references no block of the author, so carries the evidence
+  have hnot : e.1 ∉ creatorsOf xw.disk.blk (refsAt (cfg.at w) xw.disk n ow xw.evidence) :=
+    fun hm => by
+      obtain ⟨k, hk, hkc⟩ := mem_creatorsOf.mp hm
+      exact refsAt_avoids ho k hk (by rw [hkc]; exact ha)
+  have hez : e ∈ cfg.xp.ev (x.disk.blk z).payload := by
+    rw [← hbs.cut.eq hz, hzpay]
+    unfold payloadFor
+    erw [(hfa _ _ _).1]
+    exact Finset.mem_filter.mpr ⟨he, hnot⟩
+  exact Finset.mem_union_left _ (Finset.mem_image.mpr
+    ⟨e, Finset.mem_filter.mpr ⟨hbs.holds hfa z hz e hez hne, hne⟩, rfl⟩)
+
+end Lend
+
 section Spread
 
 variable {tr : Trace Validator BlockId Payload} {D : Finset Validator} {nE : ℕ}

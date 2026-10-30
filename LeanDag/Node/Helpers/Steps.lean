@@ -172,6 +172,49 @@ theorem EvidenceOn.accept {s : State Validator BlockId Payload} (h : EvidenceOn 
       · exact hE e he
   · exact h
 
+variable (cfg) in
+/-- **The node holds the evidence of its disk**: every item a block on the
+disk carries, naming two distinct blocks, is in the node's evidence. -/
+def Kept (s : State Validator BlockId Payload) : Prop :=
+  ∀ c ∈ s.disk.ids, ∀ e ∈ cfg.xp.ev (s.disk.blk c).payload, e.2.1 ≠ e.2.2 →
+    e ∈ s.evidence
+
+omit [Fintype Validator] in
+theorem Kept.of_eq {s s' : State Validator BlockId Payload} (h : Kept cfg s)
+    (hd : s'.disk = s.disk) (he : s'.evidence = s.evidence) : Kept cfg s' := by
+  intro c hc e he' hne
+  rw [hd] at hc he'
+  rw [he]
+  exact h c hc e he' hne
+
+omit [Fintype Validator] in
+/-- **Inserting a block whose evidence the node then holds keeps `Kept`.** -/
+theorem Kept.insert {s s' : State Validator BlockId Payload} (h : Kept cfg s) {id : BlockId}
+    {b : Block Validator BlockId Payload} {hnew hrefs hpred}
+    (hd : s'.disk = s.disk.insert id b hnew hrefs hpred) (he : s.evidence ⊆ s'.evidence)
+    (hb : ∀ e ∈ cfg.xp.ev b.payload, e.2.1 ≠ e.2.2 → e ∈ s'.evidence) : Kept cfg s' := by
+  intro c hc e he' hne
+  rw [hd] at hc he'
+  rw [Store.insert_blk] at he'
+  split at he'
+  · exact hb e he' hne
+  · rename_i hci
+    rw [Store.insert_ids] at hc
+    exact he (h c ((Finset.mem_insert.mp hc).resolve_left hci) e he' hne)
+
+omit [Fintype Validator] in
+theorem Kept.accept {s : State Validator BlockId Payload} (h : Kept cfg s)
+    (id : BlockId) (b : Block Validator BlockId Payload) :
+    Kept cfg (Node.accept cfg s id b) := by
+  unfold Node.accept
+  split
+  · rename_i hc
+    have hd := s.mirrors.checks_pick.mp hc.2
+    exact h.insert (id := id) (hnew := hc.1) (hrefs := hd.1) (hpred := hd.2.1)
+      (by simp only [keep_disk]) Finset.subset_union_left fun e he hne =>
+        Finset.mem_union_right _ (Finset.mem_union_right _ (Finset.mem_filter.mpr ⟨he, hne⟩))
+  · exact h
+
 omit [Fintype Validator] in
 theorem tryBuild_detected {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
@@ -245,6 +288,16 @@ structure Received (inp : Input Validator BlockId Payload)
   recovering : s₁.recovering = s.recovering
   ev : EvidenceOn cfg s → EvidenceOn cfg s₁
   det : s.detected ⊆ s₁.detected
+  holds : Kept cfg s → Kept cfg s₁
+
+omit [Fintype Validator] in
+theorem Kept.absorb {s : State Validator BlockId Payload} (h : Kept cfg s) :
+    ∀ L : List (BlockId × Block Validator BlockId Payload), Kept cfg (Node.absorb cfg s L)
+  | [] => h
+  | x :: L => by
+    unfold Node.absorb
+    rw [List.foldl_cons]
+    exact Kept.absorb (h.accept x.1 x.2) L
 
 omit [Fintype Validator] in
 theorem EvidenceOn.absorb {s : State Validator BlockId Payload} (h : EvidenceOn cfg s) :
@@ -266,7 +319,7 @@ theorem received_absorb {inp : Input Validator BlockId Payload}
   obtain ⟨h₁, h₂, h₃, h₄, h₅, h₆, h₇, h₈, h₉, h₁₀⟩ := absorb_rest (cfg := cfg) s L
   have ht := tidy_eq (absorb cfg s L)
   refine ⟨⟨L, hL, by rw [ht.1, absorb_disk]⟩, fun e he => ?_, h₁, h₃, h₄, h₅, h₆, h₇, h₈, h₉,
-    ?_, h₁₀⟩
+    ?_, h₁₀, fun h => (h.absorb L).of_eq rfl rfl⟩
   · have := ht.2.2.2.2.2.2.2.2.2.2 he
     rw [h₂] at this
     exact Or.inl (List.mem_map_of_mem this)
@@ -280,7 +333,7 @@ theorem received_syncs {inp : Input Validator BlockId Payload} {s : State Valida
     (hS : ∀ e ∈ S, e.2.1 ∈ s.syncs.map (·.2.1) ∨ e.2.1 ∈ delivered cfg [inp]) :
     Received cfg inp s { s with syncs := S } :=
   ⟨⟨[], fun _ h => absurd h List.not_mem_nil, rfl⟩, hS, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
-    fun h => h.grow (Grows.refl _) rfl rfl, subset_rfl⟩
+    fun h => h.grow (Grows.refl _) rfl rfl, subset_rfl, fun h => h.of_eq rfl rfl⟩
 
 omit [Fintype Validator] in
 /-- **A receipt grows the disk.** -/
@@ -330,7 +383,8 @@ theorem Received.trans {inp : Input Validator BlockId Payload}
   refine ⟨⟨L₁ ++ L₂, fun e he => ?_, by rw [hd₂, hd₁, List.foldl_append]⟩, fun e he => ?_,
     h₂.floor.trans h₁.floor, h₂.top.trans h₁.top, h₂.own.trans h₁.own, h₂.fired.trans h₁.fired,
     h₂.lo.trans h₁.lo, h₂.decided.trans h₁.decided, h₂.armed.trans h₁.armed,
-    h₂.recovering.trans h₁.recovering, h₂.ev ∘ h₁.ev, h₁.det.trans h₂.det⟩
+    h₂.recovering.trans h₁.recovering, h₂.ev ∘ h₁.ev, h₁.det.trans h₂.det,
+    h₂.holds ∘ h₁.holds⟩
   · rcases List.mem_append.mp he with he | he
     · exact hL₁ e he
     · rcases hL₂ e he with h | h

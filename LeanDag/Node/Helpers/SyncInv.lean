@@ -42,6 +42,18 @@ theorem evidenceOn_before (v : Validator) : ∀ i, EvidenceOn (cfg.at v) (stateB
       exact EvidenceOn.step (cfg := cfg.at v) (syncsOn_before v i) (evidenceOn_before v i) inp
     · rw [same_before fun inp h => he ⟨inp, h⟩]; exact evidenceOn_before v i
 
+/-- **An honest node holds the evidence of its disk** before every event,
+under a faithful payload source. -/
+theorem kept_before (hf : cfg.Faithful) (v : Validator) :
+    ∀ i, Kept (cfg.at v) (stateBefore cfg tr i v)
+  | 0 => fun c hc => absurd hc (Finset.notMem_empty c)
+  | i + 1 => by
+    by_cases he : ∃ inp, tr[i]? = some (v, inp)
+    · obtain ⟨inp, hi⟩ := he
+      rw [step_before hi]
+      exact Kept.step (cfg := cfg.at v) hf (syncsOn_before v i) (kept_before hf v i) inp
+    · rw [same_before fun inp h => he ⟨inp, h⟩]; exact kept_before hf v i
+
 end Converge
 
 end Node

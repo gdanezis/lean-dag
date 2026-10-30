@@ -669,7 +669,10 @@ builder holds an earlier honest block of the round (`behind_honest`),
 which did not pass the tests either, or the references it lends would
 have and the node would have built on those (`ready_transfer`): above
 `n_E` they reference no author the node leaves out (`Spread`,
-`refs_avoid_spread`), so the node may build on them. The claim follows by
+`refs_avoid_spread`), so the node may build on them, and the node leaves
+out every author the lender left out, since the lent block carries the
+evidence against each and the node holds the evidence of its disk
+(`excluded_lent`, `Kept`), so the tests pass at the same slots. The claim follows by
 induction on the event that built it. A reliable node
 building on the timer or behind therefore holds, and references, every
 reliable block of the round below: its builder leaves out no reliable

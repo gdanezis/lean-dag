@@ -439,6 +439,7 @@ structure BuildState (U : BlockRecord Validator BlockId Payload P H)
   inv : ∃ B, Inv cfg x K B
   ev : EvidenceOn cfg x
   det : s.detected ⊆ x.detected
+  holds : cfg.Faithful → Kept cfg x
 
 omit [Fintype Validator] in
 theorem BuildState.tryBuild {U : BlockRecord Validator BlockId Payload P H}
@@ -452,7 +453,7 @@ theorem BuildState.tryBuild {U : BlockRecord Validator BlockId Payload P H}
     h.grows.trans (hst ▸ Grows.insert x.disk),
     fun r hr => h.fired r (calm_tryBuild hb hr), ?_,
     h.ev.grow (hst ▸ Grows.insert x.disk) (tryBuild_detected hb).1 (tryBuild_detected hb).2,
-    h.det.trans (tryBuild_detected hb).1.symm.subset⟩
+    h.det.trans (tryBuild_detected hb).1.symm.subset, fun hf => (h.holds hf).tryBuild hf hb⟩
   obtain ⟨B, hi⟩ := h.inv
   obtain ⟨e, he, hi'⟩ := hi.tryBuild hb
   refine ⟨_, hi'.mono fun z hz => ?_⟩
@@ -512,6 +513,25 @@ theorem BuildState.excluded_sub {U : BlockRecord Validator BlockId Payload P H}
       (fun j hj e he hne hc => Finset.mem_compl.mp hc (hev _ (hi.known j hj) e he hne)) i
       (Store.mem_atRound.mp hiR).1 _ ham (Finset.mem_compl.mpr hD)
 
+/-- **A state the node builds from leaves out only authors its evidence
+names**, under a faithful payload source: a block's exposure is named by
+evidence in its history, which the node holds. -/
+theorem BuildState.excluded_sub_named {U : BlockRecord Validator BlockId Payload P H}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    {s x : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
+    (h : BuildState cfg U K s inp x) (hf : cfg.Faithful) (r : ℕ) :
+    excluded cfg x.disk r x.evidence ⊆ named x.evidence := by
+  obtain ⟨B, hi⟩ := h.inv
+  intro a hm
+  rcases Finset.mem_union.mp hm with hm | hm
+  · exact hm
+  · obtain ⟨i, hiR, ham⟩ := Finset.mem_biUnion.mp hm
+    by_contra hn
+    exact ex_not_named (A := (named x.evidence)ᶜ) hi.valid
+      (fun j hj e he hne hc => Finset.mem_compl.mp hc (Finset.mem_image.mpr
+        ⟨e, Finset.mem_filter.mpr ⟨h.holds hf j hj e he hne, hne⟩, rfl⟩))
+      i (Store.mem_atRound.mp hiR).1 _ ham (Finset.mem_compl.mpr hn)
+
 omit [Fintype Validator] in
 /-- **A pass keeps a state the node builds from.** -/
 theorem BuildState.advance {U : BlockRecord Validator BlockId Payload P H}
@@ -522,7 +542,8 @@ theorem BuildState.advance {U : BlockRecord Validator BlockId Payload P H}
     BuildState cfg U K s inp (Node.advance cfg x).1 := by
   refine ⟨h.cut.advanceStore hg hp hK, h.held.advance, h.own.advance,
     h.grows.trans (Grows.advance x), fun r hr => h.fired r (calm_advance x hr), ?_,
-    (Thins.advance x).twins h.ev, h.det.trans (Thins.advance x).det⟩
+    (Thins.advance x).twins h.ev, h.det.trans (Thins.advance x).det,
+    fun hf => (Thins.advance x).holds hf (h.holds hf)⟩
   obtain ⟨B, hi⟩ := h.inv
   obtain ⟨bs, ho, hi'⟩ := hi.advance
   exact ⟨_, hi'.mono fun z hz => hz.elim id fun hz => hK z (by rw [ho.1]; exact hz)⟩
@@ -600,7 +621,8 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
     {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
     {B₀ : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B₀)
     (hc : IsCut U s.disk) (hh : Held cfg s) (hown : OwnTop cfg s) (hev : EvidenceOn cfg s)
-    (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K) (hd : ∀ e ∈ delivered cfg [inp], e ∈ K)
+    (hkp : cfg.Faithful → Kept cfg s) (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K)
+    (hd : ∀ e ∈ delivered cfg [inp], e ∈ K)
     (hb : ∀ e ∈ persists (Node.step cfg s inp).2, e ∈ K) :
     ∀ e ∈ persists (Node.step cfg s inp).2, e.2.round = 0 ∨ ∃ x y o,
       BuildState cfg U K s inp x ∧ Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o ∧
@@ -690,7 +712,14 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
               simpa [floorOf, s₀, keep] using this⟩
         refine hset s₀ (built cfg [(cfg.idOf cfg.genesis, cfg.genesis)])
           ⟨hcst, hh₀, ho₀, (Grows.insert s.disk : Grows s.disk st), fun r hr => Or.inl hr,
-            ⟨_, hi₀⟩, hev.grow (Grows.insert s.disk : Grows s.disk st) rfl rfl, subset_rfl⟩ hp ?_
+            ⟨_, hi₀⟩, hev.grow (Grows.insert s.disk : Grows s.disk st) rfl rfl, subset_rfl,
+            fun hf => (hkp hf).insert (hnew := h₂.1)
+              (hrefs := fun _ hj => absurd hj (Finset.notMem_empty _))
+              (hpred := fun j hj => absurd hj (Finset.notMem_empty j)) rfl subset_rfl
+              fun e he => by
+                simp only [Config.genesis] at he
+                rw [(hf _ _ _).1] at he
+                exact absurd he (Finset.notMem_empty _)⟩ hp ?_
           (by simp only [Node.step, dif_pos h₂, if_pos h₁]; rfl)
         intro e he
         simp only [built, persists, List.flatMap_cons, List.flatMap_nil, List.append_nil,
@@ -707,7 +736,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
       refine hset s₁ pre
         ⟨hc₁, hh.grow hr.grows hr.top, hown.grow hr.grows hr.top hr.own, hr.grows,
           fun r hr' => Or.inl (by rwa [hr.fired] at hr'), ⟨B₀, hr.inv hi hd⟩, hr.ev hev,
-          hr.det⟩ hp₁ ?_ he
+          hr.det, fun hf => hr.holds (hkp hf)⟩ hp₁ ?_ he
       intro e he
       obtain ⟨o, ho, he⟩ := List.mem_filterMap.mp he
       obtain ⟨_, _, _, _, rfl⟩ := hpre o ho; cases he
@@ -718,7 +747,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
       refine hset s₁ pre
         ⟨hc₁, hh.grow hr.grows hr.top, hown.grow hr.grows hr.top hr.own, hr.grows,
           fun r hr' => Or.inl (by rwa [hr.fired] at hr'), ⟨B₀, hr.inv hi hd⟩, hr.ev hev,
-          hr.det⟩ hp₁ ?_ he
+          hr.det, fun hf => hr.holds (hkp hf)⟩ hp₁ ?_ he
       intro e he
       obtain ⟨o, ho, he⟩ := List.mem_filterMap.mp he
       obtain ⟨_, _, _, _, rfl⟩ := hpre o ho; cases he
@@ -730,7 +759,8 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
       (s₀ := { s with fired := fire s r, recovering := false })
       ⟨hc, hh.grow (Grows.refl _) rfl, hown.grow (Grows.refl _) rfl rfl, Grows.refl _,
         fun t ht => ?_, ⟨B₀, hi.of_eq rfl rfl rfl rfl rfl le_rfl⟩,
-        hev.grow (Grows.refl _) rfl rfl, subset_rfl⟩ hp hb e hev')
+        hev.grow (Grows.refl _) rfl rfl, subset_rfl, fun hf => (hkp hf).of_eq rfl rfl⟩ hp hb e
+        hev')
     rcases Finset.mem_insert.mp ht with rfl | ht
     · exact Or.inr rfl
     · exact Or.inl (Finset.mem_filter.mp ht).1
@@ -750,7 +780,8 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
       (s₀ := { s with recovering := true })
       ⟨hc, hh.grow (Grows.refl _) rfl, hown.grow (Grows.refl _) rfl rfl, Grows.refl _,
         fun t ht => Or.inl ht, ⟨B₀, hi.of_eq rfl rfl rfl rfl rfl le_rfl⟩,
-        hev.grow (Grows.refl _) rfl rfl, subset_rfl⟩ hp hb e hev')
+        hev.grow (Grows.refl _) rfl rfl, subset_rfl, fun hf => (hkp hf).of_eq rfl rfl⟩ hp hb e
+        hev')
 
 omit [Fintype Validator] in
 theorem decideStep_armed (s : State Validator BlockId Payload) :

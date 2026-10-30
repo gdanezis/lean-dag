@@ -238,7 +238,7 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
       exact (Local.authored _ _ _ (cfg.at w') _ z (persists_of_event hj' hz)).2
     have hzr' : (U.block z.1).round = n + 1 := by rw [hzB, hzr]
     obtain ⟨iw, inpw, xw, oww, hiw, -, hbsw, hshw, hzxw, ⟨yw, ow, hbw, heow, hew⟩, hzrefs, hzsub,
-      hgxw, hexitw, -⟩ := built_block time hσ hadm hf htime hinj hw'H hzU hzc hzr'
+      hgxw, hexitw, hzpay⟩ := built_block time hσ hadm hf htime hinj hw'H hzU hzc hzr'
     have hiwj : iw = j' := persist_events_eq hiw hj' hew hz (by rw [hzr', hzr])
     subst hiwj
     -- the earlier block did not pass the tests, else the node would have
@@ -267,14 +267,6 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
         hfa hfresh x.evidence
       have hRR : refsAt (cfg.at w') xw.disk n oww xw.evidence ⊆ lent x.disk z.1 := by
         unfold lent; rw [hZR]
-      -- the lender left out only authors of `D`, all of which the node leaves out
-      have hXX : excluded (cfg.at w') xw.disk n xw.evidence ⊆
-          excluded (cfg.at h) x.disk n x.evidence :=
-        (excluded_sub_spread hsp hbsw n).trans
-          (spread_sub_excluded hsp hj₀ hh hbs he (by simp only; rw [hcr]; omega) n)
-      have hready := ready_transfer (cfg := cfg.at h) hσ (fun h => certThreshold_pos hadm h)
-        hbsw.cut hbs.cut hzsub hRR hlZ hXX hrw.1 hrw.2
-      -- the lent references avoid the authors the node leaves out
       have ho : ∀ k, oww = some k → (xw.disk.blk k).creator = (cfg.at w').me := fun k hk => by
         rcases hshw.2.2 with ⟨ht, hoe⟩ | ⟨-, hon, -⟩
         · obtain ⟨k', hk', -, -, hkc⟩ := hbsw.own n ht
@@ -282,6 +274,13 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
           cases hk
           exact hkc
         · rw [hon] at hk; cases hk
+      -- the node leaves out every author the lender left out
+      have hXX : excluded (cfg.at w') xw.disk n xw.evidence ⊆
+          excluded (cfg.at h) x.disk n x.evidence :=
+        excluded_lent hfa hbsw hbs ho hzx hzrefs hzpay
+      have hready := ready_transfer (cfg := cfg.at h) hσ (fun h => certThreshold_pos hadm h)
+        hbsw.cut hbs.cut hzsub hRR hlZ hXX hrw.1 hrw.2
+      -- the lent references avoid the authors the node leaves out
       have hAD := refs_avoid_spread (r := n) hsp hiw hw'H hbsw hew (by rw [hzr']; omega) ho
       have hav : ∀ k ∈ lent x.disk z.1, (x.disk.blk k).creator ∉
           excluded (cfg.at h) x.disk n x.evidence := fun k hk hmk => by
