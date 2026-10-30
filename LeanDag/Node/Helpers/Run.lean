@@ -80,6 +80,8 @@ theorem waveFacts_of_run (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf
     (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) (hwait : Live.TimersAfterSet cfg H tr time)
     (hid : Function.Injective cfg.idOf) (hstart : Live.StartedBy T tr time gst)
     (hTc : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) (hqT : cfg.q ≤ T.card) {n₀ N t : ℕ}
+    {D : Finset Validator} {nE : ℕ} (hsp : Live.Spread cfg H tr D nE)
+    (hE : ∀ v ∈ T, nE ≤ topAt cfg tr time v gst)
     (hbelow : ∀ v ∈ T, topAt cfg tr time v gst < n₀)
     (hst : ∀ v ∈ T, (stateAt cfg tr time v t).top.isSome)
     (htop : ∀ v ∈ T, N ≤ topAt cfg tr time v t) (ht₁ : t + (Δ + Δₛ) ≤ t₁) :
@@ -96,11 +98,11 @@ theorem waveFacts_of_run (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf
     reach_or_refs := fun w hw' _ hRk hNk hlk L hL _ hm _ hc hcc hcr =>
       reach_or_refs_node hσ hadm hfa hf htime hinj hev hTH hmono harr hbelow hst htop ht₁ hq hto
           hwait
-        hid hstart hTc hqT hw' hRk hlk hL hm (by omega) hc hcc hcr
+        hid hstart hTc hqT hsp hE hw' hRk hlk hL hm (by omega) hc hcc hcr
     cert_or_refs := fun hvc w hw' _ hRk hNk hlk L hL _ hc hcc hcr =>
       cert_or_refs_node hσ hadm hfa hf htime hinj hev hTH hmono harr hbelow hst htop ht₁ hq hto
           hwait
-        hid hstart hTc hqT hvc hw' hRk hlk hL hNk hc hcc hcr }
+        hid hstart hTc hqT hsp hE hvc hw' hRk hlk hL hNk hc hcc hcr }
 
 /-- **On a reliable node's view, a reliably led run is decided**, from a
 round `n₀` above every reliable node's round at GST, `A` after every
@@ -116,7 +118,9 @@ theorem run_commits (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : c
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr) (hev :
         Converge.EvidenceAuthentic cfg H tr)
     (hmono : Live.TimeMono tr time) (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁)
-    (hwait : Live.TimersAfterSet cfg H tr time) (hstart : Live.StartedBy T tr time gst) :
+    (hwait : Live.TimersAfterSet cfg H tr time) (hstart : Live.StartedBy T tr time gst)
+    {D : Finset Validator} {nE : ℕ} (hsp : Live.Spread cfg H tr D nE)
+    (hnE : ∀ v ∈ T, nE ≤ topAt cfg tr time v gst) :
     letI := cfg.slots
     ∀ {b c n₀ : ℕ}, 0 < c → (Scheme.schemeAnchored cfg.p
       (boundedSel (BlockId := BlockId) (Payload := Payload) (P := ValidAt cfg.q Clause.none)
@@ -150,7 +154,7 @@ theorem run_commits (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : c
     · rfl
   have wf := waveFacts_of_run hσ hadm hfa hf htime hinj hev hTH hmono harr hq hto hwait hid hstart
       hTc
-    hqT hbelow hst htop ht₁
+    hqT hsp hnE hbelow hst htop ht₁
   -- the view of the node's disk `A` later
   set E := eventsBy tr time (t + (Δ + Δₛ)) with hE
   have hcut := (cut_before hσ hadm hf htime hinj E v (hTH hv)).1

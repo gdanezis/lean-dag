@@ -549,7 +549,7 @@ can. -/
 theorem refsAt_buildable_of (st : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId)
     (E : Finset (Validator × BlockId × BlockId))
     (h : buildable cfg st r (refsFor cfg st r o E) E = true ∨
-      ∃ R ∈ lents cfg st r, buildable cfg st r R E = true) :
+      ∃ R ∈ lents cfg st r E, buildable cfg st r R E = true) :
     buildable cfg st r (refsAt cfg st r o E) E = true := by
   unfold refsAt
   dsimp only
@@ -670,7 +670,7 @@ theorem tryBuild_isSome {s : State Validator BlockId Payload} {r : ℕ} (ht : s.
     (ho : ∀ j, s.own = some j → j ∈ s.disk.ids ∧ (s.disk.blk j).round = r ∧
       (s.disk.blk j).creator = cfg.me)
     (hB : buildable cfg s.disk r (refsFor cfg s.disk r s.own s.evidence) s.evidence = true ∨
-      ∃ R ∈ lents cfg s.disk r, buildable cfg s.disk r R s.evidence = true)
+      ∃ R ∈ lents cfg s.disk r s.evidence, buildable cfg s.disk r R s.evidence = true)
     (hfresh : ∀ (P : Payload) R, cfg.idOf ⟨r + 1, cfg.me, R, P⟩ ∉ s.disk.ids)
     (hF : s.floor ≤ r) :
     (tryBuild cfg s).isSome := by
@@ -690,7 +690,7 @@ theorem tryBuild_isSome {s : State Validator BlockId Payload} {r : ℕ} (ht : s.
   have hB' : buildable cfg s.memory r (refsAt cfg s.memory r s.own s.evidence) s.evidence =
       true := by
     refine refsAt_buildable_of s.memory r s.own s.evidence ?_
-    rw [s.mirrors.refsFor_eq hF, s.mirrors.lents_eq hF, s.mirrors.buildable_eq hF hown]
+    rw [s.mirrors.refsFor_eq hF, s.mirrors.lents_eq hF s.evidence, s.mirrors.buildable_eq hF hown]
     rcases hB with hB | ⟨R, hR, hb⟩
     · exact Or.inl hB
     · exact Or.inr ⟨R, hR, by

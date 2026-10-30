@@ -70,7 +70,9 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
     (hev : Converge.EvidenceAuthentic cfg H tr)
     (hmono : TimeMono tr time) (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁)
     (htop : TopTimerBy cfg T tr time gst t₁)
-    (hstart : StartedBy T tr time gst) : Produces cfg T tr time gst (Δ + Δₛ) t₁ := by
+    (hstart : StartedBy T tr time gst) {D : Finset Validator} {nE : ℕ}
+    (hsp : Spread cfg H tr D nE) (hnE : ∀ v ∈ T, nE ≤ topAt cfg tr time v gst) :
+    Produces cfg T tr time gst (Δ + Δₛ) t₁ := by
   intro s n hgs hst₁ hall v hv
   have hstarted : ∀ w ∈ T, (stateAt cfg tr time w s).top.isSome := fun w hw =>
     started_at hadm hfa hid htime hTH hmono hstart hw hgs
@@ -139,23 +141,40 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
   -- references it can build on: a peer's round-`n + 1` block lends its own, or
   -- every reliable author's round-`n` block is held, none of them left out
   have hB : buildable (cfg.at v) Z.disk n (refsFor (cfg.at v) Z.disk n Z.own Z.evidence)
-      Z.evidence = true ∨ ∃ R ∈ lents (cfg.at v) Z.disk n,
+      Z.evidence = true ∨ ∃ R ∈ lents (cfg.at v) Z.disk n Z.evidence,
         buildable (cfg.at v) Z.disk n R Z.evidence = true := by
     by_cases hup : ∃ w ∈ T, w ≠ v ∧ n < topAt cfg tr time w s
     · obtain ⟨w, hw, hwv, hwn⟩ := hup
-      obtain ⟨j, hj, hjr, -⟩ :=
+      obtain ⟨j, hj, hjr, hjc⟩ :=
         top_arrives htime hinj hTH hmono harr hw hv hwv hgs (hstarted w hw) (τ := τ) le_rfl
           (by omega)
       have hjE : j ∈ Z.disk.ids := hgτ.1 hj
       have hjr' : (Z.disk.blk j).round = topAt cfg tr time w s := by
         rw [hgτ.blk hj]; exact hjr
-      obtain ⟨z, hz, hzr⟩ := exists_at_round hvalid hadm.2.2.2.1
-        ((Z.disk.blk j).round - (n + 1)) hjE (n + 1) (by omega)
+      have hjc' : (Z.disk.blk j).creator = w := by rw [hgτ.blk hj]; exact hjc
+      -- an honest author's block of round `n + 1`: `w`'s, or one of the quorum below it
+      obtain ⟨z, hz, hzr, hzH⟩ : ∃ z ∈ Z.disk.ids, (Z.disk.blk z).round = n + 1 ∧
+          (Z.disk.blk z).creator ∈ H := by
+        by_cases hnt : n + 1 = topAt cfg tr time w s
+        · exact ⟨j, hjE, hjr'.trans hnt.symm, hjc' ▸ hTH hw⟩
+        · have h₁ := quorum_below hσ hadm hf htime hinj (hTH hv) E _ hjE hjr' (n + 1) (by omega)
+          have h₂ := two_f_c_lt_q hadm
+          exact exists_honest_at hf (by
+            rw [Store.authorsAt_eq]; exact (show cfg.f + 1 ≤ cfg.q by omega).trans h₁)
       have hzm : (Z.disk.blk z).creator ≠ (cfg.at v).me := fun h => by
         have h₁ : (Z.disk.blk z).round ≤ n := own_le_top htime (hTH hv) hZt hz h
         have h₂ : (Z.disk.blk z).round = n + 1 := hzr
         omega
-      exact Or.inr ⟨_, lent_mem_lents hz hzr hzm, (lent_buildable (cfg := cfg.at v) hvalid hz hzr
+      have hnE' : nE ≤ n := by
+        have h₁ := (rises_before (cfg := cfg) (tr := tr) v (eventsBy_mono (tr := tr)
+          (time := time) (show gst ≤ τ + cfg.timeout n by omega))).1
+        change topAt cfg tr time v gst ≤ (stateBefore cfg tr E v).top.getD 0 at h₁
+        rw [hZt] at h₁
+        simp only [Option.getD_some] at h₁
+        exact (hnE v hv).trans h₁
+      exact Or.inr ⟨_, lent_mem_lents hz hzr hzm
+        (lent_avoids_before hσ hadm hf htime hinj time hsp (hTH hv) E hz hzr hzH hnE'),
+        (lent_buildable (cfg := cfg.at v) hvalid hz hzr
         hfa (fresh_before hid htime (hTH hv) hZt) _).2⟩
     · push Not at hup
       refine Or.inl (refsFor_buildable (cfg := cfg.at v) _ hfa
@@ -200,7 +219,9 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr) (hev :
         Converge.EvidenceAuthentic cfg H tr)
     (hmono : TimeMono tr time) (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁)
-    (hwait : TimersAfterSet cfg H tr time) (hstart : StartedBy T tr time gst) :
+    (hwait : TimersAfterSet cfg H tr time) (hstart : StartedBy T tr time gst)
+    {D : Finset Validator} {nE : ℕ} (hsp : Spread cfg H tr D nE)
+    (hnE : ∀ v ∈ T, nE ≤ topAt cfg tr time v gst) :
     Decides cfg T tr time gst (Δ + Δₛ) t₁ := by
   letI := cfg.slots
   intro b c n₀ hc hspan hlead hn₀ hbelow t htop ht₁ v hv
@@ -218,7 +239,7 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
   -- on its view the run is decided
   obtain ⟨V, hiff, hdw, -⟩ := run_commits hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hev
       hmono harr
-    hwait hstart hc hspan hlead hn₀ hbelow htop ht₁ hv
+    hwait hstart hsp hnE hc hspan hlead hn₀ hbelow htop ht₁ hv
   -- `v` at `t + A`, settled
   set E := eventsBy tr time (t + (Δ + Δₛ)) with hE
   obtain ⟨h₁, h₂, -⟩ := rises_before (cfg := cfg) v
@@ -315,12 +336,13 @@ theorem decidesBy {cfg : Config Validator BlockId Payload} {T : Finset Validator
 
 /-- **The reliable nodes produce rounds and decide.** -/
 theorem progresses : Progresses := by
-  intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t₁ hσ hadm hfa hf hTH hqT hcT
-    hq hid hto htime hinj hev hmono hdel hfire hwait hsync hstart hup
+  intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t₁ D nE hσ hadm hfa hf hTH hqT
+    hcT hq hid hto htime hinj hev hmono hsp hnE hdel hfire hwait hsync hstart hup
   have harr := arrival_of_delivered (H := H) hTH hmono hdel hsync hup
   have hp := produces hσ hadm hfa hf hTH hqT hq hid htime hinj hev hmono harr
-    (TopTimerBy.of_fire hmono hfire) hstart
+    (TopTimerBy.of_fire hmono hfire) hstart hsp hnE
   have hd := decides hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hev hmono harr hwait hstart
+    hsp hnE
   exact ⟨hp, hd, decidesBy hp hd⟩
 
 /-- **The reliable nodes recover from crashes**: past `G = max t_r gst + W`
@@ -328,8 +350,8 @@ blocks arrive within `A` (`arrival_of_recovered`) and the armed top
 round's timer fires within its timeout (`topTimerBy_of_up`), so
 production and decision hold from `G`. -/
 theorem recovers : Recovers := by
-  intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t_r t₁ hσ hadm hfa hf hTH hqT
-    hcT hq hid hto htime hinj hev hmono hdel hfire hwait hsync hup hstart G
+  intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t_r t₁ D nE hσ hadm hfa hf hTH
+    hqT hcT hq hid hto htime hinj hev hmono hsp hnE hdel hfire hwait hsync hup hstart G
   have hrG : t_r ≤ G := (le_max_left _ _).trans (Nat.le_add_right _ _)
   have hgG : gst ≤ G := (le_max_right _ _).trans (Nat.le_add_right _ _)
   have harr := arrival_of_recovered hσ hadm hfa hf hid htime hinj hTH hmono hdel hsync hup hfire
@@ -337,9 +359,16 @@ theorem recovers : Recovers := by
   have hstart' : StartedBy T tr time G := fun v hv => by
     obtain ⟨i, hi, hit⟩ := hstart v hv
     exact ⟨i, hi, hit.trans hgG⟩
+  -- the reliable nodes stay at `nE` or above from `max t_r gst` to `G`
+  have hnE' : ∀ v ∈ T, nE ≤ topAt cfg tr time v G := fun v hv => by
+    have := (rises_before (cfg := cfg) (tr := tr) v (eventsBy_mono (tr := tr) (time := time)
+      (show max t_r gst ≤ G from Nat.le_add_right _ _))).1
+    change topAt cfg tr time v (max t_r gst) ≤ topAt cfg tr time v G at this
+    exact (hnE v hv).trans this
   have hp := produces hσ hadm hfa hf hTH hqT hq hid htime hinj hev hmono harr
-    (topTimerBy_of_up hmono hup hfire hrG) hstart'
+    (topTimerBy_of_up hmono hup hfire hrG) hstart' hsp hnE'
   have hd := decides hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hev hmono harr hwait hstart'
+    hsp hnE'
   exact ⟨hp, hd, decidesBy hp hd⟩
 
 /-- **The reliable nodes' liveness**, without crashes and with them. -/

@@ -244,6 +244,7 @@ structure Received (inp : Input Validator BlockId Payload)
   armed : s₁.armed = s.armed
   recovering : s₁.recovering = s.recovering
   ev : EvidenceOn cfg s → EvidenceOn cfg s₁
+  det : s.detected ⊆ s₁.detected
 
 omit [Fintype Validator] in
 theorem EvidenceOn.absorb {s : State Validator BlockId Payload} (h : EvidenceOn cfg s) :
@@ -262,10 +263,10 @@ theorem received_absorb {inp : Input Validator BlockId Payload}
     {L : List (BlockId × Block Validator BlockId Payload)}
     (hL : ∀ e ∈ L, e ∈ s.syncs.map (·.2.1) ∨ e ∈ delivered cfg [inp]) :
     Received cfg inp s (tidy (absorb cfg s L)) := by
-  obtain ⟨h₁, h₂, h₃, h₄, h₅, h₆, h₇, h₈, h₉, -⟩ := absorb_rest (cfg := cfg) s L
+  obtain ⟨h₁, h₂, h₃, h₄, h₅, h₆, h₇, h₈, h₉, h₁₀⟩ := absorb_rest (cfg := cfg) s L
   have ht := tidy_eq (absorb cfg s L)
   refine ⟨⟨L, hL, by rw [ht.1, absorb_disk]⟩, fun e he => ?_, h₁, h₃, h₄, h₅, h₆, h₇, h₈, h₉,
-    ?_⟩
+    ?_, h₁₀⟩
   · have := ht.2.2.2.2.2.2.2.2.2.2 he
     rw [h₂] at this
     exact Or.inl (List.mem_map_of_mem this)
@@ -279,7 +280,7 @@ theorem received_syncs {inp : Input Validator BlockId Payload} {s : State Valida
     (hS : ∀ e ∈ S, e.2.1 ∈ s.syncs.map (·.2.1) ∨ e.2.1 ∈ delivered cfg [inp]) :
     Received cfg inp s { s with syncs := S } :=
   ⟨⟨[], fun _ h => absurd h List.not_mem_nil, rfl⟩, hS, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
-    fun h => h.grow (Grows.refl _) rfl rfl⟩
+    fun h => h.grow (Grows.refl _) rfl rfl, subset_rfl⟩
 
 omit [Fintype Validator] in
 /-- **A receipt grows the disk.** -/
@@ -329,7 +330,7 @@ theorem Received.trans {inp : Input Validator BlockId Payload}
   refine ⟨⟨L₁ ++ L₂, fun e he => ?_, by rw [hd₂, hd₁, List.foldl_append]⟩, fun e he => ?_,
     h₂.floor.trans h₁.floor, h₂.top.trans h₁.top, h₂.own.trans h₁.own, h₂.fired.trans h₁.fired,
     h₂.lo.trans h₁.lo, h₂.decided.trans h₁.decided, h₂.armed.trans h₁.armed,
-    h₂.recovering.trans h₁.recovering, h₂.ev ∘ h₁.ev⟩
+    h₂.recovering.trans h₁.recovering, h₂.ev ∘ h₁.ev, h₁.det.trans h₂.det⟩
   · rcases List.mem_append.mp he with he | he
     · exact hL₁ e he
     · rcases hL₂ e he with h | h

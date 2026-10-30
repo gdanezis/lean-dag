@@ -38,7 +38,9 @@ theorem waves_leads {cfg : Config Validator BlockId Payload} {H T : Finset Valid
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr) (hev :
         Converge.EvidenceAuthentic cfg H tr)
     (hmono : Live.TimeMono tr time) (harr : Arrival cfg T tr time G (Δ + Δₛ) t₁)
-    (hwait : Live.TimersAfterSet cfg H tr time) (hstart : Live.StartedBy T tr time G) :
+    (hwait : Live.TimersAfterSet cfg H tr time) (hstart : Live.StartedBy T tr time G)
+    {D : Finset Validator} {nE : ℕ} (hsp : Live.Spread cfg H tr D nE)
+    (hnE : ∀ v ∈ T, nE ≤ topAt cfg tr time v G) :
     Waves cfg T tr time G (Δ + Δₛ) t₁
         (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)) ∧
       Leads cfg T tr time G (Δ + Δₛ) t₁
@@ -47,16 +49,16 @@ theorem waves_leads {cfg : Config Validator BlockId Payload} {H T : Finset Valid
   refine ⟨fun n₀ N t hbelow hgt htop ht₁ => ?_,
     fun b c n₀ hc hspan hlead hn₀ hbelow t htop ht₁ v hv j hbj hjc => ?_⟩
   · exact waveFacts_of_run hσ hadm hfa hf htime hinj hev hTH hmono harr hq hto hwait hid hstart hcT
-      hqT hbelow (fun w hw => started_at hadm hfa hid htime hTH hmono hstart hw hgt) htop ht₁
+      hqT hsp hnE hbelow (fun w hw => started_at hadm hfa hid htime hTH hmono hstart hw hgt) htop ht₁
   set U := globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime) with hU
   -- on the node's view the slot commits a leader block
   obtain ⟨V, -, -, hcm⟩ := run_commits hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hev hmono
       harr
-    hwait hstart hc hspan hlead hn₀ hbelow htop ht₁ hv
+    hwait hstart hsp hnE hc hspan hlead hn₀ hbelow htop ht₁ hv
   obtain ⟨L, hL, hLd⟩ := hcm j hbj (by omega)
   -- the node has output a decision for the slot
   have hlen := Live.decides hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hev hmono harr hwait
-      hstart
+      hstart hsp hnE
     b c n₀ hc hspan hlead hn₀ hbelow t htop ht₁ v hv
   set E := eventsBy tr time (t + (Δ + Δₛ)) with hE
   have hmap := (Local.decisions Validator BlockId Payload (cfg.at v) (inputsBefore tr E v)).2
@@ -87,18 +89,22 @@ theorem holds : Statement := by
   refine ⟨globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime),
     fun v hv i => (cut_before hσ hadm hf htime hinj i v hv).1,
     fun v hv i => commitInv_before hσ hadm hf htime hinj hv i, ?_, ?_⟩
-  · intro T time gst Δ Δₛ t₁ hTH hfa hev hqT hcT hq hid hto hmono hdel hwait hsync hstart hup
+  · intro T time gst Δ Δₛ t₁ D nE hTH hfa hev hqT hcT hq hid hto hsp hnE hmono hdel hwait hsync
+      hstart hup
     exact waves_leads hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hev hmono
-      (arrival_of_delivered (H := H) hTH hmono hdel hsync hup) hwait hstart
-  · intro T time gst Δ Δₛ t_r t₁ hTH hfa hev hqT hcT hq hid hto hmono hdel hfire hwait hsync hup
-      hstart G
+      (arrival_of_delivered (H := H) hTH hmono hdel hsync hup) hwait hstart hsp hnE
+  · intro T time gst Δ Δₛ t_r t₁ D nE hTH hfa hev hqT hcT hq hid hto hsp hnE hmono hdel hfire hwait
+      hsync hup hstart G
     have hgG : gst ≤ G := (le_max_right _ _).trans (Nat.le_add_right _ _)
     have hstart' : Live.StartedBy T tr time G := fun v hv => by
       obtain ⟨i, hi, hit⟩ := hstart v hv
       exact ⟨i, hi, hit.trans hgG⟩
     exact waves_leads hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hev hmono
       (arrival_of_recovered hσ hadm hfa hf hid htime hinj hTH hmono hdel hsync hup hfire hstart)
-      hwait hstart'
+      hwait hstart' hsp fun v hv => (hnE v hv).trans (by
+        have := (rises_before (cfg := cfg) (tr := tr) v (eventsBy_mono (tr := tr) (time := time)
+          (show max t_r gst ≤ G from Nat.le_add_right _ _))).1
+        exact this)
 
 end Refines
 

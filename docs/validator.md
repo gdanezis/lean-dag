@@ -230,7 +230,8 @@ reference, and the authors it then exposes: those that evidence names and
 those its references expose (`payloadFor`). Where these references would
 wait, and a held round-`r + 1` block of another author has references that
 would not, it builds on those instead (`refsAt`, `lent`), provided they
-make a valid block (`buildable`). It does the same where leaving authors
+make a valid block (`buildable`) and reference no author it leaves out
+(`lents`). It does the same where leaving authors
 out leaves fewer than `q`: a valid block of round `r + 1` names `q`
 authors and none it exposes, so its references make a valid block for the
 node. Without
@@ -485,10 +486,10 @@ four a round. It needs no bootstrap, since no block is collected.
 | V2 | **The decisions are the scheme's**: at the bounded vote, a decision step of a node whose memory holds the round of its next undecided slot, as it always does (§3.1), outputs what `Scheme.tryDecide` decides on any record and view holding the disk's blocks, read alike; over successive views this is the scheme's loop. | `Node.Local.DecidesOnView` (proved): `Node.tryDecide_memory`, `Node.Store.Mirrors.viewsAbove`, `Node.tryDecide_window`, `Node.ViewsAbove.of_store`, `Node.ViewsAbove.tryDecide_eq` |
 | V3 | **Safety**: over a trace with timely authentication of blocks, an injective hash and `Params.Tolerates`, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` of which every honest disk is a cut, and any two honest nodes' decisions are prefix-comparable. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
 | V3′ | **Convergence**: over a trace with delivery, timely authentication, an injective hash, and authentic evidence, every block in the history of an honest node's own block at its top at the end is on every honest node's disk at the end. No fault bound is needed: an honest node given the block has a sync for it until it holds it, and the answer to the sync's last request leads to no request, which it would if the node still lacked the block (§3.4). | `Node.Converge.Converges` (proved): `Node.Converge.sync_made`, `Node.Converge.sync_stays`, `Node.Converge.last_ask`, `Node.step_stream_stuck`, `Node.foldl_all`, `Node.Converge.not_detected`, `Node.eq_of_persists` |
-| V13 | **The blocks a node holds a round**: over a trace with timely authentication and an injective hash, with fewer than `q` nodes outside the honest set, if every block of an honest author at round `m + 1` on an honest node's disk exposes every author the node convicted, its disk holds at most `n + |D|` blocks of each round from `m + 1` on, for `D` the authors it convicted: one of each author not convicted and two of each convicted. The premise is not proved of the builder of §3.2, and past GST it need not hold (§9). | `Node.Bound.Bounded` (proved, §3.4): `Node.steady_before`, `Node.Steady.step`, `Node.takeIn_referenced`, `not_mem_creators_refs_of_correct_exposed`, `Node.own_known` |
+| V13 | **The blocks a node holds a round**: over a trace with timely authentication and an injective hash, with fewer than `q` nodes outside the honest set, if every block of an honest author at round `m + 1` on an honest node's disk exposes every author the node convicted, its disk holds at most `n + |D|` blocks of each round from `m + 1` on, for `D` the authors it convicted: one of each author not convicted and two of each convicted. The premise is not yet proved of the builder of §3.2 (§9). | `Node.Bound.Bounded` (proved, §3.4): `Node.steady_before`, `Node.Steady.step`, `Node.takeIn_referenced`, `not_mem_creators_refs_of_correct_exposed`, `Node.own_known` |
 | V8 | The claims are about the program that runs: its disk and memory are ordered maps, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` (§6) |
-| V11 | **Liveness**: over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, reliable nodes that do not restart, their timers on time, no honest node's timer early, timeouts above `2(Δ + Δₛ)`, authentic evidence and a faithful payload source, the reliable nodes produce a round per timeout and `Δ + Δₛ`, and a run of reliably led slots from a round that every reliable node was below at GST is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of a timeout and `Δ + Δₛ` per round. The honest nodes outside the reliable set need meet no other timing assumption. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy`, `Node.held_before` |
-| V11′ | **Liveness across crashes**: if the reliable nodes stay up from `t_r` to the horizon `t₁`, with delivery, synchronisation and timers assumed only from then on, and timers lost only to a restart, with authentic evidence and a faithful payload source, the conclusions of V11 hold with GST replaced by `max t_r gst + W`, for `W` twice the largest timeout of the round below the one a reliable node is at by `max t_r gst`. Crashes before GST are the case `t_r ≤ gst`. The honest nodes outside the reliable set may keep crashing and restarting; with every honest node reliable, after every node crashed and restarted, the nodes decide again. | `Node.Live.Recovers` (proved, §5.6): `Node.arrival_of_recovered`, `Node.sends_again`, `Node.retry_last`, `Node.recovered_by`, `Node.topTimerBy_of_up`, `Node.top_arrives`, `Node.quorum_below` |
+| V11 | **Liveness**: over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, reliable nodes that do not restart, their timers on time, no honest node's timer early, timeouts above `2(Δ + Δₛ)`, authentic evidence, a faithful payload source, and evidence that has spread by a round every reliable node is at by GST, the reliable nodes produce a round per timeout and `Δ + Δₛ`, and a run of reliably led slots from a round that every reliable node was below at GST is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of a timeout and `Δ + Δₛ` per round. The honest nodes outside the reliable set need meet no other timing assumption. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy`, `Node.held_before` |
+| V11′ | **Liveness across crashes**: if the reliable nodes stay up from `t_r` to the horizon `t₁`, with delivery, synchronisation and timers assumed only from then on, and timers lost only to a restart, with authentic evidence, a faithful payload source, and evidence that has spread by a round every reliable node is at by `max t_r gst`, the conclusions of V11 hold with GST replaced by `max t_r gst + W`, for `W` twice the largest timeout of the round below the one a reliable node is at by `max t_r gst`. Crashes before GST are the case `t_r ≤ gst`. The honest nodes outside the reliable set may keep crashing and restarting; with every honest node reliable, after every node crashed and restarted, the nodes decide again. | `Node.Live.Recovers` (proved, §5.6): `Node.arrival_of_recovered`, `Node.sends_again`, `Node.retry_last`, `Node.recovered_by`, `Node.topTimerBy_of_up`, `Node.top_arrives`, `Node.quorum_below` |
 | V12 | **Refinement**: for an admissible configuration at the bounded vote, over a trace with timely authentication, an injective hash and at most `f` nodes outside the honest set, there is a `BlockRecord` at quorum `q` of which every honest disk, before every event, is a cut; every honest node's decisions are none or `Scheme.tryDecide` from slot `0` on a view of it that the node's disk holds. Under the assumptions of V11 (no timer need fire) or of V11′, it has the scheme's `WaveFacts` over every window of rounds from one above every reliable node's round at GST, and every slot of a reliably led run is decided by every reliable node to a leader block. | `Node.Refines.HasRecord` (proved, §5.7): `Node.commitInv_before`, `Node.waveFacts_of_run`, `Node.run_commits`, `Refines.waves_leads` |
 
 Every claim depends only on the standard axioms (`propext`,
@@ -591,7 +592,15 @@ assumptions up to a time `t₁`, over a reliable set `T ⊆ H` of at least
 * authentic evidence (`EvidenceAuthentic`, §4), so no reliable author is
   left out of a reference set, and a faithful payload source
   (`Faithful`, §2), so the node's block carries the evidence and the
-  exposure the builder put in it.
+  exposure the builder put in it;
+* **the evidence spreads** (`Spread`), for a set `D` and a round `n_E`
+  every reliable node is at by GST: every author that evidence in a block
+  the honest nodes knew names, or with two blocks of a round among those
+  blocks, is in `D`, and an honest node that persists a block above `n_E`
+  has convicted every author of `D` before that event. An honest block
+  above `n_E` then references no author of `D` (`refs_avoid_spread`), so a
+  node that is behind can build on the references of an honest block of
+  the round above (`lent_avoids_before`).
 
 A step takes no time; the time it costs a node to act on what it holds is
 the catch-up bound below, not a processing constant.
@@ -657,8 +666,10 @@ timeout before, and `2A` after that every reliable node holds the
 reliable blocks of the round. If it was built on being behind, its
 builder holds an earlier honest block of the round (`behind_honest`),
 which did not pass the tests either, or the references it lends would
-have and the node would have built on those (`ready_transfer`); the
-claim follows by induction on the event that built it. A reliable node
+have and the node would have built on those (`ready_transfer`): above
+`n_E` they reference no author the node leaves out (`Spread`,
+`refs_avoid_spread`), so the node may build on them. The claim follows by
+induction on the event that built it. A reliable node
 building on the timer or behind therefore holds, and references, every
 reliable block of the round below: its builder leaves out no reliable
 author (`not_excluded`), so the references it would lend are not taken
@@ -982,16 +993,10 @@ and the bound on the blocks a node holds a round (V13), Stage 4. Open:
   each stream carries its blocks above that round in the history of the
   stream's block, as it does a detected author's, whose frontier is `0`;
 * V13 assumes that every honest block of a round exposes the convicted
-  authors, and past GST this need not hold with the builder of §3.2. A
-  reliable node that convicted `X` and builds on the references of
-  another author's block of the next round, because its own fail the
-  tests, can reference a block of `X`; its block is then valid, does not
-  expose `X`, and a later block may inherit the omission. Lending only
-  sets that avoid the authors the builder leaves out, while its own set
-  can be built, would give the premise from the round above the highest
-  reliable round built `Δ + Δₛ` after a reliable conviction, but the
-  wave facts (§5.3) take a lent set that passes the tests whenever one
-  exists (`ready_transfer`);
+  authors. A node lends only references that name no author it leaves
+  out (§3.2), so an honest block above `n_E` references no author of `D`
+  (`refs_avoid_spread`); that it then exposes them, which gives the
+  premise from round `n_E + 1`, is not yet proved;
 * the record V12 builds is at `ValidAt q Clause.none`, not at the
   exposure clause the node checks;
 * a node answers every request of a peer it has not convicted, so before

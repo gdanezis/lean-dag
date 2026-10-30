@@ -261,10 +261,13 @@ def buildable (s : Store Validator BlockId Payload) (r : ℕ) (R : Finset BlockI
   decide (s.Checks cfg.q cfg.xp (cfg.idOf (blockOn cfg s r R E)) (blockOn cfg s r R E))
 
 /-- **The references lent by the held round-`r + 1` blocks of other
-authors**, in order of identifier. -/
-def lents (s : Store Validator BlockId Payload) (r : ℕ) : List (Finset BlockId) :=
-  (((s.atRound (r + 1)).sort (· ≤ ·)).filter fun c =>
-    decide ((s.blk c).creator ≠ cfg.me)).map (lent s ·)
+authors**, in order of identifier, those that reference no author the
+node leaves out with the evidence `E`. -/
+def lents (s : Store Validator BlockId Payload) (r : ℕ)
+    (E : Finset (Validator × BlockId × BlockId)) : List (Finset BlockId) :=
+  ((((s.atRound (r + 1)).sort (· ≤ ·)).filter fun c =>
+    decide ((s.blk c).creator ≠ cfg.me)).map (lent s ·)).filter fun R =>
+    decide (∀ i ∈ R, (s.blk i).creator ∉ excluded cfg s r E)
 
 /-- **The references of the node's next block**, above round `r`, with the
 evidence `E`: those of `refsFor` if they pass the reach and certificate
@@ -279,9 +282,9 @@ def refsAt (s : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId)
   let ok := fun R => buildable cfg s r R E
   let own := refsFor cfg s r o E
   if ready own && ok own then own
-  else match (lents cfg s r).find? fun R => ready R && ok R with
+  else match (lents cfg s r E).find? fun R => ready R && ok R with
     | some R => R
-    | none => if ok own then own else ((lents cfg s r).find? ok).getD own
+    | none => if ok own then own else ((lents cfg s r E).find? ok).getD own
 
 /-- **The node is behind round `r + 1`**: the store `st` holds round-`r + 1`
 blocks of `f + 1` authors, so a node other than a Byzantine one built the

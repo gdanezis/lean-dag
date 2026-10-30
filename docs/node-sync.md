@@ -220,8 +220,8 @@ Stage 3 needs Stages 1 and 2, and Stage 4 needs Stage 3.
 * The cost of answering requests (D6), before conviction.
 * V12's record at the exposure clause.
 * V13's premise, that every honest block of a round exposes the convicted
-  authors, need not hold past GST: a reliable node that builds on a lent
-  set can reference a convicted author's block (`docs/validator.md` §9).
+  authors, is not yet proved from the spread of the evidence
+  (`docs/validator.md` §9).
 * Catch-up after a long outage takes in one piece holding the history of
   the target above the frontier, which grows with the time the node was
   behind. The frontier is an author's least round not held, so after a

@@ -98,10 +98,12 @@ that no timer need fire, `U` has the wave facts and the leaders. -/
 def Timed (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload)
     (U : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H) : Prop :=
-  ∀ (T : Finset Validator) (time : ℕ → ℕ) (gst Δ Δₛ t₁ : ℕ), T ⊆ H →
+  ∀ (T : Finset Validator) (time : ℕ → ℕ) (gst Δ Δₛ t₁ : ℕ) (D : Finset Validator) (nE : ℕ),
+    T ⊆ H →
     cfg.Faithful → Converge.EvidenceAuthentic cfg H tr → cfg.q ≤ T.card → Fintype.card Validator -
         cfg.f - cfg.c ≤ T.card → 2 ≤ cfg.q →
     Function.Injective cfg.idOf → (∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) →
+    Live.Spread cfg H tr D nE → (∀ v ∈ T, nE ≤ topAt cfg tr time v gst) →
     Live.TimeMono tr time → Live.DeliveredWithin cfg T tr time gst Δ t₁ →
     Live.TimersAfterSet cfg H tr time → Live.SyncedWithin cfg T tr time gst Δₛ t₁ →
     Live.StartedBy T tr time gst → Live.UpFrom T tr time 0 t₁ →
@@ -112,10 +114,12 @@ the wave facts and the leaders past `max t_r gst + W`. -/
 def Recovering (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload)
     (U : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H) : Prop :=
-  ∀ (T : Finset Validator) (time : ℕ → ℕ) (gst Δ Δₛ t_r t₁ : ℕ), T ⊆ H →
+  ∀ (T : Finset Validator) (time : ℕ → ℕ) (gst Δ Δₛ t_r t₁ : ℕ) (D : Finset Validator)
+    (nE : ℕ), T ⊆ H →
     cfg.Faithful → Converge.EvidenceAuthentic cfg H tr → cfg.q ≤ T.card → Fintype.card Validator -
         cfg.f - cfg.c ≤ T.card → 2 ≤ cfg.q →
     Function.Injective cfg.idOf → (∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) →
+    Live.Spread cfg H tr D nE → (∀ v ∈ T, nE ≤ topAt cfg tr time v (max t_r gst)) →
     Live.TimeMono tr time → Live.DeliveredFrom cfg T tr time gst Δ t_r t₁ →
     Live.TimersFireUp cfg T tr time t₁ → Live.TimersAfterSet cfg H tr time →
     Live.SyncedFrom cfg T tr time gst Δₛ t_r t₁ → Live.UpFrom T tr time t_r t₁ →

@@ -144,6 +144,19 @@ def StartedBy (T : Finset Validator) (tr : Trace Validator BlockId Payload) (tim
     (gst : ℕ) : Prop :=
   ∀ v ∈ T, ∃ i, tr[i]? = some (v, .start) ∧ time i ≤ gst
 
+/-- **The evidence spreads**, for a set `D` and a round `nE`: every author
+that evidence in a block the honest nodes knew names, or with two blocks
+of a round among those blocks, is in `D`; and an honest node that persists
+a block above round `nE` has convicted every author of `D` before that
+event. -/
+def Spread (cfg : Config Validator BlockId Payload) (H : Finset Validator)
+    (tr : Trace Validator BlockId Payload) (D : Finset Validator) (nE : ℕ) : Prop :=
+  (∀ y ∈ Converge.knownIn cfg H tr, ∀ e ∈ cfg.xp.ev y.2.payload, e.2.1 ≠ e.2.2 → e.1 ∈ D) ∧
+  (∀ y ∈ Converge.knownIn cfg H tr, ∀ z ∈ Converge.knownIn cfg H tr, y.1 ≠ z.1 →
+    y.2.creator = z.2.creator → y.2.round = z.2.round → y.2.creator ∈ D) ∧
+  ∀ j v inp, tr[j]? = some (v, inp) → v ∈ H → ∀ e ∈ persists (outputsAt cfg tr j),
+    nE < e.2.round → D ⊆ (stateBefore cfg tr j v).detected
+
 /-- **Production**: past GST, once every reliable node is at round `n` or
 above at `s`, every reliable node is above `n` at `s + D + timeout n`. -/
 def Produces (cfg : Config Validator BlockId Payload) (T : Finset Validator)
@@ -192,12 +205,14 @@ meeting the assumptions up to `t₁`. -/
 def Progresses : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H T : Finset Validator)
-    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δ Δₛ t₁ : ℕ),
+    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δ Δₛ t₁ : ℕ)
+    (D : Finset Validator) (nE : ℕ),
     cfg.σ = boundedSel → cfg.Admissible → cfg.Faithful → Hᶜ.card ≤ cfg.f → T ⊆ H →
     cfg.q ≤ T.card → Fintype.card Validator - cfg.f - cfg.c ≤ T.card → 2 ≤ cfg.q →
     Function.Injective cfg.idOf → (∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) →
     Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr →
     Converge.EvidenceAuthentic cfg H tr → TimeMono tr time →
+    Spread cfg H tr D nE → (∀ v ∈ T, nE ≤ topAt cfg tr time v gst) →
     DeliveredWithin cfg T tr time gst Δ t₁ →
     TimersFire cfg T tr time t₁ → TimersAfterSet cfg H tr time →
     SyncedWithin cfg T tr time gst Δₛ t₁ → StartedBy T tr time gst → UpFrom T tr time 0 t₁ →
@@ -212,12 +227,14 @@ the one a reliable node is at by `max t_r gst`. -/
 def Recovers : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H T : Finset Validator)
-    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δ Δₛ t_r t₁ : ℕ),
+    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δ Δₛ t_r t₁ : ℕ)
+    (D : Finset Validator) (nE : ℕ),
     cfg.σ = boundedSel → cfg.Admissible → cfg.Faithful → Hᶜ.card ≤ cfg.f → T ⊆ H →
     cfg.q ≤ T.card → Fintype.card Validator - cfg.f - cfg.c ≤ T.card → 2 ≤ cfg.q →
     Function.Injective cfg.idOf → (∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) →
     Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr →
     Converge.EvidenceAuthentic cfg H tr → TimeMono tr time →
+    Spread cfg H tr D nE → (∀ v ∈ T, nE ≤ topAt cfg tr time v (max t_r gst)) →
     DeliveredFrom cfg T tr time gst Δ t_r t₁ → TimersFireUp cfg T tr time t₁ →
     TimersAfterSet cfg H tr time → SyncedFrom cfg T tr time gst Δₛ t_r t₁ →
     UpFrom T tr time t_r t₁ → StartedBy T tr time gst →

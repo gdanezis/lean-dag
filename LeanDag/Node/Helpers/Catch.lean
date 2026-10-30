@@ -161,23 +161,28 @@ theorem ready_transfer [P.Mechanised] (hσ : cfg.σ = boundedSel)
     · rfl
 
 omit [Fintype Validator] in
-/-- A held round-`r + 1` block of another author lends its references. -/
-theorem lent_mem_lents {st : Store Validator BlockId Payload} {r : ℕ} {c : BlockId}
-    (hc : c ∈ st.ids) (hcr : (st.blk c).round = r + 1) (hcm : (st.blk c).creator ≠ cfg.me) :
-    lent st c ∈ lents cfg st r :=
-  List.mem_map.mpr ⟨c, List.mem_filter.mpr ⟨(Finset.mem_sort _).mpr
-    (Store.mem_atRound.mpr ⟨hc, hcr⟩), decide_eq_true hcm⟩, rfl⟩
+/-- A held round-`r + 1` block of another author lends its references,
+when they reference no author the node leaves out. -/
+theorem lent_mem_lents {st : Store Validator BlockId Payload} {r : ℕ}
+    {E : Finset (Validator × BlockId × BlockId)} {c : BlockId}
+    (hc : c ∈ st.ids) (hcr : (st.blk c).round = r + 1) (hcm : (st.blk c).creator ≠ cfg.me)
+    (hav : ∀ i ∈ lent st c, (st.blk i).creator ∉ excluded cfg st r E) :
+    lent st c ∈ lents cfg st r E :=
+  List.mem_filter.mpr ⟨List.mem_map.mpr ⟨c, List.mem_filter.mpr ⟨(Finset.mem_sort _).mpr
+    (Store.mem_atRound.mpr ⟨hc, hcr⟩), decide_eq_true hcm⟩, rfl⟩, decide_eq_true hav⟩
 
 omit [Fintype Validator] in
 /-- **`refsAt` passes the tests when a held block's lent references do**:
 a round-`r + 1` block of the store by another author whose lent references
-pass the tests and can be built on. -/
+pass the tests, can be built on and reference no author the node leaves
+out. -/
 theorem refsAt_ready {st : Store Validator BlockId Payload} {r : ℕ} {o : Option BlockId}
     {E : Finset (Validator × BlockId × BlockId)}
     {c : BlockId} (hc : c ∈ st.ids) (hcr : (st.blk c).round = r + 1)
     (hcm : (st.blk c).creator ≠ cfg.me)
     (hready : reachReady cfg st (lent st c) r = true ∧ certReady cfg st (lent st c) r = true)
-    (hb : buildable cfg st r (lent st c) E = true) :
+    (hb : buildable cfg st r (lent st c) E = true)
+    (hav : ∀ i ∈ lent st c, (st.blk i).creator ∉ excluded cfg st r E) :
     reachReady cfg st (refsAt cfg st r o E) r = true ∧
       certReady cfg st (refsAt cfg st r o E) r = true := by
   unfold refsAt
@@ -186,9 +191,9 @@ theorem refsAt_ready {st : Store Validator BlockId Payload} {r : ℕ} {o : Optio
   · rename_i h
     simp only [Bool.and_eq_true] at h
     exact h.1
-  · have hs : ((lents cfg st r).find? fun R => (reachReady cfg st R r && certReady cfg st R r) &&
+  · have hs : ((lents cfg st r E).find? fun R => (reachReady cfg st R r && certReady cfg st R r) &&
         buildable cfg st r R E).isSome :=
-      List.find?_isSome.mpr ⟨_, lent_mem_lents hc hcr hcm, by rw [hready.1, hready.2, hb]; rfl⟩
+      List.find?_isSome.mpr ⟨_, lent_mem_lents hc hcr hcm hav, by rw [hready.1, hready.2, hb]; rfl⟩
     obtain ⟨R, hR⟩ := Option.isSome_iff_exists.mp hs
     rw [hR]
     have := List.find?_some hR
@@ -325,6 +330,118 @@ theorem built_mem (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ
 end Record
 
 /-! ## Catch-up -/
+
+section Spread
+
+variable {tr : Trace Validator BlockId Payload} {D : Finset Validator} {nE : ℕ}
+
+/-- **Under spread evidence, an honest node leaves out only authors of
+`D`**, at a state it builds from. -/
+theorem excluded_sub_spread (hsp : Live.Spread cfg H tr D nE) {v : Validator}
+    {s x : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
+    (h : BuildState (cfg.at v) U (knownAll cfg H tr) s inp x) (r : ℕ) :
+    excluded (cfg.at v) x.disk r x.evidence ⊆ D :=
+  h.excluded_sub
+    (fun y hy e he hne => by
+      obtain ⟨u, hu, hk⟩ := hy
+      exact hsp.1 y (knownOf_sub hu hk) e he hne)
+    (fun y hy z hz hne hc hr => by
+      obtain ⟨u, hu, hk⟩ := hy
+      obtain ⟨u', hu', hk'⟩ := hz
+      exact hsp.2.1 y (knownOf_sub hu hk) z (knownOf_sub hu' hk') hne hc hr) r
+
+/-- **Under spread evidence, an honest node leaves out only authors of
+`D`**, at the state before an event. -/
+theorem excluded_before_spread (hsp : Live.Spread cfg H tr D nE) {v : Validator} (hv : v ∈ H)
+    (i r : ℕ) :
+    excluded (cfg.at v) (stateBefore cfg tr i v).disk r (stateBefore cfg tr i v).evidence ⊆ D := by
+  have hE := Converge.evidenceOn_before (cfg := cfg) (tr := tr) v i
+  have hV := (Converge.inv_before (cfg := cfg) (tr := tr) i v).valid
+  intro a hm
+  rcases Finset.mem_union.mp hm with hm | hm
+  · obtain ⟨e, he, rfl⟩ := Finset.mem_image.mp hm
+    obtain ⟨he, hne⟩ := Finset.mem_filter.mp he
+    rcases (hE.2 e he).2 with ⟨h₁, h₂, h₃, h₄, h₅⟩ | ⟨c, hc, hce⟩
+    · have := hsp.2.1 _ (Converge.stored_known hv h₁) _ (Converge.stored_known hv h₂) hne
+        (by simp only; rw [h₃, h₄]) h₅
+      simp only at this
+      rwa [h₃] at this
+    · exact hsp.1 _ (Converge.stored_known hv hc) e hce hne
+  · obtain ⟨c, hcR, hcm⟩ := Finset.mem_biUnion.mp hm
+    by_contra hD
+    exact ex_not_named (A := Dᶜ) hV
+      (fun j hj e he hne hc => Finset.mem_compl.mp hc (hsp.1 _ (Converge.stored_known hv hj) e he hne))
+      c (Store.mem_atRound.mp hcR).1 _ hcm (Finset.mem_compl.mpr hD)
+
+/-- **Under spread evidence, a block an honest node builds above `nE`
+references no author of `D`**: its builder convicted them before the event,
+and leaves out the authors it convicted. -/
+theorem refs_avoid_spread (hsp : Live.Spread cfg H tr D nE) {i : ℕ} {w : Validator}
+    {inp : Input Validator BlockId Payload} {x : State Validator BlockId Payload}
+    {ow : Option BlockId} {r : ℕ} (hi : tr[i]? = some (w, inp)) (hw : w ∈ H)
+    (hbs : BuildState (cfg.at w) U (knownAll cfg H tr) (stateBefore cfg tr i w) inp x)
+    {e : BlockId × Block Validator BlockId Payload} (he : e ∈ persists (outputsAt cfg tr i))
+    (her : nE < e.2.round) (ho : ∀ j, ow = some j → (x.disk.blk j).creator = (cfg.at w).me) :
+    ∀ k ∈ refsAt (cfg.at w) x.disk r ow x.evidence, (x.disk.blk k).creator ∉ D := by
+  intro k hk hD
+  obtain ⟨e', he', he'1, hne⟩ := hbs.ev.1 _ (hbs.det (hsp.2.2 i w inp hi hw e he her hD))
+  exact refsAt_avoids ho k hk (Finset.mem_union_left _
+    (Finset.mem_image.mpr ⟨e', Finset.mem_filter.mpr ⟨he', hne⟩, he'1⟩))
+
+/-- **Under spread evidence, an honest author's block above `nE` lends
+references avoiding the authors an honest node leaves out**, at the state
+before an event. -/
+theorem lent_avoids_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
+    (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
+    (hinj : Converge.HashInjective cfg H tr) (time : ℕ → ℕ) (hsp : Live.Spread cfg H tr D nE)
+    {v : Validator} (hv : v ∈ H) (E : ℕ) {m : ℕ} {z : BlockId}
+    (hz : z ∈ (stateBefore cfg tr E v).disk.ids)
+    (hzr : ((stateBefore cfg tr E v).disk.blk z).round = m + 1)
+    (hzH : ((stateBefore cfg tr E v).disk.blk z).creator ∈ H) (hmE : nE ≤ m) :
+    ∀ k ∈ lent (stateBefore cfg tr E v).disk z, ((stateBefore cfg tr E v).disk.blk k).creator ∉
+      excluded (cfg.at v) (stateBefore cfg tr E v).disk m (stateBefore cfg tr E v).evidence := by
+  set Z := stateBefore cfg tr E v with hZ
+  have hcut := (cut_before hσ hadm hf htime hinj E v hv).1
+  have hzU := (hcut _ hz).1
+  have hzc : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
+      z).creator = (Z.disk.blk z).creator := by rw [hcut.eq hz]
+  have hzr' : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
+      z).round = m + 1 := by rw [hcut.eq hz]; exact hzr
+  obtain ⟨iw, inpw, xw, oww, hiw, -, hbsw, hshw, -, ⟨-, -, -, -, hew⟩, hzrefs, hzsub, -, -⟩ :=
+    built_block time hσ hadm hf htime hinj hzH hzU hzc hzr'
+  have ho : ∀ j, oww = some j →
+      (xw.disk.blk j).creator = (cfg.at (Z.disk.blk z).creator).me := fun j hj => by
+    rcases hshw.2.2 with ⟨ht, hoe⟩ | ⟨-, hon, -⟩
+    · obtain ⟨j', hj', -, -, hjc⟩ := hbsw.own m ht
+      rw [hoe, hj'] at hj
+      cases hj
+      exact hjc
+    · rw [hon] at hj; cases hj
+  have hAD := refs_avoid_spread (r := m) hsp hiw hzH hbsw hew (by rw [hzr']; omega) ho
+  intro k hk hmk
+  have hk' : k ∈ refsAt (cfg.at (Z.disk.blk z).creator) xw.disk m oww xw.evidence := by
+    rw [← hzrefs, hcut.eq hz]; exact hk
+  have hkZ : k ∈ Z.disk.ids := Z.disk.complete z hz k hk
+  have hcr : (Z.disk.blk k).creator = (xw.disk.blk k).creator := by
+    rw [← hcut.eq hkZ, ← hbsw.cut.eq (hzsub hk')]
+  exact hAD k hk' (hcr ▸ excluded_before_spread hsp hv E m hmk)
+
+/-- **A store with more than `f` authors of a round holds an honest
+author's block of it.** -/
+theorem exists_honest_at (hf : Hᶜ.card ≤ cfg.f) {st : Store Validator BlockId Payload} {r : ℕ}
+    (h : cfg.f + 1 ≤ (st.authorsAt r).card) :
+    ∃ z ∈ st.ids, (st.blk z).round = r ∧ (st.blk z).creator ∈ H := by
+  obtain ⟨a, ha, haH⟩ : ∃ a ∈ st.authorsAt r, a ∈ H := by
+    by_contra hno
+    push Not at hno
+    have hsub : st.authorsAt r ⊆ Hᶜ := fun a ha => Finset.mem_compl.mpr (hno a ha)
+    have := Finset.card_le_card hsub
+    omega
+  obtain ⟨z, hzR, hza⟩ := mem_creatorsOf.mp ha
+  obtain ⟨hz, hzr⟩ := Store.mem_atRound.mp hzR
+  exact ⟨z, hz, hzr, hza ▸ haH⟩
+
+end Spread
 
 section Catch
 
@@ -547,7 +664,9 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
     {S : Finset Validator} (hST : S ⊆ T) (hS : cfg.f + 1 ≤ S.card) {τ n : ℕ} (hgτ : gst ≤ τ)
     (hτ₁ : τ + (Δ + Δₛ) ≤ t₁)
     (hSn : ∀ w ∈ S, (stateAt cfg tr time w τ).top.isSome ∧ n ≤ topAt cfg tr time w τ)
-    {v : Validator} (hv : v ∈ T) : n ≤ topAt cfg tr time v (τ + (Δ + Δₛ)) := by
+    {D : Finset Validator} {nE : ℕ} (hsp : Live.Spread cfg H tr D nE)
+    {v : Validator} (hv : v ∈ T) (hvE : nE ≤ topAt cfg tr time v gst) :
+    n ≤ topAt cfg tr time v (τ + (Δ + Δₛ)) := by
   set E := eventsBy tr time (τ + (Δ + Δₛ)) with hE
   by_contra hlt
   obtain ⟨m, hm⟩ := Option.isSome_iff_exists.mp
@@ -593,21 +712,26 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
         le_antisymm (hup w hw) ((hSn w hw).2.trans' hmn)
       exact mem_authorsIn.mpr ⟨j, hj, hjr.trans hwm, hjc⟩
   obtain ⟨o, hoo, hoi, hor, hoc⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) E m hm
-  -- a round-`m + 1` block it holds is another author's, and lends references
-  obtain ⟨a, ha⟩ : (Z.disk.authorsAt (m + 1)).Nonempty := Finset.card_pos.mp (by
-    have := hbeh; unfold behind at this; omega)
-  obtain ⟨z, hzR, hza⟩ := mem_creatorsOf.mp ha
-  obtain ⟨hzZ, hzr⟩ := Store.mem_atRound.mp hzR
+  -- an honest author's round-`m + 1` block it holds lends references
+  have hmE : nE ≤ m := by
+    have := (rises_before (cfg := cfg) (tr := tr) v (eventsBy_mono (tr := tr) (time := time)
+      (show gst ≤ τ + (Δ + Δₛ) by omega))).1
+    change topAt cfg tr time v gst ≤ (stateBefore cfg tr E v).top.getD 0 at this
+    rw [hm] at this
+    simp only [Option.getD_some] at this
+    omega
+  obtain ⟨z, hzZ, hzr, hzH⟩ := exists_honest_at hf (show cfg.f + 1 ≤ _ from hbeh)
   have hzm : (Z.disk.blk z).creator ≠ (cfg.at v).me := fun h => by
     have h₁ : (Z.disk.blk z).round ≤ m := own_le_top htime (hTH hv) hm hzZ h
     have h₂ : (Z.disk.blk z).round = m + 1 := hzr
     omega
+  have hav := lent_avoids_before hσ hadm hf htime hinj time hsp (hTH hv) E hzZ hzr hzH hmE
   have hsome := tryBuild_isSome (cfg := cfg.at v) hm
     (harr.recovered (by omega) v hv E (eventsBy_mono (tr := tr) (time := time) (by omega))
       (eventsBy_mono (by omega)))
     (Or.inr hbeh) hcard
     (fun j hj => by rw [hoo] at hj; cases hj; exact ⟨hoi, hor, hoc⟩)
-    (Or.inr ⟨_, lent_mem_lents hzZ hzr hzm, (lent_buildable (cfg := cfg.at v)
+    (Or.inr ⟨_, lent_mem_lents hzZ hzr hzm hav, (lent_buildable (cfg := cfg.at v)
       (Converge.inv_before (cfg := cfg) (tr := tr) E v).valid hzZ hzr hfa
       (fresh_before hid htime (hTH hv) hm) _).2⟩)
     (fresh_before hid htime (hTH hv) hm) ((Converge.floor_before hm).trans (Nat.sub_le _ _))

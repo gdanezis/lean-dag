@@ -470,17 +470,19 @@ theorem mem_refsFor_of {st : Store Validator BlockId Payload} {r : ℕ} {o : Opt
 
 omit [Fintype Validator] in
 /-- A set of references `lents` gives is a round-`r + 1` block's. -/
-theorem mem_lents {st : Store Validator BlockId Payload} {r : ℕ} {R : Finset BlockId}
-    (hR : R ∈ lents cfg st r) :
+theorem mem_lents {st : Store Validator BlockId Payload} {r : ℕ}
+    {E : Finset (Validator × BlockId × BlockId)} {R : Finset BlockId}
+    (hR : R ∈ lents cfg st r E) :
     ∃ c ∈ st.atRound (r + 1), (st.blk c).creator ≠ cfg.me ∧ R = (st.blk c).refs := by
-  obtain ⟨c, hc, rfl⟩ := List.mem_map.mp hR
+  obtain ⟨c, hc, rfl⟩ := List.mem_map.mp (List.mem_filter.mp hR).1
   have hc' := List.mem_filter.mp hc
   exact ⟨c, (Finset.mem_sort _).mp hc'.1, by simpa using hc'.2, rfl⟩
 
 omit [Fintype Validator] in
 /-- A lent reference is a block of the round below the lender. -/
-theorem mem_lents_round {st : Store Validator BlockId Payload} {r : ℕ} {R : Finset BlockId}
-    (hR : R ∈ lents cfg st r) : ∀ x ∈ R, x ∈ st.atRound r := by
+theorem mem_lents_round {st : Store Validator BlockId Payload} {r : ℕ}
+    {E : Finset (Validator × BlockId × BlockId)} {R : Finset BlockId}
+    (hR : R ∈ lents cfg st r E) : ∀ x ∈ R, x ∈ st.atRound r := by
   obtain ⟨c, hc, -, rfl⟩ := mem_lents hR
   obtain ⟨hcd, hcr⟩ := Store.mem_atRound.mp hc
   intro x hx
@@ -492,7 +494,7 @@ omit [Fintype Validator] in
 /-- **`refsAt` picks `refsFor`'s references or a lent set.** -/
 theorem refsAt_cases_of (st : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId)
     (E : Finset (Validator × BlockId × BlockId)) :
-    refsAt cfg st r o E = refsFor cfg st r o E ∨ refsAt cfg st r o E ∈ lents cfg st r := by
+    refsAt cfg st r o E = refsFor cfg st r o E ∨ refsAt cfg st r o E ∈ lents cfg st r E := by
   unfold refsAt
   dsimp only
   split
@@ -501,22 +503,37 @@ theorem refsAt_cases_of (st : Store Validator BlockId Payload) (r : ℕ) (o : Op
     · rename_i R hR; exact Or.inr (List.mem_of_find?_eq_some hR)
     · split
       · exact Or.inl rfl
-      · rcases hf : (lents cfg st r).find? _ with _ | R
+      · rcases hf : (lents cfg st r E).find? _ with _ | R
         · exact Or.inl rfl
         · exact Or.inr (List.mem_of_find?_eq_some hf)
 
 omit [Fintype Validator] in
 theorem Store.Mirrors.lents_eq {m d : Store Validator BlockId Payload} {F : ℕ}
-    (h : m.Mirrors d F) {r : ℕ} (hr : F ≤ r) : lents cfg m r = lents cfg d r := by
-  unfold lents
+    (h : m.Mirrors d F) {r : ℕ} (hr : F ≤ r) (E : Finset (Validator × BlockId × BlockId)) :
+    lents cfg m r E = lents cfg d r E := by
   have hmem : ∀ c ∈ ((d.atRound (r + 1)).sort (· ≤ ·)), c ∈ d.atRound (r + 1) :=
     fun c hc => (Finset.mem_sort _).mp hc
-  rw [h.atRound_eq (by omega : F ≤ r + 1)]
-  rw [List.filter_congr fun c hc => by
-    rw [h.creator (h.mem_of_atRound (by omega : F ≤ r + 1) (hmem c hc))]]
-  refine List.map_congr_left fun c hc => ?_
+  have hin : (((m.atRound (r + 1)).sort (· ≤ ·)).filter fun c =>
+        decide ((m.blk c).creator ≠ cfg.me)).map (lent m ·) =
+      (((d.atRound (r + 1)).sort (· ≤ ·)).filter fun c =>
+        decide ((d.blk c).creator ≠ cfg.me)).map (lent d ·) := by
+    rw [h.atRound_eq (by omega : F ≤ r + 1)]
+    rw [List.filter_congr fun c hc => by
+      rw [h.creator (h.mem_of_atRound (by omega : F ≤ r + 1) (hmem c hc))]]
+    refine List.map_congr_left fun c hc => ?_
+    have hc' := Store.mem_atRound.mp (hmem c (List.mem_of_mem_filter hc))
+    exact h.lent_eq hc'.1 (by rw [hc'.2]; omega)
+  unfold lents
+  rw [hin, h.excluded_eq hr E]
+  refine List.filter_congr fun R hR => ?_
+  obtain ⟨c, hc, rfl⟩ := List.mem_map.mp hR
   have hc' := Store.mem_atRound.mp (hmem c (List.mem_of_mem_filter hc))
-  exact h.lent_eq hc'.1 (by rw [hc'.2]; omega)
+  have hround : ∀ i ∈ lent d c, i ∈ d.atRound r := fun i hi => by
+    have := d.pred c hc'.1 i hi
+    change (d.blk i).round + 1 = (d.blk c).round at this
+    exact Store.mem_atRound.mpr ⟨d.complete c hc'.1 i hi, by omega⟩
+  exact decide_eq_decide.mpr (forall₂_congr fun i hi => by
+    rw [h.creator (h.mem_of_atRound hr (hround i hi))])
 
 omit [Fintype Validator] in
 /-- **The references the node builds on are those it would pick on disk**,
@@ -536,25 +553,16 @@ theorem Store.Mirrors.refsAt_eq {m d : Store Validator BlockId Payload} {F : ℕ
     rcases mem_refsFor_of hc with hc | hc
     · exact Store.mem_atRound.mp hc
     · exact ho c hc
-  have hlents : lents cfg m r = lents cfg d r := by
-    unfold lents
-    have hmem : ∀ c ∈ ((d.atRound (r + 1)).sort (· ≤ ·)), c ∈ d.atRound (r + 1) :=
-      fun c hc => (Finset.mem_sort _).mp hc
-    rw [h.atRound_eq (by omega : F ≤ r + 1)]
-    rw [List.filter_congr fun c hc => by
-      rw [h.creator (h.mem_of_atRound (by omega : F ≤ r + 1) (hmem c hc))]]
-    refine List.map_congr_left fun c hc => ?_
-    have hc' := Store.mem_atRound.mp (hmem c (List.mem_of_mem_filter hc))
-    exact h.lent_eq hc'.1 (by rw [hc'.2]; omega)
-  have hl : ∀ R ∈ lents cfg d r, ∀ c ∈ R, c ∈ d.ids ∧ (d.blk c).round = r :=
+  have hlents : lents cfg m r E = lents cfg d r E := h.lents_eq hr E
+  have hl : ∀ R ∈ lents cfg d r E, ∀ c ∈ R, c ∈ d.ids ∧ (d.blk c).round = r :=
     fun R hR c hc => Store.mem_atRound.mp (mem_lents_round hR c hc)
-  have hfind₁ : (lents cfg m r).find? (fun R => (reachReady cfg m R r && certReady cfg m R r) &&
-        buildable cfg m r R E) = (lents cfg d r).find? (fun R =>
+  have hfind₁ : (lents cfg m r E).find? (fun R => (reachReady cfg m R r && certReady cfg m R r) &&
+        buildable cfg m r R E) = (lents cfg d r E).find? (fun R =>
           (reachReady cfg d R r && certReady cfg d R r) && buildable cfg d r R E) := by
     rw [hlents]
     exact List.find?_congr_mem fun R hR => by rw [hrd R (hl R hR), h.buildable_eq hr (hl R hR)]
-  have hfind₂ : (lents cfg m r).find? (fun R => buildable cfg m r R E) =
-      (lents cfg d r).find? (fun R => buildable cfg d r R E) := by
+  have hfind₂ : (lents cfg m r E).find? (fun R => buildable cfg m r R E) =
+      (lents cfg d r E).find? (fun R => buildable cfg d r R E) := by
     rw [hlents]
     exact List.find?_congr_mem fun R hR => h.buildable_eq hr (hl R hR) E
   unfold refsAt
@@ -570,6 +578,25 @@ theorem mem_refsAt_of {st : Store Validator BlockId Payload} {r : ℕ} {o : Opti
   rcases refsAt_cases_of (cfg := cfg) st r o E with h | h
   · rw [h] at hx; exact mem_refsFor_of hx
   · exact Or.inl (mem_lents_round h x hx)
+
+omit [Fintype Validator] in
+/-- **`refsAt` references no author the node leaves out**, when its own
+block `o` is its own. -/
+theorem refsAt_avoids {st : Store Validator BlockId Payload} {r : ℕ} {o : Option BlockId}
+    {E : Finset (Validator × BlockId × BlockId)}
+    (ho : ∀ j, o = some j → (st.blk j).creator = cfg.me) :
+    ∀ i ∈ refsAt cfg st r o E, (st.blk i).creator ∉ excluded cfg st r E := by
+  intro i hi
+  rcases refsAt_cases_of (cfg := cfg) st r o E with h | h
+  · rw [h] at hi
+    unfold refsFor at hi
+    obtain ⟨a, ha, hi⟩ := Finset.mem_biUnion.mp hi
+    have ha' := (Finset.mem_sdiff.mp ha).2
+    split at hi
+    · rename_i hc
+      rw [ho i (Option.mem_toFinset.mp hi), ← hc.1]; exact ha'
+    · rw [(Finset.mem_filter.mp (mem_of_leastOf (Option.mem_toFinset.mp hi))).2]; exact ha'
+  · exact of_decide_eq_true (List.mem_filter.mp h).2 i hi
 
 omit [Fintype Validator] in
 /-- **The build reads alike in memory and on disk**, at the bounded vote,

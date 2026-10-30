@@ -431,6 +431,7 @@ structure BuildState (U : BlockRecord Validator BlockId Payload P H)
   fired : ∀ r ∈ x.fired, r ∈ s.fired ∨ inp = .timer r
   inv : ∃ B, Inv cfg x K B
   ev : EvidenceOn cfg x
+  det : s.detected ⊆ x.detected
 
 omit [Fintype Validator] in
 theorem BuildState.tryBuild {U : BlockRecord Validator BlockId Payload P H}
@@ -443,7 +444,8 @@ theorem BuildState.tryBuild {U : BlockRecord Validator BlockId Payload P H}
   refine ⟨h.cut.tryBuild hg hb hK, h.held.tryBuild hb, OwnTop.tryBuild hb,
     h.grows.trans (hst ▸ Grows.insert x.disk),
     fun r hr => h.fired r (calm_tryBuild hb hr), ?_,
-    h.ev.grow (hst ▸ Grows.insert x.disk) (tryBuild_detected hb).1 (tryBuild_detected hb).2⟩
+    h.ev.grow (hst ▸ Grows.insert x.disk) (tryBuild_detected hb).1 (tryBuild_detected hb).2,
+    h.det.trans (tryBuild_detected hb).1.symm.subset⟩
   obtain ⟨B, hi⟩ := h.inv
   obtain ⟨e, he, hi'⟩ := hi.tryBuild hb
   refine ⟨_, hi'.mono fun z hz => ?_⟩
@@ -476,6 +478,33 @@ theorem BuildState.not_excluded {U : BlockRecord Validator BlockId Payload P H}
     exact ex_not_named hi.valid (fun j hj e he hne => hK _ (hi.known j hj) e he hne) i
       (Store.mem_atRound.mp hiR).1 _ ham ha
 
+/-- **A state the node builds from leaves out only authors of `D`**, when
+`D` holds every author that evidence in a known block names and every
+author with two known blocks of a round. -/
+theorem BuildState.excluded_sub {U : BlockRecord Validator BlockId Payload P H}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    {s x : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
+    (h : BuildState cfg U K s inp x) {D : Finset Validator}
+    (hev : ∀ y ∈ K, ∀ e ∈ cfg.xp.ev y.2.payload, e.2.1 ≠ e.2.2 → e.1 ∈ D)
+    (htw : ∀ y ∈ K, ∀ z ∈ K, y.1 ≠ z.1 → y.2.creator = z.2.creator →
+      y.2.round = z.2.round → y.2.creator ∈ D)
+    (r : ℕ) : excluded cfg x.disk r x.evidence ⊆ D := by
+  obtain ⟨B, hi⟩ := h.inv
+  intro a hm
+  rcases Finset.mem_union.mp hm with hm | hm
+  · obtain ⟨e, he, rfl⟩ := Finset.mem_image.mp hm
+    obtain ⟨he, hne⟩ := Finset.mem_filter.mp he
+    rcases (h.ev.2 e he).2 with ⟨h₁, h₂, h₃, h₄, h₅⟩ | ⟨i, hi', hie⟩
+    · have := htw _ (hi.known _ h₁) _ (hi.known _ h₂) hne (by simp only; rw [h₃, h₄]) h₅
+      simp only at this
+      rwa [h₃] at this
+    · exact hev _ (hi.known i hi') e hie hne
+  · obtain ⟨i, hiR, ham⟩ := Finset.mem_biUnion.mp hm
+    by_contra hD
+    exact ex_not_named (A := Dᶜ) hi.valid
+      (fun j hj e he hne hc => Finset.mem_compl.mp hc (hev _ (hi.known j hj) e he hne)) i
+      (Store.mem_atRound.mp hiR).1 _ ham (Finset.mem_compl.mpr hD)
+
 omit [Fintype Validator] in
 /-- **A pass keeps a state the node builds from.** -/
 theorem BuildState.advance {U : BlockRecord Validator BlockId Payload P H}
@@ -486,7 +515,7 @@ theorem BuildState.advance {U : BlockRecord Validator BlockId Payload P H}
     BuildState cfg U K s inp (Node.advance cfg x).1 := by
   refine ⟨h.cut.advanceStore hg hp hK, h.held.advance, h.own.advance,
     h.grows.trans (Grows.advance x), fun r hr => h.fired r (calm_advance x hr), ?_,
-    (Thins.advance x).twins h.ev⟩
+    (Thins.advance x).twins h.ev, h.det.trans (Thins.advance x).det⟩
   obtain ⟨B, hi⟩ := h.inv
   obtain ⟨bs, ho, hi'⟩ := hi.advance
   exact ⟨_, hi'.mono fun z hz => hz.elim id fun hz => hK z (by rw [ho.1]; exact hz)⟩
@@ -654,7 +683,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
               simpa [floorOf, s₀, keep] using this⟩
         refine hset s₀ (built cfg [(cfg.idOf cfg.genesis, cfg.genesis)])
           ⟨hcst, hh₀, ho₀, (Grows.insert s.disk : Grows s.disk st), fun r hr => Or.inl hr,
-            ⟨_, hi₀⟩, hev.grow (Grows.insert s.disk : Grows s.disk st) rfl rfl⟩ hp ?_
+            ⟨_, hi₀⟩, hev.grow (Grows.insert s.disk : Grows s.disk st) rfl rfl, subset_rfl⟩ hp ?_
           (by simp only [Node.step, dif_pos h₂, if_pos h₁]; rfl)
         intro e he
         simp only [built, persists, List.flatMap_cons, List.flatMap_nil, List.append_nil,
@@ -670,7 +699,8 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
     · obtain ⟨hc₁, hp₁⟩ := hr.cut hg hc hp hd
       refine hset s₁ pre
         ⟨hc₁, hh.grow hr.grows hr.top, hown.grow hr.grows hr.top hr.own, hr.grows,
-          fun r hr' => Or.inl (by rwa [hr.fired] at hr'), ⟨B₀, hr.inv hi hd⟩, hr.ev hev⟩ hp₁ ?_ he
+          fun r hr' => Or.inl (by rwa [hr.fired] at hr'), ⟨B₀, hr.inv hi hd⟩, hr.ev hev,
+          hr.det⟩ hp₁ ?_ he
       intro e he
       obtain ⟨o, ho, he⟩ := List.mem_filterMap.mp he
       obtain ⟨_, _, _, _, rfl⟩ := hpre o ho; cases he
@@ -680,7 +710,8 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
     · obtain ⟨hc₁, hp₁⟩ := hr.cut hg hc hp hd
       refine hset s₁ pre
         ⟨hc₁, hh.grow hr.grows hr.top, hown.grow hr.grows hr.top hr.own, hr.grows,
-          fun r hr' => Or.inl (by rwa [hr.fired] at hr'), ⟨B₀, hr.inv hi hd⟩, hr.ev hev⟩ hp₁ ?_ he
+          fun r hr' => Or.inl (by rwa [hr.fired] at hr'), ⟨B₀, hr.inv hi hd⟩, hr.ev hev,
+          hr.det⟩ hp₁ ?_ he
       intro e he
       obtain ⟨o, ho, he⟩ := List.mem_filterMap.mp he
       obtain ⟨_, _, _, _, rfl⟩ := hpre o ho; cases he
@@ -692,7 +723,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
       (s₀ := { s with fired := fire s r, recovering := false })
       ⟨hc, hh.grow (Grows.refl _) rfl, hown.grow (Grows.refl _) rfl rfl, Grows.refl _,
         fun t ht => ?_, ⟨B₀, hi.of_eq rfl rfl rfl rfl rfl le_rfl⟩,
-        hev.grow (Grows.refl _) rfl rfl⟩ hp hb e hev')
+        hev.grow (Grows.refl _) rfl rfl, subset_rfl⟩ hp hb e hev')
     rcases Finset.mem_insert.mp ht with rfl | ht
     · exact Or.inr rfl
     · exact Or.inl (Finset.mem_filter.mp ht).1
@@ -712,7 +743,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
       (s₀ := { s with recovering := true })
       ⟨hc, hh.grow (Grows.refl _) rfl, hown.grow (Grows.refl _) rfl rfl, Grows.refl _,
         fun t ht => Or.inl ht, ⟨B₀, hi.of_eq rfl rfl rfl rfl rfl le_rfl⟩,
-        hev.grow (Grows.refl _) rfl rfl⟩ hp hb e hev')
+        hev.grow (Grows.refl _) rfl rfl, subset_rfl⟩ hp hb e hev')
 
 omit [Fintype Validator] in
 theorem decideStep_armed (s : State Validator BlockId Payload) :

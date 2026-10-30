@@ -47,6 +47,8 @@ theorem waited_holds (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel) (hadm : cfg.
     (hstart : Live.StartedBy T tr time gst)
     (hTc : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) {n₀ : ℕ}
     (hbelow : ∀ v ∈ T, topAt cfg tr time v gst < n₀)
+    {D : Finset Validator} {nE : ℕ} (hsp : Live.Spread cfg H tr D nE)
+    (hE : ∀ v ∈ T, nE ≤ topAt cfg tr time v gst)
     {u : Validator} (hu : u ∈ H) {i : ℕ} {inp : Input Validator BlockId Payload}
     (hi : tr[i]? = some (u, inp)) {n : ℕ}
     (hqn : cfg.q ≤ ((stateBefore cfg tr (i + 1) u).disk.authorsAt n).card)
@@ -87,7 +89,7 @@ theorem waited_holds (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel) (hadm : cfg.
   -- so every reliable node is `A` later
   have hall : ∀ w ∈ T, n ≤ topAt cfg tr time w (time i + (Δ + Δₛ)) := fun w hw =>
     catches_up hq hσ hadm hfa hf hid htime hinj hTH hmono harr hstart
-      (fun w hw => (Finset.mem_filter.mp hw).2) hS hgi (by omega) hSn hw
+      (fun w hw => (Finset.mem_filter.mp hw).2) hS hgi (by omega) hSn hsp hw (hE w hw)
   -- the block's build
   obtain ⟨ic, inpc, e, hic, he, rfl, her, hbt⟩ :=
     event_of_mem (time := time) hinj htime (hTH hcT) hcU rfl
@@ -157,7 +159,9 @@ else the references it lends would have (`behind_honest`,
 theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout r)
     (hwait : Live.TimersAfterSet cfg H tr time) (hid : Function.Injective cfg.idOf)
     (hstart : Live.StartedBy T tr time gst)
-    (hTc : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) (hn₁ : 1 ≤ n₀) :
+    (hTc : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) (hn₁ : 1 ≤ n₀)
+    {D : Finset Validator} {nE : ℕ} (hsp : Live.Spread cfg H tr D nE)
+    (hE : ∀ v ∈ T, nE ≤ topAt cfg tr time v gst) (hnE : nE < n₀) :
     ∀ j {h : Validator} {inp : Input Validator BlockId Payload}
       {x : State Validator BlockId Payload} {n : ℕ} {c : BlockId}, h ∈ H → n₀ ≤ n →
     time j ≤ t →
@@ -220,8 +224,8 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
     have htk := hmono k j hk hj₀l
     have hτ := hto t'
     refine ⟨time i + 2 * (Δ + Δₛ), by omega, fun v hv b hbU hbT hbr => ?_⟩
-    exact waited_holds hq hσ hadm hfa hf hid htime hinj hTH hmono harr hstart hTc hbelow hh hi hqn
-      hn₀ le_rfl (by omega) hv hbU hbT hbr
+    exact waited_holds hq hσ hadm hfa hf hid htime hinj hTH hmono harr hstart hTc hbelow hsp hE hh
+      hi hqn hn₀ le_rfl (by omega) hv hbU hbT hbr
   · -- it was behind: an earlier honest block of the round
     obtain ⟨w', hw'H, hw'h, j', hj'j, inp', z, hj', hz, hzr, hzx, hzb⟩ :=
       behind_honest htime hinj hf hh hj₀ hbs hb heo he hcr hgx hbeh
@@ -262,8 +266,25 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
         unfold lent; rw [hZR]
       have hready := ready_transfer (cfg := cfg.at h) hσ (fun h => certThreshold_pos hadm h)
         hbsw.cut hbs.cut hzsub hRR hlZ hrw.1 hrw.2
+      -- the lent references avoid the authors the node leaves out
+      have ho : ∀ k, oww = some k → (xw.disk.blk k).creator = (cfg.at w').me := fun k hk => by
+        rcases hshw.2.2 with ⟨ht, hoe⟩ | ⟨-, hon, -⟩
+        · obtain ⟨k', hk', -, -, hkc⟩ := hbsw.own n ht
+          rw [hoe, hk'] at hk
+          cases hk
+          exact hkc
+        · rw [hon] at hk; cases hk
+      have hAD := refs_avoid_spread (r := n) hsp hiw hw'H hbsw hew (by rw [hzr']; omega) ho
+      have hav : ∀ k ∈ lent x.disk z.1, (x.disk.blk k).creator ∉
+          excluded (cfg.at h) x.disk n x.evidence := fun k hk hmk => by
+        have hk' : k ∈ refsAt (cfg.at w') xw.disk n oww xw.evidence := by
+          rw [← hZR]; exact hk
+        have hkx : k ∈ x.disk.ids := x.disk.complete z.1 hzx k hk
+        have hcr : (x.disk.blk k).creator = (xw.disk.blk k).creator := by
+          rw [← hbs.cut.eq hkx, ← hbsw.cut.eq (hzsub hk')]
+        exact hAD k hk' (hcr ▸ excluded_sub_spread hsp hbs n hmk)
       exact refsAt_ready (cfg := cfg.at h) hzx (by rw [hzb, hzr])
-        (by rw [← hbs.cut.creator hzx, hzc]; exact hw'h) hready hlb
+        (by rw [← hbs.cut.creator hzx, hzc]; exact hw'h) hready hlb hav
     have hexitw' : n ∈ xw.fired ∨ behind (cfg.at w') xw.disk n := by
       rcases hexitw with h' | ⟨h₁, -⟩
       · exact absurd h' hnrw
@@ -286,7 +307,9 @@ built, every reliable block of the round below had reached its builder
 theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout r)
     (hwait : Live.TimersAfterSet cfg H tr time) (hid : Function.Injective cfg.idOf)
     (hstart : Live.StartedBy T tr time gst)
-    (hTc : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) (hqT : cfg.q ≤ T.card) :
+    (hTc : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) (hqT : cfg.q ≤ T.card)
+    {D : Finset Validator} {nE : ℕ} (hsp : Live.Spread cfg H tr D nE)
+    (hE : ∀ v ∈ T, nE ≤ topAt cfg tr time v gst) :
     ∀ i₀ {v : Validator} {inp : Input Validator BlockId Payload}
       {x : State Validator BlockId Payload} {n : ℕ} {c : BlockId}, v ∈ T → n₀ ≤ n → n + 1 ≤ N →
     c ∈ (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).ids →
@@ -335,7 +358,7 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
   have hn₁ : 1 ≤ n₀ := by have := hbelow v hv; omega
   obtain ⟨τ, hτ, hall⟩ := held_before hσ hadm hfa hf htime hinj hev hTH hmono harr hbelow hst hN
       ht₁ hq hto
-    hwait hid hstart hTc hn₁ i₀ (hTH hv) hn₀ hi₀t hcU hcv hcr hi₀ hbs hxt hcx hbuild hgx hexit hnr
+    hwait hid hstart hTc hn₁ hsp hE (by have := hE v hv; have := hbelow v hv; omega) i₀ (hTH hv) hn₀ hi₀t hcU hcv hcr hi₀ hbs hxt hcx hbuild hgx hexit hnr
   have hE : eventsBy tr time τ ≤ i₀ := by
     by_contra h
     have := (lt_eventsBy (t := τ) hmono hi₀l).mp (by omega)
@@ -408,6 +431,8 @@ theorem reach_or_refs_node (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < c
     (hwait : Live.TimersAfterSet cfg H tr time) (hid : Function.Injective cfg.idOf)
     (hstart : Live.StartedBy T tr time gst)
     (hTc : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) (hqT : cfg.q ≤ T.card)
+    {D : Finset Validator} {nE : ℕ} (hsp : Live.Spread cfg H tr D nE)
+    (hE : ∀ v ∈ T, nE ≤ topAt cfg tr time v gst)
     {v : Validator} (hv : v ∈ T) {k m : ℕ} (hRk : n₀ ≤ cfg.slots.slotRound k) (hlead :
         cfg.slots.leader k ∈ T) {L : BlockId}
     (hL : IsLeaderBlock (S := cfg.slots)
@@ -456,7 +481,7 @@ theorem reach_or_refs_node (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < c
     intro b hbU hbc hbr
     exact refs_all hσ hadm hfa hf htime hinj hev hTH hmono harr hbelow hst hN ht₁ hq hto hwait hid
         hstart
-      hTc hqT i₀ hv (by omega) hmN hcU hcv hcr hi₀ hbt hbs hxt hcx hbuild hcrefs hgx h₁.1 h₁.2
+      hTc hqT hsp hE i₀ hv (by omega) hmN hcU hcv hcr hi₀ hbt hbs hxt hcx hbuild hcrefs hgx h₁.1 h₁.2
       hready b hbU
       (by rw [hbc]; exact hlead) hbr
 
@@ -468,6 +493,8 @@ theorem cert_or_refs_node (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cf
     (hwait : Live.TimersAfterSet cfg H tr time) (hid : Function.Injective cfg.idOf)
     (hstart : Live.StartedBy T tr time gst)
     (hTc : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) (hqT : cfg.q ≤ T.card)
+    {D : Finset Validator} {nE : ℕ} (hsp : Live.Spread cfg H tr D nE)
+    (hE : ∀ v ∈ T, nE ≤ topAt cfg tr time v gst)
     (hvc : cfg.p.voteIsCert = false)
     {v : Validator} (hv : v ∈ T) {k : ℕ} (hRk : n₀ ≤ cfg.slots.slotRound k)
     (hlead : cfg.slots.leader k ∈ T) {L : BlockId}
@@ -520,7 +547,7 @@ theorem cert_or_refs_node (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cf
     intro b hbU hbT hbr _
     exact refs_all hσ hadm hfa hf htime hinj hev hTH hmono harr hbelow hst hN ht₁ hq hto hwait hid
         hstart
-      hTc hqT i₀ hv (by omega) hkN hcU hcv hcr hi₀ hbt hbs hxt hcx hbuild hcrefs hgx h₁.1 h₁.2
+      hTc hqT hsp hE i₀ hv (by omega) hkN hcU hcv hcr hi₀ hbt hbs hxt hcx hbuild hcrefs hgx h₁.1 h₁.2
       hready b hbU
       hbT hbr
 
