@@ -14,8 +14,9 @@ traces assume of authentication, every attack leaves agreement,
 prefix-comparability and validity intact. A node that accepts two blocks
 of the attacker at one round, as with the invalid blocks' twin of its
 genesis block or with twins, convicts it, takes no block from it after
-and leaves it out of its references; the honest nodes then wait out the
-timer at its slots, and build fewer rounds. Without the checks, the
+and leaves it out of its references; the tests then pass its slots
+without its blocks, and the honest nodes build fewer rounds than under
+`forgedAuthor`. Without the checks, the
 blocks forged in node `0`'s name still reach no node: a node takes an announced block only from its author, and
 the attacker streams only blocks it holds.
 -/
@@ -35,7 +36,7 @@ def attackLine (sc : Scenario) : String :=
   let r := simulate sc
   s!"{r.tops} {r.commits.map (·.length)} {r.agree} {r.prefixes} {r.valid} {r.dropped}"
 
-/-- info: "[(some 20), (some 20), (some 20)] [20, 20, 20] true true true 0" -/
+/-- info: "[(some 56), (some 56), (some 56)] [54, 54, 54] true true true 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.invalidBlocks])
 
@@ -43,11 +44,11 @@ def attackLine (sc : Scenario) : String :=
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor])
 
-/-- info: "[(some 19), (some 19), (some 19)] [18, 18, 18] true true true 0" -/
+/-- info: "[(some 52), (some 52), (some 52)] [50, 50, 50] true true true 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.twinSplit])
 
-/-- info: "[(some 20), (some 20), (some 19)] [18, 18, 18] true true true 69" -/
+/-- info: "[(some 53), (some 53), (some 52)] [52, 52, 50] true true true 69" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.invalidBlocks, .forgedAuthor, .twinSplit])
 

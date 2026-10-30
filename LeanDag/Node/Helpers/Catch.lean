@@ -72,14 +72,16 @@ theorem certThreshold_pos (hadm : cfg.Admissible) (hvc : cfg.p.voteIsCert = fals
 
 omit [Fintype Validator] in
 /-- **The tests carry over to a superset of the references**, from one cut
-to another holding the superset: the leader blocks the tests read are
-reached from the references, so the second cut holds them. -/
+to another holding the superset, and to a superset of the leaders left
+out: the leader blocks the tests read are reached from the references, so
+the second cut holds them. -/
 theorem ready_transfer [P.Mechanised] (hσ : cfg.σ = boundedSel)
     (hct : cfg.p.voteIsCert = false → 1 ≤ cfg.p.certThreshold)
     {x Z : Store Validator BlockId Payload} (hx : IsCut U x) (hZ : IsCut U Z)
     {R R' : Finset BlockId} {n : ℕ} (hR : R ⊆ x.ids) (hRR : R ⊆ R') (hR'Z : R' ⊆ Z.ids)
-    (hreach : reachReady cfg x R n = true) (hcert : certReady cfg x R n = true) :
-    reachReady cfg Z R' n = true ∧ certReady cfg Z R' n = true := by
+    {X X' : Finset Validator} (hXX : X ⊆ X')
+    (hreach : reachReady cfg x R n X = true) (hcert : certReady cfg x R n X = true) :
+    reachReady cfg Z R' n X' = true ∧ certReady cfg Z R' n X' = true := by
   -- a candidate of the store `x` reached from a reference
   have hcand : ∀ k L, L ∈ candidatesIn (S := cfg.slots) x.toRecord x.view k →
       ∀ c ∈ R, ReachesFrom U.block c L →
@@ -101,7 +103,8 @@ theorem ready_transfer [P.Mechanised] (hσ : cfg.σ = boundedSel)
     · rw [if_pos hmn] at h₁ ⊢
       refine List.all_eq_true.mpr fun k hk => ?_
       have h₂ := List.all_eq_true.mp h₁ k hk
-      obtain ⟨L, hL, c, hc, hhist⟩ := of_decide_eq_true h₂
+      rcases of_decide_eq_true h₂ with hkX | ⟨L, hL, c, hc, hhist⟩
+      · exact decide_eq_true (Or.inl (hXX hkX))
       have hLx := (Finset.mem_filter.mp hL).1
       have hcx := hR hc
       have hrd := round_le_of_mem_historyUptoFrom x.toRecord m hcx hhist
@@ -109,7 +112,8 @@ theorem ready_transfer [P.Mechanised] (hσ : cfg.σ = boundedSel)
       have hcL : ReachesFrom U.block c L :=
         hx.reachesFrom hcx (reaches_of_mem_historyUptoFrom hhist)
       obtain ⟨hLZ, -⟩ := hcand k L hL c hc hcL
-      refine decide_eq_true ⟨L, hLZ, c, hRR hc, hZ.mem_historyUptoFrom (hR'Z (hRR hc)) ?_ hcL⟩
+      refine decide_eq_true (Or.inr ⟨L, hLZ, c, hRR hc,
+        hZ.mem_historyUptoFrom (hR'Z (hRR hc)) ?_ hcL⟩)
       rw [hx.round hcx, hx.round hLx]; exact hrd
     · rw [if_neg hmn]
   · unfold certReady at hcert ⊢
@@ -121,7 +125,8 @@ theorem ready_transfer [P.Mechanised] (hσ : cfg.σ = boundedSel)
       · rw [if_pos hvn] at hcert ⊢
         refine List.all_eq_true.mpr fun k hk => ?_
         have h₂ := List.all_eq_true.mp hcert k hk
-        obtain ⟨L, hL, hcount⟩ := of_decide_eq_true h₂
+        rcases of_decide_eq_true h₂ with hkX | ⟨L, hL, hcount⟩
+        · exact decide_eq_true (Or.inl (hXX hkX))
         have hLx := (Finset.mem_filter.mp hL).1
         -- the votes, read on the record
         obtain ⟨Vx, -, hVx⟩ := hx.extend ⟨∅, Finset.empty_subset _, fun i hi => absurd hi
@@ -147,7 +152,8 @@ theorem ready_transfer [P.Mechanised] (hσ : cfg.σ = boundedSel)
         obtain ⟨VZ, -, hVZ⟩ := hZ.extend ⟨∅, Finset.empty_subset _, fun i hi => absurd hi
           (Finset.notMem_empty _)⟩ (fun i hi => absurd hi (Finset.notMem_empty _))
         have hvaZ := ViewsAbove.of_store (st := Z) (V := VZ) hVZ (fun i hi => (hZ i hi).2)
-        refine decide_eq_true ⟨L, hLZ, le_trans hcount (Finset.card_le_card fun a ha => ?_)⟩
+        refine decide_eq_true (Or.inr ⟨L, hLZ, le_trans hcount
+          (Finset.card_le_card fun a ha => ?_)⟩)
         obtain ⟨b, hb, rfl⟩ := Finset.mem_image.mp ha
         obtain ⟨hbR, hbv⟩ := Finset.mem_filter.mp hb
         have hbZ := hR'Z (hRR hbR)
@@ -180,19 +186,20 @@ theorem refsAt_ready {st : Store Validator BlockId Payload} {r : ℕ} {o : Optio
     {E : Finset (Validator × BlockId × BlockId)}
     {c : BlockId} (hc : c ∈ st.ids) (hcr : (st.blk c).round = r + 1)
     (hcm : (st.blk c).creator ≠ cfg.me)
-    (hready : reachReady cfg st (lent st c) r = true ∧ certReady cfg st (lent st c) r = true)
+    (hready : reachReady cfg st (lent st c) r (excluded cfg st r E) = true ∧
+      certReady cfg st (lent st c) r (excluded cfg st r E) = true)
     (hb : buildable cfg st r (lent st c) E = true)
     (hav : ∀ i ∈ lent st c, (st.blk i).creator ∉ excluded cfg st r E) :
-    reachReady cfg st (refsAt cfg st r o E) r = true ∧
-      certReady cfg st (refsAt cfg st r o E) r = true := by
+    reachReady cfg st (refsAt cfg st r o E) r (excluded cfg st r E) = true ∧
+      certReady cfg st (refsAt cfg st r o E) r (excluded cfg st r E) = true := by
   unfold refsAt
   dsimp only
   split
   · rename_i h
     simp only [Bool.and_eq_true] at h
     exact h.1
-  · have hs : ((lents cfg st r E).find? fun R => (reachReady cfg st R r && certReady cfg st R r) &&
-        buildable cfg st r R E).isSome :=
+  · have hs : ((lents cfg st r E).find? fun R => (reachReady cfg st R r (excluded cfg st r E) &&
+        certReady cfg st R r (excluded cfg st r E)) && buildable cfg st r R E).isSome :=
       List.find?_isSome.mpr ⟨_, lent_mem_lents hc hcr hcm hav, by rw [hready.1, hready.2, hb]; rfl⟩
     obtain ⟨R, hR⟩ := Option.isSome_iff_exists.mp hs
     rw [hR]
@@ -373,6 +380,19 @@ theorem excluded_before_spread (hsp : Live.Spread cfg H tr D nE) {v : Validator}
       (fun j hj e he hne hc => Finset.mem_compl.mp hc (hsp.1 _ (Converge.stored_known hv hj) e he hne))
       c (Store.mem_atRound.mp hcR).1 _ hcm (Finset.mem_compl.mpr hD)
 
+/-- **Under spread evidence, an honest node that builds above `nE` leaves
+out every author of `D`**. -/
+theorem spread_sub_excluded (hsp : Live.Spread cfg H tr D nE) {i : ℕ} {w : Validator}
+    {inp : Input Validator BlockId Payload} {x : State Validator BlockId Payload}
+    (hi : tr[i]? = some (w, inp)) (hw : w ∈ H)
+    (hbs : BuildState (cfg.at w) U (knownAll cfg H tr) (stateBefore cfg tr i w) inp x)
+    {e : BlockId × Block Validator BlockId Payload} (he : e ∈ persists (outputsAt cfg tr i))
+    (her : nE < e.2.round) (r : ℕ) : D ⊆ excluded (cfg.at w) x.disk r x.evidence :=
+    fun a ha => by
+  obtain ⟨e', he', he'1, hne⟩ := hbs.ev.1 _ (hbs.det (hsp.2.2 i w inp hi hw e he her ha))
+  exact Finset.mem_union_left _
+    (Finset.mem_image.mpr ⟨e', Finset.mem_filter.mpr ⟨he', hne⟩, he'1⟩)
+
 /-- **Under spread evidence, a block an honest node builds above `nE`
 references no author of `D`**: its builder convicted them before the event,
 and leaves out the authors it convicted. -/
@@ -384,9 +404,7 @@ theorem refs_avoid_spread (hsp : Live.Spread cfg H tr D nE) {i : ℕ} {w : Valid
     (her : nE < e.2.round) (ho : ∀ j, ow = some j → (x.disk.blk j).creator = (cfg.at w).me) :
     ∀ k ∈ refsAt (cfg.at w) x.disk r ow x.evidence, (x.disk.blk k).creator ∉ D := by
   intro k hk hD
-  obtain ⟨e', he', he'1, hne⟩ := hbs.ev.1 _ (hbs.det (hsp.2.2 i w inp hi hw e he her hD))
-  exact refsAt_avoids ho k hk (Finset.mem_union_left _
-    (Finset.mem_image.mpr ⟨e', Finset.mem_filter.mpr ⟨he', hne⟩, he'1⟩))
+  exact refsAt_avoids ho k hk (spread_sub_excluded hsp hi hw hbs he her r hD)
 
 /-- **Under spread evidence, an honest author's block above `nE` lends
 references avoiding the authors an honest node leaves out**, at the state

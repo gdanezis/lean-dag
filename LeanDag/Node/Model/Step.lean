@@ -34,7 +34,8 @@ input `i` in the state `s`: the new state and the outputs.
   authors, so a node other than a Byzantine one built the round
   (`behind`), or the block would reach every leader block of a slot
   whose wave is at a vote round (`reachReady`) and certify one at a
-  decision round (`certReady`). A node behind thus builds each round
+  decision round (`certReady`), for each slot whose leader it does not
+  leave out. A node behind thus builds each round
   below the highest block it holds without waiting its timers. The block
   references one accepted block per author of round `r` that it does not
   leave out, the node's own for itself when it built there and the least
@@ -223,29 +224,31 @@ def blockOn (s : Store Validator BlockId Payload) (r : ℕ) (R : Finset BlockId)
   ⟨r + 1, cfg.me, R, payloadFor cfg s r R E⟩
 
 /-- **The reach test** for a block at round `r + 1` referencing `refs`:
-for each slot whose wave has `r + 1` at or below its vote round, the
-block reaches one of the slot's leader blocks (`Store.leaderBlocks`). A
-leader block `m` rounds below a reference lies within `m` steps of it,
-so the search stops there. -/
-def reachReady (s : Store Validator BlockId Payload) (refs : Finset BlockId) (r : ℕ) : Bool :=
+for each slot whose wave has `r + 1` at or below its vote round and whose
+leader is not in `X`, the block reaches one of the slot's leader blocks
+(`Store.leaderBlocks`). A leader block `m` rounds below a reference lies
+within `m` steps of it, so the search stops there. -/
+def reachReady (s : Store Validator BlockId Payload) (refs : Finset BlockId) (r : ℕ)
+    (X : Finset Validator) : Bool :=
   letI := cfg.slots
   (List.range cfg.p.voteOffset).all fun m =>
     if m ≤ r then
       (cfg.slotsAt (r - m)).all fun k =>
-        decide (∃ L ∈ s.leaderBlocks k,
+        decide (cfg.slots.leader k ∈ X ∨ ∃ L ∈ s.leaderBlocks k,
           ∃ c ∈ refs, L ∈ historyUptoFrom s.blk m c)
     else true
 
 /-- **The certificate test** for a block at round `r + 1` referencing
 `refs`: where votes are certified a round later, for each slot whose
-decision round is `r + 1`, the block carries `certThreshold` votes for
-one of the slot's leader blocks. -/
-def certReady (s : Store Validator BlockId Payload) (refs : Finset BlockId) (r : ℕ) : Bool :=
+decision round is `r + 1` and whose leader is not in `X`, the block
+carries `certThreshold` votes for one of the slot's leader blocks. -/
+def certReady (s : Store Validator BlockId Payload) (refs : Finset BlockId) (r : ℕ)
+    (X : Finset Validator) : Bool :=
   letI := cfg.slots
   if cfg.p.voteIsCert then true
   else if cfg.p.voteOffset ≤ r then
     (cfg.slotsAt (r - cfg.p.voteOffset)).all fun k =>
-      decide (∃ L ∈ s.leaderBlocks k,
+      decide (cfg.slots.leader k ∈ X ∨ ∃ L ∈ s.leaderBlocks k,
         cfg.p.certThreshold ≤
           (creatorsOf s.blk (refs.filter fun b => cfg.σ.Votes s.toRecord b L)).card)
   else true
@@ -278,7 +281,8 @@ behind then reaches what a peer reached, and a node that leaves out
 too many authors builds on what a peer built on. -/
 def refsAt (s : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId)
     (E : Finset (Validator × BlockId × BlockId)) : Finset BlockId :=
-  let ready := fun R => reachReady cfg s R r && certReady cfg s R r
+  let ready := fun R => reachReady cfg s R r (excluded cfg s r E) &&
+    certReady cfg s R r (excluded cfg s r E)
   let ok := fun R => buildable cfg s r R E
   let own := refsFor cfg s r o E
   if ready own && ok own then own
@@ -326,7 +330,8 @@ def buildAbove (s : State Validator BlockId Payload) (r : ℕ) (o : Option Block
     Option (State Validator BlockId Payload × List (Output Validator BlockId Payload)) :=
   let refs := refsAt cfg s.memory r o s.evidence
   if cfg.q ≤ (s.memory.authorsAt r).card ∧ (r ∈ s.fired ∨ behind cfg s.memory r ∨
-      (reachReady cfg s.memory refs r ∧ certReady cfg s.memory refs r)) then
+      (reachReady cfg s.memory refs r (excluded cfg s.memory r s.evidence) ∧
+        certReady cfg s.memory refs r (excluded cfg s.memory r s.evidence))) then
     let b := blockOn cfg s.memory r refs s.evidence
     let id := cfg.idOf b
     if h : id ∉ s.disk.ids ∧ s.memory.Checks cfg.q cfg.xp id b then
@@ -348,8 +353,10 @@ def tryBuild (s : State Validator BlockId Payload) :
       let r := jumpRound cfg s.memory t
       if t < r then
         if syncTop s ≤ r + 1 ∧
-            reachReady cfg s.memory (refsAt cfg s.memory r none s.evidence) r = true ∧
-            certReady cfg s.memory (refsAt cfg s.memory r none s.evidence) r = true then
+            reachReady cfg s.memory (refsAt cfg s.memory r none s.evidence) r
+              (excluded cfg s.memory r s.evidence) = true ∧
+            certReady cfg s.memory (refsAt cfg s.memory r none s.evidence) r
+              (excluded cfg s.memory r s.evidence) = true then
           buildAbove cfg s r none
         else none
       else if syncTop s ≤ t + 1 then buildAbove cfg s t s.own else none

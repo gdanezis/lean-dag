@@ -231,7 +231,8 @@ those its references expose (`payloadFor`). Where these references would
 wait, and a held round-`r + 1` block of another author has references that
 would not, it builds on those instead (`refsAt`, `lent`), provided they
 make a valid block (`buildable`) and reference no author it leaves out
-(`lents`). It does the same where leaving authors
+(`lents`). Both tests pass a slot whose leader the node leaves out
+(`excluded`), so it never waits for a convicted leader's block. It does the same where leaving authors
 out leaves fewer than `q`: a valid block of round `r + 1` names `q`
 authors and none it exposes, so its references make a valid block for the
 node. Without
@@ -879,11 +880,11 @@ view of the record (`cut_before`), and verdicts on one slot agree
    copy accepts blocks built on its twin, and it stops building. The
    honest nodes that accept both twins convict it, put the evidence in
    their next block, and leave it out of their references; the others
-   convict it on that evidence. The honest nodes then wait out the timer
-   at its slots: at the Mysticeti row with `n = 4` they build 20 rounds
-   in 150 ticks, skipping 4 or 5 slots. Over 1,000 ticks at Orcaella
-   with `n = 9`, they reach round 242 with 26 skips, and stream 181
-   blocks in all (§3.4). From `byzUntil` on it acts
+   convict it on that evidence. The tests then pass its slots without its
+   blocks (§3.2): at the Mysticeti row with `n = 4` the honest nodes reach
+   round 53 in 150 ticks, deciding 52 slots, 13 of them skips. Over 1,000
+   ticks at Orcaella with `n = 9`, they reach round 349 with 38 skips,
+   and the streams carry 558 blocks in all (§3.4). From `byzUntil` on it acts
    on nothing.
 
    The simulator reports the most blocks of one round on an honest disk,
@@ -909,7 +910,7 @@ view of the record (`cut_before`), and verdicts on one slot agree
    under `invalidBlocks`, whose block without references at round `0` is
    a twin of the attacker's genesis block. It then takes no announcement
    from the attacker, whose blocks reach it only in streams, and the
-   honest nodes build 20 rounds in 150 ticks, against 66 under
+   honest nodes build 52 to 56 rounds in 150 ticks, against 66 under
    `forgedAuthor`. Without the checks, the blocks forged in node `0`'s
    name still reach no node: a node takes an announced block only from
    its author, and the attacker streams only blocks it holds.

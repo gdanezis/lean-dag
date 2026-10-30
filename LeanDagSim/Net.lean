@@ -584,6 +584,7 @@ def simulate (sc : Scenario) : Report :=
             let pend := st.syncs.map fun e => (e.1.val, e.2.1.2.round,
               (e.2.1.2.refs.filter fun j => j ∉ st.disk.ids).card, e.2.2.length)
             let reach := reachReady cf st.memory (refsAt cf st.memory t st.own st.evidence) t
+              (excluded cf st.memory t st.evidence)
             s!"node {v}: top {st.top} own {st.own.isSome} " ++
               s!"lo {st.lo} authors {auth t}/{auth (t + 1)}/{auth (t + 2)} " ++
               s!"syncs {pend} detected {(st.detected.image (·.val)).sort (· ≤ ·)} " ++

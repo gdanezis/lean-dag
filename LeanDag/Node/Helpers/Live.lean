@@ -117,8 +117,10 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
         (authentic_of_timely htime)) (knownAll cfg H tr) (stateBefore cfg tr i₀ v) inp x ∧
         (x.top.isSome ∧ x.top.getD 0 ≤ r ∧
           ((x.top = some r ∧ ow = x.own) ∨ (x.recovering = true ∧ ow = none ∧
-            reachReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow x.evidence) r = true ∧
-            certReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow x.evidence) r = true))) ∧
+            reachReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow x.evidence) r
+              (excluded (cfg.at v) x.disk r x.evidence) = true ∧
+            certReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow x.evidence) r
+              (excluded (cfg.at v) x.disk r x.evidence) = true))) ∧
         c ∉ x.disk.ids ∧
       (∃ y o, tryBuild (cfg.at v) x = some (y, o) ∧
         (c, (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c) ∈
@@ -129,8 +131,10 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
         refsAt (cfg.at v) x.disk r ow x.evidence ∧
       refsAt (cfg.at v) x.disk r ow x.evidence ⊆ x.disk.ids ∧
       Grows x.disk (stateBefore cfg tr (i₀ + 1) v).disk ∧
-      ((reachReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow x.evidence) r = true ∧
-          certReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow x.evidence) r = true) ∨
+      ((reachReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow x.evidence) r
+        (excluded (cfg.at v) x.disk r x.evidence) = true ∧
+          certReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow x.evidence) r
+            (excluded (cfg.at v) x.disk r x.evidence) = true) ∨
         ((x.top = some r ∧ r ∈ x.fired ∨ behind (cfg.at v) x.disk r) ∧
           (refsAt (cfg.at v) x.disk r ow x.evidence = refsFor (cfg.at v) x.disk r ow x.evidence ∨
             buildable (cfg.at v) x.disk r (refsFor (cfg.at v) x.disk r ow x.evidence)

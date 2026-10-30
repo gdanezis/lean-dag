@@ -393,8 +393,8 @@ theorem buildable_eq {r : ℕ} (hr : F ≤ r) {R : Finset BlockId}
 
 omit [Fintype Validator] in
 theorem reachReady_eq {r : ℕ} (hF : F ≤ r - cfg.p.voteOffset) {R : Finset BlockId}
-    (hR : ∀ c ∈ R, c ∈ d.ids ∧ (d.blk c).round = r) :
-    reachReady cfg m R r = reachReady cfg d R r := by
+    (hR : ∀ c ∈ R, c ∈ d.ids ∧ (d.blk c).round = r) (X : Finset Validator) :
+    reachReady cfg m R r X = reachReady cfg d R r X := by
   letI := cfg.slots
   unfold reachReady
   refine List.all_congr_mem fun n hn => ?_
@@ -404,8 +404,8 @@ theorem reachReady_eq {r : ℕ} (hF : F ≤ r - cfg.p.voteOffset) {R : Finset Bl
     refine List.all_congr_mem fun k hk => ?_
     have hkr := slotRound_of_mem_slotsAt (cfg := cfg) hk
     rw [h.leaderBlocks_eq (by rw [hkr]; omega)]
-    refine decide_eq_decide.mpr (exists_congr fun L => and_congr_right fun _ =>
-      exists_congr fun c => and_congr_right fun hc => ?_)
+    refine decide_eq_decide.mpr (or_congr_right (exists_congr fun L => and_congr_right fun _ =>
+      exists_congr fun c => and_congr_right fun hc => ?_))
     rw [← historyUptoFrom_above (U := d.toRecord) d.view
       (fun i hi hir => h.refs hi hir) n (hR c hc).1 (by
         change F + n ≤ (d.blk c).round; rw [(hR c hc).2]; omega)]
@@ -414,8 +414,9 @@ theorem reachReady_eq {r : ℕ} (hF : F ≤ r - cfg.p.voteOffset) {R : Finset Bl
 
 omit [Fintype Validator] in
 theorem certReady_eq (hσ : cfg.σ = boundedSel) {r : ℕ} (hF : F ≤ r - cfg.p.voteOffset)
-    {R : Finset BlockId} (hR : ∀ c ∈ R, c ∈ d.ids ∧ (d.blk c).round = r) :
-    certReady cfg m R r = certReady cfg d R r := by
+    {R : Finset BlockId} (hR : ∀ c ∈ R, c ∈ d.ids ∧ (d.blk c).round = r)
+    (X : Finset Validator) :
+    certReady cfg m R r X = certReady cfg d R r X := by
   letI := cfg.slots
   unfold certReady
   split
@@ -426,7 +427,8 @@ theorem certReady_eq (hσ : cfg.σ = boundedSel) {r : ℕ} (hF : F ≤ r - cfg.p
       have hkr := slotRound_of_mem_slotsAt (cfg := cfg) hk
       have hkF : F ≤ cfg.slots.slotRound k := by rw [hkr]; omega
       rw [h.leaderBlocks_eq hkF]
-      refine decide_eq_decide.mpr (exists_congr fun L => and_congr_right fun hL => ?_)
+      refine decide_eq_decide.mpr (or_congr_right (exists_congr fun L =>
+        and_congr_right fun hL => ?_))
       have hLd := (Finset.mem_filter.mp hL).1
       have hLm : L ∈ m.ids := h.mem_of_atRound hkF hLd
       have hRm : ∀ c ∈ R, c ∈ m.ids := fun c hc =>
@@ -546,9 +548,10 @@ theorem Store.Mirrors.refsAt_eq {m d : Store Validator BlockId Payload} {F : ℕ
     refsAt cfg m r o E = refsAt cfg d r o E := by
   have hr : F ≤ r := le_trans hF (Nat.sub_le _ _)
   have hrd : ∀ R : Finset BlockId, (∀ c ∈ R, c ∈ d.ids ∧ (d.blk c).round = r) →
-      (reachReady cfg m R r && certReady cfg m R r) =
-        (reachReady cfg d R r && certReady cfg d R r) := fun R hR => by
-    rw [h.reachReady_eq hF hR, h.certReady_eq hσ hF hR]
+      (reachReady cfg m R r (excluded cfg m r E) && certReady cfg m R r (excluded cfg m r E)) =
+        (reachReady cfg d R r (excluded cfg d r E) && certReady cfg d R r (excluded cfg d r E)) :=
+      fun R hR => by
+    rw [h.excluded_eq hr E, h.reachReady_eq hF hR, h.certReady_eq hσ hF hR]
   have hown : ∀ c ∈ refsFor cfg d r o E, c ∈ d.ids ∧ (d.blk c).round = r := fun c hc => by
     rcases mem_refsFor_of hc with hc | hc
     · exact Store.mem_atRound.mp hc
@@ -556,9 +559,10 @@ theorem Store.Mirrors.refsAt_eq {m d : Store Validator BlockId Payload} {F : ℕ
   have hlents : lents cfg m r E = lents cfg d r E := h.lents_eq hr E
   have hl : ∀ R ∈ lents cfg d r E, ∀ c ∈ R, c ∈ d.ids ∧ (d.blk c).round = r :=
     fun R hR c hc => Store.mem_atRound.mp (mem_lents_round hR c hc)
-  have hfind₁ : (lents cfg m r E).find? (fun R => (reachReady cfg m R r && certReady cfg m R r) &&
-        buildable cfg m r R E) = (lents cfg d r E).find? (fun R =>
-          (reachReady cfg d R r && certReady cfg d R r) && buildable cfg d r R E) := by
+  have hfind₁ : (lents cfg m r E).find? (fun R => (reachReady cfg m R r (excluded cfg m r E) &&
+        certReady cfg m R r (excluded cfg m r E)) && buildable cfg m r R E) =
+      (lents cfg d r E).find? (fun R => (reachReady cfg d R r (excluded cfg d r E) &&
+        certReady cfg d R r (excluded cfg d r E)) && buildable cfg d r R E) := by
     rw [hlents]
     exact List.find?_congr_mem fun R hR => by rw [hrd R (hl R hR), h.buildable_eq hr (hl R hR)]
   have hfind₂ : (lents cfg m r E).find? (fun R => buildable cfg m r R E) =
@@ -608,8 +612,10 @@ theorem Store.Mirrors.build_reads {m d : Store Validator BlockId Payload} {F : �
     (E : Finset (Validator × BlockId × BlockId)) :
     refsAt cfg m r o E = refsAt cfg d r o E ∧ refsFor cfg m r o E = refsFor cfg d r o E ∧
       (behind cfg m r ↔ behind cfg d r) ∧
-      reachReady cfg m (refsAt cfg d r o E) r = reachReady cfg d (refsAt cfg d r o E) r ∧
-      certReady cfg m (refsAt cfg d r o E) r = certReady cfg d (refsAt cfg d r o E) r ∧
+      reachReady cfg m (refsAt cfg d r o E) r
+        (excluded cfg m r E) = reachReady cfg d (refsAt cfg d r o E) r (excluded cfg d r E) ∧
+      certReady cfg m (refsAt cfg d r o E) r
+        (excluded cfg m r E) = certReady cfg d (refsAt cfg d r o E) r (excluded cfg d r E) ∧
       payloadFor cfg m r (refsAt cfg d r o E) E = payloadFor cfg d r (refsAt cfg d r o E) E := by
   have hr : F ≤ r := le_trans hF (Nat.sub_le _ _)
   have hR : ∀ c ∈ refsAt cfg d r o E, c ∈ d.ids ∧ (d.blk c).round = r := fun c hc => by
@@ -617,7 +623,8 @@ theorem Store.Mirrors.build_reads {m d : Store Validator BlockId Payload} {F : �
     · exact Store.mem_atRound.mp hc
     · exact ho c hc
   exact ⟨h.refsAt_eq hσ hF ho E, h.refsFor_eq hr o E, h.behind_iff (by omega),
-    h.reachReady_eq hF hR, h.certReady_eq hσ hF hR,
+    by rw [h.excluded_eq hr E]; exact h.reachReady_eq hF hR _,
+    by rw [h.excluded_eq hr E]; exact h.certReady_eq hσ hF hR _,
     h.payloadFor_eq (fun c hc => h.mem_of (hR c hc).1 (by rw [(hR c hc).2]; exact hr)) E⟩
 
 end Node

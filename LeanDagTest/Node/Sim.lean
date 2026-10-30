@@ -59,12 +59,12 @@ info: "true [(some 35), (some 35), (some 35), (some 35), (some 35), (some 12)] [
 #guard_msgs in
 #eval summary { horizon := 150, row := "hybrid-mysticeti", n := 6, c := 1, crash := [(5, 30)] }
 
-/-- info: "true [(some 20), (some 20), (some 20)] [20, 18, 20] [5, 4, 5] true true" -/
+/-- info: "true [(some 53), (some 53), (some 53)] [52, 52, 52] [13, 13, 13] true true" -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "mysticeti", byz := [3], byzUntil := 150 }
 
 /--
-info: "true [(some 30), (some 30), (some 30), (some 30), (some 30)] [30, 30, 30, 30, 30] [4, 4, 4, 4, 4] true true"
+info: "true [(some 47), (some 47), (some 47), (some 47), (some 47)] [46, 46, 46, 46, 46] [7, 7, 7, 7, 7] true true"
 -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "blue-bottle", n := 6, byz := [0], byzUntil := 150 }

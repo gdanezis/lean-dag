@@ -60,8 +60,10 @@ theorem tryBuild_cases {s : State Validator BlockId Payload}
     ∃ t r o, s.top = some t ∧ buildAbove cfg s r o = some x ∧
       ((r = t ∧ o = s.own) ∨ (s.recovering = true ∧ t < r ∧ o = none ∧
         cfg.q ≤ (s.memory.authorsAt r).card ∧ behind cfg s.memory r ∧
-        reachReady cfg s.memory (refsAt cfg s.memory r none s.evidence) r = true ∧
-        certReady cfg s.memory (refsAt cfg s.memory r none s.evidence) r = true)) := by
+        reachReady cfg s.memory (refsAt cfg s.memory r none s.evidence) r
+          (excluded cfg s.memory r s.evidence) = true ∧
+        certReady cfg s.memory (refsAt cfg s.memory r none s.evidence) r
+          (excluded cfg s.memory r s.evidence) = true)) := by
   unfold tryBuild at h
   split at h
   · rename_i t ht

@@ -38,7 +38,8 @@ omit [Fintype Validator] in
 cannot be built on. -/
 theorem refsAt_cases (st : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId)
     (E : Finset (Validator × BlockId × BlockId)) :
-    (reachReady cfg st (refsAt cfg st r o E) r && certReady cfg st (refsAt cfg st r o E) r) =
+    (reachReady cfg st (refsAt cfg st r o E) r
+      (excluded cfg st r E) && certReady cfg st (refsAt cfg st r o E) r (excluded cfg st r E)) =
         true ∨
       refsAt cfg st r o E = refsFor cfg st r o E ∨
       buildable cfg st r (refsFor cfg st r o E) E = false := by
@@ -67,11 +68,15 @@ theorem tryBuild_exit {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
     ∃ r o, s.top.isSome ∧ s.top.getD 0 ≤ r ∧
       ((s.top = some r ∧ o = s.own) ∨ (s.recovering = true ∧ o = none ∧
-        reachReady cfg s.memory (refsAt cfg s.memory r o s.evidence) r = true ∧
-        certReady cfg s.memory (refsAt cfg s.memory r o s.evidence) r = true)) ∧
+        reachReady cfg s.memory (refsAt cfg s.memory r o s.evidence) r
+          (excluded cfg s.memory r s.evidence) = true ∧
+        certReady cfg s.memory (refsAt cfg s.memory r o s.evidence) r
+          (excluded cfg s.memory r s.evidence) = true)) ∧
       cfg.q ≤ (authorsIn s.disk.toRecord s.disk.ids r).card ∧
-      ((reachReady cfg s.memory (refsAt cfg s.memory r o s.evidence) r = true ∧
-          certReady cfg s.memory (refsAt cfg s.memory r o s.evidence) r = true) ∨
+      ((reachReady cfg s.memory (refsAt cfg s.memory r o s.evidence) r
+        (excluded cfg s.memory r s.evidence) = true ∧
+          certReady cfg s.memory (refsAt cfg s.memory r o s.evidence) r
+            (excluded cfg s.memory r s.evidence) = true) ∨
         ((s.top = some r ∧ r ∈ s.fired ∨ behind cfg s.memory r) ∧
           (refsAt cfg s.memory r o s.evidence = refsFor cfg s.memory r o s.evidence ∨
             buildable cfg s.memory r (refsFor cfg s.memory r o s.evidence) s.evidence = false))) ∧
@@ -81,8 +86,10 @@ theorem tryBuild_exit {s s' : State Validator BlockId Payload}
   obtain ⟨t, r, o, ht, hb, hro⟩ := tryBuild_cases h
   have hshape : s.top.isSome ∧ s.top.getD 0 ≤ r ∧
       ((s.top = some r ∧ o = s.own) ∨ (s.recovering = true ∧ o = none ∧
-        reachReady cfg s.memory (refsAt cfg s.memory r o s.evidence) r = true ∧
-        certReady cfg s.memory (refsAt cfg s.memory r o s.evidence) r = true)) := by
+        reachReady cfg s.memory (refsAt cfg s.memory r o s.evidence) r
+          (excluded cfg s.memory r s.evidence) = true ∧
+        certReady cfg s.memory (refsAt cfg s.memory r o s.evidence) r
+          (excluded cfg s.memory r s.evidence) = true)) := by
     rw [ht]
     rcases hro with ⟨rfl, rfl⟩ | ⟨hrec, hlt, rfl, -, -, ht₁, ht₂⟩
     · exact ⟨rfl, le_rfl, Or.inl ⟨rfl, rfl⟩⟩
@@ -1085,15 +1092,16 @@ block of each honest leader of a slot `m` rounds below `r`, for `m` below
 the vote offset. -/
 theorem reaches_of_reachReady {U : BlockRecord Validator BlockId Payload P H}
     {st : Store Validator BlockId Payload} (hc : IsCut U st) {refs : Finset BlockId} {r : ℕ}
-    (hready : reachReady cfg st refs r = true) (hrefs : refs ⊆ st.ids) {k m : ℕ}
-    (hm : m < cfg.p.voteOffset) (hk : cfg.slots.slotRound k + m = r)
-    (hlead : cfg.slots.leader k ∈ H) {L : BlockId} (hL : IsLeaderBlock (S := cfg.slots) U k L)
+    {X : Finset Validator} (hready : reachReady cfg st refs r X = true) (hrefs : refs ⊆ st.ids)
+    {k m : ℕ} (hm : m < cfg.p.voteOffset) (hk : cfg.slots.slotRound k + m = r)
+    (hlead : cfg.slots.leader k ∈ H) (hlX : cfg.slots.leader k ∉ X) {L : BlockId}
+    (hL : IsLeaderBlock (S := cfg.slots) U k L)
     {c : BlockId} (hcrefs : (U.block c).refs = refs) : Reaches U c L := by
   unfold reachReady at hready
   have h₁ := List.all_eq_true.mp hready m (List.mem_range.mpr hm)
   rw [if_pos (by omega)] at h₁
   have h₂ := List.all_eq_true.mp h₁ k (by rw [← hk, Nat.add_sub_cancel]; exact mem_slotsAt k)
-  obtain ⟨L', hL', c', hc', hhist⟩ := of_decide_eq_true h₂
+  obtain ⟨L', hL', c', hc', hhist⟩ := (of_decide_eq_true h₂).resolve_left hlX
   rw [Store.leaderBlocks_eq] at hL'
   obtain ⟨hL's, hL'c, hL'r⟩ := Finset.mem_filter.mp hL'
   have hreach : ReachesFrom U.block c' L' :=
@@ -1131,16 +1139,18 @@ the certificate test on a cut certifies, in the record, the block of each
 honest leader of a slot whose vote round is `r`. -/
 theorem isCert_of_certReady [P.Mechanised] (hσ : cfg.σ = boundedSel)
     {U : BlockRecord Validator BlockId Payload P H} {st : Store Validator BlockId Payload}
-    (hc : IsCut U st) {refs : Finset BlockId} {r : ℕ} (hready : certReady cfg st refs r = true)
+    (hc : IsCut U st) {refs : Finset BlockId} {r : ℕ} {X : Finset Validator}
+    (hready : certReady cfg st refs r X = true)
     (hrefs : refs ⊆ st.ids) (hvc : cfg.p.voteIsCert = false) {k : ℕ}
     (hk : cfg.slots.slotRound k + cfg.p.voteOffset = r) (hlead : cfg.slots.leader k ∈ H)
+    (hlX : cfg.slots.leader k ∉ X)
     {L : BlockId} (hL : IsLeaderBlock (S := cfg.slots) U k L) {c : BlockId}
     (hcrefs : (U.block c).refs = refs) : Scheme.IsCert cfg.p boundedSel U c L := by
   unfold certReady at hready
   rw [hvc, if_neg (by simp), if_pos (by omega)] at hready
   have h₂ := List.all_eq_true.mp hready k
     (by rw [← hk, Nat.add_sub_cancel]; exact mem_slotsAt k)
-  obtain ⟨L', hL', hcount⟩ := of_decide_eq_true h₂
+  obtain ⟨L', hL', hcount⟩ := (of_decide_eq_true h₂).resolve_left hlX
   rw [Store.leaderBlocks_eq] at hL'
   obtain ⟨hL's, hL'c, hL'r⟩ := Finset.mem_filter.mp hL'
   have hlead' : IsLeaderBlock (S := cfg.slots) U k L' :=

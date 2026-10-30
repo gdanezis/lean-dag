@@ -181,8 +181,10 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
         persists (outputsAt cfg tr j)) →
     Grows x.disk (stateBefore cfg tr (j + 1) h).disk →
     (n ∈ x.fired ∨ behind (cfg.at h) x.disk n) →
-    ¬ (reachReady (cfg.at h) x.disk (refsAt (cfg.at h) x.disk n x.own x.evidence) n = true ∧
-      certReady (cfg.at h) x.disk (refsAt (cfg.at h) x.disk n x.own x.evidence) n = true) →
+    ¬ (reachReady (cfg.at h) x.disk (refsAt (cfg.at h) x.disk n x.own x.evidence) n
+      (excluded (cfg.at h) x.disk n x.evidence) = true ∧
+      certReady (cfg.at h) x.disk (refsAt (cfg.at h) x.disk n x.own x.evidence) n
+        (excluded (cfg.at h) x.disk n x.evidence) = true) →
     ∃ τ < time j, ∀ v ∈ T,
       ∀ b ∈ (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).ids,
       ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
@@ -240,9 +242,10 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
     have hiwj : iw = j' := persist_events_eq hiw hj' hew hz (by rw [hzr', hzr])
     subst hiwj
     -- the earlier block did not pass the tests, else the node would have
-    have hnrw : ¬ (reachReady (cfg.at w') xw.disk (refsAt (cfg.at w') xw.disk n oww xw.evidence)
-          n = true ∧
-        certReady (cfg.at w') xw.disk (refsAt (cfg.at w') xw.disk n oww xw.evidence) n = true) := by
+    have hnrw : ¬ (reachReady (cfg.at w') xw.disk (refsAt (cfg.at w') xw.disk n oww xw.evidence) n
+      (excluded (cfg.at w') xw.disk n xw.evidence) = true ∧
+        certReady (cfg.at w') xw.disk (refsAt (cfg.at w') xw.disk n oww xw.evidence) n
+          (excluded (cfg.at w') xw.disk n xw.evidence) = true) := by
       intro hrw
       apply hnr
       have hZR : (x.disk.blk z.1).refs = refsAt (cfg.at w') xw.disk n oww xw.evidence := by
@@ -264,8 +267,13 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
         hfa hfresh x.evidence
       have hRR : refsAt (cfg.at w') xw.disk n oww xw.evidence ⊆ lent x.disk z.1 := by
         unfold lent; rw [hZR]
+      -- the lender left out only authors of `D`, all of which the node leaves out
+      have hXX : excluded (cfg.at w') xw.disk n xw.evidence ⊆
+          excluded (cfg.at h) x.disk n x.evidence :=
+        (excluded_sub_spread hsp hbsw n).trans
+          (spread_sub_excluded hsp hj₀ hh hbs he (by simp only; rw [hcr]; omega) n)
       have hready := ready_transfer (cfg := cfg.at h) hσ (fun h => certThreshold_pos hadm h)
-        hbsw.cut hbs.cut hzsub hRR hlZ hrw.1 hrw.2
+        hbsw.cut hbs.cut hzsub hRR hlZ hXX hrw.1 hrw.2
       -- the lent references avoid the authors the node leaves out
       have ho : ∀ k, oww = some k → (xw.disk.blk k).creator = (cfg.at w').me := fun k hk => by
         rcases hshw.2.2 with ⟨ht, hoe⟩ | ⟨-, hon, -⟩
@@ -333,8 +341,10 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
     (refsAt (cfg.at v) x.disk n x.own x.evidence = refsFor (cfg.at v) x.disk n x.own x.evidence ∨
       buildable (cfg.at v) x.disk n (refsFor (cfg.at v) x.disk n x.own x.evidence) x.evidence =
         false) →
-    ¬ (reachReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk n x.own x.evidence) n = true ∧
-      certReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk n x.own x.evidence) n = true) →
+    ¬ (reachReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk n x.own x.evidence) n
+      (excluded (cfg.at v) x.disk n x.evidence) = true ∧
+      certReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk n x.own x.evidence) n
+        (excluded (cfg.at v) x.disk n x.evidence) = true) →
     ∀ b ∈ (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).ids,
       ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
         b).creator ∈ T →
@@ -453,14 +463,25 @@ theorem reach_or_refs_node (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < c
           (authentic_of_timely htime)).block c).refs := by
   obtain ⟨i₀, inp, x, ow, hi₀, hbt, hbs, hsh, hcx, hbuild, hcrefs, hsub, hgx, hexit, -⟩ :=
     built_block time hσ hadm hf htime hinj (hTH hv) hcU hcv hcr
+  -- the evidence the honest nodes knew names no honest author, so no honest
+  -- leader is left out
+  have hlX : cfg.slots.leader k ∉
+      excluded (cfg.at v) x.disk (cfg.slots.slotRound k + m) x.evidence :=
+    hbs.not_excluded (fun y hy e he hne => by
+      obtain ⟨w, hw, hyw⟩ := hy
+      exact hev y (knownOf_sub hw hyw) e he hne) (hTH hlead) _
   by_cases hready : reachReady (cfg.at v) x.disk
         (refsAt (cfg.at v) x.disk (cfg.slots.slotRound k + m) ow x.evidence)
-        (cfg.slots.slotRound k + m) = true ∧
-      certReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk (cfg.slots.slotRound k + m) ow
-          x.evidence)
-        (cfg.slots.slotRound k + m) = true
+        (cfg.slots.slotRound k + m)
+        (excluded (cfg.at v) x.disk (cfg.slots.slotRound k + m)
+          x.evidence) = true ∧
+      certReady (cfg.at v) x.disk
+        (refsAt (cfg.at v) x.disk (cfg.slots.slotRound k + m) ow x.evidence)
+        (cfg.slots.slotRound k + m)
+        (excluded (cfg.at v) x.disk (cfg.slots.slotRound k + m)
+          x.evidence) = true
   · exact Or.inl (reaches_of_reachReady (cfg := cfg.at v) hbs.cut hready.1 hsub hm rfl
-      (hTH hlead) hL hcrefs)
+      (hTH hlead) hlX hL hcrefs)
   · right
     -- not a jump, whose references pass the tests: above its top, on its own block
     obtain ⟨hxt, how⟩ : x.top = some _ ∧ ow = x.own := by
@@ -519,14 +540,25 @@ theorem cert_or_refs_node (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cf
           (authentic_of_timely htime)).block c).refs := by
   obtain ⟨i₀, inp, x, ow, hi₀, hbt, hbs, hsh, hcx, hbuild, hcrefs, hsub, hgx, hexit, -⟩ :=
     built_block time hσ hadm hf htime hinj (hTH hv) hcU hcv hcr
+  -- the evidence the honest nodes knew names no honest author, so no honest
+  -- leader is left out
+  have hlX : cfg.slots.leader k ∉
+      excluded (cfg.at v) x.disk (cfg.slots.slotRound k + cfg.p.voteOffset) x.evidence :=
+    hbs.not_excluded (fun y hy e he hne => by
+      obtain ⟨w, hw, hyw⟩ := hy
+      exact hev y (knownOf_sub hw hyw) e he hne) (hTH hlead) _
   by_cases hready : reachReady (cfg.at v) x.disk
         (refsAt (cfg.at v) x.disk (cfg.slots.slotRound k + cfg.p.voteOffset) ow x.evidence)
-        (cfg.slots.slotRound k + cfg.p.voteOffset) = true ∧
+        (cfg.slots.slotRound k + cfg.p.voteOffset)
+        (excluded (cfg.at v) x.disk (cfg.slots.slotRound k + cfg.p.voteOffset)
+          x.evidence) = true ∧
       certReady (cfg.at v) x.disk
         (refsAt (cfg.at v) x.disk (cfg.slots.slotRound k + cfg.p.voteOffset) ow x.evidence)
-        (cfg.slots.slotRound k + cfg.p.voteOffset) = true
+        (cfg.slots.slotRound k + cfg.p.voteOffset)
+        (excluded (cfg.at v) x.disk (cfg.slots.slotRound k + cfg.p.voteOffset)
+          x.evidence) = true
   · exact Or.inl (isCert_of_certReady (cfg := cfg.at v) hσ hbs.cut hready.2 hsub hvc rfl
-      (hTH hlead) hL hcrefs)
+      (hTH hlead) hlX hL hcrefs)
   · right
     -- not a jump, whose references pass the tests: above its top, on its own block
     obtain ⟨hxt, how⟩ : x.top = some _ ∧ ow = x.own := by
