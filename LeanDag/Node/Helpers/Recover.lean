@@ -267,14 +267,20 @@ theorem arrives_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (h
   have hheld : ∀ {q k j : ℕ} {inpq : Input Validator BlockId Payload}
       {y : BlockId × Block Validator BlockId Payload},
       tr[q]? = some (u, inpq) → y ∈ persists (outputsAt cfg tr q) →
+      topAt cfg tr time u t₀ ≤ y.2.round →
       tr[j]? = some (v, .deliver u y.1 y.2) → k < j → t_r ≤ time k →
       max (time j) gst + Δₛ ≤ τ → y.1 ∈ (stateAt cfg tr time v τ).disk.ids := by
-    intro q k j inpq y hq hyq hj hkj hrk hjτ
+    intro q k j inpq y hq hyq hyr hj hkj hrk hjτ
     have hjl : j < tr.length := (List.getElem?_eq_some_iff.mp hj).1
     have hjr : t_r ≤ time j := hrk.trans (hmono k j hkj.le hjl)
     have hgood := (Converge.inv_before (cfg := cfg) (tr := tr) (q + 1) u).good y
       (persists_of_event hq hyq)
-    exact arrives hsync hu hv hgood.2.1 hgood.1 hj hjr hjτ ht₁
+    exact arrives hsync hu hv hgood.2.1 hgood.1 hyr hj hjr hjτ ht₁
+  -- `e` is at `u`'s round at `t₀` or above
+  have he₀ : topAt cfg tr time u t₀ ≤ e.2.round := by
+    have := (rises_before (cfg := cfg) (tr := tr) u
+      (eventsBy_mono (tr := tr) (time := time) (show t₀ ≤ t₀ + W by omega))).1
+    exact this.trans hGe
   have hsend : ∀ {k : ℕ} {inpk : Input Validator BlockId Payload}
       {y : BlockId × Block Validator BlockId Payload}, tr[k]? = some (u, inpk) →
       y ∈ broadcasts (outputsAt cfg tr k) → t_r ≤ time k → max (time k) gst + Δ ≤ t₁ →
@@ -284,7 +290,7 @@ theorem arrives_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (h
   by_cases hbr : t_r ≤ time b
   · -- built from `t_r` on: delivered and synchronised
     obtain ⟨j, hbj, hj, htj⟩ := hsend hb (broadcasts_of_persists hep) hbr (by omega)
-    exact hheld hb hep hj hbj hbr (by omega)
+    exact hheld hb hep he₀ hj hbj hbr (by omega)
   · -- built before: at `u`'s round at `t₀`, the block `u` sends again
     have hus : (stateAt cfg tr time u t₀).top.isSome :=
       started_at hadm hfa hid htime hTH hmono hstart hu (le_max_right _ _)
@@ -309,7 +315,7 @@ theorem arrives_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (h
       (mem_persists_iff.mpr (mem_outputs_of_event hb (mem_persists_iff.mp hep))) (by omega)
     obtain ⟨j, hkj, hj, htj⟩ := hsend hk hyb (by omega) (by omega)
     rw [← hye]
-    exact hheld hq hyq hj hkj (by omega) (by omega)
+    exact hheld hq hyq (hye ▸ he₀) hj hkj (by omega) (by omega)
 
 /-- **The reliable nodes have recovered by `G`**: a reliable node restarts
 before `t_r` at its round at `t₀`, so the retry timer the restart sets

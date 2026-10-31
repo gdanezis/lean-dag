@@ -580,11 +580,16 @@ assumptions up to a time `t₁`, over a reliable set `T ⊆ H` of at least
   sets at time `t` for `a` ticks fires at `t + a`, and no honest node's
   timer fires earlier than its delay after it was set;
 * **synchronisation** (`SyncedWithin`): a reliable node given a reliable
-  node's block at time `t` holds it on its disk by `max t gst + Δₛ`,
-  having synced its history. This is assumed of the network and the
-  syncs together, not proved: the program proves that the syncs
-  complete (V3′), not how fast. A sync completes in one request and
-  answer when no gap occurs (§3.4), so `Δₛ = 2Δ` then;
+  node's block at time `t`, at its author's round at GST or above, holds
+  it on its disk by `max t gst + Δₛ`, having synced its history. This is
+  assumed of the network and the syncs together, not proved: the program
+  proves that the syncs complete (V3′), not how fast. It is the only
+  assumption on the speed of the syncs. It concerns only blocks built
+  from the authors' rounds at GST on, so it asks nothing of how fast a
+  node behind at GST catches up on the history below. The conclusions
+  hold for every `gst` that meets the premises, so `gst` may be taken as
+  any later time by which the syncs meet this bound. A sync completes in
+  one request and answer when no gap occurs (§3.4), so `Δₛ = 2Δ` then;
 * every reliable node **starts** by GST (`StartedBy`) and does not
   **restart** by `t₁` (`UpFrom T tr time 0 t₁`), so none jumps (§3.6);
 * timely authentication of blocks, a block hash injective on every
@@ -758,7 +763,8 @@ Reliable nodes may crash and restart until a time `t_r`, and stay up from
 `t_r` to `t₁` (`UpFrom`: no reliable node restarts at or after `t_r` and
 at or before `t₁`). A crash loses the messages sent to the node while it
 is down and the timers it set before, so delivery and synchronisation are assumed only
-for what is sent from `t_r` on (`DeliveredFrom`, `SyncedFrom`), and a
+for what is sent from `t_r` on (`DeliveredFrom`, `SyncedFrom`; the
+latter for blocks at their author's round at `max t_r gst` or above), and a
 timer fires on time unless its node restarts before (`TimersFireUp`);
 timers fire no earlier than set (`TimersAfterSet`), and every reliable
 node starts by GST. Before `t_r` nothing is assumed: messages may be

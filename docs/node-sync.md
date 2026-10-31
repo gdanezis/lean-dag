@@ -162,8 +162,9 @@ audits, the documents updated, and a commit.
   and V12 through the Stage 0 lemmas. V3′ (convergence) is re-proved by
   the sync's last request (`last_ask`, `step_stream_stuck`), with no
   fault bound, for the history of each honest node's top block.
-  Synchronisation (`SyncedWithin`) now says that a reliable block given
-  to a reliable node is on its disk within `Δₛ` past GST. New clause of
+  Synchronisation (`SyncedWithin`) says that a reliable block given to a
+  reliable node, at its author's round at GST or above, is on its disk
+  within `Δₛ` past GST. New clause of
   V1: at most `n − 1` syncs (`SyncsBound`). The simulator sends requests
   and streams; the outage sweep, the attacks and the withholding
   scenario ran again (`docs/validator.md` §6).

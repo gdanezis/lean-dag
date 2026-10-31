@@ -335,10 +335,11 @@ holds it from the time by which it was synchronised. -/
 theorem arrives {t_r : ℕ} (hsync : Live.SyncedFrom cfg T tr time gst Δₛ t_r t₁)
     {u v : Validator} (hu : u ∈ T) (hv : v ∈ T) {y : BlockId × Block Validator BlockId Payload}
     (hyu : y.2.creator = u) (hid : y.1 = cfg.idOf y.2)
+    (hyr : topAt cfg tr time u (max t_r gst) ≤ y.2.round)
     {j : ℕ} (hj : tr[j]? = some (v, .deliver u y.1 y.2)) (hjr : t_r ≤ time j) {τ : ℕ}
     (hτ : max (time j) gst + Δₛ ≤ τ) (ht₁ : τ ≤ t₁) :
     y.1 ∈ (stateAt cfg tr time v τ).disk.ids :=
-  hsync j v u y.1 y.2 hj hv (hyu ▸ hu) hid hjr τ hτ ht₁
+  hsync j v u y.1 y.2 hj hv (hyu ▸ hu) hid (hyu ▸ hyr) hjr τ hτ ht₁
 
 end Arrival
 
@@ -398,7 +399,7 @@ theorem arrival_of_delivered (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
     (hdel : Live.DeliveredWithin cfg T tr time gst Δ t₁)
     (hsync : Live.SyncedWithin cfg T tr time gst Δₛ t₁) (hup : Live.UpFrom T tr time 0 t₁) :
     Arrival cfg T tr time gst (Δ + Δₛ) t₁ := by
-  refine ⟨fun u hu v hv huv b inp hb e hep _ s τ htb hτ ht₁ => ?_, fun _ v hv k _ hk₁ => ?_,
+  refine ⟨fun u hu v hv huv b inp hb e hep hGe s τ htb hτ ht₁ => ?_, fun _ v hv k _ hk₁ => ?_,
     fun v hv k inp hki _ hk₁ h => by
       subst h; exact absurd (hup k v hki hv hk₁) (Nat.not_lt_zero _)⟩
   swap
@@ -414,8 +415,9 @@ theorem arrival_of_delivered (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
     ⟨.broadcast e.1 e.2, mem_broadcasts.mp hebc, Ne.symm huv, rfl⟩ hv (by omega)
   have hgood := (Converge.inv_before (cfg := cfg) (tr := tr) (b + 1) u).good e
     (persists_of_event hb hep)
-  exact arrives (t_r := 0) (fun j v u id b hj hv hc hid _ => hsync j v u id b hj hv hc hid) hu hv
-    hgood.2.1 hgood.1 hj (Nat.zero_le _) (by omega) ht₁
+  exact arrives (t_r := 0)
+    (fun j v u id b hj hv hc hid hr _ => hsync j v u id b hj hv hc hid (by simpa using hr)) hu hv
+    hgood.2.1 hgood.1 (by simpa using hGe) hj (Nat.zero_le _) (by omega) ht₁
 
 /-- **A reliable block held is as its author built it**: its round, its
 author and its content. -/

@@ -16,9 +16,9 @@ of at least `q` nodes, and a GST `gst`, assume up to a time `t₁`:
   sets at `t` for `a` ticks fires at `t + a`, and no honest node's timer
   fires earlier than its delay after it was set;
 * **synchronisation** (`SyncedWithin`): a reliable node that receives a
-  reliable node's block at `t` holds it on its disk by `max t gst + Δₛ`,
-  having synced its history. This is assumed of the syncs, not proved
-  (`docs/validator.md` §5.1);
+  reliable node's block at `t`, at its author's round at `gst` or above,
+  holds it on its disk by `max t gst + Δₛ`, having synced its history.
+  This is assumed of the syncs, not proved (`docs/validator.md` §5.1);
 * every reliable node **starts** by `gst` (`StartedBy`), and does not
   **restart** by `t₁` (`UpFrom` from `0`);
 * timely authentication of blocks;
@@ -100,10 +100,12 @@ def TimersAfterSet (cfg : Config Validator BlockId Payload) (T : Finset Validato
 
 
 /-- **Synchronisation within `Δₛ` past GST**: a reliable node `v` given a
-reliable author's block at `t` holds it on its disk by `max t gst + Δₛ`. -/
+reliable author's block at `t`, at the author's round at `gst` or above,
+holds it on its disk by `max t gst + Δₛ`. -/
 def SyncedWithin (cfg : Config Validator BlockId Payload) (T : Finset Validator)
     (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δₛ t₁ : ℕ) : Prop :=
   ∀ j v u id b, tr[j]? = some (v, .deliver u id b) → v ∈ T → b.creator ∈ T → id = cfg.idOf b →
+    topAt cfg tr time b.creator gst ≤ b.round →
     ∀ τ, max (time j) gst + Δₛ ≤ τ → τ ≤ t₁ → id ∈ (stateAt cfg tr time v τ).disk.ids
 
 /-- **Delivery within `Δ` past GST, from `t_r` on**: a message one
@@ -117,12 +119,12 @@ def DeliveredFrom (cfg : Config Validator BlockId Payload) (T : Finset Validator
 
 /-- **Synchronisation within `Δₛ` past GST, from `t_r` on**: as
 `SyncedWithin`, for the blocks a reliable node is given at a time
-`t ≥ t_r`. -/
+`t ≥ t_r`, at the author's round at `max t_r gst` or above. -/
 def SyncedFrom (cfg : Config Validator BlockId Payload) (T : Finset Validator)
     (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δₛ t_r t₁ : ℕ) : Prop :=
   ∀ j v u id b, tr[j]? = some (v, .deliver u id b) → v ∈ T → b.creator ∈ T → id = cfg.idOf b →
-    t_r ≤ time j → ∀ τ, max (time j) gst + Δₛ ≤ τ → τ ≤ t₁ →
-      id ∈ (stateAt cfg tr time v τ).disk.ids
+    topAt cfg tr time b.creator (max t_r gst) ≤ b.round → t_r ≤ time j →
+      ∀ τ, max (time j) gst + Δₛ ≤ τ → τ ≤ t₁ → id ∈ (stateAt cfg tr time v τ).disk.ids
 
 /-- **Timers fire unless the node restarts**: a timer a reliable node sets
 at `t` for `a` ticks fires at `t + a`, if that is by `t₁` and the node
