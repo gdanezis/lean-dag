@@ -247,7 +247,7 @@ def cited(root):
 
 # Arcs recorded in their own design record only: the report has no chapter
 # for them, so a bare name it cites is never one of theirs.
-UNREPORTED = ("LeanDag.RedSnapper.",)
+UNREPORTED = ("LeanDag.RedSnapper.", "LeanDag.Node.")
 
 
 def is_cited(d, qualified, bare):

@@ -3880,7 +3880,8 @@ reading `selfBlocks` and the copy reading `copyBlocks`), `copyFill`
 with the copy reading's validity discharged from `CopyStable`,
 `addGenesis`, and the view lifts. The core's `chop`, `skipFill` and
 `addGenesis` are these at the core's record, the fill under the
-self-referencing reading with `fillBlock_valid` as its one obligation;
+self-referencing reading with `BlockRecord.selfBlock_valid` as its one
+obligation (§11.53);
 `chopBlk` moves to `BlockRecord.lean` and `SkipData` to
 `SafeSkip/Data.lean`.
 
@@ -5254,6 +5255,136 @@ of the double count that keeps the count of lightly related members
 `Common/Anchored/ReadAlike.lean`, in the namespace `AnchoredRule`.
 Async Blue Bottle's weaker `card_mul_le_of_bipartite` and Steelhead's
 `decided_of_agreeOn` are left as they are.
+
+### 11.52 Causal history computed by levels
+
+`historyUptoFrom` recurses into every reference with no sharing, so
+evaluating it costs one call per path, exponential in the fuel; the
+honest node of `docs/validator.md` could not run past five rounds.
+`Common/Causality.lean` now defines `historyLevels`, which computes the
+same set a level at a time, proves the two equal at every block map
+(`levelsFrom_eq`, `historyUptoFrom_eq_levels`), and marks the equation
+`@[csimp]`, so compiled code everywhere downstream runs the level-wise
+form. No definition and no statement changes; only evaluation does.
+
+### 11.53 The self-referencing fill at any quorum
+
+The core's fill discharged its validity obligation at the core's
+predicate only, at quorum `n − f`, so a validity that is the family
+with distinct creators and the self-parent clause at another quorum `q`
+could not use it.
+`Common/Record/Fill.lean` now proves the obligation at every predicate
+equivalent to that family, at any quorum (`BlockRecord.selfBlock_valid`):
+the copied references sit one round below, `v1` appears among their
+authors only as `B1`, the authors only grow, and the added self
+reference is the self-parent. The core's `SkipMsg.fillBlock_valid` is
+deleted; `skipFill`, the Mysticeti cell's sustaining fill and the hybrid's fill
+call the general lemma at `ValidWrt.iff_validAt`. No statement changes.
+
+### 11.54 The attested base at any block record
+
+G10's base and its soundness were stated on the core's universe, with
+`F.f` and `Correct`. `GC/AttestedBase.lean` now defines `attesters` and
+`Base U f t G` at any block record, and proves soundness wherever at most
+`f` validators lie outside the honest set
+(`exists_honest_attester_of_mem_base`), from the counting fact
+`exists_mem_of_card` in `Common/Validators.lean`. The core's
+`exists_correct_attester_of_mem_base` is deleted; its callers use the
+lifted lemma at `card_compl_correct_le`, and `exists_correct_of_card` is
+`exists_mem_of_card` there. Completeness (`correct_mem_base`,
+`accepted_mem_base`) stays on the core's universe, at `Base U F.f t G`.
+
+### 11.55 Self-reference for the reliable authors, from a round on
+
+`SelfParent` asked every non-genesis block to reference a block by its
+author. Its one reader, the chain walk of inclusion
+(`SelfParent.reaches_of_creator`), walks a reliable author's chain from a
+committed block down to an earlier one, so it needs the clause only of
+reliable authors' blocks and only above the earlier block's round.
+`Properties/Optional/SelfParent.lean` now states `SelfParent R rel R₀`:
+every reliable author's block above round `R₀` references a block by its
+author. Chain quality (`Arcs/Quality.lean`) and the headline
+(`Support.Includes rel R₀`, `Support.Lives rel R₀`) cover the reliable
+blocks at or above `R₀`. The rules whose validity carries the clause
+prove `SelfParent` at every reliability and every `R₀`, and state their
+liveness at `R₀ = 0`, which is the statement they had. The honest node
+of `docs/validator.md` does not ask for the clause in its validity, and
+no claim of it reads the clause (§8 there).
+
+### 11.56 The delivery layer and its budgets at any block record
+
+The delivery model, the novelty budgets, the liveness half of rate
+limiting and linear storage, and the bootstrap results that read them
+were stated on the core's universe. They are now stated at
+block records, in sub-steps. A validity predicate now says whether it
+carries the self-parent clause (`Validity.SelfParent`, with
+`BlockRecord.self_parent`), as it says whether it is quorate or
+distinct, and the core's `ValidWrt` has an instance. `Delivery` is stated
+on any record, its acceptance and inclusion rules at the record's honest
+set, and the density lemmas `card_authorsAt_of_succ` and
+`card_authorsAt_of_lt` at the record's quorum. The delivery assumption
+`EventuallyDeliversOn D T R` names its receivers `T` and covers the
+blocks of every honest author, so a crash-prone validator's blocks still
+reach the validators that stay up; the core's `EventuallyDelivers` is the
+case `T = Correct`, as `Populated` and `Synchronised` are.
+
+The novelty budgets (`ByzBudget`, `UniformBudget`), `RefsAccepted`, the
+liveness half of rate limiting (C3a, C3′, C3″), linear storage (B3′, B4)
+and the headline `dos_resistance` hold on any record: the Byzantine count
+is a bound `f` on the validators outside the honest set, the receivers a
+set `T` inside it, and the telescope and the retained store read the
+self-parent clause through the class. No quorum is read. The cut's
+transfer lemmas (`history_chop` and the reachability it rests on), the
+window (`chopD`, G13, G14, G6 `card_retained_le`) and the depth rule
+(G8 `chop_chop`, G9 `viewUpto_subset_viewUpto_succ`,
+`pruned_subset_peer_store`, at receivers `T` inside the honest set) hold
+on any record too.
+
+The backbone `mem_history_of_correct` moves to `GC/AttestedBase.lean` and
+holds at any record whose quorum `q` the set `T` holds, with `n < 2q`:
+the quorum is read as a reliability of slack `n − q`
+(`quorumReliability`). With it, G10 completeness (`correct_mem_base`),
+window completeness G11 (`accepted_mem_base`), the bounded fetch G6b
+(`base_subset_retained`, `card_base_le`, `card_joinIds_le`), the
+joiner's view G12 (`joinView`, and `bootstrap_agree` for any carrier on
+records whose invariant survives the cut) and the relay obligation G7
+(`history_chop_subset_retained`, `card_serve_le`) hold at any record: the
+reliable validators a set `T` inside the honest set holding the quorum,
+with `n + f + 1 ≤ 2q`, which gives `f + 1 ≤ |T|`, so the attestation
+threshold stays `f + 1`.
+
+The coverage witness (`DoS/Delivers.lean`) follows: a retained store is a
+view of any record (`View.ofViewUpto`), it holds every honest block from
+the settling round on at a receiver (`correct_mem_viewUpto`), and the
+novelty budget's stores deliver the receivers for any rule with a carrier
+on the record (`deliversOn_viewUpto`). The direct commit from that
+coverage stays at the Mysticeti row.
+
+### 11.57 The wave argument over what it reads
+
+The family's reactive argument, that every reliable block reaches a
+reliable leader's block, votes for it and certifies it, read a whole
+`SchemeReactive`. It reads only production from a round on, arrival
+after a wait, and the two wait clauses. These are `WaveFacts`
+(`Scheme/Model/Reactive.lean`), and `reaches`, `votes` and `certifies`
+are stated over them (`WaveFacts.reaches`, `WaveFacts.votes`,
+`WaveFacts.certifies`). A reactive execution past GST supplies them
+(`SchemeReactive.toWaveFacts`), from its drift and production, and so
+can a run of the validator of `docs/validator.md` §5, which meets no
+`PaceCore`. The scheme's
+statements are unchanged.
+
+`ReactiveCore.deadline`, the ceiling on a validator's wait, is deleted,
+with Steelhead's copy: no proof in any arc read it.
+
+### 11.58 A decided slot's round is reached
+
+An anchored rule's verdict on a slot holds a block of the record at or
+above the slot's round, given that a direct skip does
+(`AnchoredRule.Decided.reaches`, `Common/Anchored.lean`): a commit holds
+the leader block, and an indirect verdict inherits the bound from the
+anchor it reads. At the scheme's rule a direct skip holds a blamer at
+the slot's vote round once `0 < skipThreshold`.
 
 ### 11.5 Next steps, in order
 

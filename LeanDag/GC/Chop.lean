@@ -23,19 +23,21 @@ namespace LeanDag
 
 /-! The block-level operator `chopBlk` is `BlockRecord.lean`'s. -/
 
-variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
-variable [F : Faults Validator]
-variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
-variable {U : BlockUniverse Validator BlockId Payload}
-variable {G : ℕ} {b i j : BlockId}
-
-/-! ## The core's universe -/
-
 /-! **The cut** is the block record's (`Record/Chop.lean`); `chop`,
-`mem_chop_ids` and `chop_block` are its names, read here at the core. -/
+`mem_chop_ids` and `chop_block` are its names. -/
 export BlockRecord (chop mem_chop_ids chop_block)
 
-/-! ## Transfer lemmas: rounds, layers, reachability, cones -/
+/-! ## Transfer lemmas: rounds, layers, reachability, cones
+
+At any block record. -/
+
+section General
+
+variable {Validator : Type*} [DecidableEq Validator]
+variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
+variable {P : Validity Validator BlockId Payload} {honest : Finset Validator} [P.Mechanised]
+variable {U : BlockRecord Validator BlockId Payload P honest}
+variable {G : ℕ} {b i j : BlockId}
 
 /-- A step in the truncation is a step in the original. -/
 theorem reaches_of_reaches_chop (h : Reaches (chop U G) b i) :
@@ -83,7 +85,17 @@ theorem history_chop (hb : b ∈ (chop U G).ids) :
   rw [mem_history_iff hb, reaches_chop_iff hb, Finset.mem_filter,
     mem_history_iff hbU]
 
-/-! ## The statute of limitations, and its one-way door -/
+end General
+
+/-! ## The statute of limitations, and its one-way door
+
+At the core's universes, where exposure is read. -/
+
+variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
+variable [F : Faults Validator]
+variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
+variable {U : BlockUniverse Validator BlockId Payload}
+variable {G : ℕ} {b i j : BlockId}
 
 /-- Exposure in the truncation is exposure in the original: the witnessing
 pair survives un-rebasing. -/

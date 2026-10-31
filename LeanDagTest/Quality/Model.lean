@@ -147,6 +147,7 @@ theorem mem_history_of_decided_commit
   Properties.Arcs.mem_history_of_decided_commit
     (R := MysticetiProperties.mysticetiRule) MysticetiProperties.selfParent
     MysticetiProperties.noEquiv MysticetiProperties.commitsCandidate hdec hLc hb hbc hle
+    (Nat.zero_le _)
 
 /-- **A slot whose commit carries its leader's round-`m` block into the
 ledger.** In any execution meeting the certification precondition at
@@ -173,7 +174,7 @@ theorem includesAt_of_leads (hT : T ⊆ (Correct : Finset Validator)) {k : ℕ}
     Properties.Arcs.includes_of_leads (R := MysticetiProperties.mysticetiRule)
       MysticetiProperties.selfParent MysticetiProperties.noEquiv
       MysticetiProperties.commitsCandidate MysticetiProperties.leaderCommits_cert S hT hlead hm
-      U V hlive
+      (Nat.zero_le _) U V hlive
 
 /-- **CQ6 (inclusion liveness).** Under a schedule fair to each member
 of `T`, for every round `m` and every `v ∈ T` there is a slot at or

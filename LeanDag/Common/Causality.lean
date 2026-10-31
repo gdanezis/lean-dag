@@ -138,6 +138,54 @@ theorem historyUptoFrom_succ (n : ℕ) (b : BlockId) :
     historyUptoFrom blk (n + 1) b =
       insert b ((blk b).refs.biUnion (historyUptoFrom blk n)) := rfl
 
+/-! ### Computing the cone by levels
+
+The recursion above calls itself once per path from `b`, exponential in
+the fuel. `historyLevels` computes the same set a level at a time, the
+blocks `i` steps below being the references of those `i − 1` steps
+below; `@[csimp]` makes compiled code run it wherever `historyUptoFrom`
+appears. -/
+
+/-- The union of `acc` with the levels `0 … n` below the set `front`. -/
+def levelsFrom (blk : BlockId → Block Validator BlockId Payload) :
+    ℕ → Finset BlockId → Finset BlockId → Finset BlockId
+  | 0, front, acc => acc ∪ front
+  | n + 1, front, acc => levelsFrom blk n (front.biUnion fun x => (blk x).refs) (acc ∪ front)
+
+/-- **Everything reachable from `b` in at most `n` steps**, by levels. -/
+def historyLevels (blk : BlockId → Block Validator BlockId Payload) (n : ℕ) (b : BlockId) :
+    Finset BlockId :=
+  levelsFrom blk n {b} ∅
+
+/-- The levels below `front`, added to `acc`, are the fuelled cones of `front`. -/
+theorem levelsFrom_eq (n : ℕ) (front acc : Finset BlockId) :
+    levelsFrom blk n front acc = acc ∪ front.biUnion (historyUptoFrom blk n) := by
+  induction n generalizing front acc with
+  | zero =>
+    have : front.biUnion (historyUptoFrom blk 0) = front := by
+      ext i; simp [historyUptoFrom_zero]
+    rw [levelsFrom, this]
+  | succ n ih =>
+    rw [levelsFrom, ih, Finset.biUnion_biUnion]
+    ext i
+    simp only [Finset.mem_union, Finset.mem_biUnion, historyUptoFrom_succ, Finset.mem_insert]
+    constructor
+    · rintro ((h | h) | ⟨x, hx, j, hj, hij⟩)
+      · exact Or.inl h
+      · exact Or.inr ⟨i, h, Or.inl rfl⟩
+      · exact Or.inr ⟨x, hx, Or.inr ⟨j, hj, hij⟩⟩
+    · rintro (h | ⟨x, hx, rfl | ⟨j, hj, hij⟩⟩)
+      · exact Or.inl (Or.inl h)
+      · exact Or.inl (Or.inr hx)
+      · exact Or.inr ⟨x, hx, j, hj, hij⟩
+
+/-- **The two computations agree.** -/
+@[csimp]
+theorem historyUptoFrom_eq_levels : @historyUptoFrom = @historyLevels := by
+  funext Validator BlockId Payload _ blk n b
+  rw [historyLevels, levelsFrom_eq]
+  simp
+
 theorem mem_historyUptoFrom_succ {n : ℕ} {b i : BlockId} :
     i ∈ historyUptoFrom blk (n + 1) b ↔
       i = b ∨ ∃ j ∈ (blk b).refs, i ∈ historyUptoFrom blk n j := by
@@ -209,6 +257,28 @@ theorem historyFrom_congr {blk blk' : BlockId → Block Validator BlockId Payloa
     historyFrom blk b = historyFrom blk' b := by
   rw [historyFrom, historyFrom, ← hb b hbi]
   exact historyUptoFrom_congr hcl hb _ b hbi
+
+private theorem closed_historyUptoFrom :
+    ∀ (n : ℕ) (b : BlockId), (blk b).round < n →
+      (∀ i ∈ historyUptoFrom blk n b, ∀ j ∈ (blk i).refs, (blk j).round + 1 = (blk i).round) →
+      ∀ i ∈ historyUptoFrom blk n b, ∀ j ∈ (blk i).refs, j ∈ historyUptoFrom blk n b
+  | 0, _, hr, _ => absurd hr (Nat.not_lt_zero _)
+  | n + 1, b, hr, hp => by
+      have hsub : ∀ c ∈ (blk b).refs, historyUptoFrom blk n c ⊆ historyUptoFrom blk (n + 1) b :=
+        fun c hc x hx => mem_historyUptoFrom_succ.mpr (Or.inr ⟨c, hc, hx⟩)
+      intro i hi j hj
+      rcases mem_historyUptoFrom_succ.mp hi with rfl | ⟨c, hc, hic⟩
+      · exact hsub j hj mem_historyUptoFrom_self
+      · have hcr := hp b mem_historyUptoFrom_self c hc
+        exact hsub c hc (closed_historyUptoFrom n c (by omega)
+          (fun x hx => hp x (hsub c hc hx)) i hic j hj)
+
+/-- **A history whose blocks reference one round below is a causal
+structure**: what a check of every header of a history establishes. -/
+theorem causalStructure_historyFrom {t : BlockId}
+    (hpred : ∀ i ∈ historyFrom blk t, ∀ j ∈ (blk i).refs, (blk j).round + 1 = (blk i).round) :
+    CausalStructure blk (historyFrom blk t) :=
+  ⟨closed_historyUptoFrom _ t (Nat.lt_succ_self _) hpred, hpred⟩
 
 namespace CausalStructure
 
@@ -301,6 +371,37 @@ theorem mem_refs_of_mem_history_of_round_succ (C : CausalStructure blk ids)
 theorem mem_history_of_mem_refs (C : CausalStructure blk ids) {b j : BlockId} (hb : b ∈ ids)
     (hj : j ∈ (blk b).refs) : j ∈ historyFrom blk b :=
   (C.mem_history_iff hb).mpr (ReachesFrom.single hj)
+
+/-- A block of `b`'s history other than `b` is referenced by a block of that
+history. -/
+theorem exists_mem_refs_of_mem_history (C : CausalStructure blk ids) {b i : BlockId}
+    (hb : b ∈ ids) (hi : i ∈ historyFrom blk b) (hne : i ≠ b) :
+    ∃ j ∈ historyFrom blk b, i ∈ (blk j).refs := by
+  rcases Relation.ReflTransGen.cases_tail ((C.mem_history_iff hb).mp hi) with h | ⟨j, hj, hji⟩
+  · exact absurd h hne
+  · exact ⟨j, (C.mem_history_iff hb).mpr hj, hji⟩
+
+/-- **Every round between is crossed.** For `i` in `b`'s history and a round
+`k` between theirs, `b`'s history holds a block of round `k` whose history
+holds `i`. -/
+theorem exists_mem_history_of_round_between (C : CausalStructure blk ids) {b i : BlockId}
+    (hb : b ∈ ids) (hi : i ∈ historyFrom blk b) {k : ℕ} (hik : (blk i).round ≤ k)
+    (hkb : k ≤ (blk b).round) :
+    ∃ j ∈ historyFrom blk b, (blk j).round = k ∧ i ∈ historyFrom blk j := by
+  obtain ⟨d, hd⟩ : ∃ d, (blk b).round = k + d := ⟨(blk b).round - k, by omega⟩
+  induction d generalizing b with
+  | zero => exact ⟨b, mem_historyFrom_self, by omega, hi⟩
+  | succ d ih =>
+      have hne : i ≠ b := by
+        rintro rfl
+        omega
+      rcases Relation.ReflTransGen.cases_head ((C.mem_history_iff hb).mp hi) with h | ⟨c, hc, hci⟩
+      · exact absurd h.symm hne
+      · have hc_ids : c ∈ ids := C.complete b hb c hc
+        have hcr := C.refs_round b hb c hc
+        obtain ⟨j, hj, hjr, hij⟩ :=
+          ih hc_ids ((C.mem_history_iff hc_ids).mpr hci) (by omega) (by omega)
+        exact ⟨j, C.history_subset_of_reaches hb (ReachesFrom.single hc) hj, hjr, hij⟩
 
 end CausalStructure
 

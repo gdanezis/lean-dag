@@ -69,9 +69,9 @@ theorem card_novelty_le_of_donor {κ R : ℕ} (hbyz : ByzBudget D κ)
     {c : BlockId} (hc : c ∈ U.ids) (hcc : (U.block c).creator = w)
     (hcr : (U.block c).round = n + 1) :
     (novelty U (viewUpto D v (n + 1)) b).card ≤ F.f * κ + 1 :=
-  (card_novelty_le_viewGap_add_one hED hn hv hb hrefs).trans
-    (Nat.add_le_add_right
-      (card_viewGap_succ_le hbyz hED hn hv hw hc hcc hcr) 1)
+  (card_novelty_le_viewGap_add_one hED (Finset.Subset.refl _) hn hv hb hrefs).trans
+    (Nat.add_le_add_right (card_viewGap_succ_le card_compl_correct_le hbyz hED
+      (Finset.Subset.refl _) hn hv hw hc hcc hcr) 1)
 
 end Budget
 

@@ -156,7 +156,6 @@ def hyReactive (N : ℕ) :
     latest := fun n => 2 + 6 * n
     built_le_latest := fun v hv _ _ => by obtain ⟨_, _⟩ := mem_Thy hv; omega
     built_lt := fun _ _ _ _ => by omega
-    deadline := fun _ _ _ _ => by omega
     holds := hyHolds N
     holds_sub := fun _ _ => by
       simp only [hyHolds, uhy_ids]; exact Finset.filter_subset _ _

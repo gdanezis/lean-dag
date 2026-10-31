@@ -346,7 +346,6 @@ def spReactive (N : ℕ) : ReactiveB (Usparse N) {1, 2, 3} N where
     change (v : ℕ) + 6 * n ≤ t + 5
     rcases hheld.2 with h | ⟨_, h⟩ <;> omega
   built_lt _ _ _ _ := by omega
-  deadline _ _ _ _ := by omega
   leader_tagged k _ L hL := by
     have hL' := eq_leaderId_of_isLeaderBlock (usparse_block N) hL
     subst hL'

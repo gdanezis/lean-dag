@@ -100,12 +100,13 @@ def Progresses : Prop :=
         ∀ (U : R.Universe) (V : R.View U), sp.live rel S V T k' (k' + 1) →
           ∃ L, DecidedBelow R S (k' + 1) V k' (some L))
 
-/-- **Inclusion**: every block by a reliable author enters the ledger
-through a slot its author leads, under a schedule fair to each. -/
-def Includes : Prop :=
+/-- **Inclusion**: every block by a reliable author at or above round
+`R₀` enters the ledger through a slot its author leads, under a schedule
+fair to each. -/
+def Includes (R₀ : ℕ) : Prop :=
   ∀ (S : Slots Validator) (T : Finset Validator), T ⊆ rel.correct →
     (∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v) →
-    ∀ (m : ℕ), ∀ v ∈ T, ∃ k', m ≤ S.slotRound k' ∧ S.leader k' = v ∧
+    ∀ (m : ℕ), R₀ ≤ m → ∀ v ∈ T, ∃ k', m ≤ S.slotRound k' ∧ S.leader k' = v ∧
       ∀ (U : R.Universe) (V : R.View U), sp.live rel S V T k' (k' + 1) →
         ∃ L, R.Decided S V k' (some L) ∧
           ∀ b ∈ R.ids U, (R.block U b).creator = v → (R.block U b).round = m →
@@ -113,8 +114,8 @@ def Includes : Prop :=
               ∀ (g : ℕ → Option BlockId) (n : ℕ), g k' = some L → k' < n →
                 b ∈ Arcs.ledgerSetOf R U g n
 
-/-- **Liveness**: progress and inclusion. -/
-def Lives : Prop := sp.Progresses rel ∧ sp.Includes rel
+/-- **Liveness**: progress, and inclusion from round `R₀`. -/
+def Lives (R₀ : ℕ) : Prop := sp.Progresses rel ∧ sp.Includes rel R₀
 
 variable {sp rel}
 
@@ -129,15 +130,15 @@ theorem progress (hlc : sp.Commits rel) : sp.Progresses rel := by
     exact ⟨k', hk', hlead, fun _ V hlive =>
       sp.leaderCommits hlc S V T k' (k' + 1) hlive k' le_rfl (Nat.lt_succ_self k') hlead⟩
 
-/-- **Inclusion, from Law 2 and self-reference.** -/
-theorem inclusion (hlc : sp.Commits rel) (hcc : CommitsCandidate R) (hsp : SelfParent R)
-    (hne : NoEquiv R rel) : sp.Includes rel :=
-  fun S T hT fair m v hv =>
-    Arcs.committed_of_correct_block hsp hne hcc (sp.leaderCommits hlc) S hT fair m hv
+/-- **Inclusion, from Law 2 and self-reference** above `R₀`. -/
+theorem inclusion {R₀ : ℕ} (hlc : sp.Commits rel) (hcc : CommitsCandidate R)
+    (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel) : sp.Includes rel R₀ :=
+  fun S T hT fair m hm₀ v hv =>
+    Arcs.committed_of_correct_block hsp hne hcc (sp.leaderCommits hlc) S hT fair m hm₀ hv
 
 /-- **The liveness headline.** -/
-theorem liveness (hlc : sp.Commits rel) (hcc : CommitsCandidate R) (hsp : SelfParent R)
-    (hne : NoEquiv R rel) : sp.Lives rel :=
+theorem liveness {R₀ : ℕ} (hlc : sp.Commits rel) (hcc : CommitsCandidate R)
+    (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel) : sp.Lives rel R₀ :=
   ⟨progress hlc, inclusion hlc hcc hsp hne⟩
 
 end Support

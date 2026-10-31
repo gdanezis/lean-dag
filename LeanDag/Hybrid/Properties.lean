@@ -164,7 +164,7 @@ theorem safety {kt : ℕ} (hpos : 0 < kt) (hk : Hybrid.Admissible Validator kt) 
 
 theorem liveness (kt : ℕ) : Properties.Support.Lives (Properties.voteSupport (hybridRule
     (Validator := Validator) (BlockId := BlockId) (Payload := Payload) kt))
-    (coreReliability Validator) :=
+    (coreReliability Validator) 0 :=
   Properties.Support.liveness (voteSupport_commits kt) (commitsCandidate kt) (selfParent kt)
     (noEquiv kt)
 

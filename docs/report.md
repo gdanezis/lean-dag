@@ -1654,18 +1654,24 @@ are enforceable by a correct validator acting alone, which is the
 property that makes them deployable; the other two are structural.
 
 ```lean
+def DoSValidOn (blk : BlockId → Block Validator BlockId Payload) (ids : Finset BlockId)
+    (Exp : BlockId → Validator → Prop) : Prop :=
+  ∀ b ∈ ids, ∀ i ∈ (blk b).refs, ¬ Exp b (blk i).creator
+
 def DoSValid (U : BlockUniverse Validator BlockId Payload) : Prop :=
-  ∀ b ∈ U.ids, ∀ i ∈ (U.block b).refs, ¬ ExposedIn U b (U.block i).creator
+  DoSValidOn U.block U.ids (ExposedIn U)
 ```
 
 **D (`DoSValid`) — do not build on an exposed author.** A block never
 references a block whose author is already exposed as an equivocator
 within the referencing block's own history. Checkable locally, since
 exposure is a fact about the cone a validator already holds.
+`DoSValidOn` states the condition over raw block data for any exposure
+`Exp`; `DoSValid` reads exposure as twins in the history (`ExposedIn`).
 
 ```lean
 def UniformBudget (D : Delivery U) (τ : ℕ) : Prop :=
-  ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ D.accepted v (n + 1),
+  ∀ v ∈ honest, ∀ n, ∀ b ∈ D.accepted v (n + 1),
     (novelty U (viewUpto D v n) b).card ≤ τ
 ```
 
@@ -1678,7 +1684,7 @@ needs, and `uniform_of_byzBudget` (B6) shows the enforceable form implies it.
 
 ```lean
 def RefsAccepted (D : Delivery U) : Prop :=
-  ∀ w ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ U.ids,
+  ∀ w ∈ honest, ∀ n, ∀ b ∈ U.ids,
     (U.block b).creator = w → (U.block b).round = n + 1 →
     (U.block b).refs ⊆ D.accepted w n
 ```
@@ -1998,32 +2004,36 @@ the targeted predicates of §6.6.
 
 **L0.**
 ```lean
-theorem card_authorsAt_of_lt {r n : ℕ} (hn : n < r) {i : BlockId}
-    (hi : i ∈ U.ids) (hir : (U.block i).round = r) :
-    quorumCard Validator ≤ (authorsAt U n).card
+theorem card_authorsAt_of_lt [P.Mechanised] {q : ℕ} [P.Quorate q] {r n : ℕ} (hn : n < r)
+    {i : BlockId} (hi : i ∈ U.ids) (hir : (U.block i).round = r) :
+    q ≤ (authorsAt U n).card
 ```
 
-If any block exists at round `r`, every round below `r` has at least `n−f`
-distinct authors. The result requires no assumption beyond validity. Its content
+If any block exists at round `r`, every round below `r` has at least `q`
+distinct authors, `n−f` at the core. The result requires no assumption beyond validity. Its content
 is not that the DAG grows, but that it cannot grow tall and thin: a single block
 high in the DAG forces a quorum of authors at every round beneath it.
 
 ### 6.2 The delivery layer
 
 ```lean
-structure Delivery (U) where
+structure Delivery (U : BlockRecord Validator BlockId Payload P honest) where
   held : Validator → ℕ → Finset BlockId
   held_spec : ∀ v n, ∀ i ∈ held v n, i ∈ U.ids ∧ (U.block i).round = n
   accepted : Validator → ℕ → Finset BlockId
   accepted_sub : ∀ v n, accepted v n ⊆ held v n
   accepted_inj : ∀ v n, ∀ i ∈ accepted v n, ∀ j ∈ accepted v n,
     (U.block i).creator = (U.block j).creator → i = j
-  accepts_correct : ∀ v ∈ Correct, ∀ n, ∀ a ∈ held v n,
-    (U.block a).creator ∈ Correct → a ∈ accepted v n
-  includes : ∀ v ∈ Correct, ∀ n, ∀ b ∈ U.ids,
+  accepts_correct : ∀ v ∈ honest, ∀ n, ∀ a ∈ held v n,
+    (U.block a).creator ∈ honest → a ∈ accepted v n
+  includes : ∀ v ∈ honest, ∀ n, ∀ b ∈ U.ids,
     (U.block b).creator = v → (U.block b).round = n + 1 →
     accepted v n ⊆ (U.block b).refs
 ```
+
+The layer is stated on any block record: its honest set is the
+validators that follow the acceptance and inclusion rules, `Correct` at
+the core.
 
 The indexing of `held` is essential: `held v n` denotes what `v` had in hand *at
 the moment it built its round-`(n+1)` block*, not what `v` eventually receives.
@@ -2399,7 +2409,8 @@ processing bound `proc` — and nothing about *when* a validator chooses
 to build within a round; `reached`, `populatedOn` and the drift collapse
 are proved on it, once. `ViewPace` is the full-timeout discipline: the
 waiting floor P9 and global referencing. The reactive schedule (§11)
-extends the same trunk with a deadline in place of the floor, and
+extends the same trunk with the reactive wait clauses in place of the
+floor, and
 inherits production and drift rather than assuming them.
 
 `top v` is the highest round `v` reached; `built v n` is read only at
@@ -2998,9 +3009,9 @@ def IncludesAt (BlockId : Type) [DecidableEq BlockId] (Payload : Type)
           b ∈ ledgerSet U g n
 
 theorem committed_of_correct_block
-    (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
     (hlc : LeaderCommits R Live) (S : Slots Validator) (hT : T ⊆ rel.correct)
-    (fair : ∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v) (m : ℕ) (hv : v ∈ T) :
+    (fair : ∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v) (m : ℕ) (hm₀ : R₀ ≤ m) (hv : v ∈ T) :
     ∃ k', m ≤ S.slotRound k' ∧ S.leader k' = v ∧ …
 ```
 
@@ -3092,7 +3103,7 @@ def ExposedIn (U) (b : BlockId) (X : Validator) : Prop :=
   ∃ i ∈ history U b, ∃ j ∈ history U b, EquivPair U X i j
 
 def DoSValid (U) : Prop :=
-  ∀ b ∈ U.ids, ∀ i ∈ (U.block b).refs, ¬ ExposedIn U b (U.block i).creator
+  DoSValidOn U.block U.ids (ExposedIn U)
 ```
 
 Exposure is objective — a property of the cone, checkable by any holder —
@@ -3143,11 +3154,16 @@ its blocks entered the cone — and is linear in the round with a constant
 exponential in `f`:
 
 ```lean
-theorem card_history_le' (hdos : DoSValid U) (hb : b ∈ U.ids) :
-    (history U b).card
+theorem card_history_le' (hdos : DoSValid U) (hb : b ∈ U.ids) (lo : ℕ) :
+    ((history U b).filter fun i => lo ≤ (U.block i).round).card
       ≤ (Fintype.card Validator + (Fintype.card Validator - 1) * F.f ^ F.f) *
-          ((U.block b).round + 1)
+          ((U.block b).round + 1 - lo)
 ```
+
+At `lo = 0` this is the whole history. It is the sum over rounds of the
+per-round bound `card_historyAt_le`: at most `n + (n−1)·f^f` blocks of a
+history lie at one round, so the blocks of a history within `L` rounds of
+any round number at most `(n + (n−1)·f^f)·L`, whatever the round.
 
 The exponential constant is not an artefact of the proof: a matching family of
 witnesses (`Udouble` (C5), §28) realises `2^(e−2)` growth from `e` equivocators,
@@ -3160,6 +3176,12 @@ required, and is orthogonal to it.
 
 ### 8.4 The novelty budget
 
+The budget, its liveness half and linear storage hold on any block
+record, "correct" read as its honest set: the Byzantine count is a bound
+`f` on the validators outside it (`hf : honestᶜ.card ≤ f`), and the
+receivers of the delivery assumption a set `T` inside it. At the core,
+the honest set is `Correct` and `f` its bound.
+
 The budget is a rule about acceptance, and deliberately about nothing else.
 Two formulations are related. The analysis-side form guards on the author
 being Byzantine; the mechanism-side form is the rule a validator can
@@ -3168,16 +3190,16 @@ tell who is Byzantine:
 
 ```lean
 def ByzBudget (D : Delivery U) (κ : ℕ) : Prop :=
-  ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ D.accepted v (n + 1),
-    (U.block b).creator ∉ (Correct : Finset Validator) →
+  ∀ v ∈ honest, ∀ n, ∀ b ∈ D.accepted v (n + 1),
+    (U.block b).creator ∉ honest →
     (novelty U (viewUpto D v n) b).card ≤ κ
 
-def UniformBudget (D : Delivery U) (T : ℕ) : Prop :=
-  ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ D.accepted v (n + 1),
-    (novelty U (viewUpto D v n) b).card ≤ T
+def UniformBudget (D : Delivery U) (τ : ℕ) : Prop :=
+  ∀ v ∈ honest, ∀ n, ∀ b ∈ D.accepted v (n + 1),
+    (novelty U (viewUpto D v n) b).card ≤ τ
 
 def RefsAccepted (D : Delivery U) : Prop :=
-  ∀ w ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ U.ids,
+  ∀ w ∈ honest, ∀ n, ∀ b ∈ U.ids,
     (U.block b).creator = w → (U.block b).round = n + 1 →
     (U.block b).refs ⊆ D.accepted w n
 ```
@@ -3201,7 +3223,7 @@ forward:
 
 **B7.**
 ```lean
-theorem viewUpto_subset_history (hw : w ∈ Correct) (hb : b ∈ U.ids)
+theorem viewUpto_subset_history [P.SelfParent] (hw : w ∈ honest) (hb : b ∈ U.ids)
     (hbc : (U.block b).creator = w) (hbr : (U.block b).round = n + 1) :
     viewUpto D w n ⊆ history U b
 ```
@@ -3226,8 +3248,8 @@ correct validator retains:
 
 ```lean
 def byzPool (D : Delivery U) (n : ℕ) : Finset BlockId :=
-  (Correct : Finset Validator).biUnion fun w =>
-    (viewUpto D w n).filter fun i => (U.block i).creator ∉ Correct
+  honest.biUnion fun w =>
+    (viewUpto D w n).filter fun i => (U.block i).creator ∉ honest
 ```
 
 A Byzantine block enters the pool only as a direct budgeted acceptance — if
@@ -3236,12 +3258,11 @@ author's *earlier* store — so the pool grows by at most `|Correct|·f·κ` per
 round (`card_byzPool_le`), and the store bound follows:
 
 ```lean
-theorem card_viewUpto_le (hbyz : ByzBudget D κ) (hra : RefsAccepted D)
-    (hv : v ∈ Correct) (n : ℕ) :
+theorem card_viewUpto_le (hf : honestᶜ.card ≤ f) (hbyz : ByzBudget D κ)
+    (hra : RefsAccepted D) (hv : v ∈ honest) (n : ℕ) :
     (viewUpto D v n).card ≤
-      (Correct : Finset Validator).card * (n + 1) +
-        ((Correct : Finset Validator).card * F.f +
-          n * ((Correct : Finset Validator).card * (F.f * κ)))
+      honest.card * (n + 1) +
+        (honest.card * f + n * (honest.card * (f * κ)))
 ```
 
 — correct production, a Byzantine genesis allowance, and a Byzantine rate.
@@ -3252,15 +3273,14 @@ hypothesis rather than a premise of the DoS argument: any of the routes of
 §§6.7–6.9 discharges it (§4.3):
 
 ```lean
-theorem dos_resistance {τ N : ℕ} {P : Finset Validator}
-    (hpop : ∀ r ≤ N, PopulatedOn U P r)
+theorem dos_resistance {τ N : ℕ} {Q : Finset Validator} (hf : honestᶜ.card ≤ f)
+    (hpop : ∀ r ≤ N, PopulatedOn U Q r)
     (hu : UniformBudget D τ) (hra : RefsAccepted D) :
-    (∀ r ≤ N, PopulatedOn U P r) ∧
-      ∀ v ∈ (Correct : Finset Validator), ∀ n,
+    (∀ r ≤ N, PopulatedOn U Q r) ∧
+      ∀ v ∈ honest, ∀ n,
         (viewUpto D v n).card ≤
-          (Correct : Finset Validator).card * (n + 1) +
-            ((Correct : Finset Validator).card * F.f +
-              n * ((Correct : Finset Validator).card * (F.f * τ)))
+          honest.card * (n + 1) +
+            (honest.card * f + n * (honest.card * (f * τ)))
 ```
 
 with a post-`R` incremental form (`dos_resistance'`) in which the slope is
@@ -3431,12 +3451,10 @@ is a
 sequence of cuts:
 
 ```lean
-theorem card_retained_le {κ Λ t : ℕ} (hbyz : ByzBudget D κ)
-    (hra : RefsAccepted D) (hv : v ∈ Correct) (hG : G ≤ t) (hΛ : t ≤ G + Λ) :
+theorem card_retained_le {κ Λ t f : ℕ} (hf : honestᶜ.card ≤ f) (hbyz : ByzBudget D κ)
+    (hra : RefsAccepted D) (hv : v ∈ honest) (hG : G ≤ t) (hΛ : t ≤ G + Λ) :
     ((viewUpto D v t).filter fun i => G ≤ (U.block i).round).card ≤
-      (Correct : Finset Validator).card * (Λ + 1) +
-        ((Correct : Finset Validator).card * F.f +
-          Λ * ((Correct : Finset Validator).card * (F.f * κ)))
+      honest.card * (Λ + 1) + (honest.card * f + Λ * (honest.card * (f * κ)))
 ```
 
 — **constant in `t`**: at lag `Λ`, the retained store is bounded
@@ -3466,24 +3484,25 @@ and needs no signatures:
 def attesters (U) (t : ℕ) (y : BlockId) : Finset Validator :=
   creatorsOf U.block ((blocksAt U t).filter fun a => y ∈ history U a)
 
-def Base (U) (t G : ℕ) : Finset BlockId :=
-  (blocksAt U G).filter fun y => F.f + 1 ≤ (attesters U t y).card
+def Base (U) (f t G : ℕ) : Finset BlockId :=
+  (blocksAt U G).filter fun y => f + 1 ≤ (attesters U t y).card
 ```
 
 The base is **sandwiched** between the shared correct layer and the union of
 correct cones: everything in it has a correct attester, so the adversary
-cannot smuggle fabrications in (`exists_correct_attester_of_mem_base`);
+cannot smuggle fabrications in (`exists_honest_attester_of_mem_base`);
 post-`R`, every correct round-`G` block is in every correct attestation, so
 nothing of the correct layer can be filtered out, by anyone
 (`correct_mem_base`). Completeness in fact extends to everything
 *obtainable* — Byzantine-authored included:
 
 ```lean
-theorem accepted_mem_base (hs : Synchronised U R) (hv : v ∈ Correct)
-    (hy : y ∈ viewUpto D v m) (hyr : (U.block y).round = G)
-    (hcar : Populated U (m + 1)) (hpop : Populated U t)
-    (hR : R ≤ m + 1) (hmt : m + 2 ≤ t) :
-    y ∈ Base U t G
+theorem accepted_mem_base [P.SelfParent] [P.Quorate q] {R m t : ℕ} (hT : q ≤ T.card)
+    (hq : Fintype.card Validator + f + 1 ≤ 2 * q) (hTh : T ⊆ honest) (hs : SynchronisedOn U T R)
+    (hv : v ∈ T) (hy : y ∈ viewUpto D v m)
+    (hyr : (U.block y).round = G) (hcar : PopulatedOn U T (m + 1))
+    (hpop : PopulatedOn U T t) (hR : R ≤ m + 1) (hmt : m + 2 ≤ t) :
+    y ∈ Base U f t G
 ```
 
 — every round-`G` block a correct validator accepted into its window by `m`
@@ -3499,11 +3518,12 @@ content: window references above the cut stay in the window, references *at*
 the cut are exactly the blocks `accepted_mem_base` puts in the base), and:
 
 ```lean
-theorem bootstrap_agree {R : Properties.DagRule Validator BlockId Payload}
-    (c : R.OnRecord ValidWrt (Correct : Finset Validator) …)
+theorem bootstrap_agree [P.SelfParent] [P.Quorate q] {R : Properties.DagRule Validator BlockId Payload}
+    {I : BlockRecord Validator BlockId Payload P honest → Prop} [BlockRecord.Invariant.Chops I]
+    (c : R.OnRecord P honest I) (hI : I U)
     (ha : Properties.Agree R) (hb : Properties.Banded R) …
     (hJ : R.Decided (S.chop G d hd)
-      (c.chop_ofRec U True.intro ▸ c.ofView (joinView …)) k jv)
+      (c.chop_ofRec U hI ▸ c.ofView (joinView …)) k jv)
     (hV : R.Decided S V (d + k) fv) : jv = fv
 ```
 
@@ -3835,7 +3855,6 @@ any block record —
 structure ReactiveCore (U : BlockRecord Validator BlockId Payload P honest)
     (T : Finset Validator) (N : ℕ) extends PaceCore U T N where
   built_lt : ∀ v ∈ T, ∀ n < top v, built v n < built v (n + 1)
-  deadline : ∀ v ∈ T, ∀ n < top v, built v (n + 1) ≤ built v n + timeout n
 ```
 
 — and the core's wait clauses over it:
@@ -3853,9 +3872,8 @@ structure ReactivePace (U : BlockUniverse Validator BlockId Payload)
   prompt_vote : …
 ```
 
-`deadline` is the ceiling — a validator never waits *past* the timeout —
-and `built_lt` the only remaining floor, both over the rounds the
-validator reached. `vote_or_wait` is the reactive dichotomy: at the
+`built_lt` is the only remaining floor, over the rounds the validator
+reached; no ceiling is asked, since no proof reads one. `vote_or_wait` is the reactive dichotomy: at the
 round above a reliable leader, any `T`-authored block either references
 the leader (the reactive exit), or its builder waited the full timeout
 and references any leader block it holds (the fallback). Building early
@@ -3967,7 +3985,7 @@ theorem no_timeout_of_fast {δ : ℕ}
 `δ` is the *actual* per-block propagation bound of the run — a premise
 about this execution, not an assumption about the network — and the
 conclusion degrades continuously as it approaches the timeout. Below it,
-every reliable validator builds strictly before its deadline: the
+every reliable validator builds strictly before its timeout expires: the
 fallback branch of the dichotomy is never taken, and consensus proceeds
 at the pace of `built_succ_le_of_fast` (RS4)'s bound, drift plus delivery plus
 processing per round.
@@ -3977,7 +3995,7 @@ processing per round.
 `ugrowReactive` (§28) runs the Mysticeti structure on the round-robin
 schedule at build spacing `6` inside a timeout of `9 = 2Δ + proc` — the
 drift-free backoff met with equality: every fallback branch untaken, the
-commit, the latency bound and the strictly-inside-deadline conclusion
+commit, the latency bound and the strictly-inside-timeout conclusion
 all exhibited on data. Its
 processing constant is honest rather than generous: `proc = 5` is the
 least value `prompt_vote` admits on this model, because a validator's
@@ -4163,7 +4181,8 @@ unchanged:
 **SS1.**
 ```lean
 def skipFill : BlockUniverse Validator BlockId Payload :=
-  BlockRecord.fill U sk.toGapData (sk.selfBlocks U.complete) (fun _ hk1 hk2 => sk.fillBlock_valid hk1 hk2)
+  BlockRecord.fill U sk.toGapData (sk.selfBlocks U.complete)
+    (fun _ hk1 hk2 => BlockRecord.selfBlock_valid ValidWrt.iff_validAt U sk hk1 hk2)
 ```
 
 The fill is built once at the block record (§2.3): `BlockRecord.fill`
@@ -4172,8 +4191,11 @@ looks every old identifier up unchanged, and proves closure,
 non-equivocation and the old blocks' validity for any predicate that is
 `Mechanised`. What a reading owes is the one clause the record cannot
 supply, that each filled block is valid under the extended map. The
-core's reading is the self-referencing one, and `fillBlock_valid` is
-that obligation: every clause of §2.2 must survive the fill. The predecessor clause P1 holds
+core's reading is the self-referencing one, and
+`BlockRecord.selfBlock_valid` is that obligation, proved at every
+predicate equivalent to the family with distinct creators and the
+self-parent clause, at any quorum: every clause of §2.2 must survive the
+fill. The predecessor clause P1 holds
 because the copied references sit one round below by the line's own P1
 and the self reference is placed there by construction. P2, distinct
 creators, is the delicate clause: the copied references must not already
@@ -7743,8 +7765,8 @@ FinWhale creates a round-`r` block when any of three conditions holds:
 a quorum of voters for the round-`(r−2)` leader, or an SP-skip pattern
 for it; **C2**, the `2∆` timeout has expired; **C3**, the local DAG has
 `n − f` round-`r` blocks. The timeout is the fallback and not the rule,
-so the discipline is `ReactivePace`, whose `deadline` is a ceiling on
-waiting, rather than `ViewPace`, whose `waits` is a floor. One
+so the discipline is `ReactivePace`, whose timeout is a fallback with no
+floor under it, rather than `ViewPace`, whose `waits` is a floor. One
 consequence shapes the rest: **reference coverage is unavailable**. A
 reactive builder omits whatever had not arrived when its exit fired, so
 `SynchronisedFrom` is false in general and nothing below uses it.
@@ -12095,9 +12117,9 @@ populated, as for the run with its clock forgotten
 (`Scheme.SchemeReactive.toAsyncPace`, SC27), and drift collapses
 (`Scheme.SchemeReactive.driftOn`). A reliable block that waited holds every reliable block of the round below
 (`Scheme.SchemeReactive.arrives`); round by round every reliable block
-reaches the leader block (`Scheme.SchemeReactive.reaches`), every
+reaches the leader block (`Scheme.WaveFacts.reaches`), every
 reliable vote-round block votes, and every reliable decision-round block
-certifies (`Scheme.SchemeReactive.certifies`). That is the family
+certifies (`Scheme.WaveFacts.certifies`). That is the family
 support's liveness precondition (`Scheme.live_of_reactiveLive`), and the
 generic `LeaderCommits` follows (`Scheme.leaderCommits_reactive`). Every
 Reactive Mysticeti execution with a correct reliable set is an instance
@@ -12235,7 +12257,7 @@ of the committed cone, exactly `f`) and the censorship exhibit
 chain and a commit after it), the budget satisfiable at its exact constant
 (`UniformBudget Dtwin 3` with `ByzBudget Dtwin 0`), the horizon computed and
 its statute of limitations exhibited (`chop Uexcl 2`, `chop Umerge 1`), the
-attested base sandwich tight at the bottom (`Base Utwin 1 0 = {1,2,3}`), and
+attested base sandwich tight at the bottom (`Base Utwin F.f 1 0 = {1,2,3}`), and
 every Odontoceti rule and all four `Decided` constructors at `n = 6, f = 1`
 (`Uodo`, `Uskip`, `Utwin6`), including the two-twin configuration that
 motivates the canonicity premise (`utwin6_both_pass` (O11)). The reactive
@@ -13049,7 +13071,7 @@ reused.
 | C2 | at most `f` authors exposed per cone | `card_exposedTo_le` *(DoS/Exposure)* |
 | D14 | safety and the DoS condition do not interact | witness file *(LeanDagTest/DoS/SafetyUnderDoS)* |
 | D15a | at zero margin, references are exactly the correct validators | `creators_refs_eq_correct` *(DoS/Exclusion)* |
-| E1 | the correct backbone | `mem_history_of_correct` *(DoS/Exclusion)* |
+| E1 | the correct backbone | `mem_history_of_correct` *(GC/AttestedBase)* |
 | C1′ | the general per-cone bound | `card_history_le'` *(DoS/Pedigree)* |
 | D25 | density: cones miss at most `f` per layer | `card_missingAt_le` *(DoS/Density)* |
 | C5 | the doubling construction (`2^(e−2)`) | `Udouble` witnesses *(LeanDagTest/DoS/Doubling)* |
@@ -13073,7 +13095,7 @@ reused.
 | G13, G14 | windowed novelty; store correspondence | `novelty_chop_anti`, `viewUpto_chopD` *(GC/Window)* |
 | G6 | storage constant at lag `Λ` | `card_retained_le` *(GC/Window)* |
 | G6b, G7 | join and relay at the same constant | `card_joinIds_le`, `card_serve_le` *(GC/Bootstrap)* |
-| G10 | the attested-base sandwich | `correct_mem_base`, `exists_correct_attester_of_mem_base` *(GC/AttestedBase)* |
+| G10 | the attested-base sandwich | `correct_mem_base`, `exists_honest_attester_of_mem_base` *(GC/AttestedBase)* |
 | G11 | window completeness, tight at lag two | `accepted_mem_base` *(GC/Bootstrap)* |
 | G12 | bootstrap safety | `joinView`, `bootstrap_agree` *(GC/Bootstrap)* |
 | G8 | horizons compose; heterogeneous horizons agree | `chop_chop`, `decided_agree_horizons` *(GC/Horizon)* |
@@ -13404,7 +13426,7 @@ reused.
 | SC23 | on Hydrozoan's universe the Hybrid Mysticeti row decides as Hydrozoan without its fast path, at every vote; it meets its inequalities at every `n ≥ 3f + 2c + 1`, and its carrier is safe and progresses under Hydrozoan's fault model, and with self-reference lives | `Scheme.readAlike_hydrozoanSlow`, `Scheme.hydrozoanSlow_eq`, `Scheme.Table.hybridAnyCommittee`, `Scheme.HybridRow.slowRow`, `Scheme.HybridRow.onHydrozoan`, `Scheme.HybridRow.withSelfParent` *(Scheme/Helpers/Hydrozoan, Scheme/HybridRow)* |
 | SC24 | the asynchronous rows are live under the coin: at `2q ≥ n + f + 1` a common core; one buffer round gives a safe validator and the double count, two give `q − f`; leaders outnumbering the rest include a safe one; buffer rounds past two add nothing; a uniform coin names a safe leader with probability bounded below, and its misses vanish | `exists_commonCore`, `Scheme.isCert_of_safe`, `Scheme.safeAt_nonempty`, `Scheme.card_safeAt_count`, `Scheme.le_card_safeAt`, `Scheme.exists_safe_leader`, `Scheme.Starve.not_starved_of_reaches`, `Scheme.Starve.card_safeAt_starve`, `Scheme.Starve.starvePace`, `Scheme.Async.coinCommit`, `Scheme.Async.coinTail`, `Scheme.Async.holds` *(Common/CommonCore, Scheme/Helpers/Async, Scheme/Helpers/AsyncCoin, Scheme/Helpers/Starve, Scheme/Async)* |
 | SC25 | every row safe and live: Cordial Miners on the core's universes; Orcaella, Async Orcaella, Hybrid Mysticeti, Hybrid Mahi-Mahi, Nemo-Nemo and Async Nemo-Nemo under the hybrid fault model with self-reference; the asynchronous rows ready for the count | `Scheme.HybridRow.onHydrozoan`, `Scheme.HybridRow.withSelfParent`, `Scheme.Rows.coreRows`, `Scheme.Rows.hybridRows`, `Scheme.Rows.asyncRows`, `Scheme.Rows.holds` *(Scheme/HybridRow, Scheme/Rows)* |
-| SC26 | the family run reactively, pacing at a quorum `q`: a reliable block reaches the leader block round by round, votes and certifies; that is the family support's precondition at any reliability, so a reliably-led slot commits, at the hybrid committees too; with self-reference no reliable block is censored; Reactive Mysticeti is an instance | `Scheme.SchemeReactive.toAsyncPace`, `Scheme.SchemeReactive.driftOn`, `Scheme.SchemeReactive.arrives`, `Scheme.SchemeReactive.reaches`, `Scheme.SchemeReactive.votes`, `Scheme.SchemeReactive.certifies`, `Scheme.live_of_reactiveLive`, `Scheme.leaderCommits_reactive`, `Scheme.includes_reactive`, `Scheme.ofReactiveM`, `Scheme.ReactiveRun.holds` *(Scheme/Helpers/Reactive, Scheme/Helpers/ReactiveMysticeti, Scheme/Reactive)* |
+| SC26 | the family run reactively, pacing at a quorum `q`: a reliable block reaches the leader block round by round, votes and certifies; that is the family support's precondition at any reliability, so a reliably-led slot commits, at the hybrid committees too; with self-reference no reliable block is censored; Reactive Mysticeti is an instance | `Scheme.SchemeReactive.toAsyncPace`, `Scheme.SchemeReactive.driftOn`, `Scheme.SchemeReactive.arrives`, `Scheme.SchemeReactive.toWaveFacts`, `Scheme.WaveFacts.reaches`, `Scheme.WaveFacts.votes`, `Scheme.WaveFacts.certifies`, `Scheme.live_of_reactiveLive`, `Scheme.leaderCommits_reactive`, `Scheme.includes_reactive`, `Scheme.ofReactiveM`, `Scheme.ReactiveRun.holds` *(Scheme/Helpers/Reactive, Scheme/Helpers/ReactiveMysticeti, Scheme/Reactive)* |
 | SC27 | the asynchronous rows on a validator's own view, under eventual delivery with no time bound: a uniform coin names a leader whose slot commits on every reliable validator's own view with probability at least `1/n` at one buffer round and `(q − f)/n` at two; every reliable block is held by every reliable validator from some time on, rounds are populated, and a safe leader's slot commits on every reliable validator's own view; windows commit and slots below a run are decided there; every timed run is an asynchronous one | `Scheme.AsyncPace.coin_eventuallyCommits`, `Scheme.AsyncPace.exists_time`, `Scheme.AsyncPace.delivered`, `Scheme.AsyncPace.reached`, `Scheme.AsyncPace.populated`, `Scheme.decided_of_safe_of_holds`, `Scheme.AsyncPace.decided_of_safe`, `Scheme.AsyncPace.commitsWithin`, `Scheme.AsyncPace.allDecidedBelow`, `Scheme.AsyncPace.ofPaceCore`, `Scheme.AsyncLocal.holds` *(Scheme/Helpers/AsyncPace, Scheme/AsyncLocal)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
@@ -13480,7 +13502,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 427 definitions and structures the report names, in
+The 429 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -14146,7 +14168,7 @@ def ExposedIn (U : BlockUniverse Validator BlockId Payload) (b : BlockId) (X : V
 
 ```lean
 def DoSValid (U : BlockUniverse Validator BlockId Payload) : Prop :=
-  ∀ b ∈ U.ids, ∀ i ∈ (U.block b).refs, ¬ ExposedIn U b (U.block i).creator
+  DoSValidOn U.block U.ids (ExposedIn U)
 ```
 
 **The DoS-protection condition** (`dos-equivocation-and-growth.md` §3): a block may not reference an author exposed in its own history. A predicate on the universe, not a field of `ValidWrt`, so results that need it take it as an extra hypothesis.
@@ -14178,8 +14200,8 @@ def View.ofAccepted (h : Accepted U A n) : View Validator BlockId Payload U wher
 *def, `DoS.Novelty.lean`*
 
 ```lean
-def StepNovelty (U : BlockUniverse Validator BlockId Payload) (κ' : ℕ) : Prop :=
-  ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) →
+def StepNovelty (U : BlockRecord Validator BlockId Payload P honest) (κ' : ℕ) : Prop :=
+  ∀ b ∈ U.ids, (U.block b).creator ∈ honest →
     ∀ p ∈ (U.block b).refs, (U.block p).creator = (U.block b).creator →
       (novelty U (history U p) b).card ≤ κ'
 ```
@@ -14204,8 +14226,8 @@ Everything `v` has retained by round `n`: the whole histories of everything it a
 
 ```lean
 def ByzBudget (D : Delivery U) (κ : ℕ) : Prop :=
-  ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ D.accepted v (n + 1),
-    (U.block b).creator ∉ (Correct : Finset Validator) →
+  ∀ v ∈ honest, ∀ n, ∀ b ∈ D.accepted v (n + 1),
+    (U.block b).creator ∉ honest →
     (novelty U (viewUpto D v n) b).card ≤ κ
 ```
 
@@ -14217,7 +14239,7 @@ The **analysis-side budget**: only the Byzantine clause. The weakest thing the t
 
 ```lean
 def UniformBudget (D : Delivery U) (τ : ℕ) : Prop :=
-  ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ D.accepted v (n + 1),
+  ∀ v ∈ honest, ∀ n, ∀ b ∈ D.accepted v (n + 1),
     (novelty U (viewUpto D v n) b).card ≤ τ
 ```
 
@@ -14229,7 +14251,7 @@ def UniformBudget (D : Delivery U) (τ : ℕ) : Prop :=
 
 ```lean
 def RefsAccepted (D : Delivery U) : Prop :=
-  ∀ w ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ U.ids,
+  ∀ w ∈ honest, ∀ n, ∀ b ∈ U.ids,
     (U.block b).creator = w → (U.block b).round = n + 1 →
     (U.block b).refs ⊆ D.accepted w n
 ```
@@ -14318,11 +14340,11 @@ A delivery for the truncation: round `m` of the window is round `G + m` of the o
 *def, `GC.Bootstrap.lean`*
 
 ```lean
-def joinView {R m t : ℕ} (hs : Synchronised U R)
-    (hw : w ∈ (Correct : Finset Validator)) (hcar : Populated U (m + 1))
-    (hpop : Populated U t) (hR : R ≤ m + 1) (hmt : m + 2 ≤ t) :
-    View Validator BlockId Payload (chop U G) where
-  ids := joinIds D w m t G
+def joinView [P.SelfParent] [P.Quorate q] {R m t : ℕ} (hT : q ≤ T.card)
+    (hq : Fintype.card Validator + f + 1 ≤ 2 * q) (hTh : T ⊆ honest) (hs : SynchronisedOn U T R)
+    (hw : w ∈ T) (hcar : PopulatedOn U T (m + 1))
+    (hpop : PopulatedOn U T t) (hR : R ≤ m + 1) (hmt : m + 2 ≤ t) : (chop U G).View where
+  ids := joinIds D w f m t G
   subset_ids := by
     intro i hi
     rcases Finset.mem_union.mp hi with h | h
@@ -14346,7 +14368,7 @@ def joinView {R m t : ℕ} (hs : Synchronised U R)
       rcases Nat.lt_or_ge G (U.block j).round with hlt | hge
       · exact Finset.mem_union_right _ (Finset.mem_filter.mpr ⟨hjv, hlt⟩)
       · exact Finset.mem_union_left _
-          (accepted_mem_base hs hw hjv (by omega) hcar hpop hR hmt)
+          (accepted_mem_base hT hq hTh hs hw hjv (by omega) hcar hpop hR hmt)
 ```
 
 **G12, the assembly.** Base plus window is a bona-fide view of the truncation. Closure is the whole content: a window reference above the cut is in the window (stores are reference-closed), and a window reference *at* the cut is a round-`G` block the peer accepted — which is exactly what G11 puts in the base. The base layer itself has no references to chase: `chop` made it the genesis layer.
@@ -14438,12 +14460,9 @@ structure ReactiveCore (U : BlockRecord Validator BlockId Payload P honest)
   /-- Time advances with rounds — the only lower bound a reactive
   schedule keeps, over the rounds `v` reached. -/
   built_lt : ∀ v ∈ T, ∀ n < top v, built v n < built v (n + 1)
-  /-- **The reactive ceiling.** A validator never waits past the
-  timeout; it may build any time before it. -/
-  deadline : ∀ v ∈ T, ∀ n < top v, built v (n + 1) ≤ built v n + timeout n
 ```
 
-**The reactive timing**, at any record: `PaceCore` with the ceiling and the round-advance clause in place of `ViewPace`'s full-timeout floor. What a reactive discipline's wait clauses are stated over.
+**The reactive timing**, at any record: `PaceCore` with the round-advance clause in place of `ViewPace`'s full-timeout floor. What a reactive discipline's wait clauses are stated over.
 
 #### `ReactivePace`
 
@@ -14521,10 +14540,11 @@ abbrev SkipMsg (U : BlockUniverse Validator BlockId Payload) :=
 
 ```lean
 def skipFill : BlockUniverse Validator BlockId Payload :=
-  BlockRecord.fill U sk.toGapData (sk.selfBlocks U.complete) (fun _ hk1 hk2 => sk.fillBlock_valid hk1 hk2)
+  BlockRecord.fill U sk.toGapData (sk.selfBlocks U.complete)
+    (fun _ hk1 hk2 => BlockRecord.selfBlock_valid ValidWrt.iff_validAt U sk hk1 hk2)
 ```
 
-**The denotation.** `U`, extended with one filled block per gap round; every old block looked up unchanged. The block record's fill under the self-referencing reading, with `fillBlock_valid` as the one obligation.
+**The denotation.** `U`, extended with one filled block per gap round; every old block looked up unchanged. The block record's fill under the self-referencing reading, its obligation discharged by `BlockRecord.selfBlock_valid`.
 
 #### `selfParent`
 
@@ -15459,9 +15479,6 @@ structure ReactiveS (U : BlockUniverse Validator BlockId Payload) (T : Finset Va
     (w : ℕ → ℕ) (waits : ℕ → Prop) extends PaceCore U T N where
   /-- Time advances with rounds, over the rounds `v` reached. -/
   built_lt : ∀ v ∈ T, ∀ n < top v, built v n < built v (n + 1)
-  /-- **The reactive ceiling.** A validator never waits past the timeout; it may build any time
-  before it. -/
-  deadline : ∀ v ∈ T, ∀ n < top v, built v (n + 1) ≤ built v n + timeout n
   /-- **The leader wait, at the rounds that carry it.** At the round above a reliable leader of
   a waiting round, any `T`-authored block either votes (the reactive exit), or its builder waited
   the full timeout and votes for any leader block it holds (the fallback). -/
@@ -15484,7 +15501,7 @@ structure ReactiveS (U : BlockUniverse Validator BlockId Payload) (T : Finset Va
           L ∈ (U.block b).refs → b ∈ (U.block c).refs)
 ```
 
-**Steelhead's reactive schedule** at the wavelength function `w`, the leader wait at the rounds `waits` names: the core's pace, the reactive ceiling, the leader wait at the round above a reliable leader of a waiting round, and the certificate wait at the wave of three. At two rounds above such a leader, any `T`-authored block either already certifies, or its builder waited the full timeout and references every reliable vote it holds. Above wave three the certificate clause says nothing: reachability carries the votes, so the discipline is the core's own.
+**Steelhead's reactive schedule** at the wavelength function `w`, the leader wait at the rounds `waits` names: the core's pace, the leader wait at the round above a reliable leader of a waiting round, and the certificate wait at the wave of three. At two rounds above such a leader, any `T`-authored block either already certifies, or its builder waited the full timeout and references every reliable vote it holds. Above wave three the certificate clause says nothing: reachability carries the votes, so the discipline is the core's own.
 
 #### `certProb`
 
@@ -18625,6 +18642,30 @@ class Quorate [DecidableEq Validator] (P : Validity Validator BlockId Payload)
 
 Non-genesis blocks reference `q` distinct creators, and `q` is positive, so a non-genesis block references something.
 
+#### `SelfParent`
+
+*class, `Common.BlockRecord.lean`*
+
+```lean
+class SelfParent (P : Validity Validator BlockId Payload) : Prop where
+  self_parent : ∀ (blk : BlockId → Block Validator BlockId Payload)
+    (b : Block Validator BlockId Payload), P blk b → Clause.selfParent blk b
+```
+
+Non-genesis blocks reference a block by their own author: the clause the novelty telescope and the retained store read.
+
+#### `DoSValidOn`
+
+*def, `Common.Exclusion.lean`*
+
+```lean
+def DoSValidOn (blk : BlockId → Block Validator BlockId Payload) (ids : Finset BlockId)
+    (Exp : BlockId → Validator → Prop) : Prop :=
+  ∀ b ∈ ids, ∀ i ∈ (blk b).refs, ¬ Exp b (blk i).creator
+```
+
+**DoS validity for an exposure `Exp`**: no block references an author it exposes.
+
 #### `commitSeq`
 
 *def, `Common.Ledger.lean`*
@@ -19384,7 +19425,7 @@ def fill (U : (HybridProperties.hybridRule (Validator := Validator)
     (HybridProperties.hybridRule (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) kt).Universe :=
   onRecord.fill U sk.toGapData (sk.selfBlocks U.val.complete)
-    (fun _ hk1 hk2 => sk.fillBlock_valid hk1 hk2) (honestNoEquiv_fill sk.toGapData _ _ U.property)
+    (fun _ hk1 hk2 => BlockRecord.selfBlock_valid ValidWrt.iff_validAt _ sk hk1 hk2) (honestNoEquiv_fill sk.toGapData _ _ U.property)
 ```
 
 **The fill, at Hybrid's carrier**: the core's self-referencing fill through `onRecord`, with `honestNoEquiv_fill` as the invariant.
@@ -19614,23 +19655,12 @@ def onRecord :
 
 **Nemo's carrier, on the record**: every map the identity.
 
-#### `Populated`
-
-*abbrev, `Network.Delivery.lean`*
-
-```lean
-abbrev Populated (U : BlockUniverse Validator BlockId Payload) (r : ℕ) : Prop :=
-  PopulatedOn U (Correct : Finset Validator) r
-```
-
-The all-of-`Correct` case, which is what L1 produces.
-
 #### `Delivery`
 
 *structure, `Network.Delivery.lean`*
 
 ```lean
-structure Delivery (U : BlockUniverse Validator BlockId Payload) where
+structure Delivery (U : BlockRecord Validator BlockId Payload P honest) where
   /-- What `v` held from round `n` when it built its round-`(n+1)` block. -/
   held : Validator → ℕ → Finset BlockId
   /-- Held ids are real blocks of the stated round — what keeps `Delivery`
@@ -19646,19 +19676,30 @@ structure Delivery (U : BlockUniverse Validator BlockId Payload) where
   one, because it cannot reference both. -/
   accepted_inj : ∀ v n, ∀ i ∈ accepted v n, ∀ j ∈ accepted v n,
     (U.block i).creator = (U.block j).creator → i = j
-  /-- A correct block is always accepted. It never conflicts with anything —
-  its author has only the one block for that round (T1) — so nothing is ever
-  given up by taking it, and L7 needs it. -/
-  accepts_correct : ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ a ∈ held v n,
-    (U.block a).creator ∈ (Correct : Finset Validator) → a ∈ accepted v n
-  /-- **The protocol rule.** A correct validator references everything it
+  /-- An honest block is always accepted by an honest validator. It never
+  conflicts with anything — its author has only the one block for that round
+  (T1) — so nothing is ever given up by taking it, and L7 needs it. -/
+  accepts_correct : ∀ v ∈ honest, ∀ n, ∀ a ∈ held v n,
+    (U.block a).creator ∈ honest → a ∈ accepted v n
+  /-- **The protocol rule.** An honest validator references everything it
   accepted. Implementable and observable — unlike `Synchronised` itself. -/
-  includes : ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ U.ids,
+  includes : ∀ v ∈ honest, ∀ n, ∀ b ∈ U.ids,
     (U.block b).creator = v → (U.block b).round = n + 1 →
     accepted v n ⊆ (U.block b).refs
 ```
 
 What each validator had in hand, one round at a time, and which of it it chose to build on. Two fields because delivery and policy are two things: a structure demanding a correct validator reference everything it `held` would be unsatisfiable the moment it holds both halves of an equivocation, since `distinct_creators` forbids referencing both (`dos-equivocation-and-growth.md` §4). `held` is not deduplicated, since `U` is every block some correct validator held.
+
+#### `Populated`
+
+*abbrev, `Network.Delivery.lean`*
+
+```lean
+abbrev Populated (U : BlockUniverse Validator BlockId Payload) (r : ℕ) : Prop :=
+  PopulatedOn U (Correct : Finset Validator) r
+```
+
+The all-of-`Correct` case, which is what L1 produces.
 
 #### `Synchronised`
 
@@ -19673,16 +19714,14 @@ The all-of-`Correct` case.
 
 #### `EventuallyDelivers`
 
-*def, `Network.Delivery.lean`*
+*abbrev, `Network.Delivery.lean`*
 
 ```lean
-def EventuallyDelivers (D : Delivery U) (R : ℕ) : Prop :=
-  ∀ n, R ≤ n → ∀ v ∈ (Correct : Finset Validator), ∀ a ∈ U.ids,
-    (U.block a).round = n → (U.block a).creator ∈ (Correct : Finset Validator) →
-    a ∈ D.held v n
+abbrev EventuallyDelivers (D : Delivery U) (R : ℕ) : Prop :=
+  EventuallyDeliversOn D (Correct : Finset Validator) R
 ```
 
-**The network assumption**: after `R`, correct blocks reach correct validators in time to be built on. This is eventual DAG synchrony proper — pure delivery, no protocol content.
+**The core's network assumption**: after `R`, correct blocks reach correct validators.
 
 #### `onRecord`
 
@@ -19785,10 +19824,10 @@ def Safe (R : DagRule Validator BlockId Payload) : Prop :=
 *def, `Properties.Arcs.Headline.lean`*
 
 ```lean
-def Lives : Prop := sp.Progresses rel ∧ sp.Includes rel
+def Lives (R₀ : ℕ) : Prop := sp.Progresses rel ∧ sp.Includes rel R₀
 ```
 
-**Liveness**: progress and inclusion.
+**Liveness**: progress, and inclusion from round `R₀`.
 
 #### `Stack`
 
@@ -20079,12 +20118,14 @@ The fault model comes in as a `Reliability`: which validators the count is about
 *def, `Properties.Optional.SelfParent.lean`*
 
 ```lean
-def SelfParent (R : DagRule Validator BlockId Payload) : Prop :=
-  ∀ (U : R.Universe) (b : BlockId), b ∈ R.ids U → 0 < (R.block U b).round →
+def SelfParent (R : DagRule Validator BlockId Payload) (rel : Reliability Validator) (R₀ : ℕ) :
+    Prop :=
+  ∀ (U : R.Universe) (b : BlockId), b ∈ R.ids U → (R.block U b).creator ∈ rel.correct →
+    R₀ < (R.block U b).round →
     ∃ p ∈ (R.block U b).refs, (R.block U p).creator = (R.block U b).creator
 ```
 
-**Every non-genesis block references its author's previous block.**
+**Every reliable author's block above round `R₀` references a block by its author.**
 
 #### `NoEquiv`
 
@@ -20765,7 +20806,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 634 theorems the body or Appendix A names, each
+The 635 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -22011,17 +22052,30 @@ theorem card_missingAt_le {b : BlockId} (hb : b ∈ U.ids) {δ : ℕ}
 
 **D25 (density).** A valid block's history contains a block by all but at most `f` of the correct validators at every round strictly below it.
 
+#### `card_historyAt_le`
+
+*theorem, `DoS.Pedigree.lean`*
+
+```lean
+theorem card_historyAt_le (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids) (k : ℕ) :
+    ((history U b).filter fun i => (U.block i).round = k).card
+      ≤ Fintype.card Validator + (Fintype.card Validator - 1) * F.f ^ F.f
+```
+
+**C1′ per round.** A DoS-valid history holds at most `n + (n−1)·f^f` blocks at one round: at most one for each unexposed author, and at most `(n−1)·f^(f−1)` for each of the at most `f` exposed ones.
+
 #### `card_history_le'`
 
 *theorem, `DoS.Pedigree.lean`*
 
 ```lean
-theorem card_history_le' (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids) :
-    (history U b).card
-      ≤ (Fintype.card Validator + (Fintype.card Validator - 1) * F.f ^ F.f) * ((U.block b).round + 1)
+theorem card_history_le' (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids) (lo : ℕ) :
+    ((history U b).filter fun i => lo ≤ (U.block i).round).card
+      ≤ (Fintype.card Validator + (Fintype.card Validator - 1) * F.f ^ F.f) *
+          ((U.block b).round + 1 - lo)
 ```
 
-**The tightened total.** `|H(b)| ≤ (3f+1 + 3f^(f+1))·(r+1)`: the unexposed authors contribute one chain each, the at-most-`f` exposed ones at most `3f·f^(f-1)` chains each. At `f = 1` this is `7(r+1)`, recovering the adoption theorem's constant exactly.
+**The tightened total, from any round.** The blocks of a DoS-valid history at round `lo` or above number at most `(n + (n−1)·f^f)·(r+1−lo)`; at `lo = 0` this is the whole history, `7(r+1)` at `f = 1`.
 
 #### `card_creators_accepted_of_eventuallyDelivers`
 
@@ -22036,28 +22090,13 @@ theorem card_creators_accepted_of_eventuallyDelivers {R : ℕ} (D : Delivery U)
 
 **Where the quorum comes from after `R`.** After `R`, a quorum of accepted creators is a consequence rather than a hypothesis: `EventuallyDelivers` and `accepts_correct` supply it from a populated round. Before `R` it is not, which is why L1 holds only from `R`.
 
-#### `mem_history_of_correct`
-
-*theorem, `DoS.Exclusion.lean`*
-
-```lean
-theorem mem_history_of_correct {R : ℕ} (hs : SynchronisedOn U (Correct : Finset Validator) R) :
-    ∀ d : ℕ, ∀ c ∈ U.ids, ∀ a ∈ U.ids,
-      (U.block c).creator ∈ (Correct : Finset Validator) →
-      (U.block a).creator ∈ (Correct : Finset Validator) →
-      R ≤ (U.block a).round → (U.block a).round + 1 + d = (U.block c).round →
-      a ∈ history U c
-```
-
-**The backbone lemma.** After `R`, correct histories contain the whole correct past.
-
 #### `card_history_le_of_stepNovelty`
 
 *theorem, `DoS.Novelty.lean`*
 
 ```lean
-theorem card_history_le_of_stepNovelty {κ' : ℕ} (hstep : StepNovelty U κ')
-    (hb : b ∈ U.ids) (hcorr : (U.block b).creator ∈ (Correct : Finset Validator)) :
+theorem card_history_le_of_stepNovelty [P.SelfParent] {κ' : ℕ} (hstep : StepNovelty U κ')
+    (hb : b ∈ U.ids) (hcorr : (U.block b).creator ∈ honest) :
     (history U b).card ≤ κ' * (U.block b).round + 1
 ```
 
@@ -22079,8 +22118,8 @@ Dropping a guard weakens nothing: the author-blind cap implies the Byzantine-sid
 *theorem, `DoS.Novelty.lean`*
 
 ```lean
-theorem card_novelty_le_viewGap_add_one {R : ℕ} (hED : EventuallyDelivers D R)
-    (hn : R ≤ n) (hv : v ∈ (Correct : Finset Validator)) (hb : b ∈ U.ids)
+theorem card_novelty_le_viewGap_add_one {R : ℕ} (hED : EventuallyDeliversOn D T R)
+    (hT : T ⊆ honest) (hn : R ≤ n) (hv : v ∈ T) (hb : b ∈ U.ids)
     (hrefs : (U.block b).refs ⊆ D.accepted w n) :
     (novelty U (viewUpto D v n) b).card ≤ (viewGap D v w n).card + 1
 ```
@@ -22092,7 +22131,7 @@ theorem card_novelty_le_viewGap_add_one {R : ℕ} (hED : EventuallyDelivers D R)
 *theorem, `DoS.Novelty.lean`*
 
 ```lean
-theorem viewUpto_subset_history (hw : w ∈ (Correct : Finset Validator))
+theorem viewUpto_subset_history [P.SelfParent] (hw : w ∈ honest)
     {b : BlockId} (hb : b ∈ U.ids) (hbc : (U.block b).creator = w)
     (hbr : (U.block b).round = n + 1) :
     viewUpto D w n ⊆ history U b
@@ -22105,12 +22144,11 @@ A correct validator's block carries everything its author ever accepted: `includ
 *theorem, `DoS.Novelty.lean`*
 
 ```lean
-theorem card_viewGap_succ_le {κ R : ℕ} (hbyz : ByzBudget D κ)
-    (hED : EventuallyDelivers D R) (hn : R ≤ n + 1)
-    (hv : v ∈ (Correct : Finset Validator))
-    (hw : w ∈ (Correct : Finset Validator)) {c : BlockId} (hc : c ∈ U.ids)
+theorem card_viewGap_succ_le [P.SelfParent] {κ R : ℕ} (hf : honestᶜ.card ≤ f)
+    (hbyz : ByzBudget D κ) (hED : EventuallyDeliversOn D T R) (hT : T ⊆ honest)
+    (hn : R ≤ n + 1) (hv : v ∈ T) (hw : w ∈ honest) {c : BlockId} (hc : c ∈ U.ids)
     (hcc : (U.block c).creator = w) (hcr : (U.block c).round = n + 1) :
-    (viewGap D v w (n + 1)).card ≤ F.f * κ
+    (viewGap D v w (n + 1)).card ≤ f * κ
 ```
 
 **C3′ — the gap is constant, not a drift.** After `R`, the divergence between two correct validators' views is at most one round of Byzantine budget: `w`'s round-`(n+1)` block hands `v` all of `viewUpto w n` at once, the remainder being `w`'s budgeted Byzantine frontier.
@@ -22120,11 +22158,11 @@ theorem card_viewGap_succ_le {κ R : ℕ} (hbyz : ByzBudget D κ)
 *theorem, `DoS.Novelty.lean`*
 
 ```lean
-theorem uniform_of_byzBudget {κ R : ℕ} (hbyz : ByzBudget D κ)
-    (hED : EventuallyDelivers D R) (hra : RefsAccepted D)
-    (hv : v ∈ (Correct : Finset Validator)) {n : ℕ} (hn : R ≤ n + 1)
+theorem uniform_of_byzBudget [P.SelfParent] {κ R : ℕ} (hf : honestᶜ.card ≤ f)
+    (hbyz : ByzBudget D κ) (hED : EventuallyDeliversOn D T R) (hT : T ⊆ honest)
+    (hra : RefsAccepted D) (hv : v ∈ T) {n : ℕ} (hn : R ≤ n + 1)
     (hb : b ∈ D.accepted v (n + 2)) :
-    (novelty U (viewUpto D v (n + 1)) b).card ≤ F.f * κ + 1
+    (novelty U (viewUpto D v (n + 1)) b).card ≤ f * κ + 1
 ```
 
 **The sandwich, converse direction.** After `R`, a `ByzBudget κ` schedule is uniformly budgeted at `f·κ + 1` with no creator guard: Byzantine acceptances by enforcement, correct ones by C3″.
@@ -22134,10 +22172,10 @@ theorem uniform_of_byzBudget {κ R : ℕ} (hbyz : ByzBudget D κ)
 *theorem, `DoS.Novelty.lean`*
 
 ```lean
-theorem card_byzPool_le {κ : ℕ} (hbyz : ByzBudget D κ) (hra : RefsAccepted D)
-    (n : ℕ) :
-    (byzPool D n).card ≤ (Correct : Finset Validator).card * F.f +
-      n * ((Correct : Finset Validator).card * (F.f * κ))
+theorem card_byzPool_le {κ : ℕ} (hf : honestᶜ.card ≤ f) (hbyz : ByzBudget D κ)
+    (hra : RefsAccepted D) (n : ℕ) :
+    (byzPool D n).card ≤ honest.card * f +
+      n * (honest.card * (f * κ))
 ```
 
 The pool, telescoped: linear from round 0.
@@ -22147,12 +22185,12 @@ The pool, telescoped: linear from round 0.
 *theorem, `DoS.Novelty.lean`*
 
 ```lean
-theorem card_viewUpto_le {κ : ℕ} (hbyz : ByzBudget D κ)
-    (hra : RefsAccepted D) (hv : v ∈ (Correct : Finset Validator)) (n : ℕ) :
+theorem card_viewUpto_le {κ : ℕ} (hf : honestᶜ.card ≤ f) (hbyz : ByzBudget D κ)
+    (hra : RefsAccepted D) (hv : v ∈ honest) (n : ℕ) :
     (viewUpto D v n).card ≤
-      (Correct : Finset Validator).card * (n + 1) +
-        ((Correct : Finset Validator).card * F.f +
-          n * ((Correct : Finset Validator).card * (F.f * κ)))
+      honest.card * (n + 1) +
+        (honest.card * f +
+          n * (honest.card * (f * κ)))
 ```
 
 **B4 — unconditional linear storage.** Under nothing but the enforceable budget and the reference discipline — no synchrony, no `R`, no delivery guarantee — every correct validator's retained view is linear in the round.
@@ -22162,15 +22200,15 @@ theorem card_viewUpto_le {κ : ℕ} (hbyz : ByzBudget D κ)
 *theorem, `DoS.Novelty.lean`*
 
 ```lean
-theorem dos_resistance {τ N : ℕ} {P : Finset Validator}
-    (hpop : ∀ r ≤ N, PopulatedOn U P r)
+theorem dos_resistance {τ N : ℕ} {Q : Finset Validator} (hf : honestᶜ.card ≤ f)
+    (hpop : ∀ r ≤ N, PopulatedOn U Q r)
     (hu : UniformBudget D τ) (hra : RefsAccepted D) :
-    (∀ r ≤ N, PopulatedOn U P r) ∧
-      ∀ v ∈ (Correct : Finset Validator), ∀ n,
+    (∀ r ≤ N, PopulatedOn U Q r) ∧
+      ∀ v ∈ honest, ∀ n,
         (viewUpto D v n).card ≤
-          (Correct : Finset Validator).card * (n + 1) +
-            ((Correct : Finset Validator).card * F.f +
-              n * ((Correct : Finset Validator).card * (F.f * τ)))
+          honest.card * (n + 1) +
+            (honest.card * f +
+              n * (honest.card * (f * τ)))
 ```
 
 **DoS resistance, from enforceable conditions only.** Liveness and linear storage from round 0 under full asynchrony.
@@ -22180,15 +22218,15 @@ theorem dos_resistance {τ N : ℕ} {P : Finset Validator}
 *theorem, `DoS.Novelty.lean`*
 
 ```lean
-theorem dos_resistance' {τ R N : ℕ} {P : Finset Validator}
-    (hpop : ∀ r ≤ N, PopulatedOn U P r)
-    (hED : EventuallyDelivers D R) (hu : UniformBudget D τ)
+theorem dos_resistance' [P.SelfParent] {τ R N : ℕ} {Q : Finset Validator}
+    (hf : honestᶜ.card ≤ f) (hpop : ∀ r ≤ N, PopulatedOn U Q r)
+    (hED : EventuallyDeliversOn D T R) (hT : T ⊆ honest) (hu : UniformBudget D τ)
     (hra : RefsAccepted D) :
-    (∀ r ≤ N, PopulatedOn U P r) ∧
-      ∀ v ∈ (Correct : Finset Validator), ∀ n, R + 1 ≤ n →
+    (∀ r ≤ N, PopulatedOn U Q r) ∧
+      ∀ v ∈ T, ∀ n, R + 1 ≤ n →
         (viewUpto D v n).card ≤ (viewUpto D v (R + 1)).card +
           (n - (R + 1)) *
-            ((Correct : Finset Validator).card * (F.f * τ + 1) + F.f * τ)
+            (honest.card * (f * τ + 1) + f * τ)
 ```
 
 The post-`R` incremental form of the headline: the same enforceable conduct, plus the network's `EventuallyDelivers`.
@@ -22269,8 +22307,8 @@ theorem refsAccepted_chopD (hra : RefsAccepted D) :
 *theorem, `GC.Window.lean`*
 
 ```lean
-theorem populated_chop {N : ℕ} (hpop : ∀ r ≤ N, Populated U r) (hG : G ≤ N) :
-    ∀ r ≤ N - G, Populated (chop U G) r
+theorem populated_chop {N : ℕ} {T : Finset Validator} (hpop : ∀ r ≤ N, PopulatedOn U T r)
+    (hG : G ≤ N) : ∀ r ≤ N - G, PopulatedOn (chop U G) T r
 ```
 
 **G5.** The truncated universe never stalls above the cut: a round-`r` block of `chop U G` is a round-`(G+r)` block of `U`, so this is the production hypothesis with its index shifted.
@@ -22280,54 +22318,67 @@ theorem populated_chop {N : ℕ} (hpop : ∀ r ≤ N, Populated U r) (hG : G ≤
 *theorem, `GC.Window.lean`*
 
 ```lean
-theorem card_retained_le {κ Λ t : ℕ} (hbyz : ByzBudget D κ)
-    (hra : RefsAccepted D) (hv : v ∈ (Correct : Finset Validator))
-    (hG : G ≤ t) (hΛ : t ≤ G + Λ) :
+theorem card_retained_le {κ Λ t f : ℕ} (hf : honestᶜ.card ≤ f) (hbyz : ByzBudget D κ)
+    (hra : RefsAccepted D) (hv : v ∈ honest) (hG : G ≤ t) (hΛ : t ≤ G + Λ) :
     ((viewUpto D v t).filter fun i => G ≤ (U.block i).round).card ≤
-      (Correct : Finset Validator).card * (Λ + 1) +
-        ((Correct : Finset Validator).card * F.f +
-          Λ * ((Correct : Finset Validator).card * (F.f * κ)))
+      honest.card * (Λ + 1) + (honest.card * f + Λ * (honest.card * (f * κ)))
 ```
 
 **G6.** A validator whose horizon `G` trails its round `t` by at most `Λ` retains a constant number of blocks, independent of `t`: the retained store is the truncated store (G14), which B4 bounds at window depth `t − G ≤ Λ`.
 
-#### `exists_correct_attester_of_mem_base`
+#### `mem_history_of_correct`
 
 *theorem, `GC.AttestedBase.lean`*
 
 ```lean
-theorem exists_correct_attester_of_mem_base (hy : y ∈ Base U t G) :
-    ∃ a ∈ U.ids, (U.block a).round = t ∧
-      (U.block a).creator ∈ (Correct : Finset Validator) ∧
-      y ∈ history U a
+theorem mem_history_of_correct [Fintype Validator] [P.Mechanised] {q : ℕ} [P.Quorate q]
+    {T : Finset Validator} (hT : q ≤ T.card) (hq : Fintype.card Validator < 2 * q) {R : ℕ}
+    (hs : SynchronisedOn U T R) :
+    ∀ d : ℕ, ∀ c ∈ U.ids, ∀ a ∈ U.ids,
+      (U.block c).creator ∈ T → (U.block a).creator ∈ T →
+      R ≤ (U.block a).round → (U.block a).round + 1 + d = (U.block c).round →
+      a ∈ history U c
 ```
 
-**G10, soundness.** Everything in the base has a correct attester — `f+1` authors always include one — and so lies in a correct cone. The adversary cannot smuggle fabrications into anyone's base.
+**The backbone lemma.** After `R`, at a record whose quorum `q` the set `T` holds, with `n < 2q`, the history of a block by a member of `T` holds every block by a member of `T` of every round from `R` below it.
+
+#### `exists_honest_attester_of_mem_base`
+
+*theorem, `GC.AttestedBase.lean`*
+
+```lean
+theorem exists_honest_attester_of_mem_base (hf : honestᶜ.card ≤ f) (hy : y ∈ Base U f t G) :
+    ∃ a ∈ U.ids, (U.block a).round = t ∧ (U.block a).creator ∈ honest ∧ y ∈ history U a
+```
+
+**G10, soundness.** With at most `f` validators outside the honest set, everything in the base has an honest attester, and so lies in an honest cone. The adversary cannot smuggle fabrications into anyone's base.
 
 #### `correct_mem_base`
 
 *theorem, `GC.AttestedBase.lean`*
 
 ```lean
-theorem correct_mem_base {R : ℕ} (hs : Synchronised U R) (hR : R ≤ G)
-    (hGt : G < t) (hpop : Populated U t) (hy : y ∈ U.ids)
-    (hyr : (U.block y).round = G)
-    (hyc : (U.block y).creator ∈ (Correct : Finset Validator)) :
-    y ∈ Base U t G
+theorem correct_mem_base [Fintype Validator] [P.Mechanised] {q : ℕ} [P.Quorate q]
+    {T : Finset Validator} (hT : q ≤ T.card) (hq : Fintype.card Validator + f + 1 ≤ 2 * q)
+    {R : ℕ} (hs : SynchronisedOn U T R) (hR : R ≤ G)
+    (hGt : G < t) (hpop : PopulatedOn U T t) (hy : y ∈ U.ids)
+    (hyr : (U.block y).round = G) (hyc : (U.block y).creator ∈ T) :
+    y ∈ Base U f t G
 ```
 
-**G10, completeness.** Post-`R`, every correct block of the layer is in every correct attestation (the backbone), so it clears the `f+1` bar in *every* sample — the shared correct layer `C` is in every base, and the adversary cannot filter it out.
+**G10, completeness.** Post-`R`, every reliable block of the layer is in every reliable attestation (the backbone), so it clears the `f+1` bar in *every* sample — the shared reliable layer is in every base, and the adversary cannot filter it out.
 
 #### `accepted_mem_base`
 
 *theorem, `GC.Bootstrap.lean`*
 
 ```lean
-theorem accepted_mem_base {R m t : ℕ} (hs : Synchronised U R)
-    (hv : v ∈ (Correct : Finset Validator)) (hy : y ∈ viewUpto D v m)
-    (hyr : (U.block y).round = G) (hcar : Populated U (m + 1))
-    (hpop : Populated U t) (hR : R ≤ m + 1) (hmt : m + 2 ≤ t) :
-    y ∈ Base U t G
+theorem accepted_mem_base [P.SelfParent] [P.Quorate q] {R m t : ℕ} (hT : q ≤ T.card)
+    (hq : Fintype.card Validator + f + 1 ≤ 2 * q) (hTh : T ⊆ honest) (hs : SynchronisedOn U T R)
+    (hv : v ∈ T) (hy : y ∈ viewUpto D v m)
+    (hyr : (U.block y).round = G) (hcar : PopulatedOn U T (m + 1))
+    (hpop : PopulatedOn U T t) (hR : R ≤ m + 1) (hmt : m + 2 ≤ t) :
+    y ∈ Base U f t G
 ```
 
 **G11.** Every round-`G` block a correct validator accepted into its window by `m` — Byzantine-authored included — is in the base attested at any `t ≥ m + 2`. Acceptance → the keeper's round-`(m+1)` block carries it (`viewUpto_subset_history`) → the backbone hands that block to every correct round-`t` cone → every correct author attests it, clearing `f + 1` in **every** sample. Nothing obtainable is ever filtered out.
@@ -22337,14 +22388,11 @@ theorem accepted_mem_base {R m t : ℕ} (hs : Synchronised U R)
 *theorem, `GC.Bootstrap.lean`*
 
 ```lean
-theorem card_joinIds_le {κ Λ R m t : ℕ} (hbyz : ByzBudget D κ)
-    (hra : RefsAccepted D) (hED : EventuallyDelivers D R)
-    (hw : w ∈ (Correct : Finset Validator)) (hR : R ≤ t) (hmt : m ≤ t)
-    (hG : G ≤ t) (hΛ : t ≤ G + Λ) :
-    (joinIds D w m t G).card ≤
-      (Correct : Finset Validator).card * (Λ + 1) +
-        ((Correct : Finset Validator).card * F.f +
-          Λ * ((Correct : Finset Validator).card * (F.f * κ)))
+theorem card_joinIds_le {κ Λ R m t : ℕ} (hf : honestᶜ.card ≤ f) (hbyz : ByzBudget D κ)
+    (hra : RefsAccepted D) (hED : EventuallyDeliversOn D T R) (hTh : T ⊆ honest)
+    (hw : w ∈ T) (hR : R ≤ t) (hmt : m ≤ t) (hG : G ≤ t) (hΛ : t ≤ G + Λ) :
+    (joinIds D w f m t G).card ≤
+      honest.card * (Λ + 1) + (honest.card * f + Λ * (honest.card * (f * κ)))
 ```
 
 **G6b.** The joiner's entire fetch is inside one correct peer's retained store, hence bounded by the G6 constant: sync cost, not just storage, is constant at lag `Λ`.
@@ -22354,35 +22402,36 @@ theorem card_joinIds_le {κ Λ R m t : ℕ} (hbyz : ByzBudget D κ)
 *theorem, `GC.Bootstrap.lean`*
 
 ```lean
-theorem bootstrap_agree {R : Properties.DagRule Validator BlockId Payload}
-    (c : R.OnRecord ValidWrt (Correct : Finset Validator)
-      (BlockRecord.Any (P := ValidWrt) (honest := (Correct : Finset Validator))))
+theorem bootstrap_agree [P.SelfParent] [P.Quorate q] {R : Properties.DagRule Validator BlockId Payload}
+    {I : BlockRecord Validator BlockId Payload P honest → Prop} [BlockRecord.Invariant.Chops I]
+    (c : R.OnRecord P honest I) (hI : I U)
     (ha : Properties.Agree R) (hb : Properties.Banded R)
     [S : Slots Validator] {d : ℕ} (hd : G ≤ S.slotRound d)
-    {R' m t : ℕ} (hs : Synchronised U R') (hw : w ∈ (Correct : Finset Validator))
-    (hcar : Populated U (m + 1)) (hpop : Populated U t) (hR : R' ≤ m + 1) (hmt : m + 2 ≤ t)
-    {V : R.View (c.ofRec U True.intro)} {k : ℕ} {jv fv : Option BlockId}
+    {R' m t : ℕ} (hT : q ≤ T.card) (hq : Fintype.card Validator + f + 1 ≤ 2 * q)
+    (hTh : T ⊆ honest) (hs : SynchronisedOn U T R') (hw : w ∈ T)
+    (hcar : PopulatedOn U T (m + 1)) (hpop : PopulatedOn U T t) (hR : R' ≤ m + 1)
+    (hmt : m + 2 ≤ t)
+    {V : R.View (c.ofRec U hI)} {k : ℕ} {jv fv : Option BlockId}
     (hJ : R.Decided (S.chop G d hd)
-      (c.chop_ofRec U True.intro ▸
-        c.ofView (h := True.intro) (joinView (D := D) (G := G) hs hw hcar hpop hR hmt)) k jv)
+      (c.chop_ofRec U hI ▸
+        c.ofView (h := BlockRecord.Invariant.Chops.chop G hI)
+          (joinView (D := D) (G := G) hT hq hTh hs hw hcar hpop hR hmt)) k jv)
     (hV : R.Decided S V (d + k) fv) : jv = fv
 ```
 
-**G12 (bootstrap safety).** A joiner that assembles its view from the attested base and a correct peer's window, and runs the rule on the truncation, never conflicts with any full-history validator on any slot. The composition *is* the proof: `joinView` is a view of `chop U G`, and cross-cut agreement never asked whose view it was. Stated for any rule whose universes are the block universes — the round trip of its carrier is what reads the joiner's view, built on the record, as the rule's.
+**G12 (bootstrap safety).** A joiner that assembles its view from the attested base and a correct peer's window, and runs the rule on the truncation, never conflicts with any full-history validator on any slot. The composition *is* the proof: `joinView` is a view of `chop U G`, and cross-cut agreement never asked whose view it was. Stated for any rule with a carrier on the records of the invariant `I`, which survives the cut — the round trip of the carrier is what reads the joiner's view, built on the record, as the rule's.
 
 #### `card_serve_le`
 
 *theorem, `GC.Bootstrap.lean`*
 
 ```lean
-theorem card_serve_le {κ Λ n : ℕ} (hbyz : ByzBudget D κ)
-    (hra : RefsAccepted D) (hw : w ∈ (Correct : Finset Validator))
+theorem card_serve_le {κ Λ n : ℕ} (hf : honestᶜ.card ≤ f) (hbyz : ByzBudget D κ)
+    (hra : RefsAccepted D) (hw : w ∈ honest)
     {b : BlockId} (hb : b ∈ U.ids) (hbc : (U.block b).creator = w)
     (hbr : (U.block b).round = n + 1) (hG : G ≤ n) (hΛ : n ≤ G + Λ) :
     (history (chop U G) b).card ≤
-      ((Correct : Finset Validator).card * (Λ + 1) +
-        ((Correct : Finset Validator).card * F.f +
-          Λ * ((Correct : Finset Validator).card * (F.f * κ)))) + 1
+      (honest.card * (Λ + 1) + (honest.card * f + Λ * (honest.card * (f * κ)))) + 1
 ```
 
 **G7, priced.** Serving cost is the G6 constant plus one.
@@ -22403,10 +22452,9 @@ theorem chop_chop {G₁ G₂ : ℕ} (hG : G₁ ≤ G₂) :
 *theorem, `GC.Horizon.lean`*
 
 ```lean
-theorem viewUpto_subset_viewUpto_succ {R m : ℕ}
-    (hED : EventuallyDelivers D R) (hcar : Populated U (m + 1))
-    (hv : v ∈ (Correct : Finset Validator))
-    (hw : w ∈ (Correct : Finset Validator)) (hR : R ≤ m + 1) :
+theorem viewUpto_subset_viewUpto_succ [P.SelfParent] {R m : ℕ}
+    (hED : EventuallyDeliversOn D T R) (hT : T ⊆ honest) (hcar : PopulatedOn U T (m + 1))
+    (hv : v ∈ T) (hw : w ∈ T) (hR : R ≤ m + 1) :
     viewUpto D v m ⊆ viewUpto D w (m + 1)
 ```
 
@@ -22417,10 +22465,9 @@ theorem viewUpto_subset_viewUpto_succ {R m : ℕ}
 *theorem, `GC.Horizon.lean`*
 
 ```lean
-theorem pruned_subset_peer_store {R m : ℕ}
-    (hED : EventuallyDelivers D R) (hcar : Populated U (m + 1))
-    (hv : v ∈ (Correct : Finset Validator))
-    (hw : w ∈ (Correct : Finset Validator)) (hR : R ≤ m + 1) :
+theorem pruned_subset_peer_store [P.SelfParent] {R m : ℕ}
+    (hED : EventuallyDeliversOn D T R) (hT : T ⊆ honest) (hcar : PopulatedOn U T (m + 1))
+    (hv : v ∈ T) (hw : w ∈ T) (hR : R ≤ m + 1) :
     (viewUpto D v m).filter (fun i => (U.block i).round < G) ⊆
       viewUpto D w (m + 1)
 ```
@@ -22691,7 +22738,7 @@ theorem no_timeout_of_fast {δ : ℕ}
       < rc.built v (S.slotRound k) + rc.timeout (S.slotRound k)
 ```
 
-**The timeout never fires.** When delivery, drift and processing together undercut the timeout, every reliable validator builds strictly before its deadline — the fallback branch of `vote_or_wait` is never taken, and consensus proceeds at network speed.
+**The timeout never fires.** When delivery, drift and processing together undercut the timeout, every reliable validator builds strictly before its timeout expires — the fallback branch of `vote_or_wait` is never taken, and consensus proceeds at network speed.
 
 #### `decided`
 
@@ -22724,18 +22771,6 @@ theorem hB1uniq_of_correct {v1 : Validator} {B1 : BlockId}
 ```
 
 **The boundary condition from correctness.** For a `v1` outside the Byzantine set, non-equivocation pins its round-`r0` block to `B1` — how a `SkipMsg` is built here, and what `hB1uniq` generalises for a crash-prone `v1` in the hybrid model.
-
-#### `fillBlock_valid`
-
-*theorem, `SafeSkip.Basic.lean`*
-
-```lean
-theorem fillBlock_valid {k : ℕ} (hk1 : sk.r0 < k) (hk2 : k ≤ sk.r) :
-    ValidWrt (fun b => if b ∈ U.ids then U.block b else sk.fillBlock (sk.idx b))
-      (sk.fillBlock k)
-```
-
-**The filled block is valid** under the extended block map: the copied references sit one round below (P1), `v1` appears among the authors exactly once (by `hB1uniq` at the boundary), the reference quorum only grows, and the added self reference is P3′.
 
 #### `reaches_fill_old`
 
@@ -23816,8 +23851,9 @@ theorem votes {R k : ℕ} {L : BlockId}
 *theorem, `Steelhead.Properties.lean`*
 
 ```lean
-theorem selfParent (w : ℕ → ℕ) : SelfParent (steelheadRule (Validator := Validator)
-    (BlockId := BlockId) (Payload := Payload) w)
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} (w : ℕ → ℕ) :
+    SelfParent (steelheadRule (Validator := Validator)
+    (BlockId := BlockId) (Payload := Payload) w) rel R₀
 ```
 
 **P3′ at the carrier.**
@@ -24181,8 +24217,9 @@ theorem holds : Statement
 *theorem, `AsyncBlueBottle.Carrier.lean`*
 
 ```lean
-theorem selfParent : SelfParent (asyncBlueBottleRule (Validator := Validator)
-    (BlockId := BlockId) (Payload := Payload))
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} :
+    SelfParent (asyncBlueBottleRule (Validator := Validator)
+    (BlockId := BlockId) (Payload := Payload)) rel R₀
 ```
 
 **P3′ at the carrier.**
@@ -26176,8 +26213,9 @@ theorem indirect : Indirect
 *theorem, `Bluestreak.Carrier.lean`*
 
 ```lean
-theorem selfParent : SelfParent (bluestreakRule (Validator := Validator) (BlockId := BlockId)
-    (Payload := Payload))
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} :
+    SelfParent (bluestreakRule (Validator := Validator) (BlockId := BlockId)
+    (Payload := Payload)) rel R₀
 ```
 
 **Every non-genesis block references a block of its own author**: the self-parent clause of Bluestreak's validity, which is what the sparse chain is.
@@ -26808,6 +26846,18 @@ theorem Mechanised.of_iff {Q : Validity Validator BlockId Payload} [Q.Mechanised
 
 The obligations transfer along an equivalence of predicates.
 
+#### `self_parent`
+
+*theorem, `Common.BlockRecord.lean`*
+
+```lean
+theorem self_parent [P.SelfParent] {i : BlockId} (hi : i ∈ U.ids)
+    (hround : 0 < (U.block i).round) :
+    ∃ j ∈ (U.block i).refs, (U.block j).creator = (U.block i).creator
+```
+
+A non-genesis block references a block by its own author.
+
 #### `distinct_creators`
 
 *theorem, `Common.BlockRecord.lean`*
@@ -27278,8 +27328,9 @@ theorem agreement_of_commits [LinearOrder BlockId] {V V' : D.View}
 *theorem, `Hybrid.Carrier.lean`*
 
 ```lean
-theorem selfParent (k : ℕ) : SelfParent (hybridRule (Validator := Validator)
-    (BlockId := BlockId) (Payload := Payload) k)
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} (k : ℕ) :
+    SelfParent (hybridRule (Validator := Validator)
+    (BlockId := BlockId) (Payload := Payload) k) rel R₀
 ```
 
 **P3′ at the carrier.**
@@ -27506,8 +27557,9 @@ theorem stack_core (sk : SkipMsg U) (hd : G ≤ S.slotRound d) :
 *theorem, `MahiMahi.Carrier.lean`*
 
 ```lean
-theorem selfParent (w : ℕ) : SelfParent (mahiMahiRule (Validator := Validator)
-    (BlockId := BlockId) (Payload := Payload) w)
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} (w : ℕ) :
+    SelfParent (mahiMahiRule (Validator := Validator)
+    (BlockId := BlockId) (Payload := Payload) w) rel R₀
 ```
 
 **P3′ at the carrier.**
@@ -27590,8 +27642,9 @@ theorem safety (hw : 2 ≤ w) : Properties.Safe (mahiMahiRule (Validator := Vali
 *theorem, `Mysticeti.Properties.lean`*
 
 ```lean
-theorem selfParent : SelfParent (mysticetiRule (Validator := Validator) (BlockId := BlockId)
-    (Payload := Payload))
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} :
+    SelfParent (mysticetiRule (Validator := Validator) (BlockId := BlockId)
+    (Payload := Payload)) rel R₀
 ```
 
 **P3′ at the carrier**: every non-genesis block references its author's previous block.
@@ -27871,20 +27924,21 @@ theorem progress (hn : 0 < Fintype.card Validator) :
 *theorem, `Network.Delivery.lean`*
 
 ```lean
-theorem card_authorsAt_of_lt {r n : ℕ} (hn : n < r) {i : BlockId}
-    (hi : i ∈ U.ids) (hir : (U.block i).round = r) :
-    quorumCard Validator ≤ (authorsAt U n).card
+theorem card_authorsAt_of_lt [P.Mechanised] {q : ℕ} [P.Quorate q] {r n : ℕ} (hn : n < r)
+    {i : BlockId} (hi : i ∈ U.ids) (hir : (U.block i).round = r) :
+    q ≤ (authorsAt U n).card
 ```
 
-**L0 — the DAG is dense below its frontier.** If any block exists at round `r`, every round `n < r` has at least `2f+1` distinct authors: downward induction on the gap `r - n`, generalised over `n` so the step can re-enter at `n+1`.
+**L0 — the DAG is dense below its frontier.** If any block exists at round `r`, every round `n < r` has at least `q` distinct authors: downward induction on the gap `r - n`, generalised over `n` so the step can re-enter at `n+1`.
 
 #### `selfParent`
 
 *theorem, `Odontoceti.Carrier.lean`*
 
 ```lean
-theorem selfParent : SelfParent (odontocetiRule (Validator := Validator) (BlockId := BlockId)
-    (Payload := Payload))
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} :
+    SelfParent (odontocetiRule (Validator := Validator) (BlockId := BlockId)
+    (Payload := Payload)) rel R₀
 ```
 
 **P3′ at the carrier.**
@@ -28152,12 +28206,12 @@ theorem ledger_coverage (hq : Quorate R rel) (hcc : CommitsCandidate R)
 *theorem, `Properties.Arcs.Quality.lean`*
 
 ```lean
-theorem mem_history_of_decided_commit (hsp : SelfParent R) (hne : NoEquiv R rel)
+theorem mem_history_of_decided_commit (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel)
     (hcc : CommitsCandidate R)
     (hdec : R.Decided S V k (some L))
     (hLc : (R.block U L).creator ∈ rel.correct)
     (hb : b ∈ R.ids U) (hbc : (R.block U b).creator = (R.block U L).creator)
-    (hle : (R.block U b).round ≤ (R.block U L).round) :
+    (hle : (R.block U b).round ≤ (R.block U L).round) (h₀ : R₀ ≤ (R.block U b).round) :
     b ∈ historyFrom (R.block U) L
 ```
 
@@ -28171,10 +28225,10 @@ theorem mem_history_of_decided_commit (hsp : SelfParent R) (hne : NoEquiv R rel)
 theorem committed_of_correct_block
     {Live : Slots Validator → ∀ {U : R.Universe}, R.View U → Finset Validator →
       ℕ → ℕ → Prop}
-    (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
     (hlc : LeaderCommits R Live) (S : Slots Validator) {T : Finset Validator}
     (hT : T ⊆ rel.correct) (fair : ∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v)
-    (m : ℕ) {v : Validator} (hv : v ∈ T) :
+    (m : ℕ) (hm₀ : R₀ ≤ m) {v : Validator} (hv : v ∈ T) :
     ∃ k', m ≤ S.slotRound k' ∧ S.leader k' = v ∧
       ∀ (U : R.Universe) (V : R.View U), Live S V T k' (k' + 1) →
         ∃ L, R.Decided S V k' (some L) ∧
@@ -28194,10 +28248,10 @@ theorem committed_of_correct_block
 theorem chain_quality
     {Live : Slots Validator → ∀ {U : R.Universe}, R.View U → Finset Validator →
       ℕ → ℕ → Prop}
-    (hq : Quorate R rel) (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hq : Quorate R rel) (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
     (hlc : LeaderCommits R Live) (hhalf : 2 * rel.slack ≤ rel.correct.card)
     (S : Slots Validator) {T : Finset Validator} (hT : T ⊆ rel.correct)
-    (fair : ∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v) (m : ℕ) :
+    (fair : ∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v) (m : ℕ) (hm₀ : R₀ ≤ m) :
     (∀ (U : R.Universe) (V : R.View U) (k : ℕ) (L : BlockId) (δ : ℕ),
         R.Decided S V k (some L) → δ < (R.block U L).round →
         rel.correct.card ≤ 2 * (coveredAt R rel U L δ).card) ∧
@@ -28218,9 +28272,9 @@ theorem chain_quality
 
 ```lean
 theorem committed_of_correct_block_within
-    (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
     (hlc : LeaderCommits R Live) (hT : T ⊆ rel.correct)
-    (fair : FairToEachWithin T w) (m : ℕ) {v : Validator} (hv : v ∈ T) :
+    (fair : FairToEachWithin T w) (m : ℕ) (hm₀ : R₀ ≤ m) {v : Validator} (hv : v ∈ T) :
     ∃ k', slotAt Validator m ≤ k' ∧ k' < slotAt Validator m + w ∧
       m ≤ S.slotRound k' ∧ S.leader k' = v ∧
       ∀ (U : R.Universe) (V : R.View U), Live S V T k' (k' + 1) →
@@ -28240,10 +28294,10 @@ theorem committed_of_correct_block_within
 
 ```lean
 theorem committed_of_correct_block_by_round
-    (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
     (hlc : LeaderCommits R Live) (hT : T ⊆ rel.correct)
     (fair : FairToEachWithin T w) (hs : BoundedSpacing (Validator := Validator) s)
-    (m : ℕ) {v : Validator} (hv : v ∈ T) :
+    (m : ℕ) (hm₀ : R₀ ≤ m) {v : Validator} (hv : v ∈ T) :
     ∃ k', m ≤ S.slotRound k' ∧
       S.slotRound k' ≤ S.slotRound (slotAt Validator m) + s * w ∧
       S.leader k' = v ∧
@@ -28489,15 +28543,15 @@ theorem LocalTruncate.of_banded (h : Banded R) : LocalTruncate R
 *theorem, `Properties.Optional.SelfParent.lean`*
 
 ```lean
-theorem SelfParent.reaches_of_creator (hsp : SelfParent R) {rel : Reliability Validator}
-    (hne : NoEquiv R rel) {U : R.Universe} {b c : BlockId}
+theorem SelfParent.reaches_of_creator {rel : Reliability Validator} {R₀ : ℕ}
+    (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel) {U : R.Universe} {b c : BlockId}
     (hb : b ∈ R.ids U) (hc : c ∈ R.ids U) (hbc : (R.block U b).creator ∈ rel.correct)
     (hcc : (R.block U c).creator = (R.block U b).creator)
-    (hle : (R.block U b).round ≤ (R.block U c).round) :
+    (hle : (R.block U b).round ≤ (R.block U c).round) (h₀ : R₀ ≤ (R.block U b).round) :
     ReachesFrom (R.block U) c b
 ```
 
-**A reliable author's block reaches every earlier block of that author**: walk the self-parent chain down to the earlier block's round, where non-equivocation says the chain has arrived.
+**A reliable author's block reaches every earlier block of that author** at or above `R₀`: walk the self-parent chain down to the earlier block's round, where non-equivocation says the chain has arrived.
 
 #### `rebases_chop`
 
@@ -28663,8 +28717,7 @@ A vote, across a band.
 *theorem, `Scheme.Helpers.Reactive.lean`*
 
 ```lean
-theorem votes (hw : 2 ≤ p.waveLength) (hTh : T ⊆ honest) (hq : q ≤ T.card)
-    (hgst : rs.gst ≤ R) (hto : ∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) {k : ℕ}
+theorem votes (hw : 2 ≤ p.waveLength) (hTh : T ⊆ honest) {k : ℕ}
     {L : BlockId} (hR : R ≤ S.slotRound k) (hN : S.slotRound k + p.voteOffset ≤ N)
     (hlead : S.leader k ∈ T) (hL : IsLeaderBlock U k L) :
     ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
@@ -28754,8 +28807,8 @@ theorem skipsUnsupported (hv : p.voteOffset = 1) :
 *theorem, `Scheme.Properties.lean`*
 
 ```lean
-theorem selfParent (hP : ∀ blk b, P blk b → Clause.selfParent blk b) :
-    SelfParent (schemeRule p σ)
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} (hP : ∀ blk b, P blk b → Clause.selfParent blk b) :
+    SelfParent (schemeRule p σ) rel R₀
 ```
 
 **Every block references its author's previous block**, on records whose validity asks it.

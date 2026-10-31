@@ -31,6 +31,17 @@ class Faults (Validator : Type*) [Fintype Validator] [DecidableEq Validator] whe
   card_byzantine : byzantine.card ≤ f
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
+
+/-- **More than `f` validators include one of `H`**, when at most `f` lie
+outside it. -/
+theorem exists_mem_of_card {H : Finset Validator} {f : ℕ} (hf : Hᶜ.card ≤ f)
+    {S : Finset Validator} (h : f + 1 ≤ S.card) : ∃ v ∈ S, v ∈ H := by
+  by_contra hcon
+  push Not at hcon
+  have hsub : S ⊆ Hᶜ := fun v hv => Finset.mem_compl.mpr (hcon v hv)
+  have := Finset.card_le_card hsub
+  omega
+
 variable [F : Faults Validator]
 
 /-- The quorum size `n − f`. Notation rather than a definition: the term
@@ -91,16 +102,15 @@ theorem two_f_add_one_le_card_correct :
   have := F.card_validators
   omega
 
+/-- The validators outside `Correct` are the Byzantine ones: at most `f`. -/
+theorem card_compl_correct_le : (Correct : Finset Validator)ᶜ.card ≤ F.f := by
+  rw [Correct, compl_compl]; exact F.card_byzantine
+
 /-- Any set of more than `f` validators contains a correct one, since the
 Byzantine validators number at most `f`. -/
 theorem exists_correct_of_card {S : Finset Validator} (h : F.f + 1 ≤ S.card) :
-    ∃ v ∈ S, v ∈ (Correct : Finset Validator) := by
-  by_contra hcon
-  push Not at hcon
-  have hsub : S ⊆ F.byzantine := fun v hv => by simpa using hcon v hv
-  have := Finset.card_le_card hsub
-  have := F.card_byzantine
-  omega
+    ∃ v ∈ S, v ∈ (Correct : Finset Validator) :=
+  exists_mem_of_card card_compl_correct_le h
 
 /-- Byzantine validators can absorb at most `f` of any set: removing the
 correct members of `S` leaves nothing bigger than the Byzantine set.
@@ -124,10 +134,6 @@ theorem card_inter_correct_of_quorum {S : Finset Validator}
   have := F.card_byzantine
   have := F.card_validators
   omega
-
-/-- The validators outside `Correct` are the Byzantine ones: at most `f`. -/
-theorem card_compl_correct_le : (Correct : Finset Validator)ᶜ.card ≤ F.f := by
-  rw [Correct, compl_compl]; exact F.card_byzantine
 
 /-- **T0 (cardinality half).** Two quorums overlap in at least `f+1`
 validators: `(n−f) + (n−f) − n = n − 2f ≥ f+1`. -/

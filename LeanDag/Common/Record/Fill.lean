@@ -11,8 +11,9 @@ the new ones is the one thing a reading owes.
 
 `copyFill` discharges that obligation for any predicate that does not
 read the author (`CopyStable`): the copied block is the donor's, valid
-by the donor's validity. The core's self-referencing fill discharges it
-in `SafeSkip/Basic.lean`.
+by the donor's validity. `selfBlock_valid` discharges it for the
+self-referencing fill at any predicate equivalent to the family with
+distinct creators and the self-parent clause, at any quorum (L0).
 -/
 
 namespace LeanDag
@@ -137,6 +138,82 @@ def View.liftCopy (V : U.View) : (copyFill U sk).View :=
 @[simp] theorem View.liftCopy_ids (V : U.View) : (View.liftCopy (sk := sk) V).ids = V.ids := rfl
 
 end Copy
+
+/-! ## The self-referencing fill -/
+
+section Self
+
+variable [DecidableEq Validator] {q : ℕ} {sk : SkipData U.ids U.block}
+
+/-- **L0: the self-referencing filled block is valid** at any predicate
+equivalent to the family at `q` with distinct creators and the
+self-parent clause: the copied references sit one round below, `v1`
+appears among their authors only as `B1` (by `hB1uniq` at the boundary
+and the crash above it), the authors only grow, and the added self
+reference is the self-parent. -/
+theorem selfBlock_valid
+    (hP : ∀ blk b, P blk b ↔ ValidAt q (Clause.distinct.and Clause.selfParent) blk b)
+    (U : BlockRecord Validator BlockId Payload P honest) (sk : SkipData U.ids U.block) {k : ℕ}
+    (hk1 : sk.r0 < k) (hk2 : k ≤ sk.r) :
+    P (sk.fillMap (sk.selfBlocks U.complete)) (sk.fillBlock k) := by
+  rw [hP]
+  have hR0 : sk.r0 = (U.block sk.B1).round := rfl
+  have hk0 : (U.block sk.B1).round ≤ k := by omega
+  have hlr := sk.hline_round k hk0 hk2
+  have hlm := sk.hline_mem k hk0 hk2
+  have hlv := (hP _ _).mp (U.valid _ hlm)
+  -- the self reference is an old id at round `k − 1` with creator `v1`
+  have hprev_round : (sk.fillMap (sk.selfBlocks U.complete) (sk.prev k)).round = k - 1 := by
+    by_cases hb : k = sk.r0 + 1
+    · simp only [GapData.prev, if_pos hb, GapData.fillMap_old sk.hB1]
+      omega
+    · simp only [GapData.prev, if_neg hb, GapData.fillMap_fresh]
+      rfl
+  have hprev_creator : (sk.fillMap (sk.selfBlocks U.complete) (sk.prev k)).creator = sk.v1 := by
+    by_cases hb : k = sk.r0 + 1
+    · simp only [GapData.prev, if_pos hb, GapData.fillMap_old sk.hB1]
+      exact sk.hB1c
+    · simp only [GapData.prev, if_neg hb, GapData.fillMap_fresh]
+      rfl
+  -- no copied reference is `v1`-authored, except possibly the anchor itself
+  have hno_v1 : ∀ j ∈ (U.block (sk.line k)).refs,
+      (U.block j).creator = sk.v1 → j = sk.prev k := by
+    intro j hj hjc
+    have hjo := U.complete _ hlm j hj
+    have hjr : (U.block j).round + 1 = k := by rw [hlv.predecessor j hj, hlr]
+    by_cases hb : k = sk.r0 + 1
+    · simp only [GapData.prev, if_pos hb]
+      exact sk.hB1uniq j hjo hjc (by omega)
+    · exact (sk.hgap j hjo hjc (by omega) (by omega)).elim
+  have hold : ∀ j ∈ (U.block (sk.line k)).refs,
+      sk.fillMap (sk.selfBlocks U.complete) j = U.block j :=
+    fun j hj => GapData.fillMap_old (U.complete _ hlm j hj)
+  refine ⟨?_, ?_, ⟨?_, ?_⟩⟩
+  · intro j hj
+    simp only [SkipData.fillBlock, Finset.mem_insert] at hj
+    rcases hj with rfl | hj
+    · rw [hprev_round]; show k - 1 + 1 = k; omega
+    · rw [hold j hj, hlv.predecessor j hj]
+      exact hlr
+  · intro h0
+    refine le_trans (hlv.quorum (by rw [hlr]; exact h0)) (Finset.card_le_card ?_)
+    intro c hc
+    obtain ⟨j, hj, hjc⟩ := Finset.mem_image.mp hc
+    exact Finset.mem_image.mpr ⟨j, Finset.mem_insert_of_mem hj, by rw [hold j hj]; exact hjc⟩
+  · intro j hj l hl hjl
+    simp only [SkipData.fillBlock, Finset.mem_insert] at hj hl
+    rcases hj with rfl | hj <;> rcases hl with rfl | hl
+    · rfl
+    · rw [hprev_creator, hold l hl] at hjl
+      exact (hno_v1 l hl hjl.symm).symm
+    · rw [hprev_creator, hold j hj] at hjl
+      exact hno_v1 j hj hjl
+    · rw [hold j hj, hold l hl] at hjl
+      exact hlv.clause.1 j hj l hl hjl
+  · intro _
+    exact ⟨sk.prev k, Finset.mem_insert_self _ _, hprev_creator⟩
+
+end Self
 
 end BlockRecord
 
