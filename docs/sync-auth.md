@@ -81,10 +81,13 @@ no request fails, under any attack.
   every author joins both carriers of `bulk`, is refused, and stalls the
   system at round 39. Taking blocks that join nothing first, and joining
   blocks only to reach a quorum, removes the stall.
-* **A horizon defeats the test of `clean`.** A signer cannot test rounds
-  it has deleted, so under `oldjoin` it signs a join 25 rounds back. The
-  blocks below the horizon are not fetched, so the fullest honest disk
-  holds 6 blocks of Byzantine authors.
+* **The test of `clean` needs the signer's past rounds.** The node keeps
+  every block it has stored (garbage collection is out of scope), so a
+  signer can always test the round of a request. Under `oldjoin`, a join
+  25 rounds back is refused and no Byzantine block enters. Only with a
+  simulated horizon of 20 rounds, which the node does not have, is that
+  join signed; the blocks below the horizon are then not fetched, and the
+  fullest honest disk holds 6 blocks of Byzantine authors.
 
 ## 4. Open
 
