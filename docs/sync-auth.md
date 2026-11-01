@@ -231,6 +231,50 @@ bypassing the round below. A secret structure of at most `f` authors is
 therefore bypassed once a node holds the honest blocks of the rounds
 above it, whatever blocks of slow honest nodes are bypassed themselves.
 
+Under `bypass`, `scripts/sync-auth.py` applies the rule at each node. A
+node does not fetch or follow a block it finds bypassed, stores every
+block it receives whose references it holds or finds bypassed, and so
+holds back a block until each reference is one or the other. Each cell
+gives, at `n = 10, f = 3` under `react` with twin checks, the rounds
+reached, the blocks of Byzantine authors that some honest node follows
+(all / largest in a round), on the fullest honest disk, the honest
+blocks some other honest node finds bypassed, and the blocks one honest
+node follows and another finds bypassed. The pruning column is §5 with
+`K = 3` and no references below the previous round.
+
+| Attack | No pruning | Pruning | Bypass |
+|---|---|---|---|
+| `fast` | 150, 149 / 1, 153, 0, 0 | 150, 149 / 1, 153, 66, 0 | 150, 149 / 1, 153, 87, 0 |
+| `split` | 54, 15 / 14, 20, 0, 0 | 54, 15 / 14, 20, 0, 0 | 55, 15 / 14, 20, 1, 14 |
+| `isolate` | 55, 21 / 21, 27, 0, 0 | 55, 21 / 21, 27, 0, 0 | 54, 0 / 0, 27, 0, 0 |
+| `filler` | 55, 65 / 15, 71, 0, 0 | 55, 44 / 15, 71, 0, 0 | 56, 9 / 7, 32, 3, 7 |
+| `inject`, `d = 8` | 79, 41 / 3, 300, 0, 0 | 150, 154 / 3, 162, 60, 0 | 150, 150 / 2, 157, 96, 0 |
+| `nest`, `depth = 13` | 52, 616 / 49, 622, 0, 0 | 55, 39 / 14, 232, 0, 0 | 56, 7 / 7, 30, 2, 7 |
+| `nest`, `depth = 39` | 43, 1890 / 49, 1896, 0, 0 | 55, 39 / 14, 232, 0, 0 | 56, 7 / 7, 30, 2, 7 |
+| `flat`, `depth = 13` | 52, 539 / 42, 545, 0, 0 | 55, 39 / 14, 221, 0, 0 | 56, 7 / 7, 30, 2, 7 |
+| `bulk`, `depth = 39` | 54, 153 / 4, 156, 0, 0 | 55, 11 / 4, 30, 0, 0 | 55, 3 / 2, 10, 1, 0 |
+
+* **The system stays live**, under every attack of §2, under `react` and
+  `min`, at `n = 13, f = 4`, and with delays of up to 10 before
+  `GST = 100, 200, 500`.
+* **The cost of an attack no longer depends on its depth.** Under `nest`
+  the fullest disk holds 30 blocks of Byzantine authors at both depths,
+  against 232 under pruning. At `n = 13, f = 4` and `depth = 39` it holds
+  48, against 3826 without pruning, and some honest node follows 9.
+  With `GST = 500`, so that the attacks start during asynchrony, `nest`,
+  `flat` and `bulk` give the same counts.
+* **Blocks wait little.** An honest block waits at most 5 ticks between
+  its first arrival at a node and its storage, against 26 under `nest`
+  with `depth = 13` and 75 with `depth = 39` without pruning.
+* **Nodes seldom disagree.** At most 7 blocks are followed by one honest
+  node and bypassed by another under the back-dated attacks; 14 to 18
+  under `split`, `rtnest` and `isolate`, whose twins honest nodes see
+  differently.
+* **Slow honest blocks are bypassed.** Under `fast`, 87 honest blocks are
+  bypassed under `react` and 103 under `min`; 112 with `GST = 100`, 130
+  with `GST = 200`, and 72 at `n = 13`. Their payload must be proposed
+  again. The rule has no window to trade against this.
+
 * **An unreferenced block is bypassed** (`bypassed_of_unreferenced`). If
   `V` holds a round-`(r + 1)` block of every honest validator, no honest
   block of that round references `x`, and `q ≤ |honest|`, then `x` is
@@ -251,9 +295,12 @@ above it, whatever blocks of slow honest nodes are bypassed themselves.
 ## 7. Open
 
 * **Validity under bypass.** Whether a reference is bypassed depends on
-  what a node holds. Two nodes may judge a block differently until they
-  hold the same blocks; a node must then hold the block rather than
-  reject it. The simulator of §5 does not yet model the rule of §6.
+  what a node holds, and a node holds a block back until each reference
+  is held or bypassed. The bound on how long it waits, and the agreement
+  of two nodes that come to hold the same blocks, are not proved.
+* **Slow honest blocks.** A rule that bypasses fewer honest blocks, for
+  example by counting witnesses from more than the next round, without
+  losing the bound of §6.
 * **Safety under bypass.** A commit orders one history at every node. It
   must be shown that the bypasses of the rounds it covers are the same at
   every node by then, or the ordered history must be fixed by the leader.

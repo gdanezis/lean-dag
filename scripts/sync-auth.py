@@ -29,6 +29,13 @@ is cut: no node fetches, stores or follows it, and a reference to it counts as
 held. Unless `weak` is false, an honest node also references the blocks it holds
 of its last K rounds that are not yet in its history.
 
+With `bypass`, there is no seal: a node finds a block x bypassed when the blocks
+it holds one round above x that do not reference it come from q authors
+(`LeanDag/Common/Bypass.lean`). The node does not fetch or follow a bypassed
+block, and a reference to one counts as held; it stores every block it receives
+whose references it holds or finds bypassed, bypassed blocks included, and these
+count towards bypassing the round below.
+
 `python3 sync-auth.py table rule` prints, at n = 10, f = 3 with no horizon over
 300 ticks, rounds, blocks of Byzantine authors in honest histories (all /
 largest in a round), the least share, the most failed requests of a node, and
@@ -36,8 +43,9 @@ the largest E, under evidence checks, twin checks, and certificates.
 `python3 sync-auth.py prune rule n f` prints rounds, blocks of Byzantine authors in
 the history that validity follows (all / largest in a round), on the fullest
 honest disk, and processed by one honest node, and the honest blocks cut, under
-twin checks without and with `prune = 3`; `fast` is no attack with Byzantine
-blocks that arrive first.
+twin checks without pruning, with `prune = 3` and no references below the
+previous round, and with `bypass`; `fast` is no attack with Byzantine blocks that
+arrive first.
 """
 import random
 import sys
@@ -56,6 +64,9 @@ NOW = [0]
 HBUILT = defaultdict(list)
 SEAL = [0]
 KEPT = set()
+CUR = [None]
+BYPF = [None]
+HELD = [None]
 N = F = Q = 0
 HON, BYZ = [], []
 X = Y = Z = W = S = 0
@@ -71,7 +82,10 @@ def setup(n, f):
 
 
 def cut(x):
-    """A block of a sealed round that the seal did not keep."""
+    """Under `bypass`, a block the current node finds bypassed; else a block of a
+    sealed round that the seal did not keep."""
+    if CUR[0] is not None:
+        return BYPF[0](CUR[0], x)
     return 0 < blocks[x][1] <= SEAL[0] and x not in KEPT
 
 
@@ -105,7 +119,10 @@ def analyze(refs, rnd, L, ev_root, evidence):
 
 
 def exposed_of(b, L, evidence):
-    key = (b, evidence)
+    if CUR[0] is not None and b not in HELD[0][CUR[0]]:
+        a, r, refs = blocks[b]
+        return analyze(refs, r, L, EV[b], evidence)
+    key = (b, evidence, CUR[0])
     if key not in CACHE:
         a, r, refs = blocks[b]
         CACHE[key] = analyze(refs, r, L, EV[b], evidence)
@@ -189,7 +206,7 @@ def missing_from(t, have, source, hz):
 def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, gst=0,
         seed=1, dmax=10, Delta=3, n=None, f=None, mark=None, twin=False, tau=None,
         w=None, auth=False, cap=None, byzsign=False, sign='clean', reuse=False, prune=None,
-        weak=True):
+        weak=True, bypass=False):
     if n is not None:
         setup(n, f)
     blocks.clear()
@@ -200,6 +217,7 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
     AUTH[0] = auth
     SEAL[0] = 0
     KEPT.clear()
+    CUR[0] = None
     clock = [0]
     req = {}
     fails = defaultdict(int)
@@ -221,6 +239,29 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
         for a in range(N):
             twins[v][0][a].append(gen[a])
     hz = {v: 0 for v in builders}
+    byps = {v: set() for v in builders}
+    nots = {}
+    first, waits_of = {}, []
+
+    def byp(v, x):
+        # x is bypassed at v: v's blocks one round above x that do not reference it
+        # come from q authors; bypass persists, so it is recorded once found
+        if x in byps[v]:
+            return True
+        r = blocks[x][1]
+        above = diskr[v].get(r + 1, ())
+        if r == 0 or len(above) < Q or nots.get((v, x)) == len(above):
+            return False
+        au = {blocks[y][0] for y in above if x not in blocks[y][2]}
+        if len(au) >= Q:
+            byps[v].add(x)
+            return True
+        nots[(v, x)] = len(above)
+        return False
+
+    BYPF[0] = byp
+    HELD[0] = disk
+    ctx = (lambda v: v) if bypass else (lambda v: None)
     top = {v: 0 for v in builders}
     own = {v: gen[v] for v in builders}
     target = {v: {} for v in builders}
@@ -438,6 +479,8 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
 
     def put(t, v, b):
         a, r, _ = blocks[b]
+        if (v, b) in first:
+            waits_of.append((t - first[(v, b)], a in HON))
         disk[v].add(b)
         diskr[v][r].add(b)
         twins[v][r][a].append(b)
@@ -450,6 +493,9 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
     for t in range(ticks):
         clock[0] = NOW[0] = t
         for v, kind, u, b in inbox.pop(t, []):
+            CUR[0] = ctx(v)
+            if kind in ('ann', 'blk'):
+                first.setdefault((v, b), t)
             if kind == 'rep':
                 convict(t, v, b)
                 continue
@@ -471,7 +517,7 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
                 if rq and (rq['r'], rq['E']) == b:
                     rq['sig' if kind == 'sig' else 'no'].add(u)
                 continue
-            if b in disk[v] or blocks[b][1] < hz[v] or cut(b):
+            if b in disk[v] or blocks[b][1] < hz[v] or (not bypass and cut(b)):
                 continue
             if kind == 'ann':
                 if u in conv[v] or u in bad[v]:
@@ -495,11 +541,13 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
                     continue
                 put(t, v, b)
         for v in builders:
+            CUR[0] = ctx(v)
             for u in list(target[v]):
                 tg = target[v][u]
                 if tg in disk[v] or blocks[tg][1] < hz[v] or cut(tg):
                     del target[v][u]
         for v in builders:
+            CUR[0] = ctx(v)
             if t < wait_until[v]:
                 continue
             while True:
@@ -605,6 +653,7 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
                     disk[v] -= diskr[v].pop(rd, set())
                     twins[v].pop(rd, None)
                 hz[v] = nh
+        CUR[0] = None
         series.append((min(top.values()), dict(proc), dict(procB)))
         while prune:
             # the commit of the first honest leader at round a >= r + prune + 1 seals
@@ -783,6 +832,7 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
                 for h in only:
                     send(t, Y, h, 'ann', y)
         for v in builders:
+            CUR[0] = ctx(v)
             for u, tg in list(target[v].items()):
                 if rule != 'none' and not valid(chk, tg, L):
                     del target[v][u]
@@ -799,6 +849,7 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
                     miss = missing_from(tg, disk[v], None, hz[v])
                 for b in miss[:k if u in builders else kb]:
                     send(t, u, v, 'blk', b)
+    CUR[0] = None
     hist, stack = set(), [b for rd in honest_at.values() for b in rd.values()]
     while stack:
         x = stack.pop()
@@ -823,6 +874,31 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
         if blocks[x][0] in BYZ and blocks[x][1] > 0:
             vper[blocks[x][1]] += 1
     hcut = sum(1 for rd in honest_at.values() for b in rd.values() if cut(b))
+    split = 0
+    if bypass:
+        # what each node follows: from its own blocks, through references it does not
+        # find bypassed
+        vh = set()
+        for v in builders:
+            seen, stack = set(), [b for rd in honest_at.values() for b in rd.values()
+                                  if b in disk[v]]
+            while stack:
+                x = stack.pop()
+                if x in seen:
+                    continue
+                seen.add(x)
+                stack.extend(r for r in blocks[x][2] if not byp(v, r))
+            vh |= seen
+        vper = defaultdict(int)
+        for x in vh:
+            if blocks[x][0] in BYZ and blocks[x][1] > 0:
+                vper[blocks[x][1]] += 1
+        hcut = sum(1 for rd in honest_at.values() for b in rd.values()
+                   if any(byp(v, b) for v in builders if v != blocks[b][0]))
+        split = sum(1 for x in range(len(blocks)) if blocks[x][1] > 0
+                    and any(x in disk[v] and not byp(v, x) for v in builders)
+                    and any(byp(v, x) for v in builders))
+    hw = [w_ for w_, h_ in waits_of if h_]
     rounds = min(top.values())
     dB = max(sum(1 for x in disk[v] if blocks[x][0] in BYZ) for v in HON)
     late = [b for rd, hb in honest_at.items() if rd >= 30 for b in hb.values()]
@@ -838,7 +914,10 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
             'waits': max(waits.values()), 'hist': sum(per.values()), 'disk': dB,
             'share': share, 'fails': max(fails.values(), default=0),
             'vhist': sum(vper.values()), 'vmax': max(vper.values(), default=0),
-            'hcut': hcut, 'seal': SEAL[0], 'procB': max(procB.values()),
+            'hcut': hcut, 'seal': SEAL[0], 'split': split,
+            'wait': (max(hw, default=0), sum(hw) / max(1, len(hw))),
+            'bwait': max((w_ for w_, h_ in waits_of if not h_), default=0),
+            'procB': max(procB.values()),
             'hcert': ncert[0], 'bcert': ncert[1], 'maxE': maxE[0], 'tops': dict(top),
             'req': {v: (q['r'], len(q['E']), sorted(q['sig']), sorted(q['no']))
                     for v, q in req.items() if q}}
@@ -905,10 +984,10 @@ def prune_table(rule, n, f, ticks=300):
             ('isolate', {}), ('twins', {}), ('inject', dict(d=8)), ('nest', dict(depth=13)),
             ('nest', dict(depth=39)), ('bulk', dict(depth=39)), ('oldjoin', dict(depth=25)),
             ('force', dict(depth=13)), ('flat', dict(depth=13)), ('rtnest', dict(depth=13))]
-    print(f"{rule} n={n} f={f} ticks={ticks}, no horizon: twin checks, and pruning K = 3")
+    print(f"{rule} n={n} f={f} ticks={ticks}, no horizon: twin checks; prune = 3; bypass")
     for a, kw in atts:
         cells = []
-        for ck in (dict(), dict(prune=3)):
+        for ck in (dict(), dict(prune=3, weak=False), dict(bypass=True)):
             r = run(None if a == 'fast' else a, rule, ticks=ticks, L=1000, twin=True,
                     **kw, **ck)
             cells.append(f"{r['rounds']}r {r['vhist']}/{r['vmax']} D{r['disk']} "
