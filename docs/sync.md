@@ -381,7 +381,8 @@ from round 30 on that reference a block of one honest node.
   `s < f`, each honest node is shown its own family of stage `s`,
   back-dated `depth` rounds: a chain of `BYZ[k]` adopts, in its last `k`
   rounds, a fresh family of each `BYZ[i]` with `i < k`, so it carries
-  `2^k` chains, and no block has twins in its history. An honest node
+  `2^k` chains. A block may have twins in its history, but no block
+  references an author with twins in its history. An honest node
   that takes the stages has `2^f − 1` chains in its history, the count
   that freshness allows (`docs/dos-equivocation-and-growth.md` §5).
   Evidence comes too late, so evidence-only checks give the same rows.
@@ -425,7 +426,8 @@ The plan to run these syncs and checks on the node is `docs/node-sync.md`.
   from evidence alone, and a late injection then enters every honest
   history. Reading exposure from twins in the history as well stops the
   injection in the simulation. It is not in the model, and it does not
-  stop `nest`, whose blocks have no twins in their histories.
+  stop `nest`, whose blocks reference no author with twins in their
+  histories.
 * **Liveness.** The node's V11 assumes synchronisation of the network
   (`SyncedWithin`, section 5.1 of `docs/validator.md`); deriving it from these
   syncs, with the budget, is open.
