@@ -218,15 +218,50 @@ The other attacks of §2 are as without pruning.
   blocks of those rounds, and its payload must be proposed again. The
   system stays live.
 
-## 6. Open
+## 6. Bypassed blocks
 
-* **A seal from a commit rule.** §5 computes the seal once for all
-  nodes. A node that has not yet seen the commit must hold a block whose
-  validity depends on it, rather than reject it, and the seal of round
-  `r` must not depend on blocks whose validity waits on that seal.
-* **The window under asynchrony.** Rounds are sealed only as commits
-  are made, so before `GST` the unsealed window, and what a node fetches
-  in it, grows with the rounds since the last commit.
+`LeanDag/Common/Bypass.lean` defines the rule in terms of what a node
+holds, not of the seal of §5. A block `x` of round `r` is *bypassed* in a
+set `V` of held blocks when the blocks of `V` at round `r + 1` that do
+not reference `x` come from at least `q` authors (`Bypassed`). `V` is
+*closed up to bypass* when every reference of a block of `V` is in `V`
+or bypassed in it (`BypassClosed`). A bypassed block may still be held:
+a node stops following its references, but it still counts towards
+bypassing the round below. A secret structure of at most `f` authors is
+therefore bypassed once a node holds the honest blocks of the rounds
+above it, whatever blocks of slow honest nodes are bypassed themselves.
+
+* **An unreferenced block is bypassed** (`bypassed_of_unreferenced`). If
+  `V` holds a round-`(r + 1)` block of every honest validator, no honest
+  block of that round references `x`, and `q ≤ |honest|`, then `x` is
+  bypassed in `V`.
+* **Bypass persists** (`Bypassed.mono`). If `V ⊆ V′`, a block bypassed in
+  `V` is bypassed in `V′`. A bypass at one honest node therefore holds at
+  every honest node that comes to hold the same blocks.
+* **What is not bypassed is bounded** (`card_not_bypassed_le`). Under the
+  holding of the first theorem, the round-`r` blocks not bypassed in `V`
+  number at most `|honest| · n`, since each is referenced by an honest
+  block of round `r + 1`, and a block references at most `n` blocks. The
+  bound does not depend on how far back a structure is dated.
+* **Supported blocks are never bypassed** (`not_bypassed_of_support`). A
+  block referenced at round `r + 1` by `s` honest validators, with
+  `n < q + s`, is bypassed in no set. At `q = n − f` that is `s ≥ f + 1`,
+  which every leader with a quorum of votes has.
+
+## 7. Open
+
+* **Validity under bypass.** Whether a reference is bypassed depends on
+  what a node holds. Two nodes may judge a block differently until they
+  hold the same blocks; a node must then hold the block rather than
+  reject it. The simulator of §5 does not yet model the rule of §6.
+* **Safety under bypass.** A commit orders one history at every node. It
+  must be shown that the bypasses of the rounds it covers are the same at
+  every node by then, or the ordered history must be fixed by the leader.
+  A leader with a quorum of votes is never bypassed, but a path to it may
+  run through bypassed blocks.
+* **Before the honest blocks arrive.** Under asynchrony, the last honest
+  block of round `r + 1` may come late, and until then a node cannot tell
+  a secret block from a late honest one.
 * **Certificates under pruning.** Below the seal, back-dated joins are
   cut, so certificates may only be needed in the window.
 * A bound on what one certificate may name, without the stall a cap
