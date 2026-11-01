@@ -45,7 +45,8 @@ theorem accepted_correct_of_allExposed (hdos : DoSValid U)
   by_contra htc
   obtain ⟨b, hb, hbc, hbr⟩ := hpop
   have href : t ∈ (U.block b).refs := D.includes v hv n b hb hbc hbr ht
-  exact not_mem_creators_refs_of_correct_exposed hdos
+  exact not_mem_creators_refs_of_correct_exposed (U.quorateOn.correctBelow U.causal) hdos
+    inherited_exposedIn
     (hexp (U.block t).creator htc) hb (by omega)
     (mem_creatorsOf.mpr ⟨t, href, rfl⟩)
 
@@ -127,6 +128,6 @@ theorem card_viewUpto_le_of_allExposed' {κ : ℕ} (hdos : DoSValid U)
         ((Correct : Finset Validator).card * F.f +
           (m + 1) * ((Correct : Finset Validator).card * (F.f * κ))) :=
   (card_viewUpto_le_of_allExposed hdos hra hexp hv hn hpop).trans
-    (Nat.add_le_add_left (card_byzPool_le hbyz hra (m + 1)) _)
+    (Nat.add_le_add_left (card_byzPool_le card_compl_correct_le hbyz hra (m + 1)) _)
 
 end LeanDag

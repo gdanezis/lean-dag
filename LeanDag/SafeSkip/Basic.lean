@@ -72,99 +72,13 @@ open GapData SkipData
 
 variable (sk : SkipMsg U)
 
-/-- **The filled block is valid** under the extended block map: the
-copied references sit one round below (P1), `v1` appears among the
-authors exactly once (by `hB1uniq` at the boundary), the reference
-quorum only grows, and the added self reference is P3′. -/
-theorem fillBlock_valid {k : ℕ} (hk1 : sk.r0 < k) (hk2 : k ≤ sk.r) :
-    ValidWrt (fun b => if b ∈ U.ids then U.block b else sk.fillBlock (sk.idx b))
-      (sk.fillBlock k) := by
-  have hR0 : sk.r0 = (U.block sk.B1).round := rfl
-  have hlm := sk.hline_mem k (by omega) hk2
-  have hlv := U.valid _ hlm
-  have hlr := sk.hline_round k (by omega) hk2
-  -- the self reference is an old id at round `k − 1` with creator `v1`
-  have hprev_old : sk.prev k ∈ U.ids ∨ sk.prev k = sk.fresh (k - 1) := by
-    by_cases hb : k = sk.r0 + 1
-    · exact Or.inl (by simp only [prev, if_pos hb]; exact sk.hB1)
-    · exact Or.inr (by simp only [prev, if_neg hb])
-  have hprev_round : (if sk.prev k ∈ U.ids then U.block (sk.prev k)
-      else sk.fillBlock (sk.idx (sk.prev k))).round = k - 1 := by
-    by_cases hb : k = sk.r0 + 1
-    · simp only [prev, if_pos hb, if_pos sk.hB1]
-      show (U.block sk.B1).round = k - 1
-      omega
-    · simp only [prev, if_neg hb, if_neg (sk.hfresh_new (k - 1)), sk.hidx]
-      rfl
-  have hprev_creator : (if sk.prev k ∈ U.ids then U.block (sk.prev k)
-      else sk.fillBlock (sk.idx (sk.prev k))).creator = sk.v1 := by
-    by_cases hb : k = sk.r0 + 1
-    · simp only [prev, if_pos hb, if_pos sk.hB1]
-      exact sk.hB1c
-    · simp only [prev, if_neg hb, if_neg (sk.hfresh_new (k - 1)), sk.hidx]
-      rfl
-  -- no copied reference is `v1`-authored, except possibly the anchor itself
-  have hno_v1 : ∀ j ∈ (U.block (sk.line k)).refs,
-      (U.block j).creator = sk.v1 → j = sk.prev k := by
-    intro j hj hjc
-    have hjo := U.complete _ hlm j hj
-    have hjr : (U.block j).round = k - 1 := by
-      have := hlv.predecessor j hj
-      omega
-    by_cases hb : k = sk.r0 + 1
-    · -- boundary: non-equivocation pins it to the anchor
-      simp only [prev, if_pos hb]
-      exact sk.hB1uniq j hjo hjc (by omega)
-    · -- inside the gap: the crash forbids it
-      exact (sk.hgap j hjo hjc (by omega) (by omega)).elim
-  refine ⟨?_, ?_, ?_, ?_⟩
-  · -- P1: the self reference and every copied reference sit at `k − 1`
-    intro j hj
-    simp only [fillBlock, Finset.mem_insert] at hj
-    rcases hj with rfl | hj
-    · rw [hprev_round]; show k - 1 + 1 = k; omega
-    · rw [if_pos (U.complete _ hlm j hj)]
-      have := hlv.predecessor j hj
-      show (U.block j).round + 1 = k
-      omega
-  · -- P2: copied references are distinct by the line's P2; the self
-    -- reference's author appears nowhere else
-    intro j hj l hl hjl
-    simp only [fillBlock, Finset.mem_insert] at hj hl
-    rcases hj with rfl | hj <;> rcases hl with rfl | hl
-    · rfl
-    · rw [hprev_creator] at hjl
-      rw [if_pos (U.complete _ hlm l hl)] at hjl
-      exact (hno_v1 l hl hjl.symm).symm
-    · rw [hprev_creator] at hjl
-      rw [if_pos (U.complete _ hlm j hj)] at hjl
-      exact hno_v1 j hj hjl
-    · rw [if_pos (U.complete _ hlm j hj), if_pos (U.complete _ hlm l hl)] at hjl
-      exact hlv.distinct_creators j hj l hl hjl
-  · -- P3: the copied quorum survives, since lookups of old ids agree
-    intro _
-    have hq := hlv.quorum (by show 0 < (U.block (sk.line k)).round; omega)
-    refine le_trans hq ?_
-    refine Finset.card_le_card ?_
-    intro c hc
-    unfold creators creatorsOf at hc ⊢
-    obtain ⟨j, hj, hjc⟩ := Finset.mem_image.mp hc
-    refine Finset.mem_image.mpr ⟨j, ?_, ?_⟩
-    · simp only [fillBlock, Finset.mem_insert]
-      exact Or.inr hj
-    · simp only
-      rw [if_pos (U.complete _ hlm j hj)]
-      exact hjc
-  · -- P3′: the added self reference
-    intro _
-    exact ⟨sk.prev k, Finset.mem_insert_self _ _, hprev_creator⟩
-
 /-- **The denotation.** `U`, extended with one filled block per gap
 round; every old block looked up unchanged. The block record's fill
-under the self-referencing reading, with `fillBlock_valid` as the one
-obligation. -/
+under the self-referencing reading, its obligation discharged by
+`BlockRecord.selfBlock_valid`. -/
 def skipFill : BlockUniverse Validator BlockId Payload :=
-  BlockRecord.fill U sk.toGapData (sk.selfBlocks U.complete) (fun _ hk1 hk2 => sk.fillBlock_valid hk1 hk2)
+  BlockRecord.fill U sk.toGapData (sk.selfBlocks U.complete)
+    (fun _ hk1 hk2 => BlockRecord.selfBlock_valid ValidWrt.iff_validAt U sk hk1 hk2)
 
 /-- Old blocks read unchanged: every store, view and certificate built
 on `U` sees the same data in the extension. -/

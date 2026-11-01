@@ -881,7 +881,7 @@ row and vote, past GST with the timeout clearing `2Δ + proc`:
   most `Δ + proc` later, arriving `Δ` after); round by round from the
   proposal every reliable block reaches the leader block, on the exit by
   the clause and on the fallback through the leader's own block
-  (`SchemeReactive.reaches`); a reliable vote-round block then votes, and
+  (`WaveFacts.reaches`); a reliable vote-round block then votes, and
   a reliable decision-round block certifies, its vote being the
   certificate or its fallback referencing every reliable vote;
 * **the reactive precondition is the family support's**

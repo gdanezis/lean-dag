@@ -37,9 +37,10 @@ theorem quorate (k : ℕ) : Quorate (hybridRule (Validator := Validator) (BlockI
   fun U => BlockUniverse.quorateOn U.val
 
 /-- **P3′ at the carrier.** -/
-theorem selfParent (k : ℕ) : SelfParent (hybridRule (Validator := Validator)
-    (BlockId := BlockId) (Payload := Payload) k) :=
-  fun U b hb hr => (U.val.valid b hb).self_parent hr
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} (k : ℕ) :
+    SelfParent (hybridRule (Validator := Validator)
+    (BlockId := BlockId) (Payload := Payload) k) rel R₀ :=
+  fun U b hb _ hr => (U.val.valid b hb).self_parent (Nat.lt_of_le_of_lt (Nat.zero_le _) hr)
 
 /-- **One block per correct author per round.** -/
 theorem noEquiv (k : ℕ) : NoEquiv (hybridRule (Validator := Validator) (BlockId := BlockId)

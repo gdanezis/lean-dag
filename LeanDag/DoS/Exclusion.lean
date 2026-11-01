@@ -131,37 +131,6 @@ theorem exists_correct_mem_refs {b : BlockId} (hb : b ∈ U.ids)
       (U.block i).round + 1 = (U.block b).round :=
   exists_correct_memRefs U.causal U.quorateOn hb hround
 
-/-- **D17 — exclusion is total, and permanent.** If every correct block of
-round `n+1` is exposed to `X`, so is every block from round `n+2` on,
-whoever authored it. The induction uses no synchrony, only that every
-block leans on a correct block below. -/
-theorem exposedIn_of_correct_exposed {X : Validator} {n : ℕ}
-    (hexp : ∀ c ∈ U.ids, (U.block c).round = n + 1 →
-      (U.block c).creator ∈ (Correct : Finset Validator) → ExposedIn U c X) :
-    ∀ k, ∀ b ∈ U.ids, (U.block b).round = n + 2 + k → ExposedIn U b X := by
-  intro k
-  induction k with
-  | zero =>
-      intro b hb hbr
-      obtain ⟨i, hi, hi_ids, hi_correct, hi_round⟩ :=
-        exists_correct_mem_refs hb (by omega)
-      exact (hexp i hi_ids (by omega) hi_correct).of_mem_refs hb hi
-  | succ k ih =>
-      intro b hb hbr
-      obtain ⟨i, hi, hi_ids, _, hi_round⟩ := exists_correct_mem_refs hb (by omega)
-      exact (ih i hi_ids (by omega)).of_mem_refs hb hi
-
-/-- The form the condition consumes: from `n+2` on, nobody may name `X`. -/
-theorem not_mem_creators_refs_of_correct_exposed (hdos : DoSValid U) {X : Validator} {n : ℕ}
-    (hexp : ∀ c ∈ U.ids, (U.block c).round = n + 1 →
-      (U.block c).creator ∈ (Correct : Finset Validator) → ExposedIn U c X)
-    {b : BlockId} (hb : b ∈ U.ids) (hbr : n + 2 ≤ (U.block b).round) :
-    X ∉ creatorsOf U.block (U.block b).refs := by
-  obtain ⟨k, hk⟩ : ∃ k, (U.block b).round = n + 2 + k := ⟨(U.block b).round - (n + 2), by omega⟩
-  intro hX
-  obtain ⟨i, hi, rfl⟩ := mem_creatorsOf.mp hX
-  exact hdos b hb i hi (exposedIn_of_correct_exposed hexp k b hb hk)
-
 /-- **D16 — after `R`, agree or be exposed.** If the histories of two
 correct round-`n` blocks between them hold an equivocation by `X`, every
 correct round-`(n+1)` block is exposed to `X`: `SynchronisedOn` puts both
@@ -316,20 +285,6 @@ theorem eq_of_both_name_of_shared (hdos : DoSValid U)
     by_contra hne
     exact hclean₂ ⟨A₂, hA₂, A, hAw₂, hne, hA₂c, hAc, hA₂r⟩
   rw [e₁, e₂]
-
-/-! ## The correct backbone: after `R`, `SynchronisedOn` makes every
-correct block's history contain every correct block of every round from
-`R` to its own. -/
-
-/-- **The backbone lemma.** After `R`, correct histories contain the whole
-correct past. -/
-theorem mem_history_of_correct {R : ℕ} (hs : SynchronisedOn U (Correct : Finset Validator) R) :
-    ∀ d : ℕ, ∀ c ∈ U.ids, ∀ a ∈ U.ids,
-      (U.block c).creator ∈ (Correct : Finset Validator) →
-      (U.block a).creator ∈ (Correct : Finset Validator) →
-      R ≤ (U.block a).round → (U.block a).round + 1 + d = (U.block c).round →
-      a ∈ history U c :=
-  mem_historyFrom_of_correct U.causal U.quorateOn hs
 
 /-! ## Two delivery policies: made explicit, nothing an author publishes
 is invisible to the correct population. -/

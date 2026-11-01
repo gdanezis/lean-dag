@@ -1,4 +1,5 @@
 import LeanDag.Common.History
+import LeanDag.Common.Exclusion
 /-!
 # Exposure, and the DoS-protection condition
 
@@ -75,7 +76,7 @@ a block may not reference an author exposed in its own history. A
 predicate on the universe, not a field of `ValidWrt`, so results that need
 it take it as an extra hypothesis. -/
 def DoSValid (U : BlockUniverse Validator BlockId Payload) : Prop :=
-  ∀ b ∈ U.ids, ∀ i ∈ (U.block b).refs, ¬ ExposedIn U b (U.block i).creator
+  DoSValidOn U.block U.ids (ExposedIn U)
 
 /-- Decidable on concrete data, so a small DAG can be checked by `decide`. -/
 instance decidableDoSValid : Decidable (DoSValid U) :=
@@ -176,6 +177,10 @@ theorem ExposedIn.mono {c b : BlockId} {X : Validator} (hc : c ∈ U.ids)
 theorem ExposedIn.of_mem_refs {c b : BlockId} {X : Validator} (hc : c ∈ U.ids)
     (hb : b ∈ (U.block c).refs) (h : ExposedIn U b X) : ExposedIn U c X :=
   h.mono hc (Reaches.single hb)
+
+/-- Twins in the history are an exposure carried upward. -/
+theorem inherited_exposedIn : InheritedOn U.block U.ids (ExposedIn U) :=
+  fun _ hc _ hb _ h => h.of_mem_refs hc hb
 
 /-! ## D15, D15a — who can be excluded, and what it costs (§4). Exposure
 never lands on a correct validator; each exposed author costs one unit

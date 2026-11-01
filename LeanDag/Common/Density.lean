@@ -109,6 +109,19 @@ theorem exists_correct_memRefs (C : CausalStructure blk ids) (hq : QuorateOn blk
   obtain ⟨i, hi, rfl⟩ := mem_creatorsOf.mp hv
   exact ⟨i, hi, C.complete b hb i hi, hvc, C.refs_round b hb i hi⟩
 
+/-- **A reference by `T` below every block**: each block of `ids` above
+round `0` references a block of `ids` by an author of `T`, one round
+below. -/
+def CorrectBelow (blk : BlockId → Block Validator BlockId Payload) (ids : Finset BlockId)
+    (T : Finset Validator) : Prop :=
+  ∀ b ∈ ids, 0 < (blk b).round →
+    ∃ i ∈ (blk b).refs, i ∈ ids ∧ (blk i).creator ∈ T ∧ (blk i).round + 1 = (blk b).round
+
+/-- A quorate causal structure has a correct reference below every block. -/
+theorem QuorateOn.correctBelow (hq : QuorateOn blk ids rel) (C : CausalStructure blk ids) :
+    CorrectBelow blk ids rel.correct :=
+  fun _ hb hround => exists_correct_memRefs C hq hb hround
+
 section Density
 
 variable [DecidableEq BlockId]

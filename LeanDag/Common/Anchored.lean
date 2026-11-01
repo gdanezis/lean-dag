@@ -236,6 +236,22 @@ theorem Decided.indirectSkip_single {U : BlockRecord Validator BlockId Payload P
     have : i = 0 := by omega
     subst this; exact hnone L hL)
 
+variable {R} in
+/-- **A decided slot's round is reached**: a view that settles slot `k`
+holds the record's block at or above `k`'s round, given that a direct
+skip does. -/
+theorem Decided.reaches {U : BlockRecord Validator BlockId Payload P honest} {V : U.View}
+    (hskip : ∀ k, R.Skip U V S k → ∃ b ∈ U.ids, S.slotRound k ≤ (U.block b).round)
+    {k : ℕ} {v : Option BlockId} (h : R.Decided U V k v) :
+    ∃ b ∈ U.ids, S.slotRound k ≤ (U.block b).round := by
+  induction h with
+  | directCommit hL _ => exact ⟨_, hL.1, hL.2.1.ge⟩
+  | directSkip hs => exact hskip _ hs
+  | indirectCommit _ _ _ _ _ _ hL _ _ _ _ => exact ⟨_, hL.1, hL.2.1.ge⟩
+  | indirectSkip hkj _ _ _ _ ih _ =>
+    obtain ⟨b, hb, hr⟩ := ih
+    exact ⟨b, hb, (S.mono hkj.le).trans hr⟩
+
 /-- **The indirect rule is total**: a nearest eligible committed anchor
 gives the slot a verdict. -/
 def Total (U : BlockRecord Validator BlockId Payload P honest) : Prop :=

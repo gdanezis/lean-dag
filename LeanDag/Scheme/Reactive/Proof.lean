@@ -20,7 +20,7 @@ open Properties
 theorem certifies : Certifies := by
   intro Validator BlockId Payload _ _ _ _ P _ honest p σ S U T N R q rs k L hc hTh hq hgst
     hto hR hN hlead hL
-  exact rs.certifies hc.1 hc.2 hTh hq hgst hto hR hN hlead hL
+  exact (rs.toWaveFacts hq hgst hto).certifies hc.1 hc.2 hTh hq hR hN hlead hL
 
 theorem live : Live := by
   intro Validator BlockId Payload _ _ _ _ P _ honest p σ rel S U V T lo K hc h

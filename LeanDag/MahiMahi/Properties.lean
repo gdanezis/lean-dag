@@ -410,7 +410,7 @@ theorem safety (hw : 2 ≤ w) : Properties.Safe (mahiMahiRule (Validator := Vali
 
 theorem liveness (hw : 2 ≤ w) : Properties.Support.Lives
     (R := mahiMahiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) w)
-    (mmSupport w) (coreReliability Validator) :=
+    (mmSupport w) (coreReliability Validator) 0 :=
   Properties.Support.liveness (mmSupport_commits hw) (commitsCandidate w) (selfParent w)
     (noEquiv w)
 

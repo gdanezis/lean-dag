@@ -67,6 +67,7 @@ both equivocators exposed (`e = 2`):
 
 * per exposed author: `(3f+1-e)·e^(e-1) = 5·2 = 10` chains (actual: 2);
 * per author per round: `c(f) = 1 + 3f·f^(f-1) = 13` (was `8⁷ = 2 097 152`);
+* per round: `3f+1 + 3f^(f+1) = 31`;
 * whole history: `(3f+1 + 3f^(f+1))·(r+1) = 31·4 = 124` (was `7·8⁷·4`);
   actual: 20. -/
 
@@ -88,11 +89,17 @@ example : ∀ n, (historyBlocksOf Ufault 19 0 n).card ≤
 example : 1 + (Fintype.card (Fin 7) - 1) * Faults.f (Fin 7) ^ (Faults.f (Fin 7) - 1) = 13 := by
   decide
 
+/-- **C1′ per round, applied**: at most `31` blocks of the history at any
+one round. -/
+example : ∀ k, ((history Ufault 19).filter fun i => (Ufault.block i).round = k).card ≤
+    Fintype.card (Fin 7) + (Fintype.card (Fin 7) - 1) * Faults.f (Fin 7) ^ Faults.f (Fin 7) :=
+  card_historyAt_le ufault_dosValid (by decide)
+
 /-- **The tightened total applied**: `20 ≤ 31·4`. -/
 example : (history Ufault 19).card ≤
     (Fintype.card (Fin 7) + (Fintype.card (Fin 7) - 1) * Faults.f (Fin 7) ^ Faults.f (Fin 7))
-      * ((Ufault.block 19).round + 1) :=
-  card_history_le' ufault_dosValid (by decide)
+      * ((Ufault.block 19).round + 1) := by
+  simpa using card_history_le' ufault_dosValid (by decide) 0
 
 example : (Fintype.card (Fin 7) + (Fintype.card (Fin 7) - 1) * Faults.f (Fin 7) ^ Faults.f (Fin 7)) = 31 := by
   decide
@@ -101,8 +108,8 @@ example : (Fintype.card (Fin 7) + (Fintype.card (Fin 7) - 1) * Faults.f (Fin 7) 
 — on `Umerge`: `12 ≤ 7·4`. -/
 example : (history Umerge 12).card ≤
     (Fintype.card (Fin 4) + (Fintype.card (Fin 4) - 1) * Faults.f (Fin 4) ^ Faults.f (Fin 4))
-      * ((Umerge.block 12).round + 1) :=
-  card_history_le' umerge_dosValid (by decide)
+      * ((Umerge.block 12).round + 1) := by
+  simpa using card_history_le' umerge_dosValid (by decide) 0
 
 example : (Fintype.card (Fin 4) + (Fintype.card (Fin 4) - 1) * Faults.f (Fin 4) ^ Faults.f (Fin 4)) = 7 := by
   decide

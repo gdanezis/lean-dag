@@ -53,7 +53,7 @@ example : viewUpto Dexcl 1 0 ⊆ viewUpto Dexcl 3 1 := by decide
 
 -- …and from the theorem.
 example : viewUpto Dexcl 1 0 ⊆ viewUpto Dexcl 3 1 :=
-  viewUpto_subset_viewUpto_succ dexcl_eventuallyDelivers
+  viewUpto_subset_viewUpto_succ dexcl_eventuallyDelivers (Finset.Subset.refl _)
     (uexcl_populated 1 (by omega)) (by decide) (by decide) (by omega)
 
 /-! ## G8 on data — heterogeneous horizons agree -/

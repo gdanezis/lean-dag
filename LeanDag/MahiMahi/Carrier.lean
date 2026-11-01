@@ -36,9 +36,10 @@ theorem quorate (w : ℕ) : Quorate (mahiMahiRule (Validator := Validator) (Bloc
   fun U => BlockUniverse.quorateOn U
 
 /-- **P3′ at the carrier.** -/
-theorem selfParent (w : ℕ) : SelfParent (mahiMahiRule (Validator := Validator)
-    (BlockId := BlockId) (Payload := Payload) w) :=
-  fun U b hb hr => (U.valid b hb).self_parent hr
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} (w : ℕ) :
+    SelfParent (mahiMahiRule (Validator := Validator)
+    (BlockId := BlockId) (Payload := Payload) w) rel R₀ :=
+  fun U b hb _ hr => (U.valid b hb).self_parent (Nat.lt_of_le_of_lt (Nat.zero_le _) hr)
 
 /-- **One block per correct author per round.** -/
 theorem noEquiv (w : ℕ) : NoEquiv (mahiMahiRule (Validator := Validator) (BlockId := BlockId)

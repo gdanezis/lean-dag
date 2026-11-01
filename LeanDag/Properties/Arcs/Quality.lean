@@ -24,7 +24,7 @@ namespace Arcs
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 variable {R : DagRule Validator BlockId Payload} {rel : Reliability Validator}
-variable {U : R.Universe} {b L : BlockId} {δ : ℕ}
+variable {U : R.Universe} {b L : BlockId} {δ R₀ : ℕ}
 
 /-! ## Coverage -/
 
@@ -141,21 +141,22 @@ theorem ledger_coverage (hq : Quorate R rel) (hcc : CommitsCandidate R)
 /-! ## Inclusion, from self-reference
 
 A reliable author's blocks form a chain — one per round (`NoEquiv`),
-each referencing the one before (`SelfParent`) — so any later block by
-the author reaches every earlier one, with no synchrony needed. -/
+each above `R₀` referencing the one before (`SelfParent`) — so any later
+block by the author reaches every earlier one at or above `R₀`, with no
+synchrony needed. -/
 
 /-- **CQ5.** A reliable block is in the cone of every committed leader
 block by the same author at or above its round — any commit route, any
 view, no synchrony. -/
-theorem mem_history_of_decided_commit (hsp : SelfParent R) (hne : NoEquiv R rel)
+theorem mem_history_of_decided_commit (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel)
     (hcc : CommitsCandidate R)
     (hdec : R.Decided S V k (some L))
     (hLc : (R.block U L).creator ∈ rel.correct)
     (hb : b ∈ R.ids U) (hbc : (R.block U b).creator = (R.block U L).creator)
-    (hle : (R.block U b).round ≤ (R.block U L).round) :
+    (hle : (R.block U b).round ≤ (R.block U L).round) (h₀ : R₀ ≤ (R.block U b).round) :
     b ∈ historyFrom (R.block U) L :=
   ((R.causal U).mem_history_iff (hcc.mem hdec)).mpr
-    (hsp.reaches_of_creator hne hb (hcc.mem hdec) (by rw [hbc]; exact hLc) hbc.symm hle)
+    (hsp.reaches_of_creator hne hb (hcc.mem hdec) (by rw [hbc]; exact hLc) hbc.symm hle h₀)
 
 /-! ## Inclusion liveness
 
@@ -171,9 +172,10 @@ the slot. -/
 theorem includes_of_leads
     {Live : Slots Validator → ∀ {U : R.Universe}, R.View U → Finset Validator →
       ℕ → ℕ → Prop}
-    (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
     (hlc : LeaderCommits R Live) (S : Slots Validator) {T : Finset Validator}
     (hT : T ⊆ rel.correct) {k' m : ℕ} (hlead : S.leader k' ∈ T) (hm : m ≤ S.slotRound k')
+    (hm₀ : R₀ ≤ m)
     (U : R.Universe) (V : R.View U) (hlive : Live S V T k' (k' + 1)) :
     ∃ L, R.Decided S V k' (some L) ∧
       ∀ b ∈ R.ids U, (R.block U b).creator = S.leader k' → (R.block U b).round = m →
@@ -185,7 +187,7 @@ theorem includes_of_leads
   obtain ⟨-, hLr, hLc⟩ := hcc S U V k' L hdec
   have hmem : b ∈ historyFrom (R.block U) L :=
     mem_history_of_decided_commit hsp hne hcc hdec (by rw [hLc]; exact hT hlead) hb
-      (by rw [hbc, hLc]) (by rw [hbr, hLr]; exact hm)
+      (by rw [hbc, hLc]) (by rw [hbr, hLr]; exact hm) (by rw [hbr]; exact hm₀)
   exact ⟨hmem, fun g n hg hn => mem_ledgerSetOf_of_mem_history hg hn (hcc.mem hdec) hmem⟩
 
 /-- **CQ6 (inclusion liveness).** Under a schedule returning to every
@@ -195,10 +197,10 @@ argument runs along one author's chain. -/
 theorem committed_of_correct_block
     {Live : Slots Validator → ∀ {U : R.Universe}, R.View U → Finset Validator →
       ℕ → ℕ → Prop}
-    (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
     (hlc : LeaderCommits R Live) (S : Slots Validator) {T : Finset Validator}
     (hT : T ⊆ rel.correct) (fair : ∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v)
-    (m : ℕ) {v : Validator} (hv : v ∈ T) :
+    (m : ℕ) (hm₀ : R₀ ≤ m) {v : Validator} (hv : v ∈ T) :
     ∃ k', m ≤ S.slotRound k' ∧ S.leader k' = v ∧
       ∀ (U : R.Universe) (V : R.View U), Live S V T k' (k' + 1) →
         ∃ L, R.Decided S V k' (some L) ∧
@@ -210,7 +212,7 @@ theorem committed_of_correct_block
   obtain ⟨k', hk', hlead⟩ := fair v hv k₀
   have hm : m ≤ S.slotRound k' := le_trans hk₀ (S.mono hk')
   refine ⟨k', hm, hlead, fun U V hlive => ?_⟩
-  have h := includes_of_leads hsp hne hcc hlc S hT (by rw [hlead]; exact hv) hm U V hlive
+  have h := includes_of_leads hsp hne hcc hlc S hT (by rw [hlead]; exact hv) hm hm₀ U V hlive
   rw [hlead] at h
   exact h
 
@@ -223,10 +225,10 @@ author leads. -/
 theorem chain_quality
     {Live : Slots Validator → ∀ {U : R.Universe}, R.View U → Finset Validator →
       ℕ → ℕ → Prop}
-    (hq : Quorate R rel) (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hq : Quorate R rel) (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
     (hlc : LeaderCommits R Live) (hhalf : 2 * rel.slack ≤ rel.correct.card)
     (S : Slots Validator) {T : Finset Validator} (hT : T ⊆ rel.correct)
-    (fair : ∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v) (m : ℕ) :
+    (fair : ∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v) (m : ℕ) (hm₀ : R₀ ≤ m) :
     (∀ (U : R.Universe) (V : R.View U) (k : ℕ) (L : BlockId) (δ : ℕ),
         R.Decided S V k (some L) → δ < (R.block U L).round →
         rel.correct.card ≤ 2 * (coveredAt R rel U L δ).card) ∧
@@ -239,7 +241,7 @@ theorem chain_quality
                 b ∈ ledgerSetOf R U g n :=
   ⟨fun _ _ _ _ _ hdec hδ =>
     card_correct_le_two_mul_coveredAt_of_decided hq hcc hhalf hdec hδ,
-   fun v hv => committed_of_correct_block hsp hne hcc hlc S hT fair m hv⟩
+   fun v hv => committed_of_correct_block hsp hne hcc hlc S hT fair m hm₀ hv⟩
 
 end Decided
 
@@ -267,9 +269,9 @@ variable [S : Slots Validator] {T : Finset Validator} {w s m : ℕ}
 /-- **CQ7, windowed.** The committing slot for `v`'s round-`m` blocks
 lies within `w` slots of the first slot at or above round `m`. -/
 theorem committed_of_correct_block_within
-    (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
     (hlc : LeaderCommits R Live) (hT : T ⊆ rel.correct)
-    (fair : FairToEachWithin T w) (m : ℕ) {v : Validator} (hv : v ∈ T) :
+    (fair : FairToEachWithin T w) (m : ℕ) (hm₀ : R₀ ≤ m) {v : Validator} (hv : v ∈ T) :
     ∃ k', slotAt Validator m ≤ k' ∧ k' < slotAt Validator m + w ∧
       m ≤ S.slotRound k' ∧ S.leader k' = v ∧
       ∀ (U : R.Universe) (V : R.View U), Live S V T k' (k' + 1) →
@@ -283,15 +285,16 @@ theorem committed_of_correct_block_within
   have hm : m ≤ S.slotRound k' :=
     le_trans (le_slotRound_slotAt (Validator := Validator) m) (S.mono hk₁)
   exact ⟨k', hk₁, hk₂, hm, hlead,
-    fun U V hlive => includes_of_leads hsp hne hcc hlc S hT (by rw [hlead]; exact hv) hm U V hlive⟩
+    fun U V hlive => includes_of_leads hsp hne hcc hlc S hT (by rw [hlead]; exact hv) hm hm₀ U V
+      hlive⟩
 
 /-- **CQ7, by round.** With bounded slot spacing the committing slot's
 round is within `s * w` rounds of the first slot at or above `m`. -/
 theorem committed_of_correct_block_by_round
-    (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
     (hlc : LeaderCommits R Live) (hT : T ⊆ rel.correct)
     (fair : FairToEachWithin T w) (hs : BoundedSpacing (Validator := Validator) s)
-    (m : ℕ) {v : Validator} (hv : v ∈ T) :
+    (m : ℕ) (hm₀ : R₀ ≤ m) {v : Validator} (hv : v ∈ T) :
     ∃ k', m ≤ S.slotRound k' ∧
       S.slotRound k' ≤ S.slotRound (slotAt Validator m) + s * w ∧
       S.leader k' = v ∧
@@ -303,7 +306,7 @@ theorem committed_of_correct_block_by_round
               ∀ (g : ℕ → Option BlockId) (n : ℕ), g k' = some L → k' < n →
                 b ∈ ledgerSetOf R U g n := by
   obtain ⟨k', hk₁, hk₂, hm, hlead, hinc⟩ :=
-    committed_of_correct_block_within hsp hne hcc hlc hT fair m hv
+    committed_of_correct_block_within hsp hne hcc hlc hT fair m hm₀ hv
   refine ⟨k', hm, ?_, hlead, hinc⟩
   have hd : k' - slotAt Validator m ≤ w := by omega
   have h := slotRound_le_of_boundedSpacing hs (slotAt Validator m) (k' - slotAt Validator m)

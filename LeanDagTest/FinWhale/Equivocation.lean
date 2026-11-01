@@ -161,7 +161,6 @@ certifies. -/
 def eqReactive : ReactiveM Uequiv (Correct : Finset (Fin 4)) 3 :=
   { eqPace with
     built_lt := fun _ _ _ _ => by simp [eqPace]
-    deadline := fun _ _ _ _ => by simp [eqPace]
     vote_or_wait := by
       intro v hv k hN hlead L hL c hc hcc hcr
       refine Or.inl ?_

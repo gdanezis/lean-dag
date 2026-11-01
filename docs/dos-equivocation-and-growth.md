@@ -357,7 +357,25 @@ developed in §6 (*no amplification*).
 - **D17 — total and permanent.** Once every correct block of a round is
   exposed to `X`, *no valid block* of any later round may reference `X` —
   Byzantine blocks included, since every valid block leans on `f+1` correct
-  blocks of the round below.
+  blocks of the round below. This holds for any exposure a block inherits
+  from its references (`InheritedOn`) under the matching condition
+  (`DoSValidOn`), stated over the raw block data: twins in the history
+  (`ExposedIn`, so `DoSValid`), or evidence of an equivocation carried by a
+  block of the history. The Sync model applies it to a target's history
+  (`docs/sync.md`, S5).
+- **D27 — histories above the exposure.** Then no block of any history at
+  that round or above, other than the history's top, is by `X`: it is
+  referenced by a block one round up, which may not name `X`.
+- **D28 — one block a round for each author not exposed.** Let every
+  correct block of round `n+1` expose each author of a set `E`. In the
+  union of any set of histories, if no author outside `E` has two blocks
+  at one round `k ≥ n+1`, the blocks at round `k` number at most
+  `n − |E|`, besides the tops by authors of `E`. A node that syncs no
+  target of an author of `E`, and adds to `E` every author with twins on
+  its disk, therefore takes in at most `n − |E|` new blocks a round from
+  round `n+1` on, whatever the Byzantine authors send. What lies below
+  round `n+1` in such a history lies in the history of one of its blocks
+  at round `n+1` (`exists_mem_history_of_round_between`).
 - **D18 — pinning.** An author that publishes a round-`j` block to all but
   at most `f` correct validators loses the freedom to disagree about that
   round later.
@@ -435,9 +453,11 @@ determines its top. Anchored at the first unexposed adopter, with
 > (`card_topsOf_le_of_exposed`);
 > per author per round **`c(f) = 1 + (n−1)·f^(f−1)`**
 > (`card_historyBlocksOf_le'`);
-> in total **`|H(b)| ≤ (n + (n−1)·f^f)·(r+1)`** (`card_history_le'`) — at
-> `n = 3f+1`: exactly `7(r+1)` at `f = 1`, constant `31` at `f = 2`
-> against a floor of `5r+1`.
+> per round **`n + (n−1)·f^f`** blocks of the history (`card_historyAt_le`);
+> in total **`|H(b)| ≤ (n + (n−1)·f^f)·(r+1)`**, and at most
+> `(n + (n−1)·f^f)·(r+1−lo)` blocks at rounds `lo` and above
+> (`card_history_le'`) — at `n = 3f+1`: exactly `7(r+1)` at `f = 1`,
+> constant `31` at `f = 2` against a floor of `5r+1`.
 
 Under at most one exposed author the constant is `2n−1` (**B1**), and at
 `f ≤ 1` the bound is unconditional. Linear in `r` at every fault budget:
@@ -760,12 +780,14 @@ form — `card_viewUpto_le` / `card_viewUpto_le'`,
 | **D15a** | the margin is `f − k`, and zero at the bound | `card_creators_refs_add_card_exposedTo_le`, `creators_refs_eq_correct` | `Exposure` |
 | **D15b** | the correct set alone meets the threshold | `correctBlocksAt_admissible_quorum` | `Exclusion` |
 | **D16** | after `R`, agree or be exposed | `exposedIn_of_correct_disagree` | `Exclusion` |
-| **D17** | exclusion is total and permanent | `exposedIn_of_correct_exposed`, `not_mem_creators_refs_of_correct_exposed` | `Exclusion` |
+| **D17** | exclusion is total and permanent | `InheritedOn`, `DoSValidOn`, `exposed_of_correct_exposed`, `not_mem_creators_refs_of_correct_exposed` | `Common/Exclusion` |
 | **D18** | pinning | `mem_history_of_pinned` | `Exclusion` |
+| **D27** | histories above the exposure name no exposed author | `creator_ne_of_correct_exposed` | `Common/Exclusion` |
+| **D28** | one block a round for each author not exposed | `card_union_history_round_le`, `CausalStructure.exists_mem_history_of_round_between` | `Common/Exclusion` |
 | **D19a** | a clean history is linear | `card_history_le_of_not_exposed` | `Counting` |
 | **D19b** | a block is clean about what it references | `card_filter_creator_le_of_mem_refs` | `Counting` |
 | — | the intersection lemma | `exists_shared_correct_ref`, `eq_of_both_name_of_shared` | `Exclusion` |
-| — | the backbone lemma | `mem_history_of_correct` | `Exclusion` |
+| — | the backbone lemma | `mem_history_of_correct` | `AttestedBase` |
 | — | nothing published is invisible to the correct | `exists_accepted_of_mem_ids` | `Exclusion` |
 | — | the condition is implementable | `not_exposedIn_refs_of_policy` | `Exclusion` |
 | — | the quorum is derivable after `R` | `card_creators_accepted_of_eventuallyDelivers` | `Exclusion` |
@@ -789,7 +811,7 @@ form — `card_viewUpto_le` / `card_viewUpto_le'`,
 | — | anchored pedigrees | `PedigreeVia`, `exists_pedigreeVia`, `pedigreeVia_deterministic` | `Pedigree` |
 | — | the sharp top count: `(n−e)·e^(e-1)` | `card_topsOf_le_of_exposed` | `Pedigree` |
 | **C1′ sharp** | per-author per-round `≤ 1 + (n−1)·f^(f-1)` | `card_historyBlocksOf_le'` | `Pedigree` |
-| **B2 sharp** | `\|H(b)\| ≤ (n + (n−1)·f^f)·(r+1)` | `card_history_le'` | `Pedigree` |
+| **B2 sharp** | per round `≤ n + (n−1)·f^f`; at rounds `≥ lo`, `≤ (n + (n−1)·f^f)·(r+1−lo)` | `card_historyAt_le`, `card_history_le'` | `Pedigree` |
 | **D25** | density: all but `f` correct per round appear | `card_missingAt_le` | `Density` |
 | — | novelty: the measure, antitone in the view | `novelty`, `novelty_anti`, `card_history_le_card_add_card_novelty` | `Novelty` |
 | **D26** | the telescope: stepwise novelty ⇒ linear history | `StepNovelty`, `card_history_le_of_stepNovelty` | `Novelty` |

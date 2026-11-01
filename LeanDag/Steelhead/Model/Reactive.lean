@@ -7,8 +7,7 @@ The execution discipline `SynchronisedOn` stands for in SH6a and SH6b, in its re
 (`steelhead.md` §6). The core's `ReactivePace` asks its leader wait at every reliably led slot;
 Steelhead's leader is hidden at an asynchronous slot and nobody waits for it, so the wait is
 asked only at the rounds that carry it, the synchronous slots and the canary rounds, named by
-`waits`. The rest is the core's: time advances with rounds, a validator never waits past its
-timeout (`deadline`, a ceiling where the timed model puts a floor), and at the round above a
+`waits`. The rest is the core's: time advances with rounds, and at the round above a
 reliable leader of a waiting round a block either votes or its builder waited the timeout out and
 votes for any leader block it holds (`vote_or_wait`).
 
@@ -33,7 +32,7 @@ variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type}
 variable [S : Slots Validator]
 
 /-- **Steelhead's reactive schedule** at the wavelength function `w`, the leader wait at the
-rounds `waits` names: the core's pace, the reactive ceiling, the leader wait at the round above a
+rounds `waits` names: the core's pace, the leader wait at the round above a
 reliable leader of a waiting round, and the certificate wait at the wave of three. At two rounds
 above such a leader, any `T`-authored block either already certifies, or its builder waited the
 full timeout and references every reliable vote it holds. Above wave three the certificate clause
@@ -42,9 +41,6 @@ structure ReactiveS (U : BlockUniverse Validator BlockId Payload) (T : Finset Va
     (w : ℕ → ℕ) (waits : ℕ → Prop) extends PaceCore U T N where
   /-- Time advances with rounds, over the rounds `v` reached. -/
   built_lt : ∀ v ∈ T, ∀ n < top v, built v n < built v (n + 1)
-  /-- **The reactive ceiling.** A validator never waits past the timeout; it may build any time
-  before it. -/
-  deadline : ∀ v ∈ T, ∀ n < top v, built v (n + 1) ≤ built v n + timeout n
   /-- **The leader wait, at the rounds that carry it.** At the round above a reliable leader of
   a waiting round, any `T`-authored block either votes (the reactive exit), or its builder waited
   the full timeout and votes for any leader block it holds (the fallback). -/

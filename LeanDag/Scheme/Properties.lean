@@ -93,9 +93,9 @@ theorem noEquiv {rel : Reliability Validator} (hsub : rel.correct ⊆ honest) :
 
 /-- **Every block references its author's previous block**, on records
 whose validity asks it. -/
-theorem selfParent (hP : ∀ blk b, P blk b → Clause.selfParent blk b) :
-    SelfParent (schemeRule p σ) :=
-  fun U b hb hr => hP _ _ (U.valid b hb) hr
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} (hP : ∀ blk b, P blk b → Clause.selfParent blk b) :
+    SelfParent (schemeRule p σ) rel R₀ :=
+  fun U b hb _ hr => hP _ _ (U.valid b hb) (Nat.lt_of_le_of_lt (Nat.zero_le _) hr)
 
 /-- **Two views decide alike** at every row that tolerates the record's
 faults, on records with quorum `q`. -/
@@ -116,7 +116,7 @@ theorem safety {q : ℕ} [P.Quorate q] {f : ℕ} (hσ : σ.Local) (ht : p.Tolera
 the correct validators meet: progress and inclusion. -/
 theorem lives [F : Faults Validator] {σ : VoteSel Validator BlockId Payload ValidWrt Correct}
     (hlive : p.commitThreshold ≤ Fintype.card Validator - F.f) :
-    Support.Lives (R := schemeRule p σ) (familySupport p σ) (coreReliability Validator) :=
+    Support.Lives (R := schemeRule p σ) (familySupport p σ) (coreReliability Validator) 0 :=
   Support.liveness (familySupport_commits hlive) commitsCandidate
     (selfParent fun _ _ h => h.self_parent) (noEquiv subset_rfl)
 

@@ -318,7 +318,7 @@ theorem safety : Properties.Safe (asyncBlueBottleRule (Validator := Validator)
   Properties.safety banded agree commitsCandidate
 
 theorem liveness : Properties.Support.Lives (abbSupport (Validator := Validator)
-    (BlockId := BlockId) (Payload := Payload)) (coreReliability Validator) :=
+    (BlockId := BlockId) (Payload := Payload)) (coreReliability Validator) 0 :=
   Properties.Support.liveness abbSupport_commits commitsCandidate selfParent noEquiv
 
 end AsyncBlueBottleProperties

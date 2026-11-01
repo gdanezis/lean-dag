@@ -32,7 +32,8 @@ theorem populated_and_card_viewUpto_le' {κ R N : ℕ}
         (viewUpto D v n).card ≤ (viewUpto D v (R + 1)).card +
           (n - (R + 1)) *
             ((Correct : Finset Validator).card * (F.f * κ + 1) + F.f * κ) :=
-  ⟨hpop, fun _v hv _n hn => card_viewUpto_le' hbyz hED hra hv hn⟩
+  ⟨hpop, fun _v hv _n hn =>
+    card_viewUpto_le' card_compl_correct_le hbyz hED (Finset.Subset.refl _) hra hv hn⟩
 
 /-- **DoS resistance, unconditionally.** Production, an enforceable
 budget and the reference discipline give liveness and linear storage
@@ -46,6 +47,6 @@ theorem populated_and_card_viewUpto_le {κ N : ℕ}
           (Correct : Finset Validator).card * (n + 1) +
             ((Correct : Finset Validator).card * F.f +
               n * ((Correct : Finset Validator).card * (F.f * κ))) :=
-  ⟨hpop, fun _v hv n => card_viewUpto_le hbyz hra hv n⟩
+  ⟨hpop, fun _v hv n => card_viewUpto_le card_compl_correct_le hbyz hra hv n⟩
 
 end LeanDag

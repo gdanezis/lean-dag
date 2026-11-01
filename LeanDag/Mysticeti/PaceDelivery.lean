@@ -156,7 +156,7 @@ theorem dos_resistance_of_pace {κ : ℕ}
           (Correct : Finset Validator).card * (n + 1) +
             ((Correct : Finset Validator).card * F.f +
               n * ((Correct : Finset Validator).card * (F.f * κ))) :=
-  dos_resistance (vp.populatedOn card_correct) hu vp.refsAccepted_toDelivery
+  dos_resistance card_compl_correct_le (vp.populatedOn card_correct) hu vp.refsAccepted_toDelivery
 
 /-- **The same bound, factored** (V20′). The three summands of
 `dos_resistance_of_pace` are one product: a correct validator's

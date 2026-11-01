@@ -1,6 +1,7 @@
 import LeanDag.DoS.Adoption
 import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Tactic.Ring
+import Mathlib.Order.Interval.Finset.Nat
 
 /-!
 # Pedigrees, and the general bound
@@ -688,6 +689,19 @@ theorem card_topsOf_le_of_exposed (hdos : DoSValid U) {b : BlockId} (hb : b ∈ 
           Fintype.card_option, Fintype.card_coe, Fintype.card_fin, hfilter,
           ← hE', ← hm, hbase]
 
+/-- An exposed author has at most `(n−1)·f^(f−1)` chains. -/
+theorem card_topsOf_le_of_exposed' (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids)
+    {X : Validator} (hX : ExposedIn U b X) :
+    (topsOf U b X).card ≤ (Fintype.card Validator - 1) * F.f ^ (F.f - 1) := by
+  refine le_trans (card_topsOf_le_of_exposed hdos hb hX) ?_
+  have he : 1 ≤ (exposedTo U b).card := Finset.card_pos.mpr ⟨X, mem_exposedTo.mpr hX⟩
+  have hef : (exposedTo U b).card ≤ F.f := card_exposedTo_le hb
+  have herase : ((exposedTo U b).erase X).card ≤ F.f - 1 := by
+    rw [Finset.card_erase_of_mem (mem_exposedTo.mpr hX)]
+    omega
+  exact Nat.mul_le_mul (by omega)
+    ((Nat.pow_le_pow_left hef _).trans (Nat.pow_le_pow_right (by omega) herase))
+
 /-- **C1′, tightened.** The per-round contribution of any author to any
 history is at most `1 + 3f·f^(f-1)` — down from `(3f+2)^(3f+1)`. -/
 theorem card_historyBlocksOf_le' (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids)
@@ -695,101 +709,70 @@ theorem card_historyBlocksOf_le' (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U
     (historyBlocksOf U b X n).card ≤ 1 + (Fintype.card Validator - 1) * F.f ^ (F.f - 1) := by
   refine le_trans (card_historyBlocksOf_le_card_topsOf hdos hb X n) ?_
   by_cases hX : ExposedIn U b X
-  · refine le_trans (card_topsOf_le_of_exposed hdos hb hX) ?_
-    have he : 1 ≤ (exposedTo U b).card :=
-      Finset.card_pos.mpr ⟨X, mem_exposedTo.mpr hX⟩
-    have hef : (exposedTo U b).card ≤ F.f := card_exposedTo_le hb
-    have hf1 : 1 ≤ F.f := le_trans he hef
-    have h1 : Fintype.card Validator - (exposedTo U b).card ≤ (Fintype.card Validator - 1) := by omega
-    have h2 : (exposedTo U b).card ^ ((exposedTo U b).erase X).card
-        ≤ F.f ^ (F.f - 1) := by
-      have herase : ((exposedTo U b).erase X).card ≤ F.f - 1 := by
-        rw [Finset.card_erase_of_mem (mem_exposedTo.mpr hX)]
-        omega
-      calc (exposedTo U b).card ^ ((exposedTo U b).erase X).card
-          ≤ F.f ^ ((exposedTo U b).erase X).card := Nat.pow_le_pow_left hef _
-        _ ≤ F.f ^ (F.f - 1) := Nat.pow_le_pow_right hf1 herase
-    calc (Fintype.card Validator - (exposedTo U b).card) *
-          (exposedTo U b).card ^ ((exposedTo U b).erase X).card
-        ≤ (Fintype.card Validator - 1) * (F.f ^ (F.f - 1)) := Nat.mul_le_mul h1 h2
-      _ ≤ 1 + (Fintype.card Validator - 1) * F.f ^ (F.f - 1) := by omega
-  · have := card_topsOf_le_one_of_not_exposedIn hdos hb hX
-    omega
+  · exact (card_topsOf_le_of_exposed' hdos hb hX).trans (Nat.le_add_left _ _)
+  · exact (card_topsOf_le_one_of_not_exposedIn hdos hb hX).trans (Nat.le_add_right _ _)
 
-/-- **The tightened total.** `|H(b)| ≤ (3f+1 + 3f^(f+1))·(r+1)`: the
-unexposed authors contribute one chain each, the at-most-`f` exposed ones at
-most `3f·f^(f-1)` chains each. At `f = 1` this is `7(r+1)`, recovering the
-adoption theorem's constant exactly. -/
-theorem card_history_le' (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids) :
-    (history U b).card
-      ≤ (Fintype.card Validator + (Fintype.card Validator - 1) * F.f ^ F.f) * ((U.block b).round + 1) := by
+/-- **C1′ per round.** A DoS-valid history holds at most `n + (n−1)·f^f`
+blocks at one round: at most one for each unexposed author, and at most
+`(n−1)·f^(f−1)` for each of the at most `f` exposed ones. -/
+theorem card_historyAt_le (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids) (k : ℕ) :
+    ((history U b).filter fun i => (U.block i).round = k).card
+      ≤ Fintype.card Validator + (Fintype.card Validator - 1) * F.f ^ F.f := by
   classical
-  set e := (exposedTo U b).card with he
-  have hef : e ≤ F.f := card_exposedTo_le hb
-  calc (history U b).card
-      = ∑ W ∈ Finset.univ,
-          ((history U b).filter fun i => (U.block i).creator = W).card :=
-        Finset.card_eq_sum_card_fiberwise (fun i _ => Finset.mem_univ _)
-    _ = (∑ W ∈ exposedTo U b,
-          ((history U b).filter fun i => (U.block i).creator = W).card)
-        + ∑ W ∈ (exposedTo U b)ᶜ,
-            ((history U b).filter fun i => (U.block i).creator = W).card :=
+  have hef : (exposedTo U b).card ≤ F.f := card_exposedTo_le hb
+  have hexp : (exposedTo U b).card * ((Fintype.card Validator - 1) * F.f ^ (F.f - 1))
+      ≤ (Fintype.card Validator - 1) * F.f ^ F.f := by
+    rcases Nat.eq_zero_or_pos F.f with hf0 | hf1
+    · have : (exposedTo U b).card = 0 := by omega
+      simp [this]
+    · calc (exposedTo U b).card * ((Fintype.card Validator - 1) * F.f ^ (F.f - 1))
+          ≤ F.f * ((Fintype.card Validator - 1) * F.f ^ (F.f - 1)) :=
+            Nat.mul_le_mul_right _ hef
+        _ = (Fintype.card Validator - 1) * F.f ^ (F.f - 1 + 1) := by rw [pow_succ]; ring
+        _ = (Fintype.card Validator - 1) * F.f ^ F.f := by rw [Nat.sub_add_cancel hf1]
+  calc ((history U b).filter fun i => (U.block i).round = k).card
+      = ∑ W ∈ Finset.univ, (historyBlocksOf U b W k).card := by
+        rw [Finset.card_eq_sum_card_fiberwise
+          (fun i _ => Finset.mem_univ ((U.block i).creator))]
+        refine Finset.sum_congr rfl fun W _ => congrArg Finset.card ?_
+        ext i
+        simp only [historyBlocksOf, Finset.mem_filter]
+        tauto
+    _ = (∑ W ∈ exposedTo U b, (historyBlocksOf U b W k).card)
+        + ∑ W ∈ (exposedTo U b)ᶜ, (historyBlocksOf U b W k).card :=
         (Finset.sum_add_sum_compl _ _).symm
-    _ ≤ (∑ _W ∈ exposedTo U b, (Fintype.card Validator - 1) * F.f ^ (F.f - 1) * ((U.block b).round + 1))
-        + ∑ _W ∈ (exposedTo U b)ᶜ, ((U.block b).round + 1) := by
-        refine Nat.add_le_add (Finset.sum_le_sum ?_) (Finset.sum_le_sum ?_)
-        · intro W hW
-          have hWexp : ExposedIn U b W := mem_exposedTo.mp hW
-          have hf1 : 1 ≤ F.f :=
-            le_trans (Finset.card_pos.mpr ⟨W, hW⟩) (card_exposedTo_le hb)
-          refine le_trans (card_filter_creator_le_card_topsOf hdos hb W) ?_
-          refine Nat.mul_le_mul_right _ ?_
-          refine le_trans (card_topsOf_le_of_exposed hdos hb hWexp) ?_
-          have h1 : Fintype.card Validator - (exposedTo U b).card ≤ (Fintype.card Validator - 1) := by
-            have : 1 ≤ (exposedTo U b).card := Finset.card_pos.mpr ⟨W, hW⟩
-            omega
-          have h2 : (exposedTo U b).card ^ ((exposedTo U b).erase W).card
-              ≤ F.f ^ (F.f - 1) := by
-            have herase : ((exposedTo U b).erase W).card ≤ F.f - 1 := by
-              rw [Finset.card_erase_of_mem hW]
-              omega
-            calc (exposedTo U b).card ^ ((exposedTo U b).erase W).card
-                ≤ F.f ^ ((exposedTo U b).erase W).card :=
-                  Nat.pow_le_pow_left (card_exposedTo_le hb) _
-              _ ≤ F.f ^ (F.f - 1) := Nat.pow_le_pow_right hf1 herase
-          exact Nat.mul_le_mul h1 h2
-        · intro W hW
-          rw [Finset.mem_compl, mem_exposedTo] at hW
-          exact card_filter_creator_le hb hW
-    _ ≤ ((Fintype.card Validator - 1) * F.f ^ F.f) * ((U.block b).round + 1)
-        + (Fintype.card Validator) * ((U.block b).round + 1) := by
-        refine Nat.add_le_add ?_ ?_
-        · rw [Finset.sum_const_nat (fun _ _ => rfl)]
-          rcases Nat.eq_zero_or_pos F.f with hf0 | hf1
-          · have he0 : e = 0 := by omega
-            rw [← he, he0]
-            simp
-          · calc e * ((Fintype.card Validator - 1) * F.f ^ (F.f - 1) * ((U.block b).round + 1))
-                ≤ F.f * ((Fintype.card Validator - 1) * F.f ^ (F.f - 1) * ((U.block b).round + 1)) :=
-                  Nat.mul_le_mul_right _ hef
-              _ = ((Fintype.card Validator - 1) * F.f ^ F.f) * ((U.block b).round + 1) := by
-                  have hpow : F.f * F.f ^ (F.f - 1) = F.f ^ F.f := by
-                    have hsub : F.f - 1 + 1 = F.f := by omega
-                    calc F.f * F.f ^ (F.f - 1)
-                        = F.f ^ (F.f - 1) * F.f := by ring
-                      _ = F.f ^ (F.f - 1 + 1) := (pow_succ F.f (F.f - 1)).symm
-                      _ = F.f ^ F.f := by rw [hsub]
-                  calc F.f * ((Fintype.card Validator - 1) * F.f ^ (F.f - 1) * ((U.block b).round + 1))
-                      = (Fintype.card Validator - 1) * (F.f * F.f ^ (F.f - 1)) * ((U.block b).round + 1) := by
-                        ring
-                    _ = ((Fintype.card Validator - 1) * F.f ^ F.f) * ((U.block b).round + 1) := by
-                        rw [hpow]
-        · rw [Finset.sum_const_nat (fun _ _ => rfl), Finset.card_compl]
-          refine Nat.mul_le_mul_right _ ?_
-          omega
-    _ = (Fintype.card Validator + (Fintype.card Validator - 1) * F.f ^ F.f) * ((U.block b).round + 1) := by
-        rw [← Nat.add_mul]
-        congr 1
+    _ ≤ (∑ _W ∈ exposedTo U b, (Fintype.card Validator - 1) * F.f ^ (F.f - 1))
+        + ∑ _W ∈ (exposedTo U b)ᶜ, 1 :=
+        Nat.add_le_add
+          (Finset.sum_le_sum fun W hW => (card_historyBlocksOf_le_card_topsOf hdos hb W k).trans
+            (card_topsOf_le_of_exposed' hdos hb (mem_exposedTo.mp hW)))
+          (Finset.sum_le_sum fun W hW => (card_historyBlocksOf_le_card_topsOf hdos hb W k).trans
+            (card_topsOf_le_one_of_not_exposedIn hdos hb
+              (by rwa [Finset.mem_compl, mem_exposedTo] at hW)))
+    _ ≤ Fintype.card Validator + (Fintype.card Validator - 1) * F.f ^ F.f := by
+        rw [Finset.sum_const, Finset.sum_const, smul_eq_mul, smul_eq_mul, mul_one,
+          Finset.card_compl]
         omega
+
+/-- **The tightened total, from any round.** The blocks of a DoS-valid
+history at round `lo` or above number at most `(n + (n−1)·f^f)·(r+1−lo)`;
+at `lo = 0` this is the whole history, `7(r+1)` at `f = 1`. -/
+theorem card_history_le' (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids) (lo : ℕ) :
+    ((history U b).filter fun i => lo ≤ (U.block i).round).card
+      ≤ (Fintype.card Validator + (Fintype.card Validator - 1) * F.f ^ F.f) *
+          ((U.block b).round + 1 - lo) := by
+  classical
+  calc ((history U b).filter fun i => lo ≤ (U.block i).round).card
+      ≤ ∑ k ∈ Finset.Ico lo ((U.block b).round + 1),
+          ((history U b).filter fun i => (U.block i).round = k).card := by
+        refine le_trans (Finset.card_le_card fun i hi => ?_) Finset.card_biUnion_le
+        rw [Finset.mem_filter] at hi
+        have := round_le_of_mem_history hb hi.1
+        exact Finset.mem_biUnion.mpr ⟨(U.block i).round, Finset.mem_Ico.mpr ⟨hi.2, by omega⟩,
+          Finset.mem_filter.mpr ⟨hi.1, rfl⟩⟩
+    _ ≤ ∑ _k ∈ Finset.Ico lo ((U.block b).round + 1),
+          (Fintype.card Validator + (Fintype.card Validator - 1) * F.f ^ F.f) :=
+        Finset.sum_le_sum fun k _ => card_historyAt_le hdos hb k
+    _ = _ := by rw [Finset.sum_const, Nat.card_Ico, smul_eq_mul, mul_comm]
 
 end LeanDag

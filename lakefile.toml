@@ -26,3 +26,16 @@ name = "LeanDag"
 # structures fails the build instead of silently trivialising every theorem.
 [[lean_lib]]
 name = "LeanDagTest"
+
+# The node's simulator and executables (`docs/validator.md` §6): run with
+# `lake exe sim` and `lake exe node`.
+[[lean_lib]]
+name = "LeanDagSim"
+
+[[lean_exe]]
+name = "sim"
+root = "LeanDagSim.SimMain"
+
+[[lean_exe]]
+name = "node"
+root = "LeanDagSim.NodeMain"

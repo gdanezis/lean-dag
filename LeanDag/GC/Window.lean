@@ -8,15 +8,16 @@ rounds; the truncated store agrees with pruning a store below `G`
 (G14); windowed novelty only shrinks as the cut advances (G13), so no
 deferral decision ever flips the wrong way; and a validator whose
 horizon trails its round by at most `Λ` retains a constant number of
-blocks independent of runtime (G6, `card_retained_le`).
+blocks independent of runtime (G6, `card_retained_le`). Stated on any
+block record, its honest set read as correct.
 -/
 
 namespace LeanDag
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
-variable [F : Faults Validator]
 variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
-variable {U : BlockUniverse Validator BlockId Payload}
+variable {P : Validity Validator BlockId Payload} {honest : Finset Validator} [P.Mechanised]
+variable {U : BlockRecord Validator BlockId Payload P honest}
 variable {D : Delivery U} {v w : Validator} {b x : BlockId} {G : ℕ}
 
 /-! ## The store, characterized -/
@@ -172,8 +173,8 @@ theorem refsAccepted_chopD (hra : RefsAccepted D) :
 /-- **G5.** The truncated universe never stalls above the cut: a
 round-`r` block of `chop U G` is a round-`(G+r)` block of `U`, so this is
 the production hypothesis with its index shifted. -/
-theorem populated_chop {N : ℕ} (hpop : ∀ r ≤ N, Populated U r) (hG : G ≤ N) :
-    ∀ r ≤ N - G, Populated (chop U G) r := by
+theorem populated_chop {N : ℕ} {T : Finset Validator} (hpop : ∀ r ≤ N, PopulatedOn U T r)
+    (hG : G ≤ N) : ∀ r ≤ N - G, PopulatedOn (chop U G) T r := by
   intro r hr v hv
   obtain ⟨b, hb, hbc, hbr⟩ := hpop (G + r) (by omega) v hv
   refine ⟨b, mem_chop_ids.mpr ⟨hb, by omega⟩, ?_, ?_⟩
@@ -186,14 +187,11 @@ theorem populated_chop {N : ℕ} (hpop : ∀ r ≤ N, Populated U r) (hG : G ≤
 most `Λ` retains a constant number of blocks, independent of `t`: the
 retained store is the truncated store (G14), which B4 bounds at window
 depth `t − G ≤ Λ`. -/
-theorem card_retained_le {κ Λ t : ℕ} (hbyz : ByzBudget D κ)
-    (hra : RefsAccepted D) (hv : v ∈ (Correct : Finset Validator))
-    (hG : G ≤ t) (hΛ : t ≤ G + Λ) :
+theorem card_retained_le {κ Λ t f : ℕ} (hf : honestᶜ.card ≤ f) (hbyz : ByzBudget D κ)
+    (hra : RefsAccepted D) (hv : v ∈ honest) (hG : G ≤ t) (hΛ : t ≤ G + Λ) :
     ((viewUpto D v t).filter fun i => G ≤ (U.block i).round).card ≤
-      (Correct : Finset Validator).card * (Λ + 1) +
-        ((Correct : Finset Validator).card * F.f +
-          Λ * ((Correct : Finset Validator).card * (F.f * κ))) := by
-  have h := card_viewUpto_le (D := chopD D G)
+      honest.card * (Λ + 1) + (honest.card * f + Λ * (honest.card * (f * κ))) := by
+  have h := card_viewUpto_le (D := chopD D G) hf
     (byzBudget_chopD hbyz) (refsAccepted_chopD hra) hv (t - G)
   rw [viewUpto_chopD, show G + (t - G) = t from by omega] at h
   refine le_trans h (Nat.add_le_add ?_ (Nat.add_le_add_left ?_ _))

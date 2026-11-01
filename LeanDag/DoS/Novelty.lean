@@ -20,20 +20,26 @@ unconditional linear storage from round 0 with no synchrony (B4), and
 the headline `dos_resistance` restated from enforceable conditions only.
 The one hypothesis beyond `Delivery` is `RefsAccepted`, D3's ordinary
 case: a correct validator references only what it accepted.
+
+Everything is stated on any block record, "correct" read as its honest
+set: the Byzantine count is a bound `f` on the validators outside it,
+the receivers of the delivery assumption a set `T` inside it, and the
+self-parent clause a class of the validity (`Validity.SelfParent`). No
+quorum is read.
 -/
 
 namespace LeanDag
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
-variable [F : Faults Validator]
 variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
-variable {U : BlockUniverse Validator BlockId Payload}
-variable {V W : Finset BlockId} {b i : BlockId} {m n : ℕ}
+variable {P : Validity Validator BlockId Payload} {honest : Finset Validator} [P.Mechanised]
+variable {U : BlockRecord Validator BlockId Payload P honest}
+variable {V W : Finset BlockId} {b i : BlockId} {m n : ℕ} {f : ℕ} {T : Finset Validator}
 
 /-! ## The measure -/
 
 /-- What accepting `b` would newly bring into the view `V`. -/
-def novelty (U : BlockUniverse Validator BlockId Payload) (V : Finset BlockId)
+def novelty (U : BlockRecord Validator BlockId Payload P honest) (V : Finset BlockId)
     (b : BlockId) : Finset BlockId :=
   history U b \ V
 
@@ -72,17 +78,17 @@ linear in the round, needing nothing but S10. -/
 
 /-- Stepwise novelty: every correct block adds at most `κ'` blocks over
 the history of its self-parent, unique for a correct author. -/
-def StepNovelty (U : BlockUniverse Validator BlockId Payload) (κ' : ℕ) : Prop :=
-  ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) →
+def StepNovelty (U : BlockRecord Validator BlockId Payload P honest) (κ' : ℕ) : Prop :=
+  ∀ b ∈ U.ids, (U.block b).creator ∈ honest →
     ∀ p ∈ (U.block b).refs, (U.block p).creator = (U.block b).creator →
       (novelty U (history U p) b).card ≤ κ'
 
 instance : Decidable (StepNovelty U κ') := by
   unfold StepNovelty; infer_instance
 
-private theorem card_history_le_of_stepNovelty_aux {κ' : ℕ}
+private theorem card_history_le_of_stepNovelty_aux [P.SelfParent] {κ' : ℕ}
     (hstep : StepNovelty U κ') :
-    ∀ r, ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) →
+    ∀ r, ∀ b ∈ U.ids, (U.block b).creator ∈ honest →
       (U.block b).round = r → (history U b).card ≤ κ' * r + 1 := by
   intro r
   induction r with
@@ -92,7 +98,7 @@ private theorem card_history_le_of_stepNovelty_aux {κ' : ℕ}
       simp
   | succ r ih =>
       intro b hb hcorr hr
-      obtain ⟨p, hp, hpc⟩ := (U.valid b hb).self_parent (by omega)
+      obtain ⟨p, hp, hpc⟩ := U.self_parent hb (by omega)
       have hp_ids : p ∈ U.ids := U.complete b hb p hp
       have hp_round : (U.block p).round + 1 = (U.block b).round :=
         U.round_of_mem_refs hb hp
@@ -108,8 +114,8 @@ private theorem card_history_le_of_stepNovelty_aux {κ' : ℕ}
 /-- **The telescope.** Under `StepNovelty`, a correct author's history is
 linear: `|H(b)| ≤ κ'·r + 1`. Descent along the self-parent chain (S10),
 one budget per round. -/
-theorem card_history_le_of_stepNovelty {κ' : ℕ} (hstep : StepNovelty U κ')
-    (hb : b ∈ U.ids) (hcorr : (U.block b).creator ∈ (Correct : Finset Validator)) :
+theorem card_history_le_of_stepNovelty [P.SelfParent] {κ' : ℕ} (hstep : StepNovelty U κ')
+    (hb : b ∈ U.ids) (hcorr : (U.block b).creator ∈ honest) :
     (history U b).card ≤ κ' * (U.block b).round + 1 :=
   card_history_le_of_stepNovelty_aux hstep (U.block b).round b hb hcorr rfl
 
@@ -182,15 +188,15 @@ thing the theorems need; the correct clause is derived from it
 (`card_novelty_le_of_byzBudget`). The enforced form is `UniformBudget`
 below. -/
 def ByzBudget (D : Delivery U) (κ : ℕ) : Prop :=
-  ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ D.accepted v (n + 1),
-    (U.block b).creator ∉ (Correct : Finset Validator) →
+  ∀ v ∈ honest, ∀ n, ∀ b ∈ D.accepted v (n + 1),
+    (U.block b).creator ∉ honest →
     (novelty U (viewUpto D v n) b).card ≤ κ
 
 /-- **The mechanism-side budget** — the rule a validator actually runs: a
 guard-free cap on every acceptance, author-blind. The two formulations
 sandwich within one factor of `f` (`uniform_of_byzBudget`). -/
 def UniformBudget (D : Delivery U) (τ : ℕ) : Prop :=
-  ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ D.accepted v (n + 1),
+  ∀ v ∈ honest, ∀ n, ∀ b ∈ D.accepted v (n + 1),
     (novelty U (viewUpto D v n) b).card ≤ τ
 
 /-- Dropping a guard weakens nothing: the author-blind cap implies the
@@ -203,8 +209,8 @@ omit [DecidableEq BlockId] in
 correct-authored blocks… -/
 private theorem card_filter_correct_le (v : Validator) (n : ℕ) :
     ((D.accepted v n).filter
-      fun b => (U.block b).creator ∈ (Correct : Finset Validator)).card ≤
-      (Correct : Finset Validator).card := by
+      fun b => (U.block b).creator ∈ honest).card ≤
+      honest.card := by
   refine Finset.card_le_card_of_injOn (fun b => (U.block b).creator) ?_ ?_
   · intro b hb
     exact (Finset.mem_filter.mp hb).2
@@ -214,52 +220,50 @@ private theorem card_filter_correct_le (v : Validator) (n : ℕ) :
 
 omit [DecidableEq BlockId] in
 /-- …and at most `f` Byzantine-authored ones. -/
-private theorem card_filter_not_correct_le (v : Validator) (n : ℕ) :
+private theorem card_filter_not_correct_le (hf : honestᶜ.card ≤ f) (v : Validator) (n : ℕ) :
     ((D.accepted v n).filter
-      fun b => (U.block b).creator ∉ (Correct : Finset Validator)).card ≤ F.f := by
-  refine le_trans ?_ F.card_byzantine
+      fun b => (U.block b).creator ∉ honest).card ≤ f := by
+  refine le_trans ?_ hf
   refine Finset.card_le_card_of_injOn (fun b => (U.block b).creator) ?_ ?_
   · intro b hb
-    have := (Finset.mem_filter.mp hb).2
-    simp only [mem_correct, not_not] at this
-    exact this
+    exact Finset.mem_coe.mpr (Finset.mem_compl.mpr (Finset.mem_filter.mp hb).2)
   · intro i hi j hj hij
     simp only [Finset.mem_coe, Finset.mem_filter] at hi hj
     exact D.accepted_inj v n i hi.1 j hj.1 hij
 
 /-- The Byzantine spend of one round: at most `f` acceptances, `κ` each. -/
-private theorem sum_novelty_not_correct_le {κ : ℕ} (hbyz : ByzBudget D κ)
-    (hv : v ∈ (Correct : Finset Validator)) (n : ℕ) :
+private theorem sum_novelty_not_correct_le {κ : ℕ} (hf : honestᶜ.card ≤ f)
+    (hbyz : ByzBudget D κ) (hv : v ∈ honest) (n : ℕ) :
     ∑ t ∈ (D.accepted v (n + 1)).filter
-        (fun t => (U.block t).creator ∉ (Correct : Finset Validator)),
-      (novelty U (viewUpto D v n) t).card ≤ F.f * κ :=
+        (fun t => (U.block t).creator ∉ honest),
+      (novelty U (viewUpto D v n) t).card ≤ f * κ :=
   calc ∑ t ∈ (D.accepted v (n + 1)).filter
-        (fun t => (U.block t).creator ∉ (Correct : Finset Validator)),
+        (fun t => (U.block t).creator ∉ honest),
         (novelty U (viewUpto D v n) t).card
       ≤ ∑ _t ∈ (D.accepted v (n + 1)).filter
-          (fun t => (U.block t).creator ∉ (Correct : Finset Validator)), κ :=
+          (fun t => (U.block t).creator ∉ honest), κ :=
         Finset.sum_le_sum fun t ht =>
           hbyz v hv n t (Finset.mem_of_mem_filter t ht) (Finset.mem_filter.mp ht).2
     _ = ((D.accepted v (n + 1)).filter
-          (fun t => (U.block t).creator ∉ (Correct : Finset Validator))).card * κ :=
+          (fun t => (U.block t).creator ∉ honest)).card * κ :=
         Finset.sum_const_nat fun _ _ => rfl
-    _ ≤ F.f * κ := Nat.mul_le_mul_right κ (card_filter_not_correct_le v (n + 1))
+    _ ≤ f * κ := Nat.mul_le_mul_right κ (card_filter_not_correct_le hf v (n + 1))
 
 /-! ## The one-round step -/
 
 /-- The generic one-round step: any per-block novelty bounds on the correct
 and Byzantine acceptances bound the view's growth. B3′ instantiates the
 correct side with the *derived* threshold of C3″. -/
-private theorem card_viewUpto_succ_le_of_bounds {κc κb n : ℕ}
+private theorem card_viewUpto_succ_le_of_bounds {κc κb n : ℕ} (hf : honestᶜ.card ≤ f)
     (hc : ∀ b ∈ D.accepted v (n + 1),
-      (U.block b).creator ∈ (Correct : Finset Validator) →
+      (U.block b).creator ∈ honest →
       (novelty U (viewUpto D v n) b).card ≤ κc)
     (hbz : ∀ b ∈ D.accepted v (n + 1),
-      (U.block b).creator ∉ (Correct : Finset Validator) →
+      (U.block b).creator ∉ honest →
       (novelty U (viewUpto D v n) b).card ≤ κb) :
     (viewUpto D v (n + 1)).card ≤
       (viewUpto D v n).card +
-        ((Correct : Finset Validator).card * κc + F.f * κb) := by
+        (honest.card * κc + f * κb) := by
   have hcover : viewUpto D v (n + 1) ⊆
       viewUpto D v n ∪
         (D.accepted v (n + 1)).biUnion (fun t => novelty U (viewUpto D v n) t) := by
@@ -273,39 +277,39 @@ private theorem card_viewUpto_succ_le_of_bounds {κc κb n : ℕ}
         exact Finset.mem_union_right _
           (Finset.mem_biUnion.mpr ⟨a, ha, mem_novelty.mpr ⟨hia, hiv⟩⟩)
   have hsum : ∑ t ∈ D.accepted v (n + 1), (novelty U (viewUpto D v n) t).card ≤
-      (Correct : Finset Validator).card * κc + F.f * κb := by
+      honest.card * κc + f * κb := by
     rw [← Finset.sum_filter_add_sum_filter_not (D.accepted v (n + 1))
-      (fun t => (U.block t).creator ∈ (Correct : Finset Validator))]
+      (fun t => (U.block t).creator ∈ honest)]
     have hcs : ∑ t ∈ (D.accepted v (n + 1)).filter
-          (fun t => (U.block t).creator ∈ (Correct : Finset Validator)),
+          (fun t => (U.block t).creator ∈ honest),
         (novelty U (viewUpto D v n) t).card ≤
-        (Correct : Finset Validator).card * κc :=
+        honest.card * κc :=
       calc ∑ t ∈ (D.accepted v (n + 1)).filter
-            (fun t => (U.block t).creator ∈ (Correct : Finset Validator)),
+            (fun t => (U.block t).creator ∈ honest),
             (novelty U (viewUpto D v n) t).card
           ≤ ∑ _t ∈ (D.accepted v (n + 1)).filter
-              (fun t => (U.block t).creator ∈ (Correct : Finset Validator)), κc :=
+              (fun t => (U.block t).creator ∈ honest), κc :=
             Finset.sum_le_sum fun t ht =>
               hc t (Finset.mem_of_mem_filter t ht) (Finset.mem_filter.mp ht).2
         _ = ((D.accepted v (n + 1)).filter
-              (fun t => (U.block t).creator ∈ (Correct : Finset Validator))).card * κc :=
+              (fun t => (U.block t).creator ∈ honest)).card * κc :=
             Finset.sum_const_nat fun _ _ => rfl
-        _ ≤ (Correct : Finset Validator).card * κc :=
+        _ ≤ honest.card * κc :=
             Nat.mul_le_mul_right κc (card_filter_correct_le v (n + 1))
     have hbs : ∑ t ∈ (D.accepted v (n + 1)).filter
-          (fun t => (U.block t).creator ∉ (Correct : Finset Validator)),
-        (novelty U (viewUpto D v n) t).card ≤ F.f * κb :=
+          (fun t => (U.block t).creator ∉ honest),
+        (novelty U (viewUpto D v n) t).card ≤ f * κb :=
       calc ∑ t ∈ (D.accepted v (n + 1)).filter
-            (fun t => (U.block t).creator ∉ (Correct : Finset Validator)),
+            (fun t => (U.block t).creator ∉ honest),
             (novelty U (viewUpto D v n) t).card
           ≤ ∑ _t ∈ (D.accepted v (n + 1)).filter
-              (fun t => (U.block t).creator ∉ (Correct : Finset Validator)), κb :=
+              (fun t => (U.block t).creator ∉ honest), κb :=
             Finset.sum_le_sum fun t ht =>
               hbz t (Finset.mem_of_mem_filter t ht) (Finset.mem_filter.mp ht).2
         _ = ((D.accepted v (n + 1)).filter
-              (fun t => (U.block t).creator ∉ (Correct : Finset Validator))).card * κb :=
+              (fun t => (U.block t).creator ∉ honest)).card * κb :=
             Finset.sum_const_nat fun _ _ => rfl
-        _ ≤ F.f * κb := Nat.mul_le_mul_right κb (card_filter_not_correct_le v (n + 1))
+        _ ≤ f * κb := Nat.mul_le_mul_right κb (card_filter_not_correct_le hf v (n + 1))
     omega
   calc (viewUpto D v (n + 1)).card
       ≤ (viewUpto D v n ∪
@@ -320,7 +324,7 @@ private theorem card_viewUpto_succ_le_of_bounds {κc κb n : ℕ}
           ∑ t ∈ D.accepted v (n + 1), (novelty U (viewUpto D v n) t).card :=
         Nat.add_le_add_left Finset.card_biUnion_le _
     _ ≤ (viewUpto D v n).card +
-          ((Correct : Finset Validator).card * κc + F.f * κb) :=
+          (honest.card * κc + f * κb) :=
         Nat.add_le_add_left hsum _
 
 /-! ## C3 — the liveness half: what a correct validator must fetch so
@@ -337,8 +341,8 @@ def viewGap (D : Delivery U) (v w : Validator) (n : ℕ) : Finset BlockId :=
 correct `v`, at most one plus the gap toward `w`: its correct references
 are shared (delivered and accepted at `v` too), and its Byzantine
 references sit whole inside `w`'s view. -/
-theorem card_novelty_le_viewGap_add_one {R : ℕ} (hED : EventuallyDelivers D R)
-    (hn : R ≤ n) (hv : v ∈ (Correct : Finset Validator)) (hb : b ∈ U.ids)
+theorem card_novelty_le_viewGap_add_one {R : ℕ} (hED : EventuallyDeliversOn D T R)
+    (hT : T ⊆ honest) (hn : R ≤ n) (hv : v ∈ T) (hb : b ∈ U.ids)
     (hrefs : (U.block b).refs ⊆ D.accepted w n) :
     (novelty U (viewUpto D v n) b).card ≤ (viewGap D v w n).card + 1 := by
   have hsub : novelty U (viewUpto D v n) b ⊆ insert b (viewGap D v w n) := by
@@ -348,9 +352,9 @@ theorem card_novelty_le_viewGap_add_one {R : ℕ} (hED : EventuallyDelivers D R)
     · exact Finset.mem_insert_self _ _
     · have htw : t ∈ D.accepted w n := hrefs ht
       obtain ⟨ht_ids, ht_round⟩ := D.held_spec w n t (D.accepted_sub w n htw)
-      by_cases htc : (U.block t).creator ∈ (Correct : Finset Validator)
+      by_cases htc : (U.block t).creator ∈ honest
       · exact absurd (history_subset_viewUpto (le_refl n)
-          (D.accepts_correct v hv n t (hED n hn v hv t ht_ids ht_round htc) htc)
+          (D.accepts_correct v (hT hv) n t (hED n hn v hv t ht_ids ht_round htc) htc)
           hit) hiv
       · exact Finset.mem_insert_of_mem (Finset.mem_sdiff.mpr
           ⟨history_subset_viewUpto (le_refl n) htw hit, hiv⟩)
@@ -363,7 +367,7 @@ whole standing gap. -/
 
 /-- A correct validator's block carries everything its author ever
 accepted: `includes` per round, chained by the self-parent (S10). -/
-theorem viewUpto_subset_history (hw : w ∈ (Correct : Finset Validator))
+theorem viewUpto_subset_history [P.SelfParent] (hw : w ∈ honest)
     {b : BlockId} (hb : b ∈ U.ids) (hbc : (U.block b).creator = w)
     (hbr : (U.block b).round = n + 1) :
     viewUpto D w n ⊆ history U b := by
@@ -377,7 +381,7 @@ theorem viewUpto_subset_history (hw : w ∈ (Correct : Finset Validator))
       intro i hi
       rw [viewUpto_succ] at hi
       rcases Finset.mem_union.mp hi with h | h
-      · obtain ⟨p, hp, hpc⟩ := (U.valid b hb).self_parent (by omega)
+      · obtain ⟨p, hp, hpc⟩ := U.self_parent hb (by omega)
         have hp_ids : p ∈ U.ids := U.complete b hb p hp
         have hp_round : (U.block p).round + 1 = (U.block b).round :=
           U.round_of_mem_refs hb hp
@@ -391,22 +395,21 @@ theorem viewUpto_subset_history (hw : w ∈ (Correct : Finset Validator))
 between two correct validators' views is at most one round of Byzantine
 budget: `w`'s round-`(n+1)` block hands `v` all of `viewUpto w n` at
 once, the remainder being `w`'s budgeted Byzantine frontier. -/
-theorem card_viewGap_succ_le {κ R : ℕ} (hbyz : ByzBudget D κ)
-    (hED : EventuallyDelivers D R) (hn : R ≤ n + 1)
-    (hv : v ∈ (Correct : Finset Validator))
-    (hw : w ∈ (Correct : Finset Validator)) {c : BlockId} (hc : c ∈ U.ids)
+theorem card_viewGap_succ_le [P.SelfParent] {κ R : ℕ} (hf : honestᶜ.card ≤ f)
+    (hbyz : ByzBudget D κ) (hED : EventuallyDeliversOn D T R) (hT : T ⊆ honest)
+    (hn : R ≤ n + 1) (hv : v ∈ T) (hw : w ∈ honest) {c : BlockId} (hc : c ∈ U.ids)
     (hcc : (U.block c).creator = w) (hcr : (U.block c).round = n + 1) :
-    (viewGap D v w (n + 1)).card ≤ F.f * κ := by
+    (viewGap D v w (n + 1)).card ≤ f * κ := by
   have hcheld : c ∈ D.held v (n + 1) :=
     hED (n + 1) hn v hv c hc hcr (by rw [hcc]; exact hw)
   have hcacc : c ∈ D.accepted v (n + 1) :=
-    D.accepts_correct v hv (n + 1) c hcheld (by rw [hcc]; exact hw)
+    D.accepts_correct v (hT hv) (n + 1) c hcheld (by rw [hcc]; exact hw)
   have hwv : viewUpto D w n ⊆ viewUpto D v (n + 1) :=
     (viewUpto_subset_history hw hc hcc hcr).trans
       (history_subset_viewUpto (le_refl (n + 1)) hcacc)
   have hsub : viewGap D v w (n + 1) ⊆
       ((D.accepted w (n + 1)).filter
-        (fun t => (U.block t).creator ∉ (Correct : Finset Validator))).biUnion
+        (fun t => (U.block t).creator ∉ honest)).biUnion
         (fun t => novelty U (viewUpto D w n) t) := by
     intro i hi
     obtain ⟨hiw, hiv⟩ := Finset.mem_sdiff.mp hi
@@ -416,33 +419,33 @@ theorem card_viewGap_succ_le {κ R : ℕ} (hbyz : ByzBudget D κ)
     · obtain ⟨t, ht, hit⟩ := Finset.mem_biUnion.mp h
       obtain ⟨ht_ids, ht_round⟩ :=
         D.held_spec w (n + 1) t (D.accepted_sub w (n + 1) ht)
-      by_cases htc : (U.block t).creator ∈ (Correct : Finset Validator)
+      by_cases htc : (U.block t).creator ∈ honest
       · exact absurd (history_subset_viewUpto (le_refl (n + 1))
-          (D.accepts_correct v hv (n + 1) t
+          (D.accepts_correct v (hT hv) (n + 1) t
             (hED (n + 1) hn v hv t ht_ids ht_round htc) htc) hit) hiv
       · exact Finset.mem_biUnion.mpr ⟨t, Finset.mem_filter.mpr ⟨ht, htc⟩,
           mem_novelty.mpr ⟨hit, fun hmem => hiv (hwv hmem)⟩⟩
   exact (Finset.card_le_card hsub).trans
-    (Finset.card_biUnion_le.trans (sum_novelty_not_correct_le hbyz hw n))
+    (Finset.card_biUnion_le.trans (sum_novelty_not_correct_le hf hbyz hw n))
 
 /-- **C3″ — the correct side of the budget is a theorem.** A validator
 enforcing only the Byzantine clause `κ` never meets a correct block over
 `f·κ + 1` after `R`, so the hysteresis threshold `Κ = f·κ + 1` is
 derived, not assumed. -/
-theorem card_novelty_le_of_byzBudget {κ R : ℕ} (hbyz : ByzBudget D κ)
-    (hED : EventuallyDelivers D R) (hn : R ≤ n + 1)
-    (hv : v ∈ (Correct : Finset Validator)) (hb : b ∈ U.ids)
-    (hbc : (U.block b).creator ∈ (Correct : Finset Validator))
+theorem card_novelty_le_of_byzBudget [P.SelfParent] {κ R : ℕ} (hf : honestᶜ.card ≤ f)
+    (hbyz : ByzBudget D κ) (hED : EventuallyDeliversOn D T R) (hT : T ⊆ honest)
+    (hn : R ≤ n + 1) (hv : v ∈ T) (hb : b ∈ U.ids)
+    (hbc : (U.block b).creator ∈ honest)
     (hbr : (U.block b).round = n + 2)
     (hrefs : (U.block b).refs ⊆ D.accepted (U.block b).creator (n + 1)) :
-    (novelty U (viewUpto D v (n + 1)) b).card ≤ F.f * κ + 1 := by
-  obtain ⟨p, hp, hpc⟩ := (U.valid b hb).self_parent (by omega)
+    (novelty U (viewUpto D v (n + 1)) b).card ≤ f * κ + 1 := by
+  obtain ⟨p, hp, hpc⟩ := U.self_parent hb (by omega)
   have hp_ids : p ∈ U.ids := U.complete b hb p hp
   have hp_round : (U.block p).round + 1 = (U.block b).round :=
     U.round_of_mem_refs hb hp
-  exact (card_novelty_le_viewGap_add_one hED hn hv hb hrefs).trans
+  exact (card_novelty_le_viewGap_add_one hED hT hn hv hb hrefs).trans
     (Nat.add_le_add_right
-      (card_viewGap_succ_le hbyz hED hn hv hbc hp_ids hpc (by omega)) 1)
+      (card_viewGap_succ_le hf hbyz hED hT hn hv hbc hp_ids hpc (by omega)) 1)
 
 /-! ## The capstone — liveness and storage from one set of hypotheses -/
 
@@ -450,71 +453,67 @@ theorem card_novelty_le_of_byzBudget {κ R : ℕ} (hbyz : ByzBudget D κ)
 references **only** what it accepted — the converse of `includes`;
 together they say `refs = accepted`. -/
 def RefsAccepted (D : Delivery U) : Prop :=
-  ∀ w ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ U.ids,
+  ∀ w ∈ honest, ∀ n, ∀ b ∈ U.ids,
     (U.block b).creator = w → (U.block b).round = n + 1 →
     (U.block b).refs ⊆ D.accepted w n
 
 /-- **The sandwich, converse direction.** After `R`, a `ByzBudget κ`
 schedule is uniformly budgeted at `f·κ + 1` with no creator guard:
 Byzantine acceptances by enforcement, correct ones by C3″. -/
-theorem uniform_of_byzBudget {κ R : ℕ} (hbyz : ByzBudget D κ)
-    (hED : EventuallyDelivers D R) (hra : RefsAccepted D)
-    (hv : v ∈ (Correct : Finset Validator)) {n : ℕ} (hn : R ≤ n + 1)
+theorem uniform_of_byzBudget [P.SelfParent] {κ R : ℕ} (hf : honestᶜ.card ≤ f)
+    (hbyz : ByzBudget D κ) (hED : EventuallyDeliversOn D T R) (hT : T ⊆ honest)
+    (hra : RefsAccepted D) (hv : v ∈ T) {n : ℕ} (hn : R ≤ n + 1)
     (hb : b ∈ D.accepted v (n + 2)) :
-    (novelty U (viewUpto D v (n + 1)) b).card ≤ F.f * κ + 1 := by
+    (novelty U (viewUpto D v (n + 1)) b).card ≤ f * κ + 1 := by
   obtain ⟨hb_ids, hb_round⟩ :=
     D.held_spec v (n + 2) b (D.accepted_sub v (n + 2) hb)
-  by_cases hbc : (U.block b).creator ∈ (Correct : Finset Validator)
-  · exact card_novelty_le_of_byzBudget hbyz hED hn hv hb_ids hbc hb_round
+  by_cases hbc : (U.block b).creator ∈ honest
+  · exact card_novelty_le_of_byzBudget hf hbyz hED hT hn hv hb_ids hbc hb_round
       (hra (U.block b).creator hbc (n + 1) b hb_ids rfl hb_round)
-  · have h1 := hbyz v hv (n + 1) b hb hbc
-    have hf : 0 < F.f := by
-      have hmem : (U.block b).creator ∈ F.byzantine := by
-        by_contra hcon
-        exact hbc (mem_correct.mpr hcon)
-      have hpos := Finset.card_pos.mpr ⟨_, hmem⟩
-      have := F.card_byzantine
+  · have h1 := hbyz v (hT hv) (n + 1) b hb hbc
+    have hf0 : 0 < f := by
+      have hpos := Finset.card_pos.mpr ⟨_, Finset.mem_compl.mpr hbc⟩
       omega
-    have := Nat.le_mul_of_pos_left κ hf
+    have := Nat.le_mul_of_pos_left κ hf0
     omega
 
 /-- **B3′ — linear storage from the enforceable rule alone.** After `R`,
 a correct validator's view grows by at most
 `|Correct|·(f·κ + 1) + f·κ` per round, under nothing but the Byzantine
 budget and the reference discipline. -/
-theorem card_viewUpto_le' {κ R : ℕ} (hbyz : ByzBudget D κ)
-    (hED : EventuallyDelivers D R) (hra : RefsAccepted D)
-    (hv : v ∈ (Correct : Finset Validator)) {n : ℕ} (hn : R + 1 ≤ n) :
+theorem card_viewUpto_le' [P.SelfParent] {κ R : ℕ} (hf : honestᶜ.card ≤ f)
+    (hbyz : ByzBudget D κ) (hED : EventuallyDeliversOn D T R) (hT : T ⊆ honest)
+    (hra : RefsAccepted D) (hv : v ∈ T) {n : ℕ} (hn : R + 1 ≤ n) :
     (viewUpto D v n).card ≤ (viewUpto D v (R + 1)).card +
       (n - (R + 1)) *
-        ((Correct : Finset Validator).card * (F.f * κ + 1) + F.f * κ) := by
+        (honest.card * (f * κ + 1) + f * κ) := by
   induction n, hn using Nat.le_induction with
   | base => simp
   | succ n hRn ih =>
       obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
       have hstep : (viewUpto D v (m + 2)).card ≤ (viewUpto D v (m + 1)).card +
-          ((Correct : Finset Validator).card * (F.f * κ + 1) + F.f * κ) := by
-        refine card_viewUpto_succ_le_of_bounds ?_ ?_
+          (honest.card * (f * κ + 1) + f * κ) := by
+        refine card_viewUpto_succ_le_of_bounds hf ?_ ?_
         · intro b hb hbc
           obtain ⟨hb_ids, hb_round⟩ :=
             D.held_spec v (m + 2) b (D.accepted_sub v (m + 2) hb)
-          exact card_novelty_le_of_byzBudget hbyz hED (by omega) hv hb_ids hbc
+          exact card_novelty_le_of_byzBudget hf hbyz hED hT (by omega) hv hb_ids hbc
             hb_round (hra (U.block b).creator hbc (m + 1) b hb_ids rfl hb_round)
         · intro b hb hbc
-          exact hbyz v hv (m + 1) b hb hbc
+          exact hbyz v (hT hv) (m + 1) b hb hbc
       have hsub : m + 2 - (R + 1) = (m + 1 - (R + 1)) + 1 := by omega
       calc (viewUpto D v (m + 2)).card
           ≤ (viewUpto D v (m + 1)).card +
-              ((Correct : Finset Validator).card * (F.f * κ + 1) + F.f * κ) :=
+              (honest.card * (f * κ + 1) + f * κ) :=
             hstep
         _ ≤ ((viewUpto D v (R + 1)).card +
               (m + 1 - (R + 1)) *
-                ((Correct : Finset Validator).card * (F.f * κ + 1) + F.f * κ)) +
-              ((Correct : Finset Validator).card * (F.f * κ + 1) + F.f * κ) :=
+                (honest.card * (f * κ + 1) + f * κ)) +
+              (honest.card * (f * κ + 1) + f * κ) :=
             Nat.add_le_add_right ih _
         _ = (viewUpto D v (R + 1)).card +
               (m + 2 - (R + 1)) *
-                ((Correct : Finset Validator).card * (F.f * κ + 1) + F.f * κ) := by
+                (honest.card * (f * κ + 1) + f * κ) := by
             rw [hsub, Nat.succ_mul, Nat.add_assoc]
 
 
@@ -555,11 +554,11 @@ theorem viewUpto_zero : viewUpto D v 0 = D.accepted v 0 := by
 per round (`no_equivocation`), so at most `|Correct|·(n+1)`. -/
 theorem card_viewUpto_filter_correct_le (v : Validator) (n : ℕ) :
     ((viewUpto D v n).filter
-      fun i => (U.block i).creator ∈ (Correct : Finset Validator)).card ≤
-      (Correct : Finset Validator).card * (n + 1) := by
+      fun i => (U.block i).creator ∈ honest).card ≤
+      honest.card * (n + 1) := by
   calc ((viewUpto D v n).filter
-        fun i => (U.block i).creator ∈ (Correct : Finset Validator)).card
-      ≤ ((Correct : Finset Validator) ×ˢ Finset.range (n + 1)).card := by
+        fun i => (U.block i).creator ∈ honest).card
+      ≤ (honest ×ˢ Finset.range (n + 1)).card := by
         refine Finset.card_le_card_of_injOn
           (fun i => ((U.block i).creator, (U.block i).round)) ?_ ?_
         · intro i hi
@@ -575,21 +574,21 @@ theorem card_viewUpto_filter_correct_le (v : Validator) (n : ℕ) :
             congrArg Prod.snd hij
           exact U.no_equivocation i (viewUpto_subset_ids hi.1) j
             (viewUpto_subset_ids hj.1) hi.2 h1 h2
-    _ = (Correct : Finset Validator).card * (n + 1) := by
+    _ = honest.card * (n + 1) := by
         rw [Finset.card_product, Finset.card_range]
 
 /-- The **global Byzantine pool**: every Byzantine-authored block sitting
 in any correct validator's retained view. -/
 def byzPool (D : Delivery U) (n : ℕ) : Finset BlockId :=
-  (Correct : Finset Validator).biUnion fun w =>
+  honest.biUnion fun w =>
     (viewUpto D w n).filter
-      fun i => (U.block i).creator ∉ (Correct : Finset Validator)
+      fun i => (U.block i).creator ∉ honest
 
 /-- Membership in `byzPool`, unfolded: a Byzantine-authored block that some correct validator's view already contains. -/
 theorem mem_byzPool {i : BlockId} :
-    i ∈ byzPool D n ↔ ∃ w ∈ (Correct : Finset Validator),
+    i ∈ byzPool D n ↔ ∃ w ∈ honest,
       i ∈ viewUpto D w n ∧
-        (U.block i).creator ∉ (Correct : Finset Validator) := by
+        (U.block i).creator ∉ honest := by
   constructor
   · intro h
     obtain ⟨w, hw, hmem⟩ := Finset.mem_biUnion.mp h
@@ -600,32 +599,32 @@ theorem mem_byzPool {i : BlockId} :
 
 /-- Round 0 seeds the pool with at most `f` Byzantine geneses per correct
 validator. -/
-theorem card_byzPool_zero_le :
-    (byzPool D 0).card ≤ (Correct : Finset Validator).card * F.f :=
+theorem card_byzPool_zero_le (hf : honestᶜ.card ≤ f) :
+    (byzPool D 0).card ≤ honest.card * f :=
   calc (byzPool D 0).card
-      ≤ ∑ w ∈ (Correct : Finset Validator),
+      ≤ ∑ w ∈ honest,
           ((viewUpto D w 0).filter
-            fun i => (U.block i).creator ∉ (Correct : Finset Validator)).card :=
+            fun i => (U.block i).creator ∉ honest).card :=
         Finset.card_biUnion_le
-    _ ≤ ∑ _w ∈ (Correct : Finset Validator), F.f :=
+    _ ≤ ∑ _w ∈ honest, f :=
         Finset.sum_le_sum fun w _ => by
           rw [viewUpto_zero]
-          exact card_filter_not_correct_le w 0
-    _ = (Correct : Finset Validator).card * F.f :=
+          exact card_filter_not_correct_le hf w 0
+    _ = honest.card * f :=
         Finset.sum_const_nat fun _ _ => rfl
 
 /-- **The accounting step.** A Byzantine block enters the pool only as a
 direct budgeted acceptance: if it arrived inside a correct block's cone,
 `RefsAccepted` puts it in that block's author's *earlier* view — it was in
 the pool already. So the pool grows by at most `|Correct|·f·κ` per round. -/
-theorem card_byzPool_succ_le {κ : ℕ} (hbyz : ByzBudget D κ)
+theorem card_byzPool_succ_le {κ : ℕ} (hf : honestᶜ.card ≤ f) (hbyz : ByzBudget D κ)
     (hra : RefsAccepted D) (n : ℕ) :
     (byzPool D (n + 1)).card ≤
-      (byzPool D n).card + (Correct : Finset Validator).card * (F.f * κ) := by
+      (byzPool D n).card + honest.card * (f * κ) := by
   have hsub : byzPool D (n + 1) ⊆ byzPool D n ∪
-      (Correct : Finset Validator).biUnion (fun w =>
+      honest.biUnion (fun w =>
         ((D.accepted w (n + 1)).filter
-          fun t => (U.block t).creator ∉ (Correct : Finset Validator)).biUnion
+          fun t => (U.block t).creator ∉ honest).biUnion
           fun t => novelty U (viewUpto D w n) t) := by
     intro i hi
     obtain ⟨w, hw, hiv, hic⟩ := mem_byzPool.mp hi
@@ -637,7 +636,7 @@ theorem card_byzPool_succ_le {κ : ℕ} (hbyz : ByzBudget D κ)
       · exact Finset.mem_union_left _ (mem_byzPool.mpr ⟨w, hw, hiw, hic⟩)
       obtain ⟨ht_ids, ht_round⟩ :=
         D.held_spec w (n + 1) t (D.accepted_sub w (n + 1) ht)
-      by_cases htc : (U.block t).creator ∈ (Correct : Finset Validator)
+      by_cases htc : (U.block t).creator ∈ honest
       · -- inside a correct block's cone: already in its author's view
         rcases (mem_history_succ_iff ht_ids).mp hit with rfl | ⟨s, hs, his⟩
         · exact absurd htc hic
@@ -652,41 +651,41 @@ theorem card_byzPool_succ_le {κ : ℕ} (hbyz : ByzBudget D κ)
             mem_novelty.mpr ⟨hit, hiw⟩⟩⟩)
   calc (byzPool D (n + 1)).card
       ≤ (byzPool D n ∪
-          (Correct : Finset Validator).biUnion (fun w =>
+          honest.biUnion (fun w =>
             ((D.accepted w (n + 1)).filter
-              fun t => (U.block t).creator ∉ (Correct : Finset Validator)).biUnion
+              fun t => (U.block t).creator ∉ honest).biUnion
               fun t => novelty U (viewUpto D w n) t)).card :=
         Finset.card_le_card hsub
     _ ≤ (byzPool D n).card +
-          ((Correct : Finset Validator).biUnion (fun w =>
+          (honest.biUnion (fun w =>
             ((D.accepted w (n + 1)).filter
-              fun t => (U.block t).creator ∉ (Correct : Finset Validator)).biUnion
+              fun t => (U.block t).creator ∉ honest).biUnion
               fun t => novelty U (viewUpto D w n) t)).card :=
         Finset.card_union_le _ _
     _ ≤ (byzPool D n).card +
-          ∑ w ∈ (Correct : Finset Validator),
+          ∑ w ∈ honest,
             (((D.accepted w (n + 1)).filter
-              fun t => (U.block t).creator ∉ (Correct : Finset Validator)).biUnion
+              fun t => (U.block t).creator ∉ honest).biUnion
               fun t => novelty U (viewUpto D w n) t).card :=
         Nat.add_le_add_left Finset.card_biUnion_le _
-    _ ≤ (byzPool D n).card + ∑ _w ∈ (Correct : Finset Validator), F.f * κ :=
+    _ ≤ (byzPool D n).card + ∑ _w ∈ honest, f * κ :=
         Nat.add_le_add_left (Finset.sum_le_sum fun w hw =>
-          Finset.card_biUnion_le.trans (sum_novelty_not_correct_le hbyz hw n)) _
-    _ = (byzPool D n).card + (Correct : Finset Validator).card * (F.f * κ) := by
+          Finset.card_biUnion_le.trans (sum_novelty_not_correct_le hf hbyz hw n)) _
+    _ = (byzPool D n).card + honest.card * (f * κ) := by
         rw [Finset.sum_const_nat fun _ _ => rfl]
 
 /-- The pool, telescoped: linear from round 0. -/
-theorem card_byzPool_le {κ : ℕ} (hbyz : ByzBudget D κ) (hra : RefsAccepted D)
-    (n : ℕ) :
-    (byzPool D n).card ≤ (Correct : Finset Validator).card * F.f +
-      n * ((Correct : Finset Validator).card * (F.f * κ)) := by
+theorem card_byzPool_le {κ : ℕ} (hf : honestᶜ.card ≤ f) (hbyz : ByzBudget D κ)
+    (hra : RefsAccepted D) (n : ℕ) :
+    (byzPool D n).card ≤ honest.card * f +
+      n * (honest.card * (f * κ)) := by
   induction n with
-  | zero => simpa using card_byzPool_zero_le (D := D)
+  | zero => simpa using card_byzPool_zero_le (D := D) hf
   | succ n ih =>
-      have hstep := card_byzPool_succ_le hbyz hra n
-      have hmul : (n + 1) * ((Correct : Finset Validator).card * (F.f * κ)) =
-          n * ((Correct : Finset Validator).card * (F.f * κ)) +
-            (Correct : Finset Validator).card * (F.f * κ) :=
+      have hstep := card_byzPool_succ_le hf hbyz hra n
+      have hmul : (n + 1) * (honest.card * (f * κ)) =
+          n * (honest.card * (f * κ)) +
+            honest.card * (f * κ) :=
         Nat.succ_mul _ _
       omega
 
@@ -694,29 +693,29 @@ theorem card_byzPool_le {κ : ℕ} (hbyz : ByzBudget D κ) (hra : RefsAccepted D
 enforceable budget and the reference discipline — no synchrony, no `R`,
 no delivery guarantee — every correct validator's retained view is
 linear in the round. -/
-theorem card_viewUpto_le {κ : ℕ} (hbyz : ByzBudget D κ)
-    (hra : RefsAccepted D) (hv : v ∈ (Correct : Finset Validator)) (n : ℕ) :
+theorem card_viewUpto_le {κ : ℕ} (hf : honestᶜ.card ≤ f) (hbyz : ByzBudget D κ)
+    (hra : RefsAccepted D) (hv : v ∈ honest) (n : ℕ) :
     (viewUpto D v n).card ≤
-      (Correct : Finset Validator).card * (n + 1) +
-        ((Correct : Finset Validator).card * F.f +
-          n * ((Correct : Finset Validator).card * (F.f * κ))) := by
+      honest.card * (n + 1) +
+        (honest.card * f +
+          n * (honest.card * (f * κ))) := by
   have hbyzpart : ((viewUpto D v n).filter
-      fun i => (U.block i).creator ∉ (Correct : Finset Validator)).card ≤
+      fun i => (U.block i).creator ∉ honest).card ≤
       (byzPool D n).card :=
     Finset.card_le_card fun i hi => by
       obtain ⟨hiv, hic⟩ := Finset.mem_filter.mp hi
       exact mem_byzPool.mpr ⟨v, hv, hiv, hic⟩
   calc (viewUpto D v n).card
       = ((viewUpto D v n).filter
-          fun i => (U.block i).creator ∈ (Correct : Finset Validator)).card +
+          fun i => (U.block i).creator ∈ honest).card +
         ((viewUpto D v n).filter
-          fun i => (U.block i).creator ∉ (Correct : Finset Validator)).card :=
+          fun i => (U.block i).creator ∉ honest).card :=
         (Finset.card_filter_add_card_filter_not _).symm
-    _ ≤ (Correct : Finset Validator).card * (n + 1) +
-          ((Correct : Finset Validator).card * F.f +
-            n * ((Correct : Finset Validator).card * (F.f * κ))) :=
+    _ ≤ honest.card * (n + 1) +
+          (honest.card * f +
+            n * (honest.card * (f * κ))) :=
         Nat.add_le_add (card_viewUpto_filter_correct_le v n)
-          (hbyzpart.trans (card_byzPool_le hbyz hra n))
+          (hbyzpart.trans (card_byzPool_le hf hbyz hra n))
 
 /-! ## The headline — enforceable conditions only: `dos_resistance`
 quotes nothing a validator cannot implement — `Live`, `DeliversQuorum`,
@@ -726,28 +725,28 @@ or any identity. -/
 
 /-- **DoS resistance, from enforceable conditions only.** Liveness and
 linear storage from round 0 under full asynchrony. -/
-theorem dos_resistance {τ N : ℕ} {P : Finset Validator}
-    (hpop : ∀ r ≤ N, PopulatedOn U P r)
+theorem dos_resistance {τ N : ℕ} {Q : Finset Validator} (hf : honestᶜ.card ≤ f)
+    (hpop : ∀ r ≤ N, PopulatedOn U Q r)
     (hu : UniformBudget D τ) (hra : RefsAccepted D) :
-    (∀ r ≤ N, PopulatedOn U P r) ∧
-      ∀ v ∈ (Correct : Finset Validator), ∀ n,
+    (∀ r ≤ N, PopulatedOn U Q r) ∧
+      ∀ v ∈ honest, ∀ n,
         (viewUpto D v n).card ≤
-          (Correct : Finset Validator).card * (n + 1) +
-            ((Correct : Finset Validator).card * F.f +
-              n * ((Correct : Finset Validator).card * (F.f * τ))) :=
-  ⟨hpop, fun _v hv n => card_viewUpto_le hu.byzBudget hra hv n⟩
+          honest.card * (n + 1) +
+            (honest.card * f +
+              n * (honest.card * (f * τ))) :=
+  ⟨hpop, fun _v hv n => card_viewUpto_le hf hu.byzBudget hra hv n⟩
 
 /-- The post-`R` incremental form of the headline: the same enforceable
 conduct, plus the network's `EventuallyDelivers`. -/
-theorem dos_resistance' {τ R N : ℕ} {P : Finset Validator}
-    (hpop : ∀ r ≤ N, PopulatedOn U P r)
-    (hED : EventuallyDelivers D R) (hu : UniformBudget D τ)
+theorem dos_resistance' [P.SelfParent] {τ R N : ℕ} {Q : Finset Validator}
+    (hf : honestᶜ.card ≤ f) (hpop : ∀ r ≤ N, PopulatedOn U Q r)
+    (hED : EventuallyDeliversOn D T R) (hT : T ⊆ honest) (hu : UniformBudget D τ)
     (hra : RefsAccepted D) :
-    (∀ r ≤ N, PopulatedOn U P r) ∧
-      ∀ v ∈ (Correct : Finset Validator), ∀ n, R + 1 ≤ n →
+    (∀ r ≤ N, PopulatedOn U Q r) ∧
+      ∀ v ∈ T, ∀ n, R + 1 ≤ n →
         (viewUpto D v n).card ≤ (viewUpto D v (R + 1)).card +
           (n - (R + 1)) *
-            ((Correct : Finset Validator).card * (F.f * τ + 1) + F.f * τ) :=
-  ⟨hpop, fun _v hv _n hn => card_viewUpto_le' hu.byzBudget hED hra hv hn⟩
+            (honest.card * (f * τ + 1) + f * τ) :=
+  ⟨hpop, fun _v hv _n hn => card_viewUpto_le' hf hu.byzBudget hED hT hra hv hn⟩
 
 end LeanDag

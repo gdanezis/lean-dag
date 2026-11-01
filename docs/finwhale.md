@@ -465,8 +465,8 @@ leader's block together with a quorum of voters for the round-`(r−2)`
 leader (or an SP-skip pattern for it); **C2**, the `2∆` timeout has
 expired; **C3**, the local DAG has `n − f` round-`r` blocks. The timeout
 is the fallback, not the rule, so the discipline is `ReactivePace`, whose
-`deadline` is a ceiling on waiting, rather than `ViewPace`, whose `waits`
-is a floor. One consequence shapes the rest: **reference coverage is
+timeout is a fallback with no floor under it, rather than `ViewPace`,
+whose `waits` is a floor. One consequence shapes the rest: **reference coverage is
 unavailable**. A reactive builder omits whatever had not arrived when its
 exit fired, so `SynchronisedFrom` is false in general and nothing below
 uses it.

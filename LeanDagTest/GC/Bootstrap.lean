@@ -130,15 +130,16 @@ example : (0 : Fin 20) ∈ viewUpto Dexcl 1 0 := by decide
 
 -- …one lag too early the base misses it: at attestation round 1 only
 -- carrier 5 (author 1) holds it, and the f+1 filter drops it…
-example : (0 : Fin 20) ∉ Base Uexcl 1 0 := by decide
+example : (0 : Fin 20) ∉ Base Uexcl (Faults.f (Fin 4)) 1 0 := by decide
 
 -- …and one backbone round later it clears the filter in every sample.
-example : (0 : Fin 20) ∈ Base Uexcl 2 0 := by decide
+example : (0 : Fin 20) ∈ Base Uexcl (Faults.f (Fin 4)) 2 0 := by decide
 
 -- G11 applied: the same membership from the theorem, at its boundary
 -- t = m + 2 exactly.
-example : (0 : Fin 20) ∈ Base Uexcl 2 0 :=
-  accepted_mem_base (D := Dexcl) (v := 1)
+example : (0 : Fin 20) ∈ Base Uexcl (Faults.f (Fin 4)) 2 0 :=
+  accepted_mem_base (D := Dexcl) (v := 1) (T := Correct) card_correct
+    card_add_f_lt_two_mul_quorum (Finset.Subset.refl _)
     (SynchronisedOn.mono (by decide) uexcl_synchronised)
     (by decide) (by decide) (by decide) (uexcl_populated 1 (by omega))
     (uexcl_populated 2 (by omega)) (by omega) (by omega)
@@ -147,14 +148,15 @@ example : (0 : Fin 20) ∈ Base Uexcl 2 0 :=
 
 -- The attested base at G = 1, sampled at t = 4: the correct round-1
 -- layer exactly.
-example : Base Uexcl 4 1 = {5, 6, 7} := by decide
+example : Base Uexcl (Faults.f (Fin 4)) 4 1 = {5, 6, 7} := by decide
 
 -- The joiner's fetch: base {5,6,7} plus window {8,9,10} above the cut.
-example : joinIds Dexcl 1 2 4 1 = {5, 6, 7, 8, 9, 10} := by decide
+example : joinIds Dexcl 1 (Faults.f (Fin 4)) 2 4 1 = {5, 6, 7, 8, 9, 10} := by decide
 
 -- The assembly is a view of the truncation (closure holds: window blocks
 -- 8,9,10 reference {5,6,7}, all caught by the base), with those ids.
-example : (joinView (D := Dexcl) (w := 1) (G := 1)
+example : (joinView (D := Dexcl) (w := 1) (G := 1) (T := Correct) card_correct
+      card_add_f_lt_two_mul_quorum (Finset.Subset.refl _)
       (SynchronisedOn.mono (by decide) uexcl_synchronised) (by decide)
       (uexcl_populated 3 (by omega)) (uexcl_populated 4 (by omega))
       (by omega) (by omega)).ids = {5, 6, 7, 8, 9, 10} := by decide
@@ -164,14 +166,15 @@ truncation at `G = 1` — judging from base plus window alone — matches
 whatever any full-history validator decides for slot 1. -/
 example {jv fv : Option (Fin 20)}
     (hJ : Decided (S := fairSlots.chop 1 1 (by decide)) (chop Uexcl 1)
-      (joinView (D := Dexcl) (w := 1) (G := 1)
+      (joinView (D := Dexcl) (w := 1) (G := 1) (T := Correct) card_correct
+        card_add_f_lt_two_mul_quorum (Finset.Subset.refl _)
         (SynchronisedOn.mono (by decide) uexcl_synchronised) (by decide)
         (uexcl_populated 3 (by omega)) (uexcl_populated 4 (by omega))
         (by omega) (by omega)) 0 jv)
     (hV : Decided Uexcl (View.full Uexcl) 1 fv) : jv = fv :=
-  bootstrap_agree MysticetiProperties.onRecord MysticetiProperties.agree
-    MysticetiProperties.banded (by decide)
-    (SynchronisedOn.mono (by decide) uexcl_synchronised) (by decide)
+  bootstrap_agree MysticetiProperties.onRecord True.intro MysticetiProperties.agree
+    MysticetiProperties.banded (by decide) card_correct card_add_f_lt_two_mul_quorum
+    (Finset.Subset.refl _) (SynchronisedOn.mono (by decide) uexcl_synchronised) (by decide)
     (uexcl_populated 3 (by omega)) (uexcl_populated 4 (by omega))
     (by omega) (by omega) hJ hV
 
@@ -179,14 +182,14 @@ example {jv fv : Option (Fin 20)}
 
 -- The fetch: 6 blocks against the G6 constant 3·4 + (3 + 3·0) = 15
 -- (κ = 0, Λ = 3).
-example : (joinIds Dexcl 1 2 4 1).card = 6 := by decide
+example : (joinIds Dexcl 1 (Faults.f (Fin 4)) 2 4 1).card = 6 := by decide
 
-example : (joinIds Dexcl 1 2 4 1).card ≤
+example : (joinIds Dexcl 1 (Faults.f (Fin 4)) 2 4 1).card ≤
     (Correct : Finset (Fin 4)).card * (3 + 1) +
       ((Correct : Finset (Fin 4)).card * Faults.f (Fin 4) +
         3 * ((Correct : Finset (Fin 4)).card * (Faults.f (Fin 4) * 0))) :=
-  card_joinIds_le dexcl_byz dexcl_refsAccepted dexcl_eventuallyDelivers
-    (by decide) (by omega) (by omega) (by omega) (by omega)
+  card_joinIds_le card_compl_correct_le dexcl_byz dexcl_refsAccepted dexcl_eventuallyDelivers
+    (Finset.Subset.refl _) (by decide) (by omega) (by omega) (by omega) (by omega)
 
 -- The relay obligation for block 11 (validator 1's round-3 block) at
 -- G = 1: its truncated cone is 7 blocks against the constant 9 + 1
@@ -197,7 +200,7 @@ example : (history (chop Uexcl 1) 11).card ≤
     ((Correct : Finset (Fin 4)).card * (1 + 1) +
       ((Correct : Finset (Fin 4)).card * Faults.f (Fin 4) +
         1 * ((Correct : Finset (Fin 4)).card * (Faults.f (Fin 4) * 0)))) + 1 :=
-  card_serve_le (w := 1) (n := 2) (Λ := 1) dexcl_byz dexcl_refsAccepted
+  card_serve_le (w := 1) (n := 2) (Λ := 1) card_compl_correct_le dexcl_byz dexcl_refsAccepted
     (by decide) (by decide) (by decide) (by decide) (by omega) (by omega)
 
 #print axioms accepted_mem_base

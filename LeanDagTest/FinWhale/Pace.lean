@@ -182,7 +182,6 @@ def fwPaceCore (N : ℕ) : PaceCore (Ugrow N) {1, 2, 3} N :=
 def fwReactive (N : ℕ) : ReactiveM (Ugrow N) {1, 2, 3} N :=
   { fwPaceCore N with
     built_lt := fun _ _ _ _ => by simp only [fwPaceCore_built]; omega
-    deadline := fun _ _ _ _ => by simp only [fwPaceCore_built, fwPaceCore_timeout]; omega
     vote_or_wait := fun v hv k hN _ L hL c hc hcc hcr =>
       Or.inl (ugrow_votes hcr hL.2.1)
     prompt_vote := fun v hv k hN hlead L hL t hbuilt hheld hall => by

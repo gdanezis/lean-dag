@@ -150,9 +150,10 @@ theorem quorate : Quorate (mysticetiRule (Validator := Validator) (BlockId := Bl
 
 /-- **P3′ at the carrier**: every non-genesis block references its
 author's previous block. -/
-theorem selfParent : SelfParent (mysticetiRule (Validator := Validator) (BlockId := BlockId)
-    (Payload := Payload)) :=
-  fun U b hb hr => (U.valid b hb).self_parent hr
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} :
+    SelfParent (mysticetiRule (Validator := Validator) (BlockId := BlockId)
+    (Payload := Payload)) rel R₀ :=
+  fun U b hb _ hr => (U.valid b hb).self_parent (Nat.lt_of_le_of_lt (Nat.zero_le _) hr)
 
 /-- **One block per correct author per round**, from the universe's
 non-equivocation clause. -/
@@ -803,7 +804,7 @@ theorem safety : Properties.Safe (mysticetiRule (Validator := Validator) (BlockI
 /-- **Liveness**, at the core's support: certification is the only
 antecedent, so the timed and the reactive execution share it. -/
 theorem liveness : Properties.Support.Lives (R := mysticetiRule (Validator := Validator)
-    (BlockId := BlockId) (Payload := Payload)) coreSupport (coreReliability Validator) :=
+    (BlockId := BlockId) (Payload := Payload)) coreSupport (coreReliability Validator) 0 :=
   Properties.Support.liveness coreSupport_commits commitsCandidate selfParent noEquiv
 
 end MysticetiProperties

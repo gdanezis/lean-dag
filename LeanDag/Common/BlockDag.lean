@@ -97,6 +97,12 @@ instance ValidWrt.distinct :
       (ValidWrt (Validator := Validator) (BlockId := BlockId) (Payload := Payload)) :=
   Validity.Distinct.of_validAt ValidWrt.iff_validAt fun _ _ h => h.1
 
+/-- **With a reference to the author's own previous block.** -/
+instance ValidWrt.selfParent :
+    Validity.SelfParent
+      (ValidWrt (Validator := Validator) (BlockId := BlockId) (Payload := Payload)) :=
+  Validity.SelfParent.of_validAt ValidWrt.iff_validAt fun _ _ h => h.2
+
 /-- **And quorate at `n − f`.** -/
 instance ValidWrt.quorate :
     Validity.Quorate
