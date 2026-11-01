@@ -9,8 +9,9 @@ hold, and whose history passes the checks (`State.target`, `Admits`). A
 piece of `u`'s stream is taken in by `absorb`, keeping only blocks of the
 target's history. The authors it exposes, and the authors the disk
 catches (`caught`), are detected, and their targets dropped; so are the
-authors of reported twins. The node's own blocks pass the checks and are
-built on its disk (`step`).
+authors of reported twins. The node's own blocks pass the checks, carry
+evidence against every author it has detected, and are built on its disk
+(`step`).
 
 Pending blocks are the targets (`pending`): a streamed block that is not
 ready on arrival is dropped, and the next pass asks for what is missing
@@ -76,8 +77,9 @@ variable (me : Validator)
 node not detected, by that node, not held, above its target and admitted,
 becomes the target. A piece of a stream is taken in, keeping only blocks
 of the target's history; the authors it exposes and the authors the disk
-catches are detected. A block the node builds is its own, ready and
-passing the checks. A report of twins detects their author. -/
+catches are detected. A block the node builds is its own, ready, passes
+the checks and carries evidence against every author the node has
+detected. A report of twins detects their author. -/
 def step (s : State Validator BlockId) : Input Validator BlockId → State Validator BlockId
   | .announce u t =>
     if u ≠ me ∧ u ∉ s.detected ∧ (blk t).creator = u ∧ t ∉ s.disk ∧ above blk (s.target u) t ∧
@@ -89,7 +91,8 @@ def step (s : State Validator BlockId) : Input Validator BlockId → State Valid
     let S := absorb blk s.disk L'
     settle s S (s.detected ∪ exposes blk s.disk L' ∪ caught blk ev S)
   | .build x =>
-    if (blk x).creator = me ∧ Ready blk s.disk x ∧ Checks blk ev f x then
+    if (blk x).creator = me ∧ Ready blk s.disk x ∧ Checks blk ev f x ∧
+        ∀ X ∈ s.detected, Convicts blk ev x X then
       settle s (insert x s.disk) (s.detected ∪ caught blk ev (insert x s.disk))
     else s
   | .report i j =>

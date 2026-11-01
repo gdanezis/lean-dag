@@ -1,4 +1,4 @@
-import LeanDag.Node.Sync.Model.Net
+import LeanDag.Node.Sync.Model.Time
 /-!
 # Sync by causal streams — statements
 
@@ -27,6 +27,22 @@ import LeanDag.Node.Sync.Model.Net
   at most `|V| + |D|` blocks of each round from `m + 1` on, for `D` the
   authors it has detected: one of each author not detected, two of each
   detected.
+* **Detection in time** (`DetectsInTime`): a node reports a pair of twins
+  of each author it detects; if the reports of an honest node reach every
+  other honest node within `Δ`,
+  an author an honest node detects at time `t` is detected by every honest
+  node at every event after `t + Δ`, and every block an honest node builds
+  then exposes it, since a node builds only blocks carrying evidence
+  against the authors it has detected.
+* **The exposure bound in time** (`ExposureInTime`): if moreover honest
+  blocks are built by their authors, the node `me` detects every author it
+  detects by `T`, and every block an honest node builds by `T + Δ` lies at
+  round `m` or below, then `me` holds at most `|V| + |D|` blocks of each
+  round from `m + 1` on.
+* **The history bound in time** (`HistoryInTime`): under the same
+  premises, the history of every block on `me`'s disk, its own blocks
+  among them, holds at most `|V| + |D|` blocks of each round from `m + 1`
+  on.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -93,9 +109,56 @@ def ExposureBound : Prop :=
     ((run blk ev f me State.init ins).disk.filter fun i => (blk i).round = k).card ≤
       Fintype.card Validator + (run blk ev f me State.init ins).detected.card
 
-/-- **Sync by causal streams**: the five claims. -/
+/-- **Detection in time**: an author an honest node detects at time `t`
+is detected by every honest node after `t + Δ`, and exposed by every block
+an honest node builds then. -/
+def DetectsInTime : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (blk : BlockId → Block Validator BlockId Payload)
+    (ev : Payload → Finset (BlockId × BlockId)) (f : ℕ) (H : Finset Validator)
+    (tr : Trace Validator BlockId) (time : ℕ → ℕ) (Δ : ℕ),
+    TimeMono tr time → ReportsDelivered blk ev f H tr time Δ →
+    ∀ i v X, v ∈ H → DetectsAt blk ev f tr i v X →
+      (∀ w ∈ H, ∀ j, time i + Δ < time j → X ∈ (stateBefore blk ev f tr j w).detected) ∧
+      (∀ j w x, BuiltAt blk ev f tr j w x → w ∈ H → time i + Δ < time j → Exposes blk ev x X)
+
+/-- **The exposure bound in time**: at most `|V| + |D|` blocks of each
+round above every round an honest node builds at by `T + Δ`, for `T` the
+time by which `me` has detected the authors it detects. -/
+def ExposureInTime : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (blk : BlockId → Block Validator BlockId Payload)
+    (ev : Payload → Finset (BlockId × BlockId)) (f : ℕ) (H : Finset Validator) (me : Validator)
+    (tr : Trace Validator BlockId) (time : ℕ → ℕ) (Δ T m k : ℕ),
+    Hᶜ.card ≤ f → 2 * f < Fintype.card Validator → me ∈ H →
+    (∀ i j, Twins blk i j → (blk i).creator ∉ H) →
+    TimeMono tr time → ReportsDelivered blk ev f H tr time Δ → Authentic blk ev f H tr →
+    (∀ i X, DetectsAt blk ev f tr i me X → time i ≤ T) →
+    (∀ j w x, BuiltAt blk ev f tr j w x → w ∈ H → time j ≤ T + Δ → (blk x).round ≤ m) →
+    m + 1 ≤ k →
+    ((run blk ev f me State.init (inputsOf tr me)).disk.filter fun i => (blk i).round = k).card ≤
+      Fintype.card Validator + (run blk ev f me State.init (inputsOf tr me)).detected.card
+
+/-- **The history bound in time**: at most `|V| + |D|` blocks of each
+round from `m + 1` on in the history of every block on `me`'s disk. -/
+def HistoryInTime : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (blk : BlockId → Block Validator BlockId Payload)
+    (ev : Payload → Finset (BlockId × BlockId)) (f : ℕ) (H : Finset Validator) (me : Validator)
+    (tr : Trace Validator BlockId) (time : ℕ → ℕ) (Δ T m k : ℕ),
+    Hᶜ.card ≤ f → 2 * f < Fintype.card Validator → me ∈ H →
+    (∀ i j, Twins blk i j → (blk i).creator ∉ H) →
+    TimeMono tr time → ReportsDelivered blk ev f H tr time Δ → Authentic blk ev f H tr →
+    (∀ i X, DetectsAt blk ev f tr i me X → time i ≤ T) →
+    (∀ j w x, BuiltAt blk ev f tr j w x → w ∈ H → time j ≤ T + Δ → (blk x).round ≤ m) →
+    m + 1 ≤ k → ∀ x ∈ (run blk ev f me State.init (inputsOf tr me)).disk,
+      ((historyFrom blk x).filter fun i => (blk i).round = k).card ≤
+        Fintype.card Validator + (run blk ev f me State.init (inputsOf tr me)).detected.card
+
+/-- **Sync by causal streams**: the eight claims. -/
 def Statement : Prop :=
-  Completes ∧ PendingBounded ∧ NoAmplification ∧ RateBound ∧ ExposureBound
+  Completes ∧ PendingBounded ∧ NoAmplification ∧ RateBound ∧ ExposureBound ∧ DetectsInTime ∧
+    ExposureInTime ∧ HistoryInTime
 
 end Sync
 

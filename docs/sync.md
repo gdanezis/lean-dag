@@ -15,11 +15,12 @@ not hold. The requester asks the target's creator, which streams the
 target's missing history in order of round. A node that has detected an
 equivocator syncs no block of it.
 
-Five claims are proved (§4). The time a block takes to reach the honest
+Eight claims are proved (§4). The time a block takes to reach the honest
 nodes is studied with a simulation (§5), `scripts/sync-prefeed.py`,
 reference budgets with another (§6), `scripts/sync-budget.py`, and the
 blocks a node processes after GST with equivocation reports with a third
-(§7), `scripts/sync-reports.py`.
+(§7), `scripts/sync-reports.py`, and waiting before building with a
+fourth (§8), `scripts/sync-wait.py`.
 
 Blocks are named by identifier, and a single function `blk` gives what
 each identifier denotes: the hash is taken to be injective. Signatures
@@ -87,7 +88,8 @@ it builds itself, and a report of twins (`step`):
   history of the sender's target; the authors it exposes and the authors
   the disk catches are detected, and the targets of detected authors and
   the targets now held are dropped (`settle`);
-* a block the node builds is its own, ready, and passes the checks; the
+* a block the node builds is its own, ready, passes the checks, and
+  carries evidence against every author the node has detected; the
   authors the disk then catches are detected;
 * a report of two blocks that are twins detects their author.
 
@@ -112,8 +114,11 @@ node receives from one node outside `H` at one time.
 | S3 | **No amplification.** Over a trace in which honest nodes stream only what they hold, the blocks of authors outside `H` on an honest node's disk number at most the blocks honest nodes received from nodes outside `H`. | `Node.Sync.NoAmplification` (proved): `Node.Sync.entry`, `Node.Sync.card_outside_le` |
 | S4 | **The rate bound.** If moreover an honest node receives at most `k` blocks at a time from each node outside `H`, then by time `t` the blocks of authors outside `H` on an honest disk number at most `|H| · |Hᶜ| · k · (t + 1)`. | `Node.Sync.RateBound` (proved): `Node.Sync.fromOutside_le` |
 | S5 | **The exposure bound.** Let `|Hᶜ| ≤ f < n/2`, let honest authors have no twins, and let every honest admitted block of round `m + 1` expose every author an honest node `v` has detected. Then `v` holds at most `n + |D|` blocks of each round from `m + 1` on, for `D` the authors it has detected: at most one of each author not detected, and at most two of each detected author. | `Node.Sync.ExposureBound` (proved): `Node.Sync.run_good`, `Node.Sync.eq_of_mem_admitted`, `Node.Sync.run_count`, `Node.Sync.card_round_le` |
+| S6 | **Detection in time.** At each event a node reports to the other nodes a pair of twins of each author it detects there (`reports`). Let times be nondecreasing along the trace, and let the reports of an honest node reach every other honest node within `Δ` (`ReportsDelivered`). An author an honest node detects at time `t` is detected by every honest node at every event after `t + Δ`. A node builds only blocks that carry evidence against every author it has detected, so every block an honest node builds after `t + Δ` exposes the author. | `Node.Sync.DetectsInTime` (proved): `Node.Sync.exists_reports`, `Node.Sync.reportsWithin_of_delivered`, `Node.Sync.detected_after`, `Node.Sync.convicts_of_builtAt`, `Node.Sync.exposes_after` |
+| S7 | **The exposure bound in time.** Under the premises of S6 and of S5 on the fault model, let every block of an honest author be built by that author (`Authentic`, `BuiltAt`), let the node `v` detect every author it detects by `T`, and let every block an honest node builds by `T + Δ` lie at round `m` or below. Then `v` holds at most `n + |D|` blocks of each round from `m + 1` on. | `Node.Sync.ExposureInTime` (proved): `Node.Sync.exposes_in_time`, `Node.Sync.card_round_le` |
+| S8 | **The history bound in time.** Under the premises of S7, the history of every block on `v`'s disk, `v`'s own blocks among them, holds at most `n + |D|` blocks of each round from `m + 1` on. | `Node.Sync.HistoryInTime` (proved): `Node.Sync.run_closed`, `Node.Sync.card_history_round_le` |
 
-`Node.Sync.holds` proves the five together, with the standard axioms.
+`Node.Sync.holds` proves the eight together, with the standard axioms.
 
 **Why a sync completes.** A stream in order of round, each of whose
 blocks has its references held or streamed, is taken in whole
@@ -144,9 +149,23 @@ after which `X` has no target: two blocks a round at most.
 The premise is what reports supply after GST. A node that detects `X`
 reports the twins to every honest node and carries the evidence in its
 blocks, so once the reports have arrived, every honest block built after
-exposes `X`. S5 does not model time: the delivery of reports and the
-round from which the premise holds are argued in §7, and studied there by
-simulation.
+exposes `X`. S5 does not model time; S6 and S7 give its premise in time
+from reports within `Δ`.
+
+**Why the premise holds in time.** A node detects an author at an event
+of its own, through a stream that exposes a twin of a held block, a disk
+that then holds twins or a block carrying evidence, or a report; in each
+case the event shows a pair of twins of the author, which the node
+reports (`exists_reports`). A report of twins detects their author, and a
+node never forgets a detection, so the report that reaches an honest node
+`w` within `Δ` of a detection at `t` makes the author detected at every
+event of `w` after `t + Δ` (`detected_after`). A block
+`w` puts on its disk then carries evidence against the author, since the
+build step takes only such a block (`convicts_of_builtAt`), and lies in
+its own history, so it exposes the author (`exposes_after`). An honest block of
+round `m + 1` is built by its author (`Authentic`) after `T + Δ`, since
+every honest block built by then lies at round `m` or below, so it exposes
+every author `v` detected by `T` (`exposes_in_time`): the premise of S5.
 
 **Why there is no amplification.** A block enters a disk only from a
 stream or by the node's own build (`step_disk`). An honest node streams
@@ -314,16 +333,99 @@ until its twins have been seen: under the tree attack a node processes 66
 Byzantine blocks in all, against 6 under `DoSValid`. The rate per round
 after GST is the same.
 
-## 8. Open
+## 8. Waiting before building
+
+**The history bound** (S8, `HistoryInTime`, proved). A disk holds the
+references of its blocks (`run_closed`), so it holds the history of each
+of them. Under the premises of S7, the history of every block on an
+honest node's disk, its own blocks among them, holds at most `n + |D|`
+blocks of each round from `m + 1` on. The bound needs no wait. Below
+round `m + 1` only S4 bounds the disk: an honest block built before its
+author detected anything carries no evidence, and can carry a chain of a
+Byzantine author that never equivocates, one block a round (§5).
+
+**The rules simulated** (`scripts/sync-wait.py`). The network is that of
+§7, synchronous from the start (`Δ = 3`), with the exclusion of `rep`.
+The novelty of a set of references is the blocks their histories add to
+the node's history. The rules are: `react`, the first block held of each
+author; `min`, the blocks of least novelty; `wait`, which waits once for
+each equivocating block in the novelty and then builds as `min`; and
+`size`, which builds as `min` and, when the novelty holds more than `τ`
+blocks not yet waited for, first waits `w`. No rule refuses a block. The
+share of a node is the least fraction of the other honest nodes' blocks
+from round 30 on that reference a block of one honest node.
+
+**Findings.**
+
+* Under the attacks of §5 and §7 the exclusion keeps the Byzantine blocks
+  of honest histories near one per round under every rule. `size` matches
+  `min` there with at most three waits, and `min` costs rounds under
+  `edge`.
+* **Late injection** (`inject`). X is detected at round 20. At round 40,
+  Z makes a binary tree of X twins of depth `d` below round 16, on honest
+  blocks that carry no evidence, and a chain of its own up to Y's block.
+  With exposure read from evidence alone, the tree enters every honest
+  history under every rule: `2^d + 1` blocks of one round. `wait` fails
+  because a node puts the tree in the set of blocks it waited for, and
+  its next build takes Y's following block, which carries it. With
+  exposure read from twins as well, the chain fails the checks and the
+  tree stays out.
+* **A rule that only delays cannot keep a block out while the honest
+  nodes are a bare quorum.** At `n = 10, f = 3`, `size` halves what
+  `inject` puts in at depths 4 and 6, and at depth 8 the tree enters every
+  honest history. A node that lacks an honest block after its wait takes
+  Y's block with the tree; the others, taking least novelty, leave that
+  node's blocks out, so each of them lacks an honest block in turn.
+* **Twin checks do not bound histories by the shape alone** (`nest`).
+  The Byzantine authors are silent until round 40. At round `40 + s`, for
+  `s < f`, each honest node is shown its own family of stage `s`,
+  back-dated `depth` rounds: a chain of `BYZ[k]` adopts, in its last `k`
+  rounds, a fresh family of each `BYZ[i]` with `i < k`, so it carries
+  `2^k` chains, and no block has twins in its history. An honest node
+  that takes the stages has `2^f − 1` chains in its history, the count
+  that freshness allows (`docs/dos-equivocation-and-growth.md` §5).
+  Evidence comes too late, so evidence-only checks give the same rows.
+
+With no horizon over seeds 1 to 5, each cell gives the range of rounds
+reached, the blocks of Byzantine authors in honest histories (mean, with
+the maximum in brackets), the largest number in one round, and the least
+share. Without the attack every rule reaches 54 rounds at `n = 10` and 53
+at `n = 13`.
+
+| `n, f` | `depth` | `react` | `min` | `size` |
+|---|---|---|---|---|
+| 10, 3 | 4 | 55–56, 178, 49, 0.89 | 55–56, 122 (133), 37, 0.90 | 53–54, 78 (98), 29, 0.93 |
+| 10, 3 | 13 | 52–53, 619, 49, 0.88 | 53–54, 242 (303), 24, 0.93 | 50–54, 169 (239), 19, 0.96 |
+| 10, 3 | 39 | 43–44, 1893, 49, 0.81 | 47–48, 518 (696), 18, 0.94 | 42–54, 170 (308), 8, 0.99 |
+| 13, 4 | 4 | 53–54, 391, 135, 0.84 | 54–55, 234 (255), 92, 0.89 | 50–52, 187 (216), 82, 0.90 |
+| 13, 4 | 13 | 48–49, 1606, 135, 0.80 | 50–51, 591 (774), 66, 0.90 | 51–52, 49 (91), 7, 0.96 |
+| 13, 4 | 39 | 42–43, 4847 (5116), 135, 0.72 | 44, 2012 (2978), 79, 0.89 | 42–51, 244 (906), 24, 0.98 |
+
+Under `react` a round holds `(n − f)(2^f − 1)` blocks of Byzantine
+authors, 49 at `f = 3` and 135 at `f = 4`, against the ceiling
+`n + (n − 1)·f^f` of Theorem A, 253 and 3085: below the ceiling, and
+exponential in `f`. `size` admits on average 4% to 44% of what `react`
+admits and leaves no honest node out, but one seed at `n = 13,
+depth = 39` admits 906 blocks, the cascade of `inject`.
+
+## 9. Open
 
 The plan to run these syncs and checks on the node is `docs/node-sync.md`.
 
 * **A budget that admits honest blocks.** §6 rules out the three rules
   tried as they stand. The catch-up chain reaches the frontier block only
   through the node's references to its own blocks.
-* **The premise of S5 in time.** The rounds from which every honest
-  admitted block exposes the detected authors are argued in §7, not
-  proved; the model has no clock.
+* **Delivery.** S6 assumes of the network that the reports of an honest
+  node reach every other honest node within `Δ` (`ReportsDelivered`),
+  from the start: synchrony, with no GST.
+* **The round `m` of S7.** It is the highest round an honest node builds
+  at by `T + Δ`. Rounds have no least duration, so it is not bounded by
+  the time `T`.
+* **Honest histories below round `m + 1`** (§8): the checks read exposure
+  from evidence alone, and a late injection then enters every honest
+  history. Reading exposure from twins in the history as well stops the
+  injection in the simulation. It is not in the model, and it does not
+  stop `nest`, whose blocks have no twins in their histories.
 * **Liveness.** The node's V11 assumes synchronisation of the network
   (`SyncedWithin`, section 5.1 of `docs/validator.md`); deriving it from these
   syncs, with the budget, is open.
