@@ -149,16 +149,81 @@ the current round. Each Byzantine author can serve as a top only until it
 is convicted, which every honest node does within `Δ` of the first
 request naming its twins. The attack therefore works once per author.
 
-## 5. Open
+## 5. Pruning at the seal
 
-* **A rule on late blocks.** The mass is identified by lateness. A signer
-  could refuse an `E` that contains a block it received only after it had
-  built the round above. An honest node that has already adopted a late
-  structure would then be refused the joins it needs. At a bare quorum
-  that stalls the system, as the cap on `E` does. The test would have to
-  be made when a block is adopted, and a late chain of an honest node
-  catching up looks the same.
+A late block has no honest support, and that can be read from the DAG
+once a commit fixes a set of blocks. Under `prune = K`, the first honest
+leader at a round `a ≥ r + K + 1` seals round `r` once every honest node
+is two rounds past `a`. A block of round `r` is *kept* when it is in the
+history of blocks of `f + 1` distinct authors of rounds `r + 1..r + K`
+in the history of that leader. A block of a sealed round that is not kept
+is *cut*. No node fetches, stores or follows a cut block, and a
+reference to one counts as held, both for storing a block and for its
+validity. An honest node also references the blocks it holds of its last
+`K` rounds that are not yet in its history. The seal is computed once,
+for all nodes, so the model assumes the agreement that a commit rule
+would give.
 
+Each cell gives the rounds reached, the blocks of Byzantine authors in
+the history that validity follows (all / largest in a round), on the
+fullest honest disk, and processed by one honest node, and the honest
+blocks cut. The rule is `react` with twin checks, and `K = 3`. Under
+`fast` there is no attack, and the blocks of Byzantine authors arrive
+first, so one honest node is always the last of its round.
+
+| Attack | No pruning | Pruning |
+|---|---|---|
+| `fast` | 150, 149 / 1, 153, 150, 0 | 150, 149 / 1, 153, 150, 0 |
+| `split` | 54, 15 / 14, 20, 17, 0 | 54, 15 / 14, 20, 17, 0 |
+| `isolate` | 55, 21 / 21, 27, 24, 0 | 55, 21 / 21, 27, 24, 0 |
+| `inject`, `d = 8` | 79, 41 / 3, 300, 14185, 0 | 150, 154 / 3, 162, 159, 0 |
+| `nest`, `depth = 13` | 52, 616 / 49, 622, 732, 0 | 55, 39 / 14, 232, 286, 0 |
+| `nest`, `depth = 39` | 43, 1890 / 49, 1896, 2153, 0 | 55, 39 / 14, 232, 286, 0 |
+| `flat`, `depth = 13` | 52, 539 / 42, 545, 703, 0 | 55, 39 / 14, 221, 275, 0 |
+| `bulk`, `depth = 39` | 54, 153 / 4, 156, 153, 0 | 55, 11 / 4, 30, 27, 0 |
+| `oldjoin` | 55, 62 / 4, 65, 62, 0 | 55, 4 / 1, 11, 8, 0 |
+
+At `n = 13, f = 4`, `nest` with `depth = 39` falls from 4661 / 123 to
+68 / 18, and its disk from 3826 to 314. Under `min` the rows are alike.
+The other attacks of §2 are as without pruning.
+
+* **The system stays live.** Every run reaches at least the rounds it
+  reaches without pruning. Under `inject`, it reaches 150 rounds instead
+  of 79, because no node processes the back-dated tree.
+* **The cost of sync no longer grows with the depth.** Under `nest`,
+  the disk and the work are the same at `depth = 13` and `depth = 39`.
+  A node still fetches what lies in the rounds not yet sealed when an
+  attack starts, about `K + 3` rounds below the frontier, and the cut
+  blocks of those rounds stay on its disk. What validity follows is the
+  tops and the chains of the last `K` rounds below them.
+* **Attacks at the frontier are untouched.** The twins of `split`,
+  `isolate` and `filler` have honest support, and pruning keeps them.
+  They were bounded before.
+* **Support must count history, not references.** When only references
+  of rounds `r + 1..r + K` count, `fast` cuts 68 blocks of the last
+  honest node, which most nodes reach through one other node's block.
+  Counting the blocks whose history holds `x` cuts none.
+* **`K` trades the slow node against the window.** Under `fast`, `K = 1`
+  cuts 144 honest blocks and `K = 2` cuts 17. Under `nest` with
+  `depth = 39`, validity follows 0, 19, 39 and 157 blocks of Byzantine
+  authors at `K = 1, 2, 3, 6`, and the disk holds 146, 183, 232 and 379.
+* **Asynchrony cuts honest blocks.** With delays of up to 10 before
+  `GST`, `fast` cuts 42 honest blocks when `GST = 100` and 90 when
+  `GST = 200`. A node that falls more than `K` rounds behind loses its
+  blocks of those rounds, and its payload must be proposed again. The
+  system stays live.
+
+## 6. Open
+
+* **A seal from a commit rule.** §5 computes the seal once for all
+  nodes. A node that has not yet seen the commit must hold a block whose
+  validity depends on it, rather than reject it, and the seal of round
+  `r` must not depend on blocks whose validity waits on that seal.
+* **The window under asynchrony.** Rounds are sealed only as commits
+  are made, so before `GST` the unsealed window, and what a node fetches
+  in it, grows with the rounds since the last commit.
+* **Certificates under pruning.** Below the seal, back-dated joins are
+  cut, so certificates may only be needed in the window.
 * A bound on what one certificate may name, without the stall a cap
   causes.
 * The size of §4, which is argued, not proved.

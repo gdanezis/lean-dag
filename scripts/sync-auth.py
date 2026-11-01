@@ -21,10 +21,23 @@ shows twins to two honest nodes and Y and Z feed one honest node only.
 BYZ[0..s], each carrying the one below; `rtnest`, as `nest` with every join of a
 family made at a round from 41 on, when that round is the frontier.
 
+With `prune = K`, a commit seals rounds. The first honest leader at a round
+a >= r + K + 1 seals round r once every honest node is two rounds past a. A block
+of round r is kept when it is in the history of blocks of f + 1 authors of rounds
+r + 1..r + K in the leader's history. A block of a sealed round that is not kept
+is cut: no node fetches, stores or follows it, and a reference to it counts as
+held. An honest node also references the blocks it holds of its last K rounds
+that are not yet in its history.
+
 `python3 sync-auth.py table rule` prints, at n = 10, f = 3 with no horizon over
 300 ticks, rounds, blocks of Byzantine authors in honest histories (all /
 largest in a round), the least share, the most failed requests of a node, and
 the largest E, under evidence checks, twin checks, and certificates.
+`python3 sync-auth.py prune rule n f` prints rounds, blocks of Byzantine authors in
+the history that validity follows (all / largest in a round), on the fullest
+honest disk, and processed by one honest node, and the honest blocks cut, under
+twin checks without and with `prune = 3`; `fast` is no attack with Byzantine
+blocks that arrive first.
 """
 import random
 import sys
@@ -41,6 +54,8 @@ AUTH = [False]
 BIRTH = {}
 NOW = [0]
 HBUILT = defaultdict(list)
+SEAL = [0]
+KEPT = set()
 N = F = Q = 0
 HON, BYZ = [], []
 X = Y = Z = W = S = 0
@@ -55,6 +70,11 @@ def setup(n, f):
     W, S = 0, Q - 1
 
 
+def cut(x):
+    """A block of a sealed round that the seal did not keep."""
+    return 0 < blocks[x][1] <= SEAL[0] and x not in KEPT
+
+
 def new_block(a, r, refs, ev=frozenset()):
     blocks.append((a, r, tuple(refs)))
     BIRTH[len(blocks) - 1] = NOW[0]
@@ -66,13 +86,13 @@ def analyze(refs, rnd, L, ev_root, evidence):
     """Exposed authors and unvouched count of a block at round `rnd` with references
     `refs` carrying `ev_root`, within L rounds."""
     lo = rnd - L
-    cone, stack = set(), [x for x in refs if blocks[x][1] >= lo]
+    cone, stack = set(), [x for x in refs if blocks[x][1] >= lo and not cut(x)]
     while stack:
         x = stack.pop()
         if x in cone:
             continue
         cone.add(x)
-        stack.extend(r for r in blocks[x][2] if blocks[r][1] >= lo)
+        stack.extend(r for r in blocks[x][2] if blocks[r][1] >= lo and not cut(r))
     slots = defaultdict(int)
     exposed = set(ev_root) if evidence else set()
     for x in cone:
@@ -154,7 +174,8 @@ def missing_from(t, have, source, hz):
     out, seen, stack = [], {t}, [t]
     while stack:
         x = stack.pop()
-        if x in have or blocks[x][1] < hz or (source is not None and x not in source):
+        if (x in have or blocks[x][1] < hz or cut(x)
+                or (source is not None and x not in source)):
             continue
         out.append(x)
         for r in blocks[x][2]:
@@ -167,7 +188,7 @@ def missing_from(t, have, source, hz):
 
 def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, gst=0,
         seed=1, dmax=10, Delta=3, n=None, f=None, mark=None, twin=False, tau=None,
-        w=None, auth=False, cap=None, byzsign=False, sign='clean', reuse=False):
+        w=None, auth=False, cap=None, byzsign=False, sign='clean', reuse=False, prune=None):
     if n is not None:
         setup(n, f)
     blocks.clear()
@@ -176,6 +197,8 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
     for c in (CERT, BC, PAIRS, JOK, BIRTH, HBUILT):
         c.clear()
     AUTH[0] = auth
+    SEAL[0] = 0
+    KEPT.clear()
     clock = [0]
     req = {}
     fails = defaultdict(int)
@@ -362,7 +385,7 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
         out, stack = set(), list(refs)
         while stack:
             x = stack.pop()
-            if x in own_hist[v] or x in out or x in extra:
+            if x in own_hist[v] or x in out or x in extra or cut(x):
                 continue
             out.add(x)
             stack.extend(blocks[x][2])
@@ -447,7 +470,7 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
                 if rq and (rq['r'], rq['E']) == b:
                     rq['sig' if kind == 'sig' else 'no'].add(u)
                 continue
-            if b in disk[v] or blocks[b][1] < hz[v]:
+            if b in disk[v] or blocks[b][1] < hz[v] or cut(b):
                 continue
             if kind == 'ann':
                 if u in conv[v] or u in bad[v]:
@@ -466,13 +489,14 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
             proc[v] += 1
             if blocks[b][0] in BYZ:
                 procB[v] += 1
-            if all(r in disk[v] or blocks[r][1] < hz[v] for r in blocks[b][2]):
+            if all(r in disk[v] or blocks[r][1] < hz[v] or cut(r) for r in blocks[b][2]):
                 if rule != 'none' and not valid(chk, b, L):
                     continue
                 put(t, v, b)
         for v in builders:
             for u in list(target[v]):
-                if target[v][u] in disk[v] or blocks[target[v][u]][1] < hz[v]:
+                tg = target[v][u]
+                if tg in disk[v] or blocks[tg][1] < hz[v] or cut(tg):
                     del target[v][u]
         for v in builders:
             if t < wait_until[v]:
@@ -508,6 +532,20 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
                     post[v] = False
                 if len(refs) < Q:
                     break
+                if prune:
+                    # weak links: held blocks of the last `prune` rounds not yet in
+                    # the history, so that a slow node's blocks gain support
+                    held = own_hist[v] | novelty(v, refs)
+                    evr = frozenset(conv[v])
+                    for rd in range(max(1, base + 1 - prune), base):
+                        for x in sorted(diskr[v].get(rd, ())):
+                            if x in held or cut(x) or blocks[x][0] in conv[v]:
+                                continue
+                            ex, _ = analyze(refs + [x], base + 1, L, evr, mode)
+                            if any(blocks[y][0] in ex for y in refs + [x]):
+                                continue
+                            refs.append(x)
+                            held |= novelty(v, [x], held)
                 cert = None
                 if auth:
                     J = joins(refs)
@@ -567,6 +605,39 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
                     twins[v].pop(rd, None)
                 hz[v] = nh
         series.append((min(top.values()), dict(proc), dict(procB)))
+        while prune:
+            # the commit of the first honest leader at round a >= r + prune + 1 seals
+            # round r once every honest node is two rounds past a: a block of round r
+            # is kept when it is in the history of blocks of f + 1 authors of rounds
+            # r + 1..r + prune in the leader's history
+            r = SEAL[0] + 1
+            a = r + prune + 1
+            while a % N not in HON:
+                a += 1
+            lead = honest_at[a].get(a % N)
+            if lead is None or min(top.values()) < a + 2:
+                break
+            seen, stack = set(), [lead]
+            while stack:
+                y = stack.pop()
+                if y in seen or blocks[y][1] <= r:
+                    continue
+                seen.add(y)
+                stack.extend(blocks[y][2])
+            below, up = {}, defaultdict(set)
+            for y in sorted(seen, key=lambda y: blocks[y][1]):
+                below[y] = set()
+                for x in blocks[y][2]:
+                    if blocks[x][1] == r:
+                        below[y].add(x)
+                    elif x in below:
+                        below[y] |= below[x]
+                if blocks[y][1] <= r + prune:
+                    for x in below[y]:
+                        up[x].add(blocks[y][0])
+            KEPT.update(x for x, s_ in up.items() if len(s_) >= F + 1)
+            SEAL[0] = r
+            CACHE.clear()
         # attackers (X, Y, Z stream from everything they made)
         if attack == 'isolate':
             for h in HON:
@@ -738,6 +809,19 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
     for x in hist:
         if blocks[x][0] in BYZ:
             per[blocks[x][1]] += 1
+    # the history that validity follows: no reference into a cut block
+    vh, stack = set(), [b for rd in honest_at.values() for b in rd.values()]
+    while stack:
+        x = stack.pop()
+        if x in vh:
+            continue
+        vh.add(x)
+        stack.extend(r for r in blocks[x][2] if not cut(r))
+    vper = defaultdict(int)
+    for x in vh:
+        if blocks[x][0] in BYZ and blocks[x][1] > 0:
+            vper[blocks[x][1]] += 1
+    hcut = sum(1 for rd in honest_at.values() for b in rd.values() if cut(b))
     rounds = min(top.values())
     dB = max(sum(1 for x in disk[v] if blocks[x][0] in BYZ) for v in HON)
     late = [b for rd, hb in honest_at.items() if rd >= 30 for b in hb.values()]
@@ -752,6 +836,8 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
             'byzmax': max(per.values(), default=0), 'nov': maxnov[0],
             'waits': max(waits.values()), 'hist': sum(per.values()), 'disk': dB,
             'share': share, 'fails': max(fails.values(), default=0),
+            'vhist': sum(vper.values()), 'vmax': max(vper.values(), default=0),
+            'hcut': hcut, 'seal': SEAL[0], 'procB': max(procB.values()),
             'hcert': ncert[0], 'bcert': ncert[1], 'maxE': maxE[0], 'tops': dict(top),
             'req': {v: (q['r'], len(q['E']), sorted(q['sig']), sorted(q['no']))
                     for v, q in req.items() if q}}
@@ -812,10 +898,30 @@ def auth_table(rule, ticks=300):
         print(f"{a:10}" + ''.join(f"{c:>30}" for c in cells), flush=True)
 
 
+def prune_table(rule, n, f, ticks=300):
+    setup(n, f)
+    atts = [('fast', {}), ('none', {}), ('edge', {}), ('split', {}), ('filler', {}),
+            ('isolate', {}), ('twins', {}), ('inject', dict(d=8)), ('nest', dict(depth=13)),
+            ('nest', dict(depth=39)), ('bulk', dict(depth=39)), ('oldjoin', dict(depth=25)),
+            ('force', dict(depth=13)), ('flat', dict(depth=13)), ('rtnest', dict(depth=13))]
+    print(f"{rule} n={n} f={f} ticks={ticks}, no horizon: twin checks, and pruning K = 3")
+    for a, kw in atts:
+        cells = []
+        for ck in (dict(), dict(prune=3)):
+            r = run(None if a == 'fast' else a, rule, ticks=ticks, L=1000, twin=True,
+                    **kw, **ck)
+            cells.append(f"{r['rounds']}r {r['vhist']}/{r['vmax']} D{r['disk']} "
+                         f"P{r['procB']} C{r['hcut']}")
+        print(f"{a:10}" + ''.join(f"{c:>30}" for c in cells), flush=True)
+
+
 if __name__ == '__main__':
     sys.setrecursionlimit(100000)
     if sys.argv[1] == 'table':
         auth_table(sys.argv[2])
+        sys.exit()
+    if sys.argv[1] == 'prune':
+        prune_table(sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
         sys.exit()
     if sys.argv[1] == 'nest':
         nest_table(int(sys.argv[2]), int(sys.argv[3]))
