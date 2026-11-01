@@ -320,7 +320,7 @@ both twins. The same holds at `n = 7, f = 2`.
 |---|---|---|
 | The rule of §6 | unsafe at `R = 4` | unsafe at `R = 4` |
 | The references of each block it follows | unsafe at `R = 4` | |
-| Also the references of a block one of whose referrers it follows | safe at `R = 4, 5, 6` | safe at `R = 4, 5, 6` |
+| Also those of a bypassed block it reaches | safe at `R = 4, 5, 6` | safe at `R = 4, 5, 6` |
 
 Here `R` is the round of `A`, and "safe" means the solver finds no such
 DAG with at most two blocks of a Byzantine author a round. In the second
