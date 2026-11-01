@@ -17,6 +17,9 @@ Attacks beyond those of `sync-wait.py`: `bulk`, two back-dated X chains carried
 by fresh chains of Z and Y and joined by Y's block at round 40; `oldjoin`, the
 same joined `depth` rounds below 40 and carried up by a chain of Y; `force`, X
 shows twins to two honest nodes and Y and Z feed one honest node only.
+`flat`, as `nest` with families that join nothing: at stage s, single chains of
+BYZ[0..s], each carrying the one below; `rtnest`, as `nest` with every join of a
+family made at a round from 41 on, when that round is the frontier.
 
 `python3 sync-auth.py table rule` prints, at n = 10, f = 3 with no horizon over
 300 ticks, rounds, blocks of Byzantine authors in honest histories (all /
@@ -35,6 +38,9 @@ BC = {}
 PAIRS = {}
 JOK = {}
 AUTH = [False]
+BIRTH = {}
+NOW = [0]
+HBUILT = defaultdict(list)
 N = F = Q = 0
 HON, BYZ = [], []
 X = Y = Z = W = S = 0
@@ -51,6 +57,7 @@ def setup(n, f):
 
 def new_block(a, r, refs, ev=frozenset()):
     blocks.append((a, r, tuple(refs)))
+    BIRTH[len(blocks) - 1] = NOW[0]
     EV[len(blocks) - 1] = ev
     return len(blocks) - 1
 
@@ -166,7 +173,7 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
     blocks.clear()
     EV.clear()
     CACHE.clear()
-    for c in (CERT, BC, PAIRS, JOK):
+    for c in (CERT, BC, PAIRS, JOK, BIRTH, HBUILT):
         c.clear()
     AUTH[0] = auth
     clock = [0]
@@ -275,6 +282,34 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
             tip = mk(BYZ[k], j, ([tip] if tip is not None else [])
                      + ([subs[j]] if j in subs else []))
         return tip
+
+    plan, made_at, shown = [], {}, {}
+
+    def pfam(k, lo, hi):
+        # the family of fam(k), planned; its joins fall in rounds hi - k + 1..hi
+        subs = {hi - k + 1 + i: pfam(i, lo, hi - k + i) for i in range(k)}
+        tip = None
+        for j in range(lo, hi + 1):
+            plan.append((BYZ[k], j, ([tip] if tip is not None else [])
+                         + ([subs[j]] if j in subs else [])))
+            tip = len(plan) - 1
+        return tip
+
+    def flat(s, lo, top):
+        # chains of BYZ[0..s] from round lo, each carrying the one below, the inner
+        # ones ending at round top - 1 and the outer one at top + s: no joins
+        tips = {}
+        for j in range(lo, top + s + 1):
+            new = {}
+            for k in range(s + 1):
+                if j >= top and k < s:
+                    continue
+                refs = [tips[k]] if k in tips else []
+                if k > 0 and j < top and k - 1 in tips:
+                    refs.append(tips[k - 1])
+                new[k] = mk(BYZ[k], j, refs)
+            tips.update(new)
+        return tips[s]
 
     def nest(s, lo, top):
         # stage s: the family of BYZ[s] below round top, its chain extended to top + s
@@ -389,7 +424,7 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
                 convict(t, v, e)
 
     for t in range(ticks):
-        clock[0] = t
+        clock[0] = NOW[0] = t
         for v, kind, u, b in inbox.pop(t, []):
             if kind == 'rep':
                 convict(t, v, b)
@@ -521,6 +556,7 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
                     own_hist[v].add(x)
                     slots[v][blocks[x][:2]].add(x)
                 own[v], top[v] = b, r
+                HBUILT[r].append(t)
                 honest_at[r][v] = b
                 for w in builders:
                     if w != v:
@@ -619,6 +655,27 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
                     y = mk(Y, r, [y_last])
                     send(t, Z, HON[0], 'ann', mk(Z, r, []))
                     only = [HON[0]]
+                elif attack == 'rtnest' and R0 <= r < R0 + F:
+                    # as nest, but every join of a family falls at a round from R0 + 1 on
+                    # and is made when that round is the frontier, under a certificate
+                    if r == R0:
+                        for h in HON:
+                            for s_ in range(F):
+                                shown[(h, s_)] = pfam(s_, max(1, R0 - depth), R0 + s_)
+                    for i, (a_, j, prefs) in enumerate(plan):
+                        if i not in made_at and j <= r:
+                            made_at[i] = mk(a_, j, [made_at[p_] for p_ in prefs])
+                    for (h, s_), i in shown.items():
+                        if s_ == r - R0:
+                            send(t, BYZ[s_], h, 'ann', made_at[i])
+                    y = new_block(Y, r, [])
+                    only = []
+                elif attack == 'flat' and R0 <= r < R0 + F:
+                    # as nest, with families that join nothing: s + 1 chains at stage s
+                    for h in HON:
+                        send(t, BYZ[r - R0], h, 'ann', flat(r - R0, max(1, R0 - depth), R0))
+                    y = new_block(Y, r, [])
+                    only = []
                 elif attack == 'nest' and R0 <= r < R0 + F:
                     # stage r - R0: each honest node is shown its own nested family,
                     # back-dated `depth` rounds below R0, its top by BYZ[r - R0]
@@ -646,7 +703,7 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
                     y = mk(Y, r, [y_last] if r > 1 else [])
                     if attack in ('prefeed', 'edge'):
                         only = [W]
-                    if attack in ('nest', 'bulk', 'oldjoin', 'force'):
+                    if attack in ('nest', 'bulk', 'oldjoin', 'force', 'rtnest', 'flat'):
                         only = []
                     if attack == 'split':
                         lin = {h: {X: gen[X], Y: y} for h in HON}

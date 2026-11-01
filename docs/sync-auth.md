@@ -89,13 +89,79 @@ no request fails, under any attack.
   join signed; the blocks below the horizon are then not fetched, and the
   fullest honest disk holds 6 blocks of Byzantine authors.
 
-## 4. Open
+## 4. The mass
+
+The blocks of Byzantine authors that certificates do not keep out of
+honest histories share three properties.
+
+* **They are twins, beyond one chain per author.** Under `nest` every
+  one of them is a twin. Under `bulk`, 76 of 153 are; the others are the
+  chains of Z and Y that carry the twins, one block of each author a
+  round, which no rule on twins can tell from an honest node's chain.
+* **They are late.** A block of round `j` is *late* when it is created
+  after every honest node has built round `j + 1`. No honest block can
+  then reference it, so its honest support is zero. Under `nest` with
+  certificates, 197 of 221 such blocks are late at `depth = 13`, and 715
+  of 741 at `depth = 39`. The others are the tops, which honest nodes
+  adopt at the frontier. Honest blocks have support 6, all the other
+  honest nodes, in all but a few cases. The twins of `split` are not
+  late, and each has honest support 1.
+* **They hang below a top.** A block that references a late block of
+  round `j` is of round `j + 1`, and is not honest. The mass is therefore
+  a structure of Byzantine blocks whose only link to an honest block is
+  its top, adopted at the frontier. The structure joins nothing below the
+  frontier, so its history holds at most one block of each Byzantine
+  author in each round. Its twins arise only between structures that
+  different honest nodes adopt, or that one honest node adopts at
+  successive rounds. Honest nodes then join them in public, under
+  certificates whose `E` consists of late blocks.
+
+The size of the mass is argued, not proved. Let an honest node adopt
+structures one at a time. A structure's top author must not be exposed
+in the node's history, so it can have no chain in an earlier structure
+it adopted. A Byzantine block at the frontier must reference honest
+blocks of the round below, and these carry the evidence of every join
+made public more than `Δ` before. So nesting at the frontier stops once
+evidence spreads, and under `rtnest` a round holds 7 blocks of Byzantine
+authors at most. The best order then has the `i`-th top author carry
+chains of the `i` authors before it. An honest node gathers
+`f(f + 1)/2` chains, against the `2^f − 1` of the doubling family, and a
+round of the union of honest histories holds at most
+`n + (n − f)·f(f + 1)/2` blocks. That is 52 at `n = 10, f = 3`, and 103
+at `n = 13, f = 4`.
+
+The attack `flat` builds these structures, back-dated `depth = 13`
+rounds. In blocks of Byzantine authors in honest histories, all /
+largest in a round:
+
+| `n, f` | Rule | `flat` | `flat`, certificates | `nest`, certificates |
+|---|---|---|---|---|
+| 10, 3 | `react` | 542 / 42 | 497 / 38 | 224 / 17 |
+| 10, 3 | `min` | 232 / 18 | 254 / 20 | 26 / 2 |
+| 13, 4 | `react` | 1138 / 90 | 744 / 59 | 303 / 23 |
+| 13, 4 | `min` | 429 / 34 | 605 / 48 | 39 / 3 |
+
+Certificates leave `flat` nearly whole, and under `min` they let more of
+it in. The joins are made by honest nodes, with certificates whose `E`
+names up to 1764 pairs. Each structure is as long as the attacker dates
+it back, so without garbage collection the mass of one attack grows with
+the current round. Each Byzantine author can serve as a top only until it
+is convicted, which every honest node does within `Δ` of the first
+request naming its twins. The attack therefore works once per author.
+
+## 5. Open
+
+* **A rule on late blocks.** The mass is identified by lateness. A signer
+  could refuse an `E` that contains a block it received only after it had
+  built the round above. An honest node that has already adopted a late
+  structure would then be refused the joins it needs. At a bare quorum
+  that stalls the system, as the cap on `E` does. The test would have to
+  be made when a block is adopted, and a late chain of an honest node
+  catching up looks the same.
 
 * A bound on what one certificate may name, without the stall a cap
-  causes. The mass comes from blocks created late at old rounds; the rule
-  constrains only where they are joined.
-* Whether a Byzantine node can build the doubling family at the current
-  round, with each level certified in public. The simulation does not try.
+  causes.
+* The size of §4, which is argued, not proved.
 * Liveness of `clean` in general. The refusal sends a block of round `r`
   whose references join no pair of `E`; the requester then takes them,
   but may join other pairs, and the loop has no proved end.
