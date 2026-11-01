@@ -26,8 +26,8 @@ a >= r + K + 1 seals round r once every honest node is two rounds past a. A bloc
 of round r is kept when it is in the history of blocks of f + 1 authors of rounds
 r + 1..r + K in the leader's history. A block of a sealed round that is not kept
 is cut: no node fetches, stores or follows it, and a reference to it counts as
-held. An honest node also references the blocks it holds of its last K rounds
-that are not yet in its history.
+held. Unless `weak` is false, an honest node also references the blocks it holds
+of its last K rounds that are not yet in its history.
 
 `python3 sync-auth.py table rule` prints, at n = 10, f = 3 with no horizon over
 300 ticks, rounds, blocks of Byzantine authors in honest histories (all /
@@ -188,7 +188,8 @@ def missing_from(t, have, source, hz):
 
 def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, gst=0,
         seed=1, dmax=10, Delta=3, n=None, f=None, mark=None, twin=False, tau=None,
-        w=None, auth=False, cap=None, byzsign=False, sign='clean', reuse=False, prune=None):
+        w=None, auth=False, cap=None, byzsign=False, sign='clean', reuse=False, prune=None,
+        weak=True):
     if n is not None:
         setup(n, f)
     blocks.clear()
@@ -532,7 +533,7 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
                     post[v] = False
                 if len(refs) < Q:
                     break
-                if prune:
+                if prune and weak:
                     # weak links: held blocks of the last `prune` rounds not yet in
                     # the history, so that a slow node's blocks gain support
                     held = own_hist[v] | novelty(v, refs)

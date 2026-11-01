@@ -203,6 +203,11 @@ The other attacks of §2 are as without pruning.
   of rounds `r + 1..r + K` count, `fast` cuts 68 blocks of the last
   honest node, which most nodes reach through one other node's block.
   Counting the blocks whose history holds `x` cuts none.
+* **The slow node needs references below the previous round.** In the
+  model of `LeanDag/Node`, every reference sits one round below its
+  referrer. Without the references to older held blocks, `fast` cuts
+  95, 66 and 46 honest blocks at `K = 2, 3, 4`, against 17, 0 and 0
+  with them. Under `nest` the two agree.
 * **`K` trades the slow node against the window.** Under `fast`, `K = 1`
   cuts 144 honest blocks and `K = 2` cuts 17. Under `nest` with
   `depth = 39`, validity follows 0, 19, 39 and 157 blocks of Byzantine
