@@ -292,7 +292,45 @@ node follows and another finds bypassed. The pruning column is §5 with
   `n < q + s`, is bypassed in no set. At `q = n − f` that is `s ≥ f + 1`,
   which every leader with a quorum of votes has.
 
-## 7. Open
+## 7. Safety under bypass
+
+`scripts/sync-bypass-safety.py` asks a solver for a DAG on which two nodes
+disagree about a leader `L` of round `r`. Node `w` holds every block and
+commits `L` directly. Node `v` holds every honest block and some blocks
+of Byzantine authors, each block it holds having its references held or
+bypassed; `v` does not commit `L` directly and skips it through an anchor
+`A`, since no certificate whose votes `v` holds is reachable from `A`.
+The exposure clause and references to the author's own block hold
+throughout.
+
+**The rule of §6 is not safe.** At `n = 4, f = 1`, the Byzantine author
+`B` shows two twins of round `r + 1`, `B.2` and `B.2′`, both voting.
+Honest certificates `h0.3` and `h2.3` reference one twin each, and `B`'s
+own certificate the second. Each twin is then referenced by a single
+honest block of round `r + 2`, and `v`, holding the honest blocks and a
+block of `B` that references neither, bypasses both. `w` sees three
+certificates and commits `L`. `v` counts two votes in each honest
+certificate, sees none, and skips `L` through `A = h1.4`, which
+references `h1.3`, `h2.3` and that block of `B`. No honest block holds
+both twins. The same holds at `n = 7, f = 2`.
+
+**What `v` must hold.** Two strengthenings were tested.
+
+| `v` holds | `n = 4, f = 1` | `n = 7, f = 2` |
+|---|---|---|
+| The rule of §6 | unsafe at `R = 4` | unsafe at `R = 4` |
+| The references of each block it follows | unsafe at `R = 4` | |
+| Also the references of a block one of whose referrers it follows | safe at `R = 4, 5, 6` | safe at `R = 4, 5, 6` |
+
+Here `R` is the round of `A`, and "safe" means the solver finds no such
+DAG with at most two blocks of a Byzantine author a round. In the second
+row the honest certificate is itself bypassed, by the blocks of round
+`r + 3` that do not reference it, so `v` does not fetch its votes. In
+the third row `v` reads the references of a bypassed block it reaches
+from a block it follows, and goes no further; a bypassed structure costs
+at most `n + n²` more blocks.
+
+## 8. Open
 
 * **Validity under bypass.** Whether a reference is bypassed depends on
   what a node holds, and a node holds a block back until each reference
@@ -301,11 +339,16 @@ node follows and another finds bypassed. The pruning column is §5 with
 * **Slow honest blocks.** A rule that bypasses fewer honest blocks, for
   example by counting witnesses from more than the next round, without
   losing the bound of §6.
-* **Safety under bypass.** A commit orders one history at every node. It
-  must be shown that the bypasses of the rounds it covers are the same at
-  every node by then, or the ordered history must be fixed by the leader.
-  A leader with a quorum of votes is never bypassed, but a path to it may
-  run through bypassed blocks.
+* **A proof of safety for the third row of §7.** At `R = r + 3` it is
+  the standard argument: `A` references an honest certificate, and `v`
+  holds it and its votes. For a later anchor, a path of followed blocks
+  from `A` to such a certificate must be shown to exist; a followed block
+  may have every reference bypassed. A commit must also order the same
+  history at every node.
+* **Bypass below the decided rounds only.** If a node bypasses only
+  blocks of rounds whose leaders it has all decided, the commit rule never
+  reads a bypassed round, and safety follows from the results on the cut
+  below a horizon. Inside the undecided rounds nothing is bypassed.
 * **Before the honest blocks arrive.** Under asynchrony, the last honest
   block of round `r + 1` may come late, and until then a node cannot tell
   a secret block from a late honest one.
