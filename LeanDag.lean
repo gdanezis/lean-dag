@@ -583,6 +583,7 @@ import LeanDag.Node.Local.Proof
 import LeanDag.Node.Helpers.Grow
 import LeanDag.Node.Helpers.Global
 import LeanDag.Node.Helpers.GlobalCut
+import LeanDag.Node.Helpers.CutVerdict
 import LeanDag.Node.Helpers.Commits
 import LeanDag.Node.Helpers.Decided
 import LeanDag.Node.Runs.Statement
@@ -600,6 +601,8 @@ import LeanDag.Node.Bound.Statement
 import LeanDag.Node.Bound.Proof
 import LeanDag.Node.Order.Statement
 import LeanDag.Node.Order.Proof
+import LeanDag.Node.Cut.Statement
+import LeanDag.Node.Cut.Proof
 import LeanDag.Node.Helpers.Verdict
 import LeanDag.Node.Helpers.Agree
 import LeanDag.Node.Live.Statement
