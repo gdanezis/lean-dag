@@ -351,13 +351,42 @@ the blocks it holds.
   commit orders included.
 
 **Agreement.** A decision reads only the rounds of undecided leaders, all
-of them at or above `h`, so the rule changes no decision. Whether a
-block is bypassed depends only on `C`. Nodes that commit the same
-sequence of leaders therefore order the same blocks and bypass the same
-blocks, by induction on the sequence. Two nodes never disagree about a
-bypass, unlike under §6, where the witnesses are the blocks a node holds
-and §7 finds a disagreement. This induction is argued here; it is not
-yet proved.
+of them at or above `h`, so the rule changes no decision.
+`LeanDag/Common/BypassLedger.lean` defines the ledger under the rule from
+the verdicts of the slots and the record, and from no view.
+
+* **The commit** (`layer`, `flush`). A commit of the leader `L` of slot
+  `k` orders `L` if it is not yet ordered. It then orders, one round
+  further down at each step, each reference of a block it has just
+  ordered, unless the reference is already ordered, or its round `r`
+  has `r + 1` below the round of slot `k` and the ordered blocks of
+  round `r + 1`, those of this commit included, bypass it.
+* **The ledger** (`bypassLedger`). The blocks ordered by the commits of
+  slots `0, …, n − 1`, in slot order, skipped slots ordering nothing.
+* **Agreement** (`bypassLedger_agree_of`). Verdicts that agree below
+  `n` give the same ledger after every `m ≤ n` slots. A block therefore
+  enters at the same slot at every validator.
+* **Agreement of validators** (`AnchoredRule.bypassLedger_agree`). Two
+  validators that have decided every slot below `n` agree on the
+  verdicts (`decided_agree`), and so on every ordered block.
+* **No retraction** (`bypassLedger_mono`, `disjoint_flush`). The ledger
+  only grows, and a commit orders no block ordered before it.
+* **Within the committed histories**
+  (`bypassLedger_subset_ledgerSet`). Every ordered block is in the
+  history of a committed leader.
+* **Closed up to bypass** (`bypassClosed_bypassLedger`). If every
+  committed leader is in the record, every reference of an ordered
+  block is ordered or bypassed in the ledger.
+
+The order within one commit is not modelled, as for the ledger without
+bypass (`LeanDag/Common/Ledger.lean`). The theorems hold on the record:
+two validators reading the same ids read the same blocks. A validator
+computes the ledger from what it holds. The computation reads the
+references of the ordered blocks only, and the round of a reference is
+one below its referrer's. A validator that holds the ordered blocks
+therefore computes the same ledger, but this is argued: a view in
+`LeanDag` holds the whole history of each of its blocks, so it cannot
+express a validator that holds only the ordered blocks.
 
 **What a node follows below the horizon.** If the ordered blocks of round
 `r + 1` come from at least `q` authors and none references `x`, then `x`
@@ -443,9 +472,10 @@ node processes; and the honest blocks bypassed.
   from `A` to such a certificate must be shown to exist; a followed block
   may have every reference bypassed. A commit must also order the same
   history at every node.
-* **Agreement below the horizon.** The induction of §8, that nodes
-  committing the same leaders order and bypass the same blocks, on the
-  ordering of `LeanDag`.
+* **The ledger from the blocks a validator holds.** §8 proves agreement
+  on the record. A validator holding the ordered blocks but not the
+  blocks they bypass is not a view of `LeanDag`, so that it computes the
+  ledger of the record is argued, not proved.
 * **Unordered honest blocks.** The bound of §8 assumes that `C` holds a
   block of round `r + 1` of every honest validator. When a slow honest
   block of that round is not ordered, Byzantine ordered blocks alone may
