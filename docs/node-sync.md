@@ -214,6 +214,8 @@ Stage 3 needs Stages 1 and 2, and Stage 4 needs Stage 3.
 
 ## 5. What stays open
 
+* Stage 5, ordering, bypass and certification on the node, is planned
+  in `docs/dos-bounds.md`.
 * The disk keeps every block it accepts, by design of the core, so it
   grows with the chain; the bound of Stage 4 is per round.
 * Before an equivocation is exposed, only a rate bounds what a node takes

@@ -511,6 +511,9 @@ node processes; and the honest blocks bypassed.
 
 ## 9. Open
 
+The plan that bounds what a correct node syncs and holds, from the
+mechanisms of this note, is `docs/dos-bounds.md`.
+
 * **Validity under the rule of §6.** Whether a reference is bypassed depends on
   what a node holds, and a node holds a block back until each reference
   is held or bypassed. The bound on how long it waits, and the agreement
