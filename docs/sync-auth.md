@@ -379,14 +379,47 @@ the verdicts of the slots and the record, and from no view.
   block is ordered or bypassed in the ledger.
 
 The order within one commit is not modelled, as for the ledger without
-bypass (`LeanDag/Common/Ledger.lean`). The theorems hold on the record:
-two validators reading the same ids read the same blocks. A validator
-computes the ledger from what it holds. The computation reads the
-references of the ordered blocks only, and the round of a reference is
-one below its referrer's. A validator that holds the ordered blocks
-therefore computes the same ledger, but this is argued: a view in
-`LeanDag` holds the whole history of each of its blocks, so it cannot
-express a validator that holds only the ordered blocks.
+bypass (`LeanDag/Common/Ledger.lean`).
+
+**What a node holds.** A view in `LeanDag` holds the whole history of
+each of its blocks. A node that applies the rule does not.
+`LeanDag/Common/BypassView.lean` defines what it holds instead.
+
+* **A bypass view** (`BypassView U q H C`). A set of held blocks that
+  contains the ordered set `C`. Every reference of a held block is held,
+  or lies at a round `r` with `r + 1 < H` and is bypassed in `C`. A view
+  holding `C` is one (`View.toBypassView`).
+* **The cut is a view** (`BypassView.chop`). If `H ≤ G + 1`, the held
+  blocks of round `G` or above form a view of the record cut at `G`
+  (`chop U G` of `LeanDag/GC`). No reference at round `G` or above is
+  bypassed, so these blocks are closed under the references the cut
+  keeps.
+* **A commit reads only what the node holds** (`flushOn_eq`,
+  `flush_subset`). `flushOn` computes a commit from a block map, and
+  reads the round of a reference off the leader. If the map agrees with
+  the record on the held blocks, and the leader is held, `flushOn`
+  orders the blocks of `flush`, whatever the map says of other ids. The
+  blocks a commit orders are held.
+
+`LeanDag/Properties/Arcs/Bypass.lean` then proves safety for any rule on
+the record with `Agree`. A node decides slot `n` on the part of its
+bypass view at or above `slotRound n − 1`, a view of the cut there, with
+`C` its ledger after `n` slots and `H = slotRound n`
+(`DecidedOnBypass`).
+
+* **Agreement of decisions** (`decided_agree_bypass`). Two nodes deciding
+  a slot on bypass views cut at the same round agree, by `Agree` on the
+  cut.
+* **Safety** (`bypassLedger_agree_bypass`). Two nodes that decide every
+  slot below `N` on bypass views of their own ledgers agree on every
+  verdict, and order the same blocks.
+* **With a full history** (`decided_agree_bypass_full`,
+  `bypassLedger_agree_bypass_full`). Under `Banded`, the verdicts and the
+  ledger are those of a node holding views of the whole record. This is
+  `decided_agree_chop` of garbage collection.
+
+The core rule has both premises (`MysticetiProperties.onRecord`,
+`MysticetiProperties.agree`, `MysticetiProperties.banded`).
 
 **What a node follows below the horizon.** If the ordered blocks of round
 `r + 1` come from at least `q` authors and none references `x`, then `x`
@@ -472,10 +505,6 @@ node processes; and the honest blocks bypassed.
   from `A` to such a certificate must be shown to exist; a followed block
   may have every reference bypassed. A commit must also order the same
   history at every node.
-* **The ledger from the blocks a validator holds.** §8 proves agreement
-  on the record. A validator holding the ordered blocks but not the
-  blocks they bypass is not a view of `LeanDag`, so that it computes the
-  ledger of the record is argued, not proved.
 * **Unordered honest blocks.** The bound of §8 assumes that `C` holds a
   block of round `r + 1` of every honest validator. When a slow honest
   block of that round is not ordered, Byzantine ordered blocks alone may

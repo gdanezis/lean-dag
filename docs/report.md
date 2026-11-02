@@ -13502,7 +13502,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 429 definitions and structures the report names, in
+The 430 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -18653,6 +18653,30 @@ class SelfParent (P : Validity Validator BlockId Payload) : Prop where
 ```
 
 Non-genesis blocks reference a block by their own author: the clause the novelty telescope and the retained store read.
+
+#### `chop`
+
+*def, `Common.BypassView.lean`*
+
+```lean
+def chop (W : BypassView U q H C) (G : ℕ) (hG : H ≤ G + 1) : (U.chop G).View where
+  ids := W.ids.filter fun i => G ≤ (U.block i).round
+  subset_ids := Finset.filter_subset_filter _ W.subset_ids
+  complete := by
+    intro i hi j hj
+    rw [Finset.mem_filter] at hi
+    change j ∈ (chopBlk U.block G i).refs at hj
+    rcases Nat.lt_or_ge G (U.block i).round with h | h
+    · rw [chopBlk_refs_of_lt h] at hj
+      have hjr := BlockRecord.round_of_mem_refs (W.subset_ids hi.1) hj
+      rcases W.complete i hi.1 j hj with hjW | ⟨hlt, -⟩
+      · exact Finset.mem_filter.mpr ⟨hjW, by omega⟩
+      · omega
+    · rw [chopBlk_refs_of_le h] at hj
+      exact absurd hj (Finset.notMem_empty j)
+```
+
+**The cut is a view**: at or above `G`, with `H ≤ G + 1`, a bypass view is a view of the record cut at `G`.
 
 #### `DoSValidOn`
 

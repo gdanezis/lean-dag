@@ -20,6 +20,7 @@ import LeanDag.Common.Persistence
 import LeanDag.Common.CommonCore
 import LeanDag.Common.Bypass
 import LeanDag.Common.BypassLedger
+import LeanDag.Common.BypassView
 import LeanDag.Common.Anchored.ReadAlike
 import LeanDag.Mysticeti.Model.Validity
 import LeanDag.Mysticeti.Model.Rule
@@ -119,6 +120,7 @@ import LeanDag.Timed.Extension
 import LeanDag.Properties.Compose
 import LeanDag.Properties.Record
 import LeanDag.Properties.Arcs.Record
+import LeanDag.Properties.Arcs.Bypass
 import LeanDag.Properties.Deliver
 import LeanDag.Mysticeti.Properties
 import LeanDag.Mysticeti.Record
