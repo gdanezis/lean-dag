@@ -95,6 +95,58 @@ at which every honest admitted block exposes the convicted authors `D`;
 after GST that round is one above the highest round an honest node built
 at before every reliable node held the evidence.
 
+### 2.3 Ordering, bypass and certification (Stage 5)
+
+Stage 5 adds the mechanisms of `docs/dos-bounds.md` to the node. The
+decisions it raises are D10 to D15 (§3).
+
+**Ordering.** The node keeps the set `ordered` of the blocks its commits
+have ordered. When it decides that slot `k` commits the leader `L`, it
+adds the blocks of `flushOn` for `L` (`Common/BypassView.lean`), read
+from its disk, with the horizon `slotRound k`. Its *horizon* is
+`H = slotRound lo`, for `lo` its next undecided slot, and its *cut* is
+`G = H − 1`.
+
+**Bypass.** A block `x` of round `r` is *bypassed* at the node when
+`r + 1 < H` and the ordered blocks of round `r + 1` that do not
+reference `x` come from at least `q` authors (`Bypassed U ordered q x`).
+
+* **Ready.** A block is ready when each reference is on disk or
+  bypassed, one round below it, and the block passes the checks. A block
+  of round `G` or below is checked as a base block (D10).
+* **Requests.** A request carries the requester's horizon. The responder
+  streams the history of the target at or above both the requester's
+  frontier and `G`. The requester asks by name for a reference below `G`
+  that it lacks and does not find bypassed.
+* **Dropping.** The node drops from its disk a block it finds bypassed
+  (D13). The disk then stays a bypass view of `ordered` at `H`
+  (`BypassRun.inv`).
+* **Decisions** read the disk at or above `G`, a view of the record cut
+  at `G` (`BypassView.chop`), as the memory already does from its floor.
+
+**Certification.** A block *joins* a twin pair when both blocks are in
+its history and in the history of no single reference of it.
+
+* **The join test** reads each reference's digest (D11): for each author
+  and each of the `K` rounds below the block, the identifiers of the
+  author's blocks of that round in the block's history. A validity
+  clause checks that a block's digest is the union of its references'
+  digests and its references, cut to its `K` rounds below.
+* **The certificate clause.** A block that joins pairs carries a
+  certificate: its round, a set `E` holding every pair it joins, and the
+  signatures of at least `q` nodes. The certificate is evidence against
+  the authors of `E`, and authentic by premise (`CertAuthentic`, as
+  `EvidenceAuthentic`).
+* **The builder** prefers references that join nothing. When it cannot
+  reach `q` authors without a join, it sends `(r, E)` to every peer and
+  builds once `q` nodes have signed.
+* **The signer.** A node that receives `(r, E)` convicts the authors of
+  `E`. It refuses, and sends back the block, when it holds a block of
+  round `r` whose history holds no pair of `E` (`clean`); it also
+  refuses when `r` is at or below its cut (D14). Otherwise it signs.
+* **Inputs and outputs.** `Input.signRequest` and `Input.signAnswer`;
+  `Output.signRequest` and `Output.signAnswer`.
+
 ## 3. Decisions
 
 * **D1. Header-first admission or a check on arrival.** *Decided: a
@@ -137,6 +189,49 @@ at before every reliable node held the evidence.
   low frontier, and each of its requests would stream the history above
   it (411,549 blocks in 200 ticks at Orcaella with `n = 9`, against 181
   in all in 1,000 ticks once ignored).
+* **D10. Checks at and below the cut.** *Open; recommended: base
+  blocks.* A block of round `G` may reference a bypassed block, whose
+  header the node may lack. The checks of the clauses that read
+  references (the shape, the exposure clause, the digest) cannot then be
+  made, and the history below it cannot be checked at all. Three ways:
+  (a) *base blocks*: the node checks a block of round `G` or below only
+  on its own header, as the base layer of the cut of `LeanDag/GC`, and
+  checks every block above `G` in full. Safety needs no check below the
+  cut: decisions read the record cut at `G`, which is valid by
+  construction, and the ledger reads only identifiers and rounds. The
+  record of a run is then valid above every cut, not everywhere; `chop`
+  and `bypassLedger` must be stated on such a record. (b) *headers one
+  level down*: the node also holds the header of each bypassed
+  reference, which lets it check the clauses of the blocks at `G`, but
+  not their history; it leaves the same question one level lower. (c)
+  *support*: a block below the cut is followed only if at least `f + 1`
+  ordered blocks of the round above reference it, so a correct node
+  checked it in full when it referenced it. The record stays valid, but
+  a bypass no longer persists as the ordered set grows, and the rule is
+  not the rule of `docs/sync-auth.md` §8.
+* **D11. The join test.** *Open; recommended: a digest in the payload,
+  over `K = L + 2` rounds.* A test that walks a history is not local
+  (D4). A digest carried by each block and checked against its
+  references keeps the test local, at the cost of up to `n · K`
+  identifiers a block. Pairs below the window lie below the cut of every
+  node that takes the block in at the frontier, where they are bypassed
+  or ordered.
+* **D12. The builder does not wait.** *Recommended.* A builder that waits,
+  up to a timeout, for a block of every author of its round would
+  reference every correct block, which gives exposure in rounds without
+  certification and orders every correct block. A Byzantine author that
+  withholds its block would then make every round last the timeout.
+* **D13. Bypassed blocks are dropped.** *Recommended.* Below the cut the
+  disk then holds only ordered blocks and the blocks of rounds whose
+  ordered blocks above come from fewer than `q` authors. Dropping keeps
+  a bypass view, since a dropped block is bypassed for every block that
+  references it.
+* **D14. A signer refuses a join at or below its cut.** *Recommended.*
+  It no longer holds the histories `clean` reads there.
+* **D15. A request carries the requester's horizon.** *Recommended.* A
+  responder then streams nothing below the requester's cut, and a node
+  behind receives the ordered history it lacks by name, in pieces
+  bounded by the bound on a round.
 * **D5. The fast path.** A broadcast block ready on arrival is accepted
   without a sync, as now. *Recommended*: it is the common case.
 * **D6. What stays with the environment.** Rate limits on streams from a
@@ -209,8 +304,15 @@ audits, the documents updated, and a commit.
   authors the builder leaves out, while its own set can be built, would
   give it, if the wave facts can do without a lent set that references
   such an author.
+* **Stage 5 — ordering, bypass and certification** (§2.3, D10–D15).
+  *Planned* (`docs/dos-bounds.md`, Phase 3). In three increments, each
+  with safety under any timing, liveness in synchrony (V11) and V13
+  proved again: ordering (`ordered`, the horizon); bypass (a disk that
+  need not be closed below the cut, dropping, requests with the
+  horizon); certification (the digest, the certificate clause, the
+  builder's request and the signer).
 
-Stage 3 needs Stages 1 and 2, and Stage 4 needs Stage 3.
+Stage 3 needs Stages 1 and 2, and Stage 4 needs Stage 3. Stage 5 needs Stage 4.
 
 ## 5. What stays open
 

@@ -58,21 +58,31 @@ The constants are fixed in Phase 0 and checked in Phase 1.
 * **B1. Liveness.** In a synchronous run no correct node stalls, and
   every correct node decides every slot (V11 proved again with ordering,
   bypass and certification).
-* **B2. The lag.** In a synchronous run, a correct node's decided
-  horizon is at most `L` rounds below its frontier.
+* **B2. The lag.** In a synchronous run, a correct node's horizon is at
+  most `L` rounds below its top, with `L = w + per · (c + 1)`. Here `w`
+  is the number of rounds from a slot's round to its direct decision,
+  `per` the number of rounds between slot rounds, and `c` the longest run
+  of slot rounds without a correct leader, at most `f` under a fair
+  schedule with one leader a slot round.
 * **B3. The store.** In a synchronous run, a correct node holds at most
   `n + |D|` blocks of each round, except at the rounds of at most `f`
-  bands, each at most a constant number of rounds long and holding at
-  most a constant number of blocks a round. Below its horizon it holds
-  only ordered blocks.
+  bands. A band is at most `L + 2` rounds long, and the node holds at
+  most `n + f (f + 1) / 2` blocks of each of its rounds. Below its cut it
+  holds only ordered blocks and the blocks of rounds whose ordered blocks
+  above come from fewer than `q` authors.
 * **B4. Histories.** The bound of B3 holds for the history of every block
   the node holds or takes in.
-* **B5. Memory.** The node's memory holds at most the bound of B3 for each
-  round from its floor up.
+* **B5. Memory.** The memory holds the rounds from the floor to the top,
+  at most `L + 1` of them, so at most `(L + 1) · (n + f (f + 1) / 2)`
+  blocks.
 * **B6. Sync.** The blocks a node takes in at a round number at most the
-  bound of B3. A piece from a correct responder holds at most
-  `(frontier − h) · (n + f)` blocks above the horizon `h`, and below it
-  only ordered blocks the node lacks.
+  bound of B3 for that round. A piece from a correct responder holds
+  only blocks at or above the requester's cut, so at most
+  `(t − G + 1) · (n + f (f + 1) / 2)` blocks for a target of round `t`.
+
+The constant `f (f + 1) / 2` of a band is the argument of
+`docs/sync-auth.md` §4, to be proved in R5 or replaced by the bound R5
+proves; the simulator of Phase 1 measures it.
 
 ## 4. Decisions
 
@@ -91,20 +101,10 @@ The constants are fixed in Phase 0 and checked in Phase 1.
   timing; only B1 to B6 assume synchrony.
 * **E4. Out of scope**, as in §1.
 
-Open, to be decided in Phase 0:
-
-* **The join test.** Whether a block joins twins depends on its history,
-  and the node's validity reads a block and its references only
-  (`docs/node-sync.md`, D4). A form that can be checked from the
-  references is needed, for example a digest of the twins in each
-  block's history above the horizon, carried or computed incrementally,
-  of size bounded by the window.
-* **The signer under bypass.** A signer cannot test a round below its
-  horizon on histories it no longer holds; it refuses any join below
-  the horizon.
-* **The builder.** Whether a correct builder waits for the blocks of its
-  round up to a timeout, which bounds the exposure round in rounds
-  without certification, and costs latency.
+The node's design and the decisions it raises are Stage 5 of
+`docs/node-sync.md` (§2.3, D10 to D15). D10, the checks at and below the
+cut, decides what record the safety and the bounds of the run are
+stated on.
 
 ## 5. Phases
 
