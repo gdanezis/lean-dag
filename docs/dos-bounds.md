@@ -225,6 +225,27 @@ any timing), B1 (liveness in synchrony) and V13 are proved again.
    conviction, the builder's wait for a certificate, and the join test
    on admission.
 
+**What Phase 3.2 changes on the record (D10).** Phase 3.1 keeps the
+store closed, and needs none of this.
+
+* **The ledger on known blocks.** `layer`, `flush` and `bypassLedger`
+  read only the block map and the ordered set, but the bypass test reads
+  the round of the bypassed block from its own header. Under bypass a
+  correct node may order a block whose bypassed reference no correct
+  node ever held. The test is to read that round as the referrer's round
+  less one, and the ledger is to be stated on the blocks the correct
+  nodes knew, without completeness or validity.
+* **One record for each cut.** `globalRecord` (`Node/Helpers/Global.lean`)
+  holds the blocks that are real all the way down: known, valid, with
+  real references. A block a correct node holds at or below its cut may
+  not be. Every decision of slot `k` reads the record cut at
+  `slotRound k − 1` (`Proves`, `Store.window`), so the record is to be
+  the blocks real down to that round, those at it read as base blocks.
+  V12 (`Holds`, `Loops`) and the facts of V11 that read the record are
+  restated for each slot on that record.
+* **Checks at the cut.** A block of round `G` or below is checked on its
+  own header only (D10), so `ready` and the checks change below the cut.
+
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase
 3, from R1 to R5, V13 and the invariant of `BypassRun`. R6 is optional.
 
