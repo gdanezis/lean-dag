@@ -273,8 +273,11 @@ store closed, and needs none of this.
      blocks above `G`, on which every honest decision of a slot of round
      `G + 1` is a verdict (`Cut.Cuts`); so two honest nodes decide each
      slot alike, on the record of its cut (`Cut.Agrees`). It is proved
-     here from V12; under bypass `Cuts` is to be proved directly, and
-     `Agrees` follows from it as it is.
+     directly, not from V12: along a run every honest disk is read as the
+     record padded below `G` reads it from `G` up, and every decision of
+     a slot from round `G` up is a verdict on that record
+     (`cutAbove_before`, `Node/Helpers/CutAbove.lean`). Neither reads a
+     block below `G`.
   5. *V11 for each cut.* Left to step 4: `Leads` and `Waves` on the
      padded record are to be proved there from the arrival of blocks on
      the node under bypass, not carried over from the present V11.
@@ -303,12 +306,26 @@ store closed, and needs none of this.
   the receiver's check: the loop on the proof.
 * **Sync with the horizon** (D15). A responder streams only blocks at or
   above the requester's cut; V3′ and `SyncsBound` are proved again.
-* **Staging.** About 18 files of `Node` read the store as closed
-  (`Store.complete`, `toRecord`) or as a cut of one record (`IsCut`). The
-  increments, each with `lake build` green: the disk invariant (every
-  held block real down to the node's cut) beside `IsCut`; dropping; the
-  store not closed below the cut, with `Cut.Cuts` proved directly;
-  catch-up; sync with the horizon; V11 and V13 on the new node.
+* **Staging.** Each increment keeps `lake build` green.
+  1. *The disk read from the cut up.* Done. The chain that keeps a disk
+     a cut along a run is generic in what each block of the disk
+     satisfies (`AllGood`, `Grounds`, `DecidesWell`,
+     `Node/Helpers/Commits.lean` and `Verdict.lean`). Its instance on the
+     padded record from `G` up (`CutAbove`, `grounds_padded`,
+     `decidesWell_padded`) proves `Cut.Cuts`; V12 (`IsCut`,
+     `CommitInv`) is its instance on the run's record.
+  2. *Blocks below the base kept without references.* The disk keeps
+     its blocks at or below a base round without their references, as
+     the memory keeps its floor, and their references apart; a node
+     serves and orders the blocks as received. The store stays closed,
+     so no proof that reads it as a record changes; the cut above `G`
+     reads no block below `G`. The base stays below the memory's floor.
+  3. *Dropping* (D13), below the base: the ordered blocks and the
+     proofs (`witnessView`) are kept.
+  4. *Catch-up* (D16), with the jump of a node whose top lies below its
+     cut. V12 on one record ends here: a decision on a proof is a verdict
+     on the padded record only.
+  5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase
 3, from R1 to R5, V13 and the invariant of `BypassRun`. R6 is optional.

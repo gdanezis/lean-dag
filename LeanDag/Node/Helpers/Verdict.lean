@@ -1,12 +1,15 @@
 import LeanDag.Node.Helpers.Commits
 /-!
-# A node's disk stays a cut along a run
+# A node's disk stays good along a run
 
-With every step (`IsCut.step`), the disk stays a cut of the record and
-every decision a step outputs is a verdict on a view of the record
-(`Verdict`). The decision step reads as `tryDecide` on the view of the
-record holding exactly the disk's blocks, and `Loop.sound` derives what
-it outputs (`verdict_decideStep`).
+With every step (`AllGood.step`), a disk whose blocks are good stays so,
+when the store takes in only good blocks (`Grounds`), and every decision a
+step outputs satisfies what each decision step from a good disk gives
+(`DecidesWell`). On a record grounding what the node knew, a cut is a good
+disk (`IsCut`), and a decision step from it outputs verdicts on a view of
+the record (`Verdict`): it reads as `tryDecide` on the view of the record
+holding exactly the disk's blocks, and `Loop.sound` derives what it
+outputs (`verdict_decideStep`).
 -/
 
 namespace LeanDag
@@ -57,83 +60,94 @@ theorem verdict_decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H f
     exact ⟨V', (Loop.sound _ _ _ P H cfg.p boundedSel U V' s.lo _ hl hcv (by omega)).2 e he⟩
   · simp [commitsOf] at he
 
-/-- **Advancing from a cut**: the disk stays one, and the decisions are
-verdicts. -/
-theorem IsCut.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
-    (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload} (hc : IsCut U s.disk)
+variable {Good : BlockId → Block Validator BlockId Payload → Prop}
+variable {Q : ℕ × Option BlockId → Prop}
+
+variable (cfg) in
+/-- **Each decision step from a good disk outputs decisions satisfying `Q`.** -/
+def DecidesWell (Good : BlockId → Block Validator BlockId Payload → Prop)
+    (Q : ℕ × Option BlockId → Prop) : Prop :=
+  ∀ s : State Validator BlockId Payload, AllGood Good s.disk →
+    ∀ e ∈ commitsOf (Node.decideStep cfg s).2, Q e
+
+omit [Fintype Validator] in
+/-- **A pass from a good disk**: the disk stays good, and the decisions
+satisfy `Q`. -/
+theorem AllGood.advance (hg : Grounds cfg Good K) (hdec : DecidesWell cfg Good Q)
+    {s : State Validator BlockId Payload} (hc : AllGood Good s.disk)
     (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K)
     (hb : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) :
-    IsCut U (Node.advance cfg s).1.disk ∧
-      ∀ e ∈ commitsOf (Node.advance cfg s).2, Verdict cfg U e := by
+    AllGood Good (Node.advance cfg s).1.disk ∧
+      ∀ e ∈ commitsOf (Node.advance cfg s).2, Q e := by
   refine ⟨hc.advanceStore hg hp hb, ?_⟩
   obtain ⟨bs, hbs⟩ := progress_built (cfg := cfg) (s.disk.topRound + 2) s
   rw [advance_snd, persists_append, persists_arm, List.append_nil] at hb
   rw [advance_snd, commitsOf_append, commitsOf_arm, List.append_nil]
   simp only [Node.pass] at hb ⊢
   rw [persists_append] at hb
-  have hc₁ := IsCut.progress hg _ hc fun e he => hb e (List.mem_append_left _ he)
+  have hc₁ := AllGood.progress hg _ hc fun e he => hb e (List.mem_append_left _ he)
   generalize Node.progress cfg (s.disk.topRound + 2) s = r at hbs hc₁ ⊢
-  have hv := verdict_decideStep (U := U) hσ ht hc₁
+  have hv := hdec _ hc₁
   intro e he
   rw [commitsOf_append, hbs, commitsOf_built, List.nil_append] at he
   exact hv e he
 
-/-- **The passes from a cut**: the disk stays one, and the decisions are
-verdicts. -/
-theorem IsCut.quiesce (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
-    (ht : cfg.p.Tolerates H f q) : ∀ (n : ℕ) {s : State Validator BlockId Payload},
-    IsCut U s.disk → (∀ e ∈ s.syncs, e.2.1 ∈ K) →
+omit [Fintype Validator] in
+/-- **The passes from a good disk.** -/
+theorem AllGood.quiesce (hg : Grounds cfg Good K) (hdec : DecidesWell cfg Good Q) :
+    ∀ (n : ℕ) {s : State Validator BlockId Payload},
+    AllGood Good s.disk → (∀ e ∈ s.syncs, e.2.1 ∈ K) →
     (∀ e ∈ persists (Node.quiesce cfg n s).2, e ∈ K) →
-    IsCut U (Node.quiesce cfg n s).1.disk ∧
-      ∀ e ∈ commitsOf (Node.quiesce cfg n s).2, Verdict cfg U e
+    AllGood Good (Node.quiesce cfg n s).1.disk ∧
+      ∀ e ∈ commitsOf (Node.quiesce cfg n s).2, Q e
   | 0, s, hc, _, _ => ⟨hc, fun e he => by simp [Node.quiesce, commitsOf] at he⟩
   | n + 1, s, hc, hp, hb => by
     rcases quiesce_succ_cases (cfg := cfg) n s with he | he <;> rw [he] at hb ⊢
-    · exact hc.advance hg hσ ht hp hb
+    · exact hc.advance hg hdec hp hb
     · rw [persists_append] at hb
-      obtain ⟨hc₁, hv₁⟩ := hc.advance hg hσ ht hp fun e he => hb e (List.mem_append_left _ he)
-      obtain ⟨hc₂, hv₂⟩ := IsCut.quiesce hg hσ ht n hc₁
+      obtain ⟨hc₁, hv₁⟩ := hc.advance hg hdec hp fun e he => hb e (List.mem_append_left _ he)
+      obtain ⟨hc₂, hv₂⟩ := AllGood.quiesce hg hdec n hc₁
         (fun e he => hp e (advance_sub (cfg := cfg) s e he))
         fun e he => hb e (List.mem_append_right _ he)
       refine ⟨hc₂, fun e he => ?_⟩
       rw [commitsOf_append] at he
       exact (List.mem_append.mp he).elim (hv₁ e) (hv₂ e)
 
-/-- **Settling from a cut**: the disk stays one, and the decisions are
-verdicts. -/
-theorem IsCut.settle (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
-    (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload} (hc : IsCut U s.disk)
+omit [Fintype Validator] in
+/-- **Settling from a good disk.** -/
+theorem AllGood.settle (hg : Grounds cfg Good K) (hdec : DecidesWell cfg Good Q)
+    {s : State Validator BlockId Payload} (hc : AllGood Good s.disk)
     (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K)
     (hb : ∀ e ∈ persists (Node.settle cfg s).2, e ∈ K) :
-    IsCut U (Node.settle cfg s).1.disk ∧
-      ∀ e ∈ commitsOf (Node.settle cfg s).2, Verdict cfg U e :=
-  IsCut.quiesce hg hσ ht (passes cfg s) hc hp hb
+    AllGood Good (Node.settle cfg s).1.disk ∧
+      ∀ e ∈ commitsOf (Node.settle cfg s).2, Q e :=
+  AllGood.quiesce hg hdec (passes cfg s) hc hp hb
 
-/-- **A step from a cut**: the disk stays a cut, and the decisions are
-verdicts. -/
-theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
-    (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload}
-    (i : Input Validator BlockId Payload) (hc : IsCut U s.disk)
+/-- **A step from a good disk**: the disk stays good, and the decisions
+satisfy `Q`. -/
+theorem AllGood.step (hg : Grounds cfg Good K) (hdec : DecidesWell cfg Good Q)
+    {s : State Validator BlockId Payload}
+    (i : Input Validator BlockId Payload) (hc : AllGood Good s.disk)
     (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K)
     (hd : ∀ e ∈ delivered cfg [i], e ∈ K)
     (hb : ∀ e ∈ persists (Node.step cfg s i).2, e ∈ K) :
-    IsCut U (Node.step cfg s i).1.disk ∧
-      ∀ e ∈ commitsOf (Node.step cfg s i).2, Verdict cfg U e := by
+    AllGood Good (Node.step cfg s i).1.disk ∧
+      ∀ e ∈ commitsOf (Node.step cfg s i).2, Q e := by
   -- a step that settles a state `s₀`, after outputs without decisions
   have hset : ∀ (s₀ : State Validator BlockId Payload)
       (pre : List (Output Validator BlockId Payload)),
-      IsCut U s₀.disk → (∀ e ∈ s₀.syncs, e.2.1 ∈ K) → commitsOf pre = [] →
+      AllGood Good s₀.disk → (∀ e ∈ s₀.syncs, e.2.1 ∈ K) → commitsOf pre = [] →
       Node.step cfg s i = ((Node.settle cfg s₀).1, pre ++ (Node.settle cfg s₀).2) →
-      IsCut U (Node.step cfg s i).1.disk ∧
-        ∀ e ∈ commitsOf (Node.step cfg s i).2, Verdict cfg U e := by
+      AllGood Good (Node.step cfg s i).1.disk ∧
+        ∀ e ∈ commitsOf (Node.step cfg s i).2, Q e := by
     intro s₀ pre hc₀ hp₀ hpre he
     rw [he] at hb ⊢
     rw [persists_append] at hb
     rw [commitsOf_append, hpre, List.nil_append]
-    exact hc₀.settle hg hσ ht hp₀ fun e he => hb e (List.mem_append_right _ he)
+    exact hc₀.settle hg hdec hp₀ fun e he => hb e (List.mem_append_right _ he)
   have hsame : Node.step cfg s i = (s, []) →
-      IsCut U (Node.step cfg s i).1.disk ∧
-        ∀ e ∈ commitsOf (Node.step cfg s i).2, Verdict cfg U e := by
+      AllGood Good (Node.step cfg s i).1.disk ∧
+        ∀ e ∈ commitsOf (Node.step cfg s i).2, Q e := by
     intro he; rw [he]; exact ⟨hc, fun e he => absurd he List.not_mem_nil⟩
   cases i with
   | start =>
@@ -147,9 +161,7 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         have hx : (cfg.idOf cfg.genesis, cfg.genesis) ∈ K :=
           hb _ (by simp only [Node.step, dif_pos h₂, if_pos h₁]; simp [persists])
         have hnil : cfg.genesis.refs ⊆ s.disk.ids := fun _ hj => absurd hj (Finset.notMem_empty _)
-        obtain ⟨hU₁, hU₂⟩ := hg.real _ hx (fun _ hj => absurd hj (Finset.notMem_empty _))
-          (validAt_of_cut hc h₂.1 hnil h₂.2)
-        have hcst : IsCut U st := hc.insert ⟨hU₁, hU₂⟩
+        have hcst : AllGood Good st := hc.insert (hg _ hc _ hx h₂.1 hnil h₂.2)
         let gid := cfg.idOf cfg.genesis
         exact hset { keep s (cfg.idOf cfg.genesis) cfg.genesis h₂.1
             (fun _ hj => absurd hj (Finset.notMem_empty _))
@@ -163,19 +175,19 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     rcases step_receipt (cfg := cfg) (s := s) (Or.inl ⟨u, id, b, rfl⟩) with
       he | ⟨s₁, pre, hr, hpre, he⟩
     · exact hsame he
-    · obtain ⟨hc₁, hp₁⟩ := hr.cut hg hc hp hd
+    · obtain ⟨hc₁, hp₁⟩ := hr.good hg hc hp hd
       exact hset s₁ pre hc₁ hp₁ (List.filterMap_eq_nil_iff.mpr fun o ho => by
         obtain ⟨_, _, _, _, rfl⟩ := hpre o ho; rfl) he
   | stream u L =>
     rcases step_receipt (cfg := cfg) (s := s) (Or.inr ⟨u, L, rfl⟩) with he | ⟨s₁, pre, hr, hpre, he⟩
     · exact hsame he
-    · obtain ⟨hc₁, hp₁⟩ := hr.cut hg hc hp hd
+    · obtain ⟨hc₁, hp₁⟩ := hr.good hg hc hp hd
       exact hset s₁ pre hc₁ hp₁ (List.filterMap_eq_nil_iff.mpr fun o ho => by
         obtain ⟨_, _, _, _, rfl⟩ := hpre o ho; rfl) he
   | timer r =>
     rw [persists_step_timer] at hb
     rw [step_timer_fst, commitsOf_step_timer]
-    exact (hc : IsCut U { s with fired := Insert.insert r s.fired }.disk).settle hg hσ ht hp hb
+    exact (hc : AllGood Good { s with fired := Insert.insert r s.fired }.disk).settle hg hdec hp hb
   | syncRequest peer t fr ids =>
     refine ⟨hc, fun e he => ?_⟩
     simp only [Node.step] at he
@@ -187,7 +199,7 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   | restart =>
     rw [persists_step_restart] at hb
     rw [step_restart_fst, commitsOf_step_restart]
-    exact (hc : IsCut U { s with recovering := true }.disk).settle hg hσ ht hp hb
+    exact (hc : AllGood Good { s with recovering := true }.disk).settle hg hdec hp hb
 
 end Node
 

@@ -449,7 +449,7 @@ theorem BuildState.tryBuild {U : BlockRecord Validator BlockId Payload P H}
     (hb : Node.tryBuild cfg x = some (y, o)) (hK : ∀ e ∈ persists o, e ∈ K) :
     BuildState cfg U K s inp y := by
   obtain ⟨_, _, _, _, _, _, -, -, -, -, -, hst, -⟩ := tryBuild_some hb
-  refine ⟨h.cut.tryBuild hg hb hK, h.held.tryBuild hb, OwnTop.tryBuild hb,
+  refine ⟨h.cut.tryBuild hg.grounds hb hK, h.held.tryBuild hb, OwnTop.tryBuild hb,
     h.grows.trans (hst ▸ Grows.insert x.disk),
     fun r hr => h.fired r (calm_tryBuild hb hr), ?_,
     h.ev.grow (hst ▸ Grows.insert x.disk) (tryBuild_detected hb).1 (tryBuild_detected hb).2,
@@ -540,7 +540,7 @@ theorem BuildState.advance {U : BlockRecord Validator BlockId Payload P H}
     (h : BuildState cfg U K s inp x) (hp : ∀ e ∈ x.syncs, e.2.1 ∈ K)
     (hK : ∀ e ∈ persists (Node.advance cfg x).2, e ∈ K) :
     BuildState cfg U K s inp (Node.advance cfg x).1 := by
-  refine ⟨h.cut.advanceStore hg hp hK, h.held.advance, h.own.advance,
+  refine ⟨AllGood.advanceStore hg.grounds h.cut hp hK, h.held.advance, h.own.advance,
     h.grows.trans (Grows.advance x), fun r hr => h.fired r (calm_advance x hr), ?_,
     (Thins.advance x).twins h.ev, h.det.trans (Thins.advance x).det,
     fun hf => (Thins.advance x).holds hf (h.holds hf)⟩
@@ -660,7 +660,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
         have hx : (cfg.idOf cfg.genesis, cfg.genesis) ∈ K :=
           hb _ (by simp only [Node.step, dif_pos h₂, if_pos h₁]; simp [persists])
         have hrefs : cfg.genesis.refs ⊆ s.disk.ids := fun _ hj => absurd hj (Finset.notMem_empty _)
-        have hcst : IsCut U st := hc.insert (hg.real _ hx
+        have hcst : IsCut U st := AllGood.insert hc (hg.real _ hx
           (fun _ hj => absurd hj (Finset.notMem_empty _))
           (validAt_of_cut hc h₂.1 hrefs h₂.2))
         let gid := cfg.idOf cfg.genesis
@@ -732,7 +732,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
     rcases step_receipt (cfg := cfg) (s := s) (Or.inl ⟨u, id, b, rfl⟩) with
       he | ⟨s₁, pre, hr, hpre, he⟩
     · exact hsame he
-    · obtain ⟨hc₁, hp₁⟩ := hr.cut hg hc hp hd
+    · obtain ⟨hc₁, hp₁⟩ := hr.good hg.grounds hc hp hd
       refine hset s₁ pre
         ⟨hc₁, hh.grow hr.grows hr.top, hown.grow hr.grows hr.top hr.own, hr.grows,
           fun r hr' => Or.inl (by rwa [hr.fired] at hr'), ⟨B₀, hr.inv hi hd⟩, hr.ev hev,
@@ -743,7 +743,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
   | stream u L =>
     rcases step_receipt (cfg := cfg) (s := s) (Or.inr ⟨u, L, rfl⟩) with he | ⟨s₁, pre, hr, hpre, he⟩
     · exact hsame he
-    · obtain ⟨hc₁, hp₁⟩ := hr.cut hg hc hp hd
+    · obtain ⟨hc₁, hp₁⟩ := hr.good hg.grounds hc hp hd
       refine hset s₁ pre
         ⟨hc₁, hh.grow hr.grows hr.top, hown.grow hr.grows hr.top hr.own, hr.grows,
           fun r hr' => Or.inl (by rwa [hr.fired] at hr'), ⟨B₀, hr.inv hi hd⟩, hr.ev hev,

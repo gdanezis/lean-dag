@@ -4,10 +4,14 @@ import LeanDag.Scheme.Loop.Proof
 /-!
 # A node's decisions are one call of the loop
 
-A record `U` grounds what a node knows, `K` (`Ground`), when a known
-block valid over blocks of `U` is the record's block. Then every disk
-along the node's run is a cut of `U` (`IsCut`): its blocks are blocks of
-`U`, read as `U` reads them.
+A store takes in only good blocks from `K` (`Grounds`) when a known new
+block valid over it, with its references held, is good once the store's
+blocks are (`AllGood`); accepting, building and passes keep the disk good
+(`AllGood.accept`, `AllGood.advanceStore`). A record `U` grounds what a node
+knows, `K` (`Ground`), when a known block valid over blocks of `U` is the
+record's block; then the store takes in only blocks of `U`
+(`Ground.grounds`), and every disk along the node's run is a cut of `U`
+(`IsCut`): its blocks are blocks of `U`, read as `U` reads them.
 
 On such a record the decisions a node output so far are nothing, or
 `tryDecide` from slot `0` on a view of `U` whose blocks the disk holds
@@ -29,11 +33,25 @@ variable [LinearOrder BlockId]
 variable {cfg : Config Validator BlockId Payload}
 variable {P : Validity Validator BlockId Payload} {H : Finset Validator}
 
+/-- **Every block of a store is good.** -/
+def AllGood (Good : BlockId → Block Validator BlockId Payload → Prop)
+    (st : Store Validator BlockId Payload) : Prop :=
+  ∀ j ∈ st.ids, Good j (st.blk j)
+
+variable (cfg) in
+/-- **A store takes in only good blocks from `K`**: a known new block whose
+references the store holds and that is valid over it is good, when the
+store's blocks are. -/
+def Grounds (Good : BlockId → Block Validator BlockId Payload → Prop)
+    (K : Set (BlockId × Block Validator BlockId Payload)) : Prop :=
+  ∀ st : Store Validator BlockId Payload, AllGood Good st → ∀ x ∈ K, x.1 ∉ st.ids →
+    x.2.refs ⊆ st.ids → rowValid cfg.q cfg.xp (Function.update st.blk x.1 x.2) x.2 → Good x.1 x.2
+
 /-- **A store is a cut of a record**: its blocks are the record's, read as
 the record reads them. -/
 def IsCut (U : BlockRecord Validator BlockId Payload P H) (st : Store Validator BlockId Payload) :
     Prop :=
-  ∀ j ∈ st.ids, j ∈ U.ids ∧ U.block j = st.blk j
+  AllGood (fun j b => j ∈ U.ids ∧ U.block j = b) st
 
 /-- **A record grounds what a node knew**, at quorum `q`: a known block
 valid at `q` over blocks of the record is the record's block. -/
@@ -44,6 +62,7 @@ structure Ground (U : BlockRecord Validator BlockId Payload P H)
 
 variable {U : BlockRecord Validator BlockId Payload P H}
 variable {K : Set (BlockId × Block Validator BlockId Payload)}
+variable {Good : BlockId → Block Validator BlockId Payload → Prop}
 
 section Cut
 
@@ -65,22 +84,18 @@ theorem IsCut.creator (hc : IsCut U st) {j : BlockId} (hj : j ∈ st.ids) :
   rw [hc.eq hj]
 
 omit [Fintype Validator] [DecidableEq Validator] in
-theorem IsCut.insert (hc : IsCut U st) {id : BlockId} {b : Block Validator BlockId Payload}
-    {hnew hrefs hpred} (hb : id ∈ U.ids ∧ U.block id = b) :
-    IsCut U (st.insert id b hnew hrefs hpred) := by
+theorem AllGood.insert (hc : AllGood Good st) {id : BlockId} {b : Block Validator BlockId Payload}
+    {hnew hrefs hpred} (hb : Good id b) : AllGood Good (st.insert id b hnew hrefs hpred) := by
   intro j hj
   rw [Store.insert_ids] at hj
   by_cases h : j = id
   · subst h
-    refine ⟨hb.1, ?_⟩
-    change U.block j = (st.map.insert j b).getD j st.junk
-    simp only [Std.TreeMap.getD_insert_self]
-    exact hb.2
-  · have hj' := (Finset.mem_insert.mp hj).resolve_left h
-    refine ⟨(hc j hj').1, ?_⟩
-    change U.block j = (st.map.insert id b).getD j st.junk
+    change Good j ((st.map.insert j b).getD j st.junk)
+    rw [Std.TreeMap.getD_insert_self]
+    exact hb
+  · change Good j ((st.map.insert id b).getD j st.junk)
     rw [treeMap_getD_insert_ne (Ne.symm h)]
-    exact (hc j hj').2
+    exact hc j ((Finset.mem_insert.mp hj).resolve_left h)
 
 omit [Fintype Validator] in
 /-- **Validity over the store is validity over the record**, at the
@@ -100,51 +115,57 @@ theorem validAt_of_cut (hc : IsCut U st) {q : ℕ} {E : Exposure Validator Block
     exact hv.quorum h0
 
 omit [Fintype Validator] in
-/-- **Accepting a known block keeps the store a cut.** -/
-theorem IsCut.accept (hg : Ground U K cfg.q) (hc : IsCut U st)
+/-- **A record grounding what a node knew takes in its blocks.** -/
+theorem Ground.grounds (hg : Ground U K cfg.q) :
+    Grounds cfg (fun j b => j ∈ U.ids ∧ U.block j = b) K :=
+  fun _ hc x hx hnew hrefs hv =>
+    hg.real x hx (fun j hj => (hc j (hrefs hj)).1) (validAt_of_cut hc hnew hrefs hv)
+
+omit [Fintype Validator] in
+/-- **Accepting a known block keeps the store good.** -/
+theorem AllGood.accept (hg : Grounds cfg Good K) (hc : AllGood Good st)
     {id : BlockId} {b : Block Validator BlockId Payload} (hx : (id, b) ∈ K) :
-    IsCut U (acceptOn cfg st id b) := by
+    AllGood Good (acceptOn cfg st id b) := by
   unfold acceptOn
   split
   · rename_i h
-    obtain ⟨h₁, h₂⟩ := hg.real _ hx (fun j hj => (hc j (h.2.1 hj)).1)
-      (validAt_of_cut hc h.1 h.2.1 h.2.2.2)
-    exact hc.insert ⟨h₁, h₂⟩
+    exact hc.insert (hg st hc _ hx h.1 h.2.1 h.2.2.2)
   · exact hc
 
 omit [Fintype Validator] in
-theorem IsCut.foldl (hg : Ground U K cfg.q) :
+theorem AllGood.foldl (hg : Grounds cfg Good K) :
     ∀ (l : List (BlockId × Block Validator BlockId Payload)) {st : Store Validator BlockId Payload},
-    IsCut U st → (∀ e ∈ l, e ∈ K) →
-      IsCut U (l.foldl (fun s e => acceptOn cfg s e.1 e.2) st)
+    AllGood Good st → (∀ e ∈ l, e ∈ K) →
+      AllGood Good (l.foldl (fun s e => acceptOn cfg s e.1 e.2) st)
   | [], _, hc, _ => hc
   | e :: l, st, hc, hK => by
     rw [List.foldl_cons]
-    exact IsCut.foldl hg l (hc.accept hg (hK e List.mem_cons_self))
+    exact AllGood.foldl hg l (hc.accept hg (hK e List.mem_cons_self))
       fun x hx => hK x (List.mem_cons_of_mem _ hx)
 
 omit [Fintype Validator] in
-/-- **Accepting known syncs' blocks keeps the store a cut.** -/
-theorem IsCut.flushSyncs (hg : Ground U K cfg.q) (fuel : ℕ) {s : State Validator BlockId Payload}
-    (hc : IsCut U s.disk) (hK : ∀ e ∈ s.syncs, e.2.1 ∈ K) :
-    IsCut U (Node.flushSyncs cfg fuel s).disk := by
+/-- **Accepting known syncs' blocks keeps the store good.** -/
+theorem AllGood.flushSyncs (hg : Grounds cfg Good K) (fuel : ℕ)
+    {s : State Validator BlockId Payload} (hc : AllGood Good s.disk)
+    (hK : ∀ e ∈ s.syncs, e.2.1 ∈ K) : AllGood Good (Node.flushSyncs cfg fuel s).disk := by
   obtain ⟨L, hL, hd⟩ := (flushSyncs_eq (cfg := cfg) fuel s).1
   rw [hd]
-  refine IsCut.foldl hg L hc fun e he => ?_
+  refine AllGood.foldl hg L hc fun e he => ?_
   obtain ⟨x, hx, rfl⟩ := List.mem_map.mp (hL e he)
   exact hK x hx
 
 omit [Fintype Validator] in
-/-- **A receipt of known blocks keeps the store a cut**, and the syncs'
+/-- **A receipt of known blocks keeps the store good**, and the syncs'
 blocks known. -/
-theorem Received.cut (hg : Ground U K cfg.q) {inp : Input Validator BlockId Payload}
-    {s s₁ : State Validator BlockId Payload} (hr : Received cfg inp s s₁) (hc : IsCut U s.disk)
-    (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K) (hd : ∀ e ∈ delivered cfg [inp], e ∈ K) :
-    IsCut U s₁.disk ∧ ∀ e ∈ s₁.syncs, e.2.1 ∈ K := by
+theorem Received.good (hg : Grounds cfg Good K) {inp : Input Validator BlockId Payload}
+    {s s₁ : State Validator BlockId Payload} (hr : Received cfg inp s s₁)
+    (hc : AllGood Good s.disk) (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K)
+    (hd : ∀ e ∈ delivered cfg [inp], e ∈ K) :
+    AllGood Good s₁.disk ∧ ∀ e ∈ s₁.syncs, e.2.1 ∈ K := by
   obtain ⟨L, hL, hdk⟩ := hr.disk
   refine ⟨by
     rw [hdk]
-    refine IsCut.foldl hg L hc fun e he => ?_
+    refine AllGood.foldl hg L hc fun e he => ?_
     rcases hL e he with h | h
     · obtain ⟨x, hx, rfl⟩ := List.mem_map.mp h; exact hp x hx
     · exact hd e h, fun e he => ?_⟩
@@ -205,23 +226,21 @@ theorem decideStep_lo_le (s : State Validator BlockId Payload) :
   · exact le_max_left _ _
 
 omit [Fintype Validator] in
-theorem IsCut.tryBuild (hg : Ground U K cfg.q) {s s' : State Validator BlockId Payload}
-    {out : List (Output Validator BlockId Payload)} (hc : IsCut U s.disk)
+theorem AllGood.tryBuild (hg : Grounds cfg Good K) {s s' : State Validator BlockId Payload}
+    {out : List (Output Validator BlockId Payload)} (hc : AllGood Good s.disk)
     (h : Node.tryBuild cfg s = some (s', out)) (hb : ∀ e ∈ persists out, e ∈ K) :
-    IsCut U s'.disk := by
+    AllGood Good s'.disk := by
   obtain ⟨r, id, b, hnew, hrefs, hpred, -, -, -, -, hv, hst, -, -, -, hout⟩ := tryBuild_some h
   have hx : (id, b) ∈ K := hb _ (by rw [hout, persists_built]; exact List.mem_singleton_self _)
-  obtain ⟨h₁, h₂⟩ := hg.real _ hx (fun j hj => (hc j (hrefs hj)).1)
-    (validAt_of_cut hc hnew hrefs hv)
   rw [hst]
-  exact hc.insert ⟨h₁, h₂⟩
+  exact hc.insert (hg _ hc _ hx hnew hrefs hv)
 
 omit [Fintype Validator] in
-/-- **Building known blocks keeps the disk a cut.** -/
-theorem IsCut.progress (hg : Ground U K cfg.q) :
-    ∀ (fuel : ℕ) {s : State Validator BlockId Payload}, IsCut U s.disk →
+/-- **Building known blocks keeps the disk good.** -/
+theorem AllGood.progress (hg : Grounds cfg Good K) :
+    ∀ (fuel : ℕ) {s : State Validator BlockId Payload}, AllGood Good s.disk →
       (∀ e ∈ persists (Node.progress cfg fuel s).2, e ∈ K) →
-      IsCut U (Node.progress cfg fuel s).1.disk
+      AllGood Good (Node.progress cfg fuel s).1.disk
   | 0, _, hc, _ => hc
   | fuel + 1, s, hc, hb => by
     rcases htb : Node.tryBuild cfg s with _ | ⟨s₁, out⟩
@@ -229,26 +248,27 @@ theorem IsCut.progress (hg : Ground U K cfg.q) :
       exact hc
     · simp only [Node.progress, htb] at hb ⊢
       rw [persists_append] at hb
-      exact IsCut.progress hg fuel (hc.tryBuild hg htb fun e he => hb e
+      exact AllGood.progress hg fuel (hc.tryBuild hg htb fun e he => hb e
         (List.mem_append_left _ he)) fun e he => hb e (List.mem_append_right _ he)
 
 omit [Fintype Validator] in
-/-- **A pass from a cut keeps the disk a cut.** -/
-theorem IsCut.advanceStore (hg : Ground U K cfg.q) {s : State Validator BlockId Payload}
-    (hc : IsCut U s.disk) (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K)
-    (hb : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) : IsCut U (Node.advance cfg s).1.disk := by
+/-- **A pass keeps the disk good.** -/
+theorem AllGood.advanceStore (hg : Grounds cfg Good K) {s : State Validator BlockId Payload}
+    (hc : AllGood Good s.disk) (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K)
+    (hb : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) :
+    AllGood Good (Node.advance cfg s).1.disk := by
   have hp₁ := progress_syncs (cfg := cfg) (s.disk.topRound + 2) s
   rw [advance_snd, persists_append, persists_arm, List.append_nil] at hb
   rw [advance_disk]
   simp only [Node.pass] at hb ⊢
   rw [persists_append] at hb
-  have hc₁ := IsCut.progress hg _ hc fun e he => hb e (List.mem_append_left _ he)
+  have hc₁ := AllGood.progress hg _ hc fun e he => hb e (List.mem_append_left _ he)
   generalize Node.progress cfg (s.disk.topRound + 2) s = r at hp₁ hc₁ ⊢
-  have hc₂ : IsCut U (Node.decideStep cfg r.1).1.disk := by
+  have hc₂ : AllGood Good (Node.decideStep cfg r.1).1.disk := by
     rw [decideStep_disk]; exact hc₁
   have hgp : ∀ e ∈ (Node.decideStep cfg r.1).1.syncs, e.2.1 ∈ K := by
     rw [decideStep_syncs (cfg := cfg) r.1, hp₁]; exact hp
-  exact IsCut.flushSyncs hg _ hc₂ hgp
+  exact AllGood.flushSyncs hg _ hc₂ hgp
 
 /-! ## The decisions -/
 
@@ -356,7 +376,7 @@ theorem CommitInv.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K) (hb : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) :
     CommitInv cfg U (Node.advance cfg s).1 (cs ++ commitsOf (Node.advance cfg s).2) ∧
       IsCut U (Node.advance cfg s).1.disk := by
-  have hcut := IsCut.advanceStore hg hc hp hb
+  have hcut := AllGood.advanceStore hg.grounds hc hp hb
   obtain ⟨bs, hbs⟩ := progress_built (cfg := cfg) (s.disk.topRound + 2) s
   obtain ⟨hg₁, hlo₁⟩ := Grows.progress (cfg := cfg) (s.disk.topRound + 2) s
   rw [advance_snd, persists_append, persists_arm, List.append_nil] at hb
@@ -365,7 +385,7 @@ theorem CommitInv.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   rw [advance_disk] at hcut
   simp only [Node.pass] at hb hcut ⊢
   rw [persists_append] at hb
-  have hc₁ := IsCut.progress hg _ hc fun e he => hb e (List.mem_append_left _ he)
+  have hc₁ := AllGood.progress hg.grounds _ hc fun e he => hb e (List.mem_append_left _ he)
   generalize Node.progress cfg (s.disk.topRound + 2) s = r at hbs hg₁ hlo₁ hc₁ hcut ⊢
   have h₁ : CommitInv cfg U r.1 cs := h.keeps hlo₁ hg₁.keeps
   have h₂ := h₁.decideStep hσ ht hc₁
@@ -442,7 +462,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         have hnil : cfg.genesis.refs ⊆ s.disk.ids := fun _ hj => absurd hj (Finset.notMem_empty _)
         obtain ⟨hU₁, hU₂⟩ := hg.real _ hx (fun _ hj => absurd hj (Finset.notMem_empty _))
           (validAt_of_cut hc h₂.1 hnil h₂.2)
-        have hcst : IsCut U st := hc.insert ⟨hU₁, hU₂⟩
+        have hcst : IsCut U st := AllGood.insert hc ⟨hU₁, hU₂⟩
         let gid := cfg.idOf cfg.genesis
         have hk : Keeps s.disk st := (Grows.insert s.disk).keeps
         exact hset { keep s (cfg.idOf cfg.genesis) cfg.genesis h₂.1
@@ -462,7 +482,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         rcases hL e he with h | h
         · obtain ⟨x, hx, rfl⟩ := List.mem_map.mp h; exact hp x hx
         · exact hd e h
-      have hc₁ : IsCut U s₁.disk := by rw [hdk]; exact IsCut.foldl hg L hc hLK
+      have hc₁ : IsCut U s₁.disk := by rw [hdk]; exact AllGood.foldl hg.grounds L hc hLK
       refine hset s₁ pre (h.keeps hr.lo hr.grows.keeps) hc₁ (fun e he => ?_)
         (List.filterMap_eq_nil_iff.mpr fun o ho => ?_) he
       · rcases hr.syncs e he with h | h
@@ -477,7 +497,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         rcases hL e he with h | h
         · obtain ⟨x, hx, rfl⟩ := List.mem_map.mp h; exact hp x hx
         · exact hd e h
-      have hc₁ : IsCut U s₁.disk := by rw [hdk]; exact IsCut.foldl hg L' hc hLK
+      have hc₁ : IsCut U s₁.disk := by rw [hdk]; exact AllGood.foldl hg.grounds L' hc hLK
       refine hset s₁ pre (h.keeps hr.lo hr.grows.keeps) hc₁ (fun e he => ?_)
         (List.filterMap_eq_nil_iff.mpr fun o ho => ?_) he
       · rcases hr.syncs e he with h | h
