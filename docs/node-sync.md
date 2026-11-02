@@ -127,11 +127,12 @@ reference `x` come from at least `q` authors (`Bypassed U ordered q x`).
   has decided, a proof of the verdict. It drops every other bypassed
   block (D13). Its disk stays a bypass view of `ordered` at `H`
   (`BypassRun.inv`, with `BypassRun.drop`).
-* **Catch-up.** A node whose syncs wait on a reference that no correct
-  peer serves asks each peer for the proof of the verdict of its next
-  undecided slot and, for a commit, the blocks the commit orders. It
-  decides on the proof, takes in the blocks with the commit, and so
-  raises its cut (D16).
+* **Catch-up.** A node whose top has not moved for a time `T_c` asks
+  each peer for the proof of the verdict of its next undecided slot
+  and, for a commit, the blocks the commit orders. It decides on the
+  proof, takes in the blocks with the commit, and so raises its cut
+  (D16). Liveness in synchrony rests on it (B1 of
+  `docs/dos-bounds.md`).
 * **Decisions** read a proof: the disk at or above `G`, a view of the
   record cut at `G` (`BypassView.chop`), as the memory already does from
   its floor, or a proof received in catch-up.
@@ -293,10 +294,14 @@ its history and in the history of no single reference of it.
   shows the fast nodes a block `z` under a block `y` that a commit
   orders while it bypasses `z`: the fast nodes keep `z` in the proof of
   the slot of `y`'s round, all of them but in one case, and `B` takes it
-  from one of them. That a correct node always holds what `B` needs is
-  lemma R6 of `docs/dos-bounds.md`; B1 rests on R6, or on
-  catch-up by proof. A node cut off for 100 ticks catches up once by
-  proof and then by sync (`docs/dos-bounds.md` §6).
+  from one of them. Liveness does not rest on this. It rests on
+  catch-up by proof: every correct node that has decided `B`'s next
+  slot keeps its proof and the blocks its commit orders (D13), so in
+  synchrony `B` decides the slot within `T_c + 2Δ` of stalling, whatever
+  the proofs hold (B1 of `docs/dos-bounds.md`). That a correct node
+  always holds what `B` needs without catch-up is lemma R6 there, which
+  is optional. A node cut off for 100 ticks catches up once by proof and
+  then by sync (`docs/dos-bounds.md` §6).
 * **D5. The fast path.** A broadcast block ready on arrival is accepted
   without a sync, as now. *Recommended*: it is the common case.
 * **D6. What stays with the environment.** Rate limits on streams from a

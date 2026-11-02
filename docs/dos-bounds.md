@@ -58,8 +58,14 @@ The constants are fixed in Phase 0 and checked in Phase 1.
   V12 proved again for a store that need not be closed).
 * **B1. Liveness.** In a synchronous run no correct node stalls, and
   every correct node decides every slot (V11 proved again with ordering,
-  bypass and certification). It rests on R6, or on catch-up by proof
-  (D16 of `docs/node-sync.md`).
+  bypass and certification). A node behind rests on catch-up by proof
+  (D16 of `docs/node-sync.md`): once its top has not moved for a time
+  `T_c`, it asks its peers for the proof of the verdict of its next
+  undecided slot and the blocks that slot's commit orders. Every correct
+  node that has decided the slot keeps both (D13), so the node decides
+  the slot within `T_c + 2Δ` of stalling. A node that no correct node
+  is ahead of needs no catch-up: no correct node drops a block at or
+  above its cut, and the argument is that of V11.
 * **B2. The lag.** In a synchronous run, a correct node's horizon is at
   most `L` rounds below its top, with `L = w + per · (c + 1)`. Here `w`
   is the number of rounds from a slot's round to the round at which a
@@ -85,7 +91,9 @@ The constants are fixed in Phase 0 and checked in Phase 1.
 * **B6. Sync.** The blocks a node takes in at a round number at most the
   bound of B3 for that round. A piece from a correct responder holds
   only blocks at or above the requester's cut, so at most
-  `(t − G + 1) · K` blocks for a target of round `t`.
+  `(t − G + 1) · K` blocks for a target of round `t`. A catch-up reply
+  holds a proof and the blocks of one commit, each within the bound of
+  B3 at the rounds it spans.
 
 **The constant `K`.** No attack in the simulator exceeds `K`: 31 at
 `n = 10` and 49 at `n = 13`, against 28 and 45 seen. The 28 and 45 are
@@ -192,30 +200,33 @@ They are proved in Phase 4, on the node of Phase 3.
   joins are made at the frontier, so that a band lasts at most `L + 2`
   rounds, needs time. A band holds a bounded number of twins a round:
   `K − n = (n − f) · f`, or failing that `M − n`.
-* **R6.** What a node behind needs. In a synchronous run, the history
-  down to a correct node's cut of the blocks from which another correct
-  node decided its next slot is held by a correct node: on its disk
-  above its cut, in its ledger, or in a proof (D13). B1 then needs no
-  catch-up by proof.
+* **R6, optional.** What a node behind needs. In a synchronous run, the
+  history down to a correct node's cut of the blocks from which another
+  correct node decided its next slot is held by a correct node: on its
+  disk above its cut, in its ledger, or in a proof (D13). It would
+  explain why no node catches up by proof in the synchronous runs of
+  the simulator. B1 does not rest on it.
 
 **Phase 3. The node, in three increments.** After each, B0 (safety under
 any timing), B1 (liveness in synchrony) and V13 are proved again.
 
 1. **Ordering.** The node computes its ledger and its decided horizon
    from its verdicts (`bypassLedger`).
-2. **Bypass.** The store need not be closed: a block is kept once each
-   reference is held or bypassed (`BypassRun`), and a bypassed block
-   outside the ledger and every proof is dropped (D13). The store's
-   invariant (`keep` requires every reference on disk), `ready`, the
-   checks and V12 change with it. A node behind catches up by deciding on
-   proofs from its peers and taking in the blocks of each commit with the
-   commit (D16), a step `BypassRun` is to gain.
+2. **Bypass.** First, `BypassRun` gains the step that takes the blocks
+   of a commit in with the commit (D16), with its invariant and B0;
+   catch-up, on which B1 rests, and the exemption of those blocks from
+   the join test need it. Then the store need not be closed: a block is
+   kept once each reference is held or bypassed (`BypassRun`), and a
+   bypassed block outside the ledger and every proof is dropped (D13).
+   The store's invariant (`keep` requires every reference on disk),
+   `ready`, the checks and V12 change with it. A node behind catches up
+   by deciding on proofs from its peers.
 3. **Certification.** Sign requests and answers, the signer's
    conviction, the builder's wait for a certificate, and the join test
    on admission.
 
-**Phase 4. The bounds.** R4 to R6, and B2 to B6 on the node of Phase 3,
-from R1 to R6, V13 and the invariant of `BypassRun`.
+**Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase
+3, from R1 to R5, V13 and the invariant of `BypassRun`. R6 is optional.
 
 Phases 3.1 and 3.2 do not depend on certification. With them, B3 holds
 below the horizon before Phase 3.3.
@@ -293,10 +304,9 @@ and `late deaf`:
   of round `R + 2` down to round `R − 1`, nearly every block of those
   rounds. Of 24 such blocks at `n = 13` under `race w2`, one is left out
   of that proof, and dropped, by 4 of the 8 fast nodes; the slow node
-  takes it from the other 4. Lemma R6 is to prove that some correct node
-  always holds what a node behind needs. Under
-  `late deaf`, a node cut off for 100 ticks catches up once by proof and
-  then by sync, and its proofs check.
+  takes it from the other 4. B1 does not rest on this, but on catch-up
+  by proof. Under `late deaf`, a node cut off for 100 ticks catches up
+  once by proof and then by sync, and its proofs check.
 
 ## 7. What exists
 
