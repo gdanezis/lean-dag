@@ -22,8 +22,11 @@ node keeps the ordered blocks, the proofs, and the blocks not bypassed.
 **Admission.** A node takes a block in once each reference is held or bypassed and
 the block is valid: the shape; above the cut, no reference to an author exposed by
 evidence in its history within `WX` rounds; and, at any round, a certificate for the
-twins it joins among the blocks the node follows, held and not bypassed (with `JOIN =
-'cut'`, among the blocks at or above the cut). The builder prefers references that
+twins it joins among the blocks the node follows, held and not bypassed. A node reads
+histories as it saw them: the history of a block is that of its references the node
+held when it took the block in. With `JOIN = 'cut'` the test covers only the blocks at
+or above the cut; with `JOIN = 'cert'` a pair named by a certificate the node took in
+counts as joined. Blocks taken in with a commit skip the test. The builder prefers references that
 join nothing, and asks every node to sign the twins it must join. A signer convicts
 their authors, and refuses at or below its cut and when it holds a block of the round
 whose history holds no pair of the twins; it then sends that block.
@@ -44,7 +47,14 @@ shows each honest node its own block each round. `carrier`: as `none`, and Y car
 a fresh X chain `depth` rounds deep each round. `nest`: the nested families of
 `sync-auth.py`, back-dated `depth` rounds. `late`: as `lead`, and when two honest
 horizons differ, X builds a chain from just below the lower one up to the frontier, Y
-carries it, and its lowest block is served to no node.
+carries it, and its lowest block is served to no node. `race`: when the fast honest
+nodes have built a round R and none has gone past it, X makes a block z of round R - 1
+that no honest block of R references, Y a block y of R on z, and both are shown to the
+fast nodes only (with `width`, to the first `width` of them); z is served to no node by
+a Byzantine node, so the last honest node gets it only from a correct peer. `flat`:
+the structures of `docs/sync-auth.md` §4, back-dated `depth` rounds: at stage s each
+honest node is shown its own chains of BYZ[0..s], each carrying the one below, which
+join nothing.
 
 `python3 dos-sim.py n f [ticks]` prints, for each attack, the least top and horizon,
 whether the ledgers agree, the authors every node convicted (`D`), the largest lag
@@ -52,7 +62,9 @@ whether the ledgers agree, the authors every node convicted (`D`), the largest l
 blocks taken in at a round, rounds where some node took in more than `n + |D|`, piece,
 piece per round of its target above the cut, history of a built block at a round
 above the cut, the blocks kept below the cut a round (ordered, in a proof only,
-other), the blocks dropped, and the catch-ups. `nest cut` runs with `JOIN = 'cut'`;
+other), the blocks dropped, the catch-ups, and the honest blocks some node refused on
+the join test (`jr`), and of those, the ones it never took in (`jp`). `nest cut` and
+`nest cert` run with `JOIN = 'cut'` and `'cert'`;
 `late deaf` cuts the last honest node off from ticks 60 to 160, outside synchrony.
 """
 import random
@@ -127,16 +139,15 @@ def in_history(b, x):
     return (BC[b] >> BI[x]) & 1
 
 
-def joins(refs, lo, keep=None):
+def joins(refs, lo):
     """The twins at or above round `lo` that a block with references `refs` joins: pairs
-    of twins in its history and in the history of no single reference. With `keep`, only
-    twins that pass it."""
+    of twins in its history and in the history of no single reference."""
     m = 0
     for x in refs:
         m |= BC[x]
     groups = defaultdict(list)
     for x in twins_in(m):
-        if blocks[x][1] >= lo and (keep is None or keep(x)):
+        if blocks[x][1] >= lo:
             groups[blocks[x][:2]].append(x)
     out = set()
     for g in groups.values():
@@ -287,6 +298,8 @@ class Node:
         self.req, self.wait_until, self.qt = None, -1, {}
         self.moved, self.mtop, self.asked = 0, 0, -10 ** 9
         self.dirty = True
+        self.vc, self.cm, self.ever = {}, [], set()
+        self.jref = set()
         self.taken = defaultdict(int)
         self.mem = self.piece = self.pratio = self.fetched = self.hist = 0
         self.lag = self.ndrop = self.ncu = self.cubad = 0
@@ -329,11 +342,17 @@ class Node:
         if J:
             c = CERT.get(b)
             if c is None or not J <= c[0] or len(c[1]) < Q:
+                if a in HON:
+                    self.jref.add(b)
                 return False
         return True
 
     def add(self, b):
-        a, r, _ = blocks[b]
+        a, r, refs = blocks[b]
+        m = 1 << BI[b] if b in BI else 0
+        for x in refs:
+            m |= self.vc.get(x, 0)
+        self.vc[b] = m
         self.disk.add(b)
         self.at[r][a].append(b)
         self.dirty = True
@@ -348,6 +367,9 @@ class Node:
     def effects(self, b):
         a, r, _ = blocks[b]
         self.taken[r] += 1
+        self.ever.add(b)
+        if b in CERT:
+            self.cm.append(sum(1 << BI[x] for x in CERT[b][0]))
         if r + 1 < self.lo:
             self.below.add(b)
         if len(self.at[r][a]) > 1:
@@ -368,11 +390,32 @@ class Node:
         return x in self.disk and not self.bypassed(x)
 
     def joins(self, refs):
-        """The twins a block with references `refs` joins, of blocks the node follows;
-        with `JOIN = 'cut'`, of blocks at or above its cut."""
+        """The twins a block with references `refs` joins, of blocks the node follows,
+        in the histories the node saw: through the blocks it held when it took each block
+        in. With `JOIN = 'cut'`, of blocks at or above its cut, in the full histories;
+        with `JOIN = 'cert'`, a pair named by a certificate the node took in is joined
+        already."""
         if JOIN == 'cut':
             return joins(refs, self.lo - 1)
-        return joins(refs, 0, self.follows)
+        vs = [self.vc.get(x, 0) for x in refs]
+        m = 0
+        for v in vs:
+            m |= v
+        groups = defaultdict(list)
+        for x in twins_in(m):
+            if self.follows(x):
+                groups[blocks[x][:2]].append(x)
+        out = set()
+        for g in groups.values():
+            for i, x in enumerate(g):
+                for y in g[i + 1:]:
+                    both = (1 << BI[x]) | (1 << BI[y])
+                    if any(v & both == both for v in vs):
+                        continue
+                    if JOIN == 'cert' and any(c & both == both for c in self.cm):
+                        continue
+                    out |= {x, y}
+        return frozenset(out)
 
     def nauth(self, r):
         return sum(1 for a in self.at.get(r, {}) if a not in self.conv)
@@ -623,13 +666,13 @@ class Node:
 
 DELTA = 3
 STUCK = 12
-JOIN = 'follow'
+JOIN = 'view'
 
 
 class Sim:
-    def __init__(self, attack, ticks, depth, seed, deaf=None):
+    def __init__(self, attack, ticks, depth, seed, deaf=None, width=None):
         reset()
-        self.deaf = deaf
+        self.deaf, self.width = deaf, width
         self.attack, self.ticks, self.depth = attack, ticks, depth
         self.rng = random.Random(seed)
         self.t = 0
@@ -696,6 +739,22 @@ class Sim:
                           + ([subs[j]] if j in subs else []))
         return tip
 
+    def flat(self, s, lo, top):
+        # chains of BYZ[0..s] from round lo, each carrying the one below, the inner ones
+        # ending at round top - 1 and the outer one at top + s: no joins
+        tips = {}
+        for j in range(lo, top + s + 1):
+            new = {}
+            for k in range(s + 1):
+                if j >= top and k < s:
+                    continue
+                refs = [tips[k]] if k in tips else []
+                if k > 0 and j < top and k - 1 in tips:
+                    refs.append(tips[k - 1])
+                new[k] = self.mk(BYZ[k], j, refs)
+            tips.update(new)
+        return tips[s]
+
     def nest(self, s, lo, top):
         tip = self.fam(s, lo, top - 1)
         for j in range(top, top + s + 1):
@@ -720,6 +779,22 @@ class Sim:
                 self.xlast = R - 1
                 self.nlate += 1
                 self.show(Y, self.mk(Y, R, [xs[-1]]))
+        if att == 'race':
+            # once the fast nodes have all built round R and none has gone past it, X
+            # makes a block z of round R - 1 that no honest block of R references, Y
+            # a block y of R on z, and both are shown to the fast nodes only, or to the
+            # first `width` of them
+            fast = HON[:-1]
+            R = min(self.nodes[h].top for h in fast)
+            if (R >= 3 and R > self.xlast + 3 and max(self.nodes[h].top for h in fast) == R
+                    and X not in self.byz_at[R - 1] and Y not in self.byz_at[R]):
+                z = self.mk(X, R - 1, [])
+                y = self.mk(Y, R, [z])
+                WITHHELD.add(z)
+                self.show(X, z, fast[:self.width])
+                self.show(Y, y, fast[:self.width])
+                self.xlast = R
+                self.nlate += 1
         if len(self.honest_at[r - 1]) < (Q - 1 if self.deaf else Q):
             return
         self.r += 1
@@ -731,6 +806,11 @@ class Sim:
                 for h in HON:
                     self.show(BYZ[r - R0], self.nest(r - R0, max(1, R0 - self.depth), R0), [h])
             return
+        if att == 'flat':
+            if R0 <= r < R0 + F:
+                for h in HON:
+                    self.show(BYZ[r - R0], self.flat(r - R0, max(1, R0 - self.depth), R0), [h])
+            return
         busy = set()
         if att == 'twins' and r > 1:
             for h in HON:
@@ -739,7 +819,7 @@ class Sim:
         if att == 'carrier' and r > self.depth + 2:
             self.show(Y, self.mk(Y, r, [self.chain(X, r - self.depth, r - 1)[-1]]))
             busy |= {X, Y}
-        if att == 'late':
+        if att in ('late', 'race'):
             busy |= {X, Y}
         for a in BYZ:
             if a in busy:
@@ -793,15 +873,18 @@ class Sim:
                 'pratio': max(nd.pratio for nd in nds), 'hist': max(nd.hist for nd in nds),
                 'kept': [k / max(1, rounds) for k in kept],
                 'drop': sum(nd.ndrop for nd in nds), 'cu': sum(nd.ncu for nd in nds),
-                'cubad': sum(nd.cubad for nd in nds), 'late': self.nlate, 'over': over,
+                'cubad': sum(nd.cubad for nd in nds),
+                'jr': sum(len(nd.jref) for nd in nds),
+                'jp': sum(len(nd.jref - nd.ever) for nd in nds), 'late': self.nlate, 'over': over,
                 'certs': sum(1 for b in CERT if blocks[b][0] in HON),
                 'bcerts': sum(1 for b in CERT if blocks[b][0] in BYZ)}
 
 
 ATTACKS = [('none', {}), ('silent', {}), ('lead', {}), ('twins', {}), ('carrier', dict(depth=8)),
-           ('nest', dict(depth=13)), ('nest', dict(depth=39)), ('late', {}),
+           ('nest', dict(depth=13)), ('nest', dict(depth=39)), ('flat', dict(depth=3)),
+           ('flat', dict(depth=13)), ('late', {}), ('race', {}), ('race', dict(width=2)),
            ('nest', dict(depth=13, join='cut')), ('nest', dict(depth=39, join='cut')),
-           ('late', dict(deaf=(60, 160)))]
+           ('nest', dict(depth=13, join='cert')), ('late', dict(deaf=(60, 160)))]
 
 
 def table(n, f, ticks):
@@ -811,18 +894,20 @@ def table(n, f, ticks):
           f"n + f(f+1)/2 = {n + f * (f + 1) // 2}")
     print(f"{'attack':16}{'top':>5}{'H':>5}{'agree':>6}{'D':>3}{'lag':>4}{'mem':>5}"
           f"{'store':>6}{'taken':>6}{'over':>5}{'piece':>6}{'p/r':>6}{'hist':>5}"
-          f"{'kept o/p/x':>15}{'drop':>6}{'cu':>3}")
+          f"{'kept o/p/x':>15}{'drop':>6}{'cu':>3}{'jr':>4}{'jp':>4}")
     for a, kw in ATTACKS:
-        JOIN = kw.get('join', 'follow')
-        res = Sim(a, ticks, kw.get('depth', 8), 1, kw.get('deaf')).run()
-        JOIN = 'follow'
+        JOIN = kw.get('join', 'view')
+        res = Sim(a, ticks, kw.get('depth', 8), 1, kw.get('deaf'), kw.get('width')).run()
+        JOIN = 'view'
         k = res['kept']
         name = a + (f"/{kw['depth']}" if 'depth' in kw else '') + (
-            ' cut' if 'join' in kw else '') + (' deaf' if 'deaf' in kw else '')
+            f" {kw['join']}" if 'join' in kw else '') + (' deaf' if 'deaf' in kw else '') + (
+            f" w{kw['width']}" if 'width' in kw else '')
         print(f"{name:16}{res['top']:>5}{res['lo']:>5}{str(res['agree']):>6}{res['D']:>3}"
               f"{res['lag']:>4}{res['mem']:>5}{res['store']:>6}{res['taken']:>6}"
               f"{res['over']:>5}{res['piece']:>6}{res['pratio']:>6.1f}{res['hist']:>5}"
-              f"{k[0]:>6.1f}/{k[1]:.1f}/{k[2]:.1f}{res['drop']:>6}{res['cu']:>3}",
+              f"{k[0]:>6.1f}/{k[1]:.1f}/{k[2]:.1f}{res['drop']:>6}{res['cu']:>3}"
+              f"{res['jr']:>4}{res['jp']:>4}",
               flush=True)
 
 

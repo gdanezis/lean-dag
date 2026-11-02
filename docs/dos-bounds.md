@@ -57,7 +57,8 @@ The constants are fixed in Phase 0 and checked in Phase 1.
   V12 proved again for a store that need not be closed).
 * **B1. Liveness.** In a synchronous run no correct node stalls, and
   every correct node decides every slot (V11 proved again with ordering,
-  bypass and certification).
+  bypass and certification). It rests on R6, or on catch-up by proof
+  (D16 of `docs/node-sync.md`).
 * **B2. The lag.** In a synchronous run, a correct node's horizon is at
   most `L` rounds below its top, with `L = w + per · (c + 1)`. Here `w`
   is the number of rounds from a slot's round to the round at which a
@@ -86,7 +87,11 @@ The constant `M` of a band is the argument of `docs/sync-auth.md` §4 for
 the union of the honest histories, to be proved in R5 or replaced by the
 bound R5 proves. The bound `n + f (f + 1) / 2` that §4 argues for one
 history fails in the simulator (§6): a correct block joins, at the
-frontier, the structures that its references adopted.
+frontier, the structures that its references adopted. No attack in the
+simulator, the structures of §4 included, exceeds `n + (n − f) · f`: 31
+at `n = 10` and 49 at `n = 13`, against 22 and 44 seen. `M` grows as
+`n · f²`, about 37,700 at `n = 100, f = 33`, so R5 aims at
+`n + (n − f) · f`.
 
 ## 4. Decisions
 
@@ -125,7 +130,8 @@ Phase 0: bypass below commit with certification, synchrony from the
 start, and the builder of Phase 0. Each node decides from the blocks it
 holds, not by an oracle, so that nodes have different cuts (D16). It
 reports each quantity of §1 under every attack, against the constants of
-§3, and checks that every run is live. Done: §6.
+§3, and checks that every run is live. Each node reads histories as it
+saw them. Done: §6.
 
 **Phase 2. Lemmas on the record.**
 
@@ -144,7 +150,12 @@ reports each quantity of §1 under every attack, against the constants of
   is ordered.
 * **R5.** The bands. A join convicts its authors, so a run has at most
   `f` bands; each lasts the constant of R3, and holds a bounded number of
-  twins a round.
+  twins a round: `(n − f) · f`, or failing that `M − n`.
+* **R6.** What a node behind needs. In a synchronous run, the history
+  down to a correct node's cut of the blocks from which another correct
+  node decided its next slot is held by a correct node: on its disk
+  above its cut, in its ledger, or in a proof (D13). B1 then needs no
+  catch-up by proof.
 
 **Phase 3. The node, in three increments.** After each, B0 (safety under
 any timing), B1 (liveness in synchrony) and V13 are proved again.
@@ -172,46 +183,67 @@ below the horizon before Phase 3.3.
 
 `scripts/dos-sim.py` runs the node of Stage 5 at `n = 10, f = 3` and
 `n = 13, f = 4`, for 300 ticks with `Δ = 3`, under the attacks it lists.
-Every message to one correct node takes `Δ`. Every run is live, and in
-every run all correct nodes order the same blocks for every slot they
-have decided. The largest values over the synchronous runs, that is all
-but `late deaf`:
+Every message to one correct node takes `Δ`. Every run is live except
+`nest cert`, and in every run all correct nodes order the same blocks
+for every slot they have decided. The largest values over the
+synchronous runs of the node of Stage 5, that is all but `cut`, `cert`
+and `late deaf`:
 
 | Quantity | `n = 10` | `n = 13` | Bound of §3 | Bound |
 |---|---|---|---|---|
 | Lag `top − H` | 6 | 8 | `L = 3 + (c + 1)` | 7, 8 |
 | Memory | 77 | 125 | `(L + 1) · M` | 416, 927 |
-| Taken in at a round | 16 | 44 | `M` | 52, 103 |
-| Rounds above `n + ∣D∣` | 5 | 10 | `f · (L + 2)` | 27, 40 |
-| History at a round | 16 | 25 | `M` | 52, 103 |
+| Taken in at a round | 22 | 44 | `M` | 52, 103 |
+| Rounds above `n + ∣D∣` | 8 | 10 | `f · (L + 2)` | 27, 40 |
+| History at a round | 16 | 27 | `M` | 52, 103 |
 | Piece per round of target | 11.8 | 19.8 | `M` | 52, 103 |
 
-* **The join test.** With the test of D11 as first decided, on pairs at
-  or above the cut, `nest` puts 56 blocks of one round into a correct
-  node at `n = 10`, above `M = 52`. The families of `nest` join their
-  twins below the frontier, at rounds that are below the cut but not
-  bypassed: the round above holds ordered blocks of fewer than `q`
-  authors after Byzantine leaders are skipped. Taken over the blocks the
-  node follows at every round (D11, revised), the test brings this to 16.
+* **The join test.** A node reads the history of a block as it saw it,
+  through the references it held when it took the block in. This gives
+  the counts of a test on full histories, and no node refuses a correct
+  block on it. With the test of D11 as first decided, on pairs at or
+  above the cut, `nest` puts 56 blocks of one round into a correct node
+  at `n = 10`, above `M = 52`. The families of `nest` join their twins
+  below the frontier, at rounds that are below the cut but not bypassed:
+  the round above holds ordered blocks of fewer than `q` authors after
+  Byzantine leaders are skipped. Taken over the blocks the node follows
+  at every round (D11, revised), the test brings this to 16. Counting a
+  pair as joined when a certificate the node took in names it (`cert`)
+  stalls `nest` at round 41: a builder leaves out a pair whose
+  certificate a receiver has not taken in, and the receivers refuse 36
+  correct blocks at `n = 10`, and 64 at `n = 13`, for good.
 * **The bands.** One round under `twins` exceeds `n + |D|`, before X is
-  convicted. The other such rounds are those of `nest`, and lie within
-  `L + 2` rounds of the run of skipped Byzantine leaders before the
-  attack's frontier. There the ordered set is thin and bypass does not
-  apply, and each correct node adopts at the frontier its own structure
-  of Byzantine chains, which joins nothing below the frontier. A correct
-  block then joins its references' structures under a certificate. At
-  `n = 13`, a round holds 10 blocks of each of three Byzantine authors,
-  one for each of 9 correct nodes and one more.
+  convicted. The other such rounds are those of `nest` and `flat`, and
+  lie within `L + 2` rounds of the run of skipped Byzantine leaders
+  before the attack's frontier. There the ordered set is thin and bypass
+  does not apply, and each correct node adopts at the frontier its own
+  structure of Byzantine chains, which joins nothing below the frontier.
+  A correct block then joins its references' structures under a
+  certificate. At `n = 13` under `nest`, a round holds 10 blocks of each
+  of three Byzantine authors, one for each of 9 correct nodes and one
+  more. The structures of `docs/sync-auth.md` §4 (`flat`) give the most:
+  22 blocks taken in at a round at `n = 10`, and a history with 27 at
+  `n = 13`. All are within `n + (n − f) · f`; the `f (f + 1) / 2` chains
+  for each correct node that `M` allows do not appear.
 * **What is kept.** Below the cut a node keeps 7 to 13 blocks a round,
   nearly all ordered; proofs add at most 0.7 a round. In all, the nodes
-  drop 250 and 784 blocks under `nest` and 21 and 144 under `late`, and
-  none under the other attacks.
+  drop 250 and 784 blocks under `nest`, 357 and 857 under `flat` at
+  `depth = 13`, 21 and 144 under `late`, 4 under `race w2` at `n = 13`,
+  and none under the other attacks.
 * **Catch-up.** In synchronous runs no node catches up by proof: a node
   behind receives by broadcast, within `Δ`, the blocks from which the
-  nodes ahead decided, and decides from them. Under `late deaf`, a node
-  cut off for 100 ticks catches up once by proof and then by sync, and
-  its proofs check. B1 can therefore rest on decisions from broadcast
-  blocks; D16 is needed only beyond synchrony.
+  nodes ahead decided, and syncs their histories from them. Under
+  `race`, X shows the fast nodes only a block `z` of round `R − 1` under
+  a block `y` of `R`, so that a commit orders `y` and bypasses `z`
+  (`race w2`: shown to two fast nodes only). The fast nodes keep `z` in
+  their proof of slot `R`, which holds the history of the certificates
+  of round `R + 2` down to round `R − 1`, nearly every block of those
+  rounds. Of 24 such blocks at `n = 13` under `race w2`, one is left out
+  of that proof, and dropped, by 4 of the 8 fast nodes; the slow node
+  takes it from the other 4. Lemma R6 is to prove that some correct node
+  always holds what a node behind needs. Under
+  `late deaf`, a node cut off for 100 ticks catches up once by proof and
+  then by sync, and its proofs check.
 
 ## 7. What exists
 

@@ -114,7 +114,7 @@ reference `x` come from at least `q` authors (`Bypassed U ordered q x`).
 * **Ready.** A block is ready when each reference is on disk or
   bypassed, one round below it, and the block passes the checks. A block
   of round `G` or below is checked as a base block (D10), and every block
-  passes the join test (D11).
+  passes the join test (D11) except those taken in with a commit (D16).
 * **Requests.** A request carries the requester's horizon. The responder
   streams the history of the target at or above both the requester's
   frontier and `G`. The requester asks by name for a reference below `G`
@@ -142,7 +142,9 @@ its history and in the history of no single reference of it.
 * **The join test** is a rule of admission, not of validity (D11). The
   node takes a block in, at any round, only if the block joins no pair
   of blocks the node follows, held or taken in with it and not
-  bypassed, or carries a certificate for the pairs it joins.
+  bypassed, or carries a certificate for the pairs it joins. It reads
+  histories as it saw them: the history of a block is that of the
+  references the node held when it took the block in.
 * **The certificate.** A block that joins pairs carries a certificate:
   its round, a set `E` holding every pair it joins, and the signatures of
   at least `q` nodes. The certificate is evidence against
@@ -227,9 +229,19 @@ its history and in the history of no single reference of it.
   joins them below the frontier is taken in. In the simulator this put
   56 blocks of one round into a correct node at `n = 10`, against 16
   with the test at every round (`docs/dos-bounds.md` §6). The test reads
-  only what the node holds. Two nodes with different cuts may disagree
-  on a block for a time, which affects liveness only (D16); validity,
-  and so safety, are unchanged.
+  only what the node holds: a path through a block that was bypassed
+  when the node took the next block in is not seen. Two nodes may
+  therefore disagree on a block, which affects liveness only; validity,
+  and so safety, are unchanged. A node with a higher cut can count as
+  new a pair that a builder with a lower cut saw joined in one
+  reference. It then refuses the builder's block until a commit orders
+  it, and takes it in with the commit, which skips the test (D16). In
+  the simulator the test on the histories a node saw gives the counts of
+  a test on full histories, and no correct block is refused. Counting a
+  pair as joined when a certificate the node took in names it does not
+  help: a builder then leaves out a pair whose certificate a receiver
+  has not taken in, and under `nest` the run stalls, with 36 correct
+  blocks refused for good at `n = 10`.
 * **D12. The builder does not wait.** *Decided.* A builder that waits,
   up to a timeout, for a block of every author of its round would
   reference every correct block, which gives exposure in rounds without
@@ -271,13 +283,20 @@ its history and in the history of no single reference of it.
   its cut until `x` is bypassed at `B` too. The blocks of a commit are
   taken in with the commit, not before: a reference of one of them may
   be bypassed only by the blocks the same commit orders
-  (`closed_flush`). `BypassRun` has no such step yet. In synchrony `B`
-  receives by broadcast, within `Δ`, the blocks from which `A` decided,
-  and decides from them without asking: in the simulator, no node
-  catches up by proof in a synchronous run, and a node cut off for 100
-  ticks catches up once by proof and then by sync
-  (`docs/dos-bounds.md` §6). Catch-up by proof is the defence beyond
-  synchrony.
+  (`closed_flush`), and they skip the join test (D11). `BypassRun` has
+  no such step yet. In synchrony `B` receives by broadcast, within `Δ`,
+  the blocks from which `A` decided, and syncs their histories from
+  correct nodes, which keep them in their proofs: the proof of slot `s`
+  holds the history of the certificates of round `s + 2` down to round
+  `s − 1`, nearly every block of those rounds. In the simulator no node
+  catches up by proof in a synchronous run. This includes `race`, which
+  shows the fast nodes a block `z` under a block `y` that a commit
+  orders while it bypasses `z`: the fast nodes keep `z` in the proof of
+  the slot of `y`'s round, all of them but in one case, and `B` takes it
+  from one of them. That a correct node always holds what `B` needs is
+  lemma R6 of `docs/dos-bounds.md`; B1 rests on R6, or on
+  catch-up by proof. A node cut off for 100 ticks catches up once by
+  proof and then by sync (`docs/dos-bounds.md` §6).
 * **D5. The fast path.** A broadcast block ready on arrival is accepted
   without a sync, as now. *Recommended*: it is the common case.
 * **D6. What stays with the environment.** Rate limits on streams from a
