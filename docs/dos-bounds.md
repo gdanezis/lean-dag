@@ -60,30 +60,33 @@ The constants are fixed in Phase 0 and checked in Phase 1.
   bypass and certification).
 * **B2. The lag.** In a synchronous run, a correct node's horizon is at
   most `L` rounds below its top, with `L = w + per · (c + 1)`. Here `w`
-  is the number of rounds from a slot's round to its direct decision,
-  `per` the number of rounds between slot rounds, and `c` the longest run
-  of slot rounds without a correct leader, at most `f` under a fair
-  schedule with one leader a slot round.
-* **B3. The store.** In a synchronous run, a correct node holds at most
-  `n + |D|` blocks of each round, except at the rounds of at most `f`
-  bands. A band is at most `L + 2` rounds long, and the node holds at
-  most `n + f (f + 1) / 2` blocks of each of its rounds. Below its cut it
-  takes in only ordered blocks and the blocks of rounds whose ordered
-  blocks above come from fewer than `q` authors, and keeps only ordered
-  blocks, the blocks of a proof of a verdict, and blocks not bypassed.
+  is the number of rounds from a slot's round to the round at which a
+  node that has built it decides it, `per` the number of rounds between
+  slot rounds, and `c` the longest run of slot rounds without a correct
+  leader, at most `f` under a fair schedule with one leader a slot round.
+  For the rule of Phase 1, `w = 3` and `per = 1`.
+* **B3. The store.** In a synchronous run, a correct node takes in at
+  most `n + |D|` blocks of each round, except at the rounds of at most
+  `f` bands. A band is at most `L + 2` rounds long, and the node takes in
+  at most `M = n + (n − f) · f (f + 1) / 2` blocks of each of its rounds.
+  Below its cut it takes in only ordered blocks and the blocks of rounds
+  whose ordered blocks above come from fewer than `q` authors, and keeps
+  only ordered blocks, the blocks of a proof of a verdict, and blocks not
+  bypassed.
 * **B4. Histories.** The bound of B3 holds for the history of every block
   the node holds or takes in.
 * **B5. Memory.** The memory holds the rounds from the floor to the top,
-  at most `L + 1` of them, so at most `(L + 1) · (n + f (f + 1) / 2)`
-  blocks.
+  at most `L + 1` of them, so at most `(L + 1) · M` blocks.
 * **B6. Sync.** The blocks a node takes in at a round number at most the
   bound of B3 for that round. A piece from a correct responder holds
   only blocks at or above the requester's cut, so at most
-  `(t − G + 1) · (n + f (f + 1) / 2)` blocks for a target of round `t`.
+  `(t − G + 1) · M` blocks for a target of round `t`.
 
-The constant `f (f + 1) / 2` of a band is the argument of
-`docs/sync-auth.md` §4, to be proved in R5 or replaced by the bound R5
-proves; the simulator of Phase 1 measures it.
+The constant `M` of a band is the argument of `docs/sync-auth.md` §4 for
+the union of the honest histories, to be proved in R5 or replaced by the
+bound R5 proves. The bound `n + f (f + 1) / 2` that §4 argues for one
+history fails in the simulator (§6): a correct block joins, at the
+frontier, the structures that its references adopted.
 
 ## 4. Decisions
 
@@ -92,12 +95,13 @@ proves; the simulator of Phase 1 measures it.
   references at most one block of each Byzantine author, so the history
   of one adopted block may hold up to `f ^ L` Byzantine blocks of a
   round. Under certification a correct signer refuses a join below the
-  frontier, so joins are public and made at the frontier, and a history
-  holds about `f (f + 1) / 2` Byzantine chains (`docs/sync-auth.md` §4).
+  frontier, so joins are public and made at the frontier, and the
+  histories of the correct nodes hold about `(n − f) · f (f + 1) / 2`
+  Byzantine chains a round (`docs/sync-auth.md` §4).
 * **E2. Bypass is the rule of `docs/sync-auth.md` §8.** The test applies
   only below the decided horizon, and its witnesses are the ordered
-  blocks. Neither the cut of `LeanDag/GC` nor the rule of §6, which is
-  not safe (§7), is used.
+  blocks. Neither the cut of `LeanDag/GC` nor the rule of its §6, which
+  is not safe (its §7), is used.
 * **E3. Time only in the bounds.** Every mechanism must be safe without
   timing; only B1 to B6 assume synchrony.
 * **E4. Out of scope**, as in §1.
@@ -116,12 +120,12 @@ reference held or bypassed), the builder, the signer, and the join test.
 Done: `docs/node-sync.md` §2.3 and D10 to D16.
 The theorems of §3 are stated in full, with their constants.
 
-**Phase 1. The simulator.** `scripts/sync-auth.py` runs the node of
+**Phase 1. The simulator.** `scripts/dos-sim.py` runs the node of
 Phase 0: bypass below commit with certification, synchrony from the
 start, and the builder of Phase 0. Each node decides from the blocks it
 holds, not by an oracle, so that nodes have different cuts (D16). It
 reports each quantity of §1 under every attack, against the constants of
-§3, and checks that every run is live.
+§3, and checks that every run is live. Done: §6.
 
 **Phase 2. Lemmas on the record.**
 
@@ -164,7 +168,52 @@ V13 and the invariant of `BypassRun`.
 Phases 3.1 and 3.2 do not depend on certification. With them, B3 holds
 below the horizon before Phase 3.3.
 
-## 6. What exists
+## 6. The simulator
+
+`scripts/dos-sim.py` runs the node of Stage 5 at `n = 10, f = 3` and
+`n = 13, f = 4`, for 300 ticks with `Δ = 3`, under the attacks it lists.
+Every message to one correct node takes `Δ`. Every run is live, and in
+every run all correct nodes order the same blocks for every slot they
+have decided. The largest values over the synchronous runs, that is all
+but `late deaf`:
+
+| Quantity | `n = 10` | `n = 13` | Bound of §3 | Bound |
+|---|---|---|---|---|
+| Lag `top − H` | 6 | 8 | `L = 3 + (c + 1)` | 7, 8 |
+| Memory | 77 | 125 | `(L + 1) · M` | 416, 927 |
+| Taken in at a round | 16 | 44 | `M` | 52, 103 |
+| Rounds above `n + ∣D∣` | 5 | 10 | `f · (L + 2)` | 27, 40 |
+| History at a round | 16 | 25 | `M` | 52, 103 |
+| Piece per round of target | 11.8 | 19.8 | `M` | 52, 103 |
+
+* **The join test.** With the test of D11 as first decided, on pairs at
+  or above the cut, `nest` puts 56 blocks of one round into a correct
+  node at `n = 10`, above `M = 52`. The families of `nest` join their
+  twins below the frontier, at rounds that are below the cut but not
+  bypassed: the round above holds ordered blocks of fewer than `q`
+  authors after Byzantine leaders are skipped. Taken over the blocks the
+  node follows at every round (D11, revised), the test brings this to 16.
+* **The bands.** One round under `twins` exceeds `n + |D|`, before X is
+  convicted. The other such rounds are those of `nest`, and lie within
+  `L + 2` rounds of the run of skipped Byzantine leaders before the
+  attack's frontier. There the ordered set is thin and bypass does not
+  apply, and each correct node adopts at the frontier its own structure
+  of Byzantine chains, which joins nothing below the frontier. A correct
+  block then joins its references' structures under a certificate. At
+  `n = 13`, a round holds 10 blocks of each of three Byzantine authors,
+  one for each of 9 correct nodes and one more.
+* **What is kept.** Below the cut a node keeps 7 to 13 blocks a round,
+  nearly all ordered; proofs add at most 0.7 a round. In all, the nodes
+  drop 250 and 784 blocks under `nest` and 21 and 144 under `late`, and
+  none under the other attacks.
+* **Catch-up.** In synchronous runs no node catches up by proof: a node
+  behind receives by broadcast, within `Δ`, the blocks from which the
+  nodes ahead decided, and decides from them. Under `late deaf`, a node
+  cut off for 100 ticks catches up once by proof and then by sync, and
+  its proofs check. B1 can therefore rest on decisions from broadcast
+  blocks; D16 is needed only beyond synchrony.
+
+## 7. What exists
 
 * **Bypass.** `Common/Bypass.lean` (the test and its bounds),
   `Common/BypassLedger.lean` (the ledger and its agreement),
@@ -176,6 +225,7 @@ below the horizon before Phase 3.3.
   (`Node.Sync`), Stages 1 to 4 of `docs/node-sync.md`.
 * **Certification.** Simulated in `scripts/sync-auth.py`, with the
   findings of `docs/sync-auth.md` §2 to §4.
+* **The node of Stage 5 in simulation.** `scripts/dos-sim.py`, §6.
 * **Bypass in simulation.** `scripts/sync-auth.py` with
   `bypass = 'commit'`, `docs/sync-auth.md` §8: live under every attack,
   and the cost of `nest` does not depend on its depth.

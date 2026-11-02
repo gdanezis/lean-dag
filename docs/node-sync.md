@@ -113,7 +113,8 @@ reference `x` come from at least `q` authors (`Bypassed U ordered q x`).
 
 * **Ready.** A block is ready when each reference is on disk or
   bypassed, one round below it, and the block passes the checks. A block
-  of round `G` or below is checked as a base block (D10).
+  of round `G` or below is checked as a base block (D10), and every block
+  passes the join test (D11).
 * **Requests.** A request carries the requester's horizon. The responder
   streams the history of the target at or above both the requester's
   frontier and `G`. The requester asks by name for a reference below `G`
@@ -139,9 +140,9 @@ reference `x` come from at least `q` authors (`Bypassed U ordered q x`).
 its history and in the history of no single reference of it.
 
 * **The join test** is a rule of admission, not of validity (D11). The
-  node takes a block in only if, on its disk at or above its cut and the
-  blocks taken in with it, the block joins no pair, or carries a
-  certificate for the pairs it joins.
+  node takes a block in, at any round, only if the block joins no pair
+  of blocks the node follows, held or taken in with it and not
+  bypassed, or carries a certificate for the pairs it joins.
 * **The certificate.** A block that joins pairs carries a certificate:
   its round, a set `E` holding every pair it joins, and the signatures of
   at least `q` nodes. The certificate is evidence against
@@ -204,7 +205,8 @@ its history and in the history of no single reference of it.
   lacks, and the history below it cannot be checked at all. The node
   checks a block of round `G` or below on its own header only, as the
   base layer of the cut of `LeanDag/GC`, and every block above `G` in
-  full. Safety needs no check below the cut: decisions read the record
+  full; the join test of D11 applies at every round. Safety needs no
+  check below the cut: decisions read the record
   cut at `G`, which is valid by construction, and the ledger reads only
   identifiers and rounds. The record of a run is then valid above every
   cut, not everywhere; `chop` and `bypassLedger` are to be stated on
@@ -216,11 +218,18 @@ its history and in the history of no single reference of it.
   A digest in the payload over the `K = L + 2` rounds below a block keeps
   the test in the validity clause, but `L = w + per · (c + 1)` grows with
   `f`, and the digest holds up to `n · K` identifiers: about 3,800 at
-  `n = 100`. The node instead tests a block it takes in against its disk
-  at or above its cut. A join of pairs below the cut needs no
-  certificate: such pairs are bypassed or ordered. Two nodes with
-  different cuts may then disagree on a block for a time, which affects
-  liveness only (D16); validity, and so safety, are unchanged.
+  `n = 100`. The node instead tests a block it takes in against the
+  blocks it follows: held, or taken in with it, and not bypassed. It does
+  so at every round. Testing only at or above the cut, as first decided,
+  is not enough: after a run of skipped leaders the ordered set of a
+  round below the cut may come from fewer than `q` authors, so twins
+  there are neither bypassed nor ordered, and a back-dated family that
+  joins them below the frontier is taken in. In the simulator this put
+  56 blocks of one round into a correct node at `n = 10`, against 16
+  with the test at every round (`docs/dos-bounds.md` §6). The test reads
+  only what the node holds. Two nodes with different cuts may disagree
+  on a block for a time, which affects liveness only (D16); validity,
+  and so safety, are unchanged.
 * **D12. The builder does not wait.** *Decided.* A builder that waits,
   up to a timeout, for a block of every author of its round would
   reference every correct block, which gives exposure in rounds without
@@ -262,9 +271,13 @@ its history and in the history of no single reference of it.
   its cut until `x` is bypassed at `B` too. The blocks of a commit are
   taken in with the commit, not before: a reference of one of them may
   be bypassed only by the blocks the same commit orders
-  (`closed_flush`). `BypassRun` has no such step yet. Liveness in
-  synchrony (B1) must cover this, and the simulator must decide at each
-  node, not by an oracle.
+  (`closed_flush`). `BypassRun` has no such step yet. In synchrony `B`
+  receives by broadcast, within `Δ`, the blocks from which `A` decided,
+  and decides from them without asking: in the simulator, no node
+  catches up by proof in a synchronous run, and a node cut off for 100
+  ticks catches up once by proof and then by sync
+  (`docs/dos-bounds.md` §6). Catch-up by proof is the defence beyond
+  synchrony.
 * **D5. The fast path.** A broadcast block ready on arrival is accepted
   without a sync, as now. *Recommended*: it is the common case.
 * **D6. What stays with the environment.** Rate limits on streams from a
