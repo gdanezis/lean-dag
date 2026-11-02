@@ -118,14 +118,22 @@ reference `x` come from at least `q` authors (`Bypassed U ordered q x`).
   streams the history of the target at or above both the requester's
   frontier and `G`. The requester asks by name for a reference below `G`
   that it lacks and does not find bypassed.
-* **Keeping.** The node keeps every block it takes in, bypassed or not
-  (D13). Its disk stays a bypass view of `ordered` at `H`
-  (`BypassRun.inv`).
+* **Proofs.** A *proof* of the verdict of slot `k` is a set of blocks
+  that is a view of the record cut at `slotRound k − 1` on which the rule
+  decides slot `k` (`Proves`). Its blocks of round `slotRound k − 1` are
+  base blocks (D10).
+* **Keeping.** The node keeps its ordered blocks and, for each slot it
+  has decided, a proof of the verdict. It drops every other bypassed
+  block (D13). Its disk stays a bypass view of `ordered` at `H`
+  (`BypassRun.inv`, with `BypassRun.drop`).
 * **Catch-up.** A node whose syncs wait on a reference that no correct
-  peer serves asks each peer for its blocks of the rounds of its next
-  undecided slots, decides from them, and so raises its cut (D16).
-* **Decisions** read the disk at or above `G`, a view of the record cut
-  at `G` (`BypassView.chop`), as the memory already does from its floor.
+  peer serves asks each peer for the proof of the verdict of its next
+  undecided slot and, for a commit, the blocks the commit orders. It
+  decides on the proof, takes in the blocks with the commit, and so
+  raises its cut (D16).
+* **Decisions** read a proof: the disk at or above `G`, a view of the
+  record cut at `G` (`BypassView.chop`), as the memory already does from
+  its floor, or a proof received in catch-up.
 
 **Certification.** A block *joins* a twin pair when both blocks are in
 its history and in the history of no single reference of it.
@@ -220,11 +228,19 @@ its history and in the history of no single reference of it.
   withholds its block would then make every round last the timeout.
   Exposure in rounds rests on the signers of a join instead (R3 of
   `docs/dos-bounds.md`).
-* **D13. Blocks are kept.** *Decided, on review.* Dropping a bypassed
-  block would keep only ordered blocks below the cut, but a correct node
-  behind needs, to decide, blocks that a node ahead has bypassed (D16);
-  the store bound B3 holds without dropping, since it bounds what a node
-  takes in at each round.
+* **D13. Proofs are kept.** *Decided, on review.* Below its cut a node
+  keeps its ordered blocks and a proof of each verdict, and drops every
+  other bypassed block. Safety allows a node to drop any bypassed block
+  that is not ordered (`BypassRun.drop`): a bypassed block stays
+  bypassed, and no later decision or commit reads it. Liveness does not
+  allow all of them to be dropped. A correct node behind needs, to
+  decide, a proof of each of its next verdicts, and a proof may hold
+  bypassed blocks, such as a vote at round `s + 1` that no ordered block
+  references. It needs no other bypassed block (D16). Keeping every
+  block was the alternative. The worst case of B3 is the same either
+  way, since a proof may hold any block the node took in at its rounds;
+  what is dropped is what a band or a slow author leaves outside every
+  proof and the ledger.
 * **D14. A signer refuses a join at or below its cut.** *Decided.* It no
   longer holds the histories that `clean` reads there. A correct signer
   past round `r` holds a clean block of round `r`, its own, so `clean`
@@ -239,11 +255,16 @@ its history and in the history of no single reference of it.
   above it: bypass removes the defence of `docs/validator.md` §3.4, that
   the correct peers that built on a block hold its history. `A` decided
   the slots that make `x` bypassed before it took in the block above
-  `x`, from blocks without `x` in their history, and keeps them (D13).
-  So `B` asks each peer for its blocks of the rounds of its next
-  undecided slots, decides from them, and raises its cut until `x` is
-  bypassed at `B` too. Liveness in synchrony (B1) must cover this, and
-  the simulator must decide at each node, not by an oracle.
+  `x`, on proofs without `x`, and keeps them and its ordered blocks
+  (D13). So `B` asks each peer for the proof of the verdict of its next
+  undecided slot and the blocks its commit orders, decides on the proof
+  (`bypassRun_agree` allows a verdict decided on any proof), and raises
+  its cut until `x` is bypassed at `B` too. The blocks of a commit are
+  taken in with the commit, not before: a reference of one of them may
+  be bypassed only by the blocks the same commit orders
+  (`closed_flush`). `BypassRun` has no such step yet. Liveness in
+  synchrony (B1) must cover this, and the simulator must decide at each
+  node, not by an oracle.
 * **D5. The fast path.** A broadcast block ready on arrival is accepted
   without a sync, as now. *Recommended*: it is the common case.
 * **D6. What stays with the environment.** Rate limits on streams from a

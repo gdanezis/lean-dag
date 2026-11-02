@@ -19,8 +19,9 @@ holds is held, or lies at a round `r` with `r + 1 < H` and is bypassed in
   of `flush`.
 * **A node under bypass** (`BypassRun`): from holding nothing, a node
   accepts blocks whose references it follows only up to bypassed blocks,
-  and decides the slots in order; a commit orders, from the blocks it
-  holds, the leader's history. In every state it reaches, what it holds is
+  may drop blocks that are bypassed and not ordered, and decides the slots
+  in order; a commit orders, from the blocks it holds, the leader's
+  history. In every state it reaches, what it holds is
   a bypass view of its ordered set at the horizon of its next slot, and
   what it has ordered is the ledger of its verdicts (`BypassRun.inv`).
 -/
@@ -106,6 +107,22 @@ def raise (W : BypassView U q H C) {H' : ℕ} {C' : Finset BlockId} (hH : H ≤ 
   ordered := hC'
   complete := fun i hi j hj =>
     (W.complete i hi j hj).imp id fun h => ⟨by omega, h.2.mono hC⟩
+
+omit [P.Mechanised] in
+/-- **Dropping bypassed blocks**: without blocks that are not ordered and
+are bypassed below the horizon, a bypass view is one still. -/
+def drop (W : BypassView U q H C) (X : Finset BlockId)
+    (hX : ∀ x ∈ X, x ∉ C ∧ (U.block x).round + 1 < H ∧ Bypassed U C q x) :
+    BypassView U q H C where
+  ids := W.ids \ X
+  subset_ids := Finset.sdiff_subset.trans W.subset_ids
+  ordered := fun x hx => Finset.mem_sdiff.mpr ⟨W.ordered hx, fun h => (hX x h).1 hx⟩
+  complete := by
+    intro i hi j hj
+    by_cases hjX : j ∈ X
+    · exact Or.inr (hX j hjX).2
+    · exact (W.complete i (Finset.mem_sdiff.mp hi).1 j hj).imp
+        (fun h => Finset.mem_sdiff.mpr ⟨h, hjX⟩) id
 
 end BypassView
 
@@ -211,9 +228,10 @@ theorem flush_subset (W : BypassView U q H C) {L : BlockId} (hL : L ∈ W.ids) :
 /-- **A node under bypass**, with the decision `Dec` read on the blocks it
 holds: it holds `held`, has decided the slots below `n` with the verdicts
 `g`, and has ordered `led`. It accepts blocks whose references are held,
-accepted with them, or bypassed below the horizon `slotRound n` in `led`.
-A commit orders the leader's history, read from a block map that agrees
-with the record on the held blocks. -/
+accepted with them, or bypassed below the horizon `slotRound n` in `led`,
+and may drop blocks that are not ordered and are bypassed there. A commit
+orders the leader's history, read from a block map that agrees with the
+record on the held blocks. -/
 inductive BypassRun [S : Slots Validator] (U : BlockRecord Validator BlockId Payload P honest)
     (q : ℕ) (Dec : Finset BlockId → ℕ → Option BlockId → Prop) (g : ℕ → Option BlockId) :
     Finset BlockId → ℕ → Finset BlockId → Prop
@@ -223,6 +241,10 @@ inductive BypassRun [S : Slots Validator] (U : BlockRecord Validator BlockId Pay
       (∀ i ∈ N, ∀ j ∈ (U.block i).refs, j ∈ held ∪ N ∨
         ((U.block j).round + 1 < S.slotRound n ∧ Bypassed U led q j)) →
       BypassRun U q Dec g (held ∪ N) n led
+  | drop {held : Finset BlockId} {n : ℕ} {led : Finset BlockId} (X : Finset BlockId) :
+      BypassRun U q Dec g held n led →
+      (∀ x ∈ X, x ∉ led ∧ (U.block x).round + 1 < S.slotRound n ∧ Bypassed U led q x) →
+      BypassRun U q Dec g (held \ X) n led
   | skip {held : Finset BlockId} {n : ℕ} {led : Finset BlockId} :
       BypassRun U q Dec g held n led → g n = none → Dec held n none →
       BypassRun U q Dec g held (n + 1) led
@@ -247,6 +269,9 @@ theorem inv (h : BypassRun U q Dec g held n led) :
   | accept N _ hN hcl ih =>
     obtain ⟨hled, W, rfl⟩ := ih
     exact ⟨hled, W.extend N hN hcl, rfl⟩
+  | drop X _ hX ih =>
+    obtain ⟨hled, W, rfl⟩ := ih
+    exact ⟨hled, W.drop X hX, rfl⟩
   | @skip held n led _ hg _ ih =>
     obtain ⟨hled, W, rfl⟩ := ih
     refine ⟨by simp only [bypassLedger, hg, hled], W.raise (S.mono (Nat.le_succ n)) subset_rfl
@@ -266,6 +291,7 @@ theorem decided (h : BypassRun U q Dec g held n led) :
   induction h with
   | init => intro k hk; omega
   | accept _ _ _ _ ih => exact ih
+  | drop _ _ _ ih => exact ih
   | @skip held n led _ hg hd ih =>
     intro k hk
     rcases Nat.lt_succ_iff_lt_or_eq.mp hk with hk | rfl

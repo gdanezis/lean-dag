@@ -403,33 +403,40 @@ each of its blocks. A node that applies the rule does not.
 
 **A node under bypass** (`BypassRun`). A node starts holding nothing, and
 its states record what it holds, the slots it has decided, and the
-blocks it has ordered. It moves by three steps.
+blocks it has ordered. It moves by four steps.
 
 * **Accept.** It takes in a set of new blocks once every reference of
   each is held, among the new blocks, or bypassed: of round `r` with
   `r + 1 < slotRound n` and bypassed in what it has ordered. It follows
   references only up to bypassed blocks, and never fetches those.
+* **Drop.** It drops a set of blocks that are not ordered and are
+  bypassed: of round `r` with `r + 1 < slotRound n` and bypassed in what
+  it has ordered.
 * **Skip.** It decides that slot `n` is skipped.
 * **Commit.** It decides that slot `n` commits a leader it holds, and
   orders the leader's history with `flushOn`, from a block map that
   agrees with the record on what it holds.
 
-`BypassView.extend` and `BypassView.raise` give the invariant
+`BypassView.extend`, `BypassView.drop` and `BypassView.raise` give the
+invariant
 (`BypassRun.inv`). In every state, what the node has ordered is the
 ledger of its verdicts, and what it holds is a bypass view of that
 ledger at the horizon `slotRound n`. A bypassed block stays bypassed,
 since the ordered set and the horizon only grow, so the node never
-needs it later.
+needs it later, and safety allows it to drop every such block.
 
 `LeanDag/Properties/Arcs/Bypass.lean` adds the decisions, for any rule on
-the record. The node decides slot `n` on the blocks it holds at or above
-`slotRound n − 1`, read as a view of the record cut there (`DecOnCut`).
+the record. A *proof* of the verdict `v` of slot `n` is a view of the
+record cut at `slotRound n − 1` on which the rule decides `v` for slot `n`
+(`Proves`). The node decides each slot on a proof: on the blocks it holds
+at or above `slotRound n − 1` (`DecOnCut`), or on a proof received from a
+peer.
 
 * **It can decide on what it holds** (`exists_cutView`). In every state
   those blocks form a view of the cut, by the invariant and
   `BypassView.chop`.
 * **Safety** (`bypassRun_agree`). Under `Agree`, two nodes that run the
-  rule agree on every verdict and order the same blocks, the ledger of
+  rule, each deciding on proofs, agree on every verdict and order the same blocks, the ledger of
   those verdicts. Both new decisions and the order of every block are
   agreed.
 * **With a full history** (`bypassRun_agree_full`). Under `Banded`, the

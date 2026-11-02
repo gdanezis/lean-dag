@@ -69,7 +69,8 @@ The constants are fixed in Phase 0 and checked in Phase 1.
   bands. A band is at most `L + 2` rounds long, and the node holds at
   most `n + f (f + 1) / 2` blocks of each of its rounds. Below its cut it
   takes in only ordered blocks and the blocks of rounds whose ordered
-  blocks above come from fewer than `q` authors.
+  blocks above come from fewer than `q` authors, and keeps only ordered
+  blocks, the blocks of a proof of a verdict, and blocks not bypassed.
 * **B4. Histories.** The bound of B3 holds for the history of every block
   the node holds or takes in.
 * **B5. Memory.** The memory holds the rounds from the floor to the top,
@@ -147,9 +148,12 @@ any timing), B1 (liveness in synchrony) and V13 are proved again.
 1. **Ordering.** The node computes its ledger and its decided horizon
    from its verdicts (`bypassLedger`).
 2. **Bypass.** The store need not be closed: a block is kept once each
-   reference is held or bypassed (`BypassRun`). The store's invariant
-   (`keep` requires every reference on disk), `ready`, the checks and V12
-   change with it, and a node behind catches up by decision (D16).
+   reference is held or bypassed (`BypassRun`), and a bypassed block
+   outside the ledger and every proof is dropped (D13). The store's
+   invariant (`keep` requires every reference on disk), `ready`, the
+   checks and V12 change with it. A node behind catches up by deciding on
+   proofs from its peers and taking in the blocks of each commit with the
+   commit (D16), a step `BypassRun` is to gain.
 3. **Certification.** Sign requests and answers, the signer's
    conviction, the builder's wait for a certificate, and the join test
    on admission.
@@ -164,8 +168,9 @@ below the horizon before Phase 3.3.
 
 * **Bypass.** `Common/Bypass.lean` (the test and its bounds),
   `Common/BypassLedger.lean` (the ledger and its agreement),
-  `Common/BypassView.lean` (what a node holds, the run `BypassRun` and its
-  invariant), `Properties/Arcs/Bypass.lean` (safety of the run under
+  `Common/BypassView.lean` (what a node holds, the run `BypassRun`, which
+  may drop bypassed blocks, and its invariant), `Properties/Arcs/Bypass.lean`
+  (proofs of verdicts, and safety of the run deciding on proofs under
   `Agree`, and with a full history under `Banded`).
 * **Exposure and conviction on the node.** V13 (`Node.Bound`), S5 to S8
   (`Node.Sync`), Stages 1 to 4 of `docs/node-sync.md`.
