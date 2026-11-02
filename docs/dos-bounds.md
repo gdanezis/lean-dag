@@ -40,7 +40,8 @@ that implements every mechanism they use.
   convicted authors `D`. Proved from round `n_E + 1` under the premise
   `Live.Spread`.
 * **M6. Certified joins** (`docs/sync-auth.md` §1 to §4). A join of twins
-  is public, and signed only at the frontier. Simulated.
+  is public, and signed only at the frontier. Simulated; on the record,
+  exposure one round above a join is proved (R1 to R3).
 * **M7. Bypass below the decided horizon** (`docs/sync-auth.md` §8). Below
   the horizon a node follows only ordered blocks, and is safe. Proved on
   the record and on a run model.
@@ -133,24 +134,48 @@ reports each quantity of §1 under every attack, against the constants of
 §3, and checks that every run is live. Each node reads histories as it
 saw them. Done: §6.
 
-**Phase 2. Lemmas on the record.**
+**Phase 2. Lemmas on the record.** R1 to R3 are proved in
+`Common/Join.lean`, over a causal structure, as `Common/Exclusion.lean`
+is. A block *joins* two blocks when both lie in its history and in the
+history of no single reference of it (`JoinsFrom`).
 
-* **R1.** Twins in one history imply a block of that history that joins
-  them.
-* **R2.** Under certification, a join is signed by `q` nodes, at least
-  `q − f` of them correct, and no correct node signs a join below its
-  frontier.
-* **R3.** Exposure in rounds. With `q = n − f` and `n ≥ 3f + 1`, the
-  `q` authors referenced by any block meet the correct signers of a join,
-  so every block a constant number of rounds above the join exposes its
-  authors.
+* **R1. Twins in one history are joined in it.** Two blocks in a
+  history are joined by a block of that history (`exists_joinsFrom`),
+  above their round when they are distinct blocks of one round
+  (`JoinsFrom.round_lt`). Proved.
+* **R2. A certificate has `q − f` correct signers.** In a certified
+  record a block that joins two twins has at least `q` signers and names
+  their author (`CertifiedOn`); at most `f` nodes are not correct, so at
+  least `q − f` signers are (`card_signers_inter_le`). Proved. That the
+  block of a correct signer at the round of the join exposes the named
+  authors (`SignersExposeOn`) is a premise, the signer's obligation, to
+  be proved on the node in Phase 3.3: the signer refuses when it holds a
+  block of that round whose history holds no pair of the twins, so its
+  block of that round either holds a pair or is built after it convicted
+  their authors.
+* **R3. Exposure one round above a join.** With `n + f < 2q`, the `q`
+  authors a block references include a correct signer
+  (`correctBelow_of_card`), so every block from one round above the join
+  of two twins exposes their author (`exposed_of_twins`). Under the DoS
+  condition no such block references a block of that author
+  (`not_mem_creators_refs_of_twins`), and D27 and D28 of
+  `Common/Exclusion.lean` apply from that round. Proved.
+
+R4 to R6 are statements on runs, not on the record. R4 reads the stores
+of correct nodes, R5 depends on when Byzantine structures are made and
+adopted, and R6 on what correct nodes hold when a node behind asks.
+They are proved in Phase 4, on the node of Phase 3.
+
 * **R4.** The ordered blocks of a round number at most `n + |D|`, since
-  each was in a correct node's store when it was ordered. This removes
-  the premise of `card_not_bypassed_le_of_twins` that every correct block
-  is ordered.
+  each was in a correct node's store when it was ordered (V13). This
+  removes the premise of `card_not_bypassed_le_of_twins` that every
+  correct block is ordered. Within a band the bound is that of R5.
 * **R5.** The bands. A join convicts its authors, so a run has at most
-  `f` bands; each lasts the constant of R3, and holds a bounded number of
-  twins a round: `(n − f) · f`, or failing that `M − n`.
+  `f` bands. By R3 every block from one round above a join exposes the
+  twins' author, so a band ends one round above its last join. That the
+  joins are made at the frontier, so that a band lasts at most `L + 2`
+  rounds, needs time. A band holds a bounded number of twins a round:
+  `(n − f) · f`, or failing that `M − n`.
 * **R6.** What a node behind needs. In a synchronous run, the history
   down to a correct node's cut of the blocks from which another correct
   node decided its next slot is held by a correct node: on its disk
@@ -173,8 +198,8 @@ any timing), B1 (liveness in synchrony) and V13 are proved again.
    conviction, the builder's wait for a certificate, and the join test
    on admission.
 
-**Phase 4. The bounds.** B2 to B6 on the node of Phase 3, from R1 to R5,
-V13 and the invariant of `BypassRun`.
+**Phase 4. The bounds.** R4 to R6, and B2 to B6 on the node of Phase 3,
+from R1 to R6, V13 and the invariant of `BypassRun`.
 
 Phases 3.1 and 3.2 do not depend on certification. With them, B3 holds
 below the horizon before Phase 3.3.
@@ -256,7 +281,9 @@ and `late deaf`:
 * **Exposure and conviction on the node.** V13 (`Node.Bound`), S5 to S8
   (`Node.Sync`), Stages 1 to 4 of `docs/node-sync.md`.
 * **Certification.** Simulated in `scripts/sync-auth.py`, with the
-  findings of `docs/sync-auth.md` §2 to §4.
+  findings of `docs/sync-auth.md` §2 to §4. On the record,
+  `Common/Join.lean`: joins of twins (R1), certified records (R2), and
+  exposure one round above a join (R3).
 * **The node of Stage 5 in simulation.** `scripts/dos-sim.py`, §6.
 * **Bypass in simulation.** `scripts/sync-auth.py` with
   `bypass = 'commit'`, `docs/sync-auth.md` §8: live under every attack,
