@@ -318,8 +318,10 @@ store closed, and needs none of this.
      its blocks at or below a base round without their references, as
      the memory keeps its floor, and their references apart; a node
      serves and orders the blocks as received. The store stays closed,
-     so no proof that reads it as a record changes; the cut above `G`
-     reads no block below `G`. The base stays below the memory's floor.
+     so `toRecord` and the proofs that read the disk as a record stand.
+     The proofs that read it as a cut of the run's record (`IsCut`, in
+     V11 and V13) are to read it from the base up, as `CutAbove` does.
+     The base stays below the memory's floor.
   3. *Dropping* (D13), below the base: the ordered blocks and the
      proofs (`witnessView`) are kept.
   4. *Catch-up* (D16), with the jump of a node whose top lies below its
