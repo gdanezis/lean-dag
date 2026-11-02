@@ -284,8 +284,10 @@ its history and in the history of no single reference of it.
   its cut until `x` is bypassed at `B` too. The blocks of a commit are
   taken in with the commit, not before: a reference of one of them may
   be bypassed only by the blocks the same commit orders
-  (`closed_flush`), and they skip the join test (D11). `BypassRun` has
-  no such step yet. In synchrony `B` receives by broadcast, within `Δ`,
+  (`closed_flush`), and they skip the join test (D11). On the record
+  this is the step `BypassRun.absorb`: the commit, decided on a proof,
+  is computed from the blocks taken in, and is the record's when it reads
+  only them (`flushOn_eq_of`). In synchrony `B` receives by broadcast, within `Δ`,
   the blocks from which `A` decided, and syncs their histories from
   correct nodes, which keep them in their proofs: the proof of slot `s`
   holds the history of the certificates of round `s + 2` down to round

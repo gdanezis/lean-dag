@@ -221,8 +221,10 @@ any timing), B1 (liveness in synchrony) and V13 are proved again.
 2. **Bypass.** First, `BypassRun` gains the step that takes the blocks
    of a commit in with the commit (D16), with its invariant and B0;
    catch-up, on which B1 rests, and the exemption of those blocks from
-   the join test need it. Then the store need not be closed: a block is
-   kept once each reference is held or bypassed (`BypassRun`), and a
+   the join test need it. Done: `BypassRun.absorb`, with `flushOn_eq_of`
+   and `BypassView.absorb`; a skip, too, may be decided on a proof.
+   Then the store need not be closed: a block is kept once each
+   reference is held or bypassed (`BypassRun`), and a
    bypassed block outside the ledger and every proof is dropped (D13).
    The store's invariant (`keep` requires every reference on disk),
    `ready`, the checks and V12 change with it. A node behind catches up

@@ -6,7 +6,8 @@ import LeanDag.Common.BypassView
 `docs/sync-auth.md` §8. A node that runs the rule (`BypassRun`) accepts a
 block once it has followed its references up to bypassed blocks, drops
 blocks that are bypassed and not ordered, decides each slot on a *proof*
-of its verdict, and orders each commit from the blocks it holds. A proof of
+of its verdict, and orders each commit from the blocks it holds, or, for a
+commit decided on a proof, from the blocks it takes in with it. A proof of
 the verdict of slot `n` is a view of the record cut at `slotRound n - 1` on
 which the rule decides it (`Proves`). A node decides on the blocks it holds
 (`DecOnCut`), or on a proof received from a peer.

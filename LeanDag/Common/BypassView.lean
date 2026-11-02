@@ -17,13 +17,19 @@ holds is held, or lies at a round `r` with `r + 1 < H` and is bypassed in
   commit orders, computed from a block map that agrees with the record on
   the held blocks and is arbitrary elsewhere (`flushOn`), are the blocks
   of `flush`.
+* **A commit reads only the blocks it is given** (`flushOn_eq_of`): a commit
+  computed from a block map that agrees with the record on a set holding the
+  ordered blocks and the leader, and that reads only blocks of that set,
+  orders the blocks of `flush`.
 * **A node under bypass** (`BypassRun`): from holding nothing, a node
   accepts blocks whose references it follows only up to bypassed blocks,
   may drop blocks that are bypassed and not ordered, and decides the slots
-  in order; a commit orders, from the blocks it holds, the leader's
-  history. In every state it reaches, what it holds is
-  a bypass view of its ordered set at the horizon of its next slot, and
-  what it has ordered is the ledger of its verdicts (`BypassRun.inv`).
+  in order, on the blocks it holds or on a proof it receives; a commit
+  orders, from the blocks it holds, the leader's history, and a commit
+  decided on a proof takes in the blocks it orders with it (`absorb`). In
+  every state it reaches, what it holds is a bypass view of its ordered set
+  at the horizon of its next slot, and what it has ordered is the ledger of
+  its verdicts (`BypassRun.inv`).
 -/
 
 namespace LeanDag
@@ -124,6 +130,25 @@ def drop (W : BypassView U q H C) (X : Finset BlockId)
     · exact (W.complete i (Finset.mem_sdiff.mp hi).1 j hj).imp
         (fun h => Finset.mem_sdiff.mpr ⟨h, hjX⟩) id
 
+omit [P.Mechanised] in
+/-- **Taking blocks in with a commit**: with the horizon and the ordered set
+raised, blocks whose references are held, taken in with them, or bypassed under
+the new horizon and ordered set join a bypass view. -/
+def absorb (W : BypassView U q H C) (N : Finset BlockId) (hN : N ⊆ U.ids) {H' : ℕ}
+    {C' : Finset BlockId} (hH : H ≤ H') (hC : C ⊆ C') (hC' : C' ⊆ W.ids ∪ N)
+    (hcl : ∀ i ∈ N, ∀ j ∈ (U.block i).refs,
+      j ∈ W.ids ∪ N ∨ ((U.block j).round + 1 < H' ∧ Bypassed U C' q j)) :
+    BypassView U q H' C' where
+  ids := W.ids ∪ N
+  subset_ids := Finset.union_subset W.subset_ids hN
+  ordered := hC'
+  complete := by
+    intro i hi j hj
+    rcases Finset.mem_union.mp hi with hi | hi
+    · exact (W.complete i hi j hj).imp (Finset.mem_union_left _)
+        fun h => ⟨by omega, h.2.mono hC⟩
+    · exact hcl i hi j hj
+
 end BypassView
 
 /-! ## A commit, from the blocks held -/
@@ -223,6 +248,49 @@ theorem flush_subset (W : BypassView U q H C) {L : BlockId} (hL : L ∈ W.ids) :
   let ⟨d, _, hd⟩ := mem_flush.mp hx
   (layerOn_eq W (blk := U.block) (fun _ _ => rfl) hL d).2 hd
 
+/-- **A commit reads only the blocks it is given**: computed from a block map
+that agrees with the record on a set `A` holding the ordered blocks and the
+leader, a commit that reads only blocks of `A` orders the blocks of `flush`. -/
+theorem flushOn_eq_of {A : Finset BlockId} (hA : A ⊆ U.ids) (hCA : C ⊆ A)
+    {blk : BlockId → Block Validator BlockId Payload} (hblk : ∀ i ∈ A, blk i = U.block i)
+    {L : BlockId} (hL : L ∈ A) (hsub : flushOn blk q H C L ⊆ A) :
+    flushOn blk q H C L = flush U q H C L := by
+  have hLU := hA hL
+  have hon : ∀ d, d ≤ (U.block L).round → layerOn blk q H C L d ⊆ A := fun d hd x hx =>
+    hsub (Finset.mem_biUnion.mpr ⟨d, Finset.mem_range.mpr (by rw [hblk L hL]; omega), hx⟩)
+  have key : ∀ d, d ≤ (U.block L).round → layerOn blk q H C L d = layer U q H C L d := by
+    intro d
+    induction d with
+    | zero => intro _; simp only [layerOn, layer]
+    | succ d ih =>
+      intro hd
+      have heq := ih (by omega)
+      have hsubd : layer U q H C L d ⊆ A := heq ▸ hon d (by omega)
+      have hV : C ∪ layer U q H C L d ⊆ A := Finset.union_subset hCA hsubd
+      ext x
+      simp only [layerOn, heq, Finset.mem_filter, Finset.mem_biUnion]
+      rw [mem_layer_succ]
+      have hbyp : ∀ y ∈ layer U q H C L d, x ∈ (U.block y).refs →
+          ((blk L).round - (d + 1) + 1 < H ∧
+            q ≤ (bypassersOn blk (C ∪ layer U q H C L d) x ((blk L).round - (d + 1))).card ↔
+          (U.block x).round + 1 < H ∧ Bypassed U (C ∪ layer U q H C L d) q x) := by
+        intro y hy hxy
+        obtain ⟨hyU, hyr⟩ := round_of_mem_layer hLU d y hy
+        have hxr := BlockRecord.round_of_mem_refs hyU hxy
+        have hr : (blk L).round - (d + 1) = (U.block x).round := by
+          rw [hblk L hL]; omega
+        rw [hr, bypassersOn_eq (hV.trans hA) (fun i hi => hblk i (hV hi))]
+        rfl
+      constructor
+      · rintro ⟨⟨y, hy, hxy⟩, hxC, hb⟩
+        rw [hblk y (hsubd hy)] at hxy
+        exact ⟨⟨y, hy, hxy⟩, hxC, fun h => hb ((hbyp y hy hxy).mpr h)⟩
+      · rintro ⟨⟨y, hy, hxy⟩, hxC, hb⟩
+        exact ⟨⟨y, hy, by rw [hblk y (hsubd hy)]; exact hxy⟩, hxC,
+          fun h => hb ((hbyp y hy hxy).mp h)⟩
+  simp only [flushOn, flush, hblk L hL]
+  exact Finset.biUnion_congr rfl fun d hd => key d (by simp at hd; omega)
+
 /-- `bypassLedger`, read from the block map `blk`. -/
 def ledgerOn [S : Slots Validator] (blk : BlockId → Block Validator BlockId Payload) (q : ℕ)
     (g : ℕ → Option BlockId) : ℕ → Finset BlockId
@@ -254,12 +322,14 @@ theorem ledgerOn_eq [S : Slots Validator] (V : U.View)
 /-! ## A node under bypass -/
 
 /-- **A node under bypass**, with the decision `Dec` read on the blocks it
-holds: it holds `held`, has decided the slots below `n` with the verdicts
-`g`, and has ordered `led`. It accepts blocks whose references are held,
-accepted with them, or bypassed below the horizon `slotRound n` in `led`,
-and may drop blocks that are not ordered and are bypassed there. A commit
-orders the leader's history, read from a block map that agrees with the
-record on the held blocks. -/
+holds or on a proof it receives: it holds `held`, has decided the slots below
+`n` with the verdicts `g`, and has ordered `led`. It accepts blocks whose
+references are held, accepted with them, or bypassed below the horizon
+`slotRound n` in `led`, and may drop blocks that are not ordered and are
+bypassed there. A commit orders the leader's history, read from a block map
+that agrees with the record on the held blocks; a commit decided on a proof
+takes in the blocks it orders with it (`absorb`), whose references may be
+bypassed by the commit itself. -/
 inductive BypassRun [S : Slots Validator] (U : BlockRecord Validator BlockId Payload P honest)
     (q : ℕ) (Dec : Finset BlockId → ℕ → Option BlockId → Prop) (g : ℕ → Option BlockId) :
     Finset BlockId → ℕ → Finset BlockId → Prop
@@ -273,14 +343,23 @@ inductive BypassRun [S : Slots Validator] (U : BlockRecord Validator BlockId Pay
       BypassRun U q Dec g held n led →
       (∀ x ∈ X, x ∉ led ∧ (U.block x).round + 1 < S.slotRound n ∧ Bypassed U led q x) →
       BypassRun U q Dec g (held \ X) n led
-  | skip {held : Finset BlockId} {n : ℕ} {led : Finset BlockId} :
-      BypassRun U q Dec g held n led → g n = none → Dec held n none →
+  | skip {held : Finset BlockId} {n : ℕ} {led : Finset BlockId} (D : Finset BlockId) :
+      BypassRun U q Dec g held n led → g n = none → Dec D n none →
       BypassRun U q Dec g held (n + 1) led
   | commit {held : Finset BlockId} {n : ℕ} {led : Finset BlockId} {L : BlockId}
       (blk : BlockId → Block Validator BlockId Payload) :
       BypassRun U q Dec g held n led → g n = some L → Dec held n (some L) → L ∈ held →
       (∀ i ∈ held, blk i = U.block i) →
       BypassRun U q Dec g held (n + 1) (led ∪ flushOn blk q (S.slotRound n) led L)
+  | absorb {held : Finset BlockId} {n : ℕ} {led : Finset BlockId} {L : BlockId}
+      (N D : Finset BlockId) (blk : BlockId → Block Validator BlockId Payload) :
+      BypassRun U q Dec g held n led → g n = some L → Dec D n (some L) → N ⊆ U.ids →
+      L ∈ held ∪ N → (∀ i ∈ held ∪ N, blk i = U.block i) →
+      flushOn blk q (S.slotRound n) led L ⊆ held ∪ N →
+      (∀ i ∈ N, ∀ j ∈ (U.block i).refs, j ∈ held ∪ N ∨
+        ((U.block j).round + 1 < S.slotRound (n + 1) ∧
+          Bypassed U (led ∪ flushOn blk q (S.slotRound n) led L) q j)) →
+      BypassRun U q Dec g (held ∪ N) (n + 1) (led ∪ flushOn blk q (S.slotRound n) led L)
 
 namespace BypassRun
 
@@ -300,7 +379,7 @@ theorem inv (h : BypassRun U q Dec g held n led) :
   | drop X _ hX ih =>
     obtain ⟨hled, W, rfl⟩ := ih
     exact ⟨hled, W.drop X hX, rfl⟩
-  | @skip held n led _ hg _ ih =>
+  | @skip held n led _ _ hg _ ih =>
     obtain ⟨hled, W, rfl⟩ := ih
     refine ⟨by simp only [bypassLedger, hg, hled], W.raise (S.mono (Nat.le_succ n)) subset_rfl
       W.ordered, rfl⟩
@@ -310,6 +389,13 @@ theorem inv (h : BypassRun U q Dec g held n led) :
     refine ⟨by simp only [bypassLedger, hg, hled], ?_⟩
     exact ⟨W.raise (S.mono (Nat.le_succ n)) Finset.subset_union_left
       (Finset.union_subset W.ordered (flush_subset W hL)), rfl⟩
+  | @absorb held n led L N D blk _ hg _ hN hL hblk hsub hcl ih =>
+    obtain ⟨hled, W, rfl⟩ := ih
+    have hA : W.ids ∪ N ⊆ U.ids := Finset.union_subset W.subset_ids hN
+    have hf := flushOn_eq_of hA (W.ordered.trans Finset.subset_union_left) hblk hL hsub
+    refine ⟨by rw [hf]; simp only [bypassLedger, hg, hled], ?_⟩
+    exact ⟨W.absorb N hN (S.mono (Nat.le_succ n)) Finset.subset_union_left
+      (Finset.union_subset (W.ordered.trans Finset.subset_union_left) hsub) hcl, rfl⟩
 
 omit [P.Mechanised] in
 /-- **The decisions of a run**: every slot below `n` was decided on the
@@ -320,16 +406,21 @@ theorem decided (h : BypassRun U q Dec g held n led) :
   | init => intro k hk; omega
   | accept _ _ _ _ ih => exact ih
   | drop _ _ _ ih => exact ih
-  | @skip held n led _ hg hd ih =>
+  | @skip held n led D _ hg hd ih =>
     intro k hk
     rcases Nat.lt_succ_iff_lt_or_eq.mp hk with hk | rfl
     · exact ih k hk
-    · exact ⟨held, hg ▸ hd⟩
+    · exact ⟨D, hg ▸ hd⟩
   | @commit held n led L blk _ hg hd _ _ ih =>
     intro k hk
     rcases Nat.lt_succ_iff_lt_or_eq.mp hk with hk | rfl
     · exact ih k hk
     · exact ⟨held, hg ▸ hd⟩
+  | @absorb held n led L N D blk _ hg hd _ _ _ _ _ ih =>
+    intro k hk
+    rcases Nat.lt_succ_iff_lt_or_eq.mp hk with hk | rfl
+    · exact ih k hk
+    · exact ⟨D, hg ▸ hd⟩
 
 end BypassRun
 
