@@ -253,7 +253,27 @@ store closed, and needs none of this.
   `slotRound k − 1` (`Proves`, `Store.window`), so the record is to be
   the blocks real down to that round, those at it read as base blocks.
   V12 (`Holds`, `Loops`) and the facts of V11 that read the record are
-  restated for each slot on that record.
+  restated for each slot on that record. The cut rebases rounds and
+  slots, as `BlockRecord.chop` and `Slots.chop` do, since a base block
+  must sit at round `0`. In steps:
+  1. *The record cut at `G`.* Done: the known blocks at or above `G`
+     that are real down to `G`, cut there (`globalCut`, `RealDown`,
+     `Node/Helpers/GlobalCut.lean`). Real down to `G` is real down to
+     every higher round, and the cut of `globalRecord` lies in it.
+  2. *Nesting.* For `G ≤ G'`, the blocks of the record cut at `G`, cut
+     again at `G' − G`, are blocks of the record cut at `G'`, read alike.
+  3. *Decisions on a cut.* The scheme's loop on the record cut at `G`,
+     with slots rebased by `Slots.chop`, decides as the loop on the
+     record from slots above `G`. The scheme has no such lemma yet;
+     `ViewsAbove` compares records at the same rounds.
+  4. *Agreement across cuts.* Two decisions of one slot on cuts `G ≤ G'`
+     agree: the lower one, cut again, lies on the higher record (step 2),
+     where it is unchanged (`decided_agree_chop` under `Banded`, which
+     the scheme shows at a local vote), and `Agree` holds there.
+  5. *V12 and V11.* `Holds`: a disk at or above its cut is a cut of the
+     record cut there. `Loops`: each decision step is the loop on a view
+     of the record cut at its slot. `Leads` and `Waves` on the record cut
+     at the lowest round they read.
 * **Checks at the cut.** A block of round `G` or below is checked on its
   own header only (D10), so `ready` and the checks change below the cut.
 
