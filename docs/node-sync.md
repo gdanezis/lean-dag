@@ -282,7 +282,9 @@ its history and in the history of no single reference of it.
   candidate is linked. These are read on the anchor's whole history over
   the certificate rounds, which the anchor's history down to `s − 1`
   holds. In the simulator the proofs, so taken, add at most 0.7 blocks a
-  round to what the node keeps below its cut.
+  round to what the node keeps below its cut. In Lean the deciding blocks
+  are `witnessAt`, and the loop on their histories alone returns the
+  verdict (`decisionAt_of_witness`, `decided_witness`).
 * **D14. A signer refuses a join at or below its cut.** *Decided.* It no
   longer holds the histories that `clean` reads there. A correct signer
   past round `r` holds a clean block of round `r`, its own, so `clean`

@@ -1,6 +1,7 @@
 import LeanDag.Node.Helpers.GlobalCut
 import LeanDag.Node.Helpers.ReadsView
 import LeanDag.Scheme.Helpers.Restart
+import LeanDag.Scheme.Helpers.Witness
 /-!
 # A decision, read on the record padded below its slot
 
@@ -10,6 +11,11 @@ verdict on any view agreeing with the loop's from the round of `k` up
 `G` up with the synthetic blocks below, is a view of the record padded below
 `G` (`paddedView`), and agrees with it from every round `R ≥ G` up
 (`viewsAbove_padded`).
+
+The proof of D13 (`docs/node-sync.md`): the witness of the loop's decision of
+slot `k`, with its histories from `G ≤ slotRound k` up and the synthetic
+blocks below, is a view of the record padded below `G` on which `k` is
+decided (`decided_witness`).
 -/
 
 namespace LeanDag
@@ -149,6 +155,17 @@ theorem viewsAbove_padded (V : (globalRecord hinj hauth).View) {G R : ℕ} (hGR 
       omega
   · change (padBlk cfg H tr G i).refs = (content cfg H tr i).refs
     rw [padBlk_of_lt (hk i hi) (by change R < (content cfg H tr i).round at hR; omega)]
+
+/-- **The proof of a decision decides it on the padded record.** -/
+theorem decided_witness [S : Slots Validator] (V : (globalRecord hinj hauth).View) (p : Params)
+    (hw : 2 ≤ p.waveLength) (hl : 1 ≤ p.linkSize) (hcm : 1 ≤ p.commitThreshold)
+    (hc : p.voteIsCert = false → 1 ≤ p.certThreshold) {lo N k G : ℕ} {v : Option BlockId}
+    (hG : G ≤ S.slotRound k) (he : (k, v) ∈ tryDecide p boundedSel _ V lo N) :
+    (schemeAnchored p boundedSel).Decided (padded hinj hauth hq G)
+      (paddedView hinj hauth hq (witnessView p boundedSel _ V N k) G) k v := by
+  obtain ⟨hkN, hd⟩ := decisionAt_of_mem_tryDecide he
+  exact (viewsAbove_padded hinj hauth hq _ hG).decided_of_mem p hw hl hc (by omega) le_rfl
+    (mem_tryDecide_of_decisionAt hkN (decisionAt_witnessView hl hcm hc hd))
 
 end Padded
 

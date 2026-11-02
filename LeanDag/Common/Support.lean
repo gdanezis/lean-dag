@@ -208,6 +208,11 @@ theorem le (h : HoldsAtLeast U V t s) : t ≤ (creatorsOf U.block s).card :=
 theorem mono (hV : V.ids ⊆ V'.ids) (h : HoldsAtLeast U V t s) : HoldsAtLeast U V' t s :=
   le_trans h (Finset.card_le_card (heldAuthors_mono hV))
 
+/-- A view holding the blocks of `s` that another holds holds it still. -/
+theorem of_inter (hs : s ∩ V.ids ⊆ V'.ids) (h : HoldsAtLeast U V t s) : HoldsAtLeast U V' t s :=
+  le_trans h (Finset.card_le_card (Finset.image_subset_image fun b hb =>
+    Finset.mem_inter.mpr ⟨(Finset.mem_inter.mp hb).1, hs hb⟩))
+
 theorem of_subset (hs : s ⊆ s') (h : HoldsAtLeast U V t s) : HoldsAtLeast U V t s' :=
   le_trans h (Finset.card_le_card (heldAuthors_mono_set hs))
 

@@ -1,0 +1,298 @@
+import LeanDag.Scheme.Model.Witness
+import LeanDag.Scheme.Helpers.TryDecide
+/-!
+# The witness of a decision decides it
+
+`docs/node-sync.md` D13. The loop's decision of a slot on a view `V` is its
+decision on every view `W ⊆ V` that holds the slot's witness
+(`decisionAt_of_witness`), so on the histories of the witness
+(`witnessView`, `decisionAt_witnessView`).
+
+A smaller view holds no skip or commit the larger lacks
+(`tryDirect_none_of_subset`), and one holding the blames or the
+certificates the larger holds skips or commits alike. The walk over the
+later slots reads their decisions, which the witnesses of the skipped
+eligible slots and of the anchor carry, and the candidates linked from the
+anchor, which lie in the anchor's history.
+-/
+
+namespace LeanDag
+
+namespace Scheme
+
+variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
+variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type}
+variable {P : Validity Validator BlockId Payload} {honest : Finset Validator}
+variable {p : Params} {σ : VoteSel Validator BlockId Payload P honest} [S : Slots Validator]
+variable {U : BlockRecord Validator BlockId Payload P honest} {V W : U.View}
+
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
+theorem leastOf_of_subset {β : Type} [LinearOrder β] {s t : Finset β} {x : β} (hst : s ⊆ t)
+    (ht : leastOf t = some x) (hx : x ∈ s) : leastOf s = some x := by
+  obtain ⟨-, hmin⟩ := leastOf_eq_some ht
+  exact leastOf_eq_some_iff.mpr ⟨hx, fun y hy => hmin y (hst hy)⟩
+
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
+theorem leastOf_none_of_subset {β : Type} [LinearOrder β] {s t : Finset β} (hst : s ⊆ t)
+    (ht : leastOf t = none) : leastOf s = none := by
+  have hs : s = ∅ := Finset.subset_empty.mp (leastOf_eq_none ht ▸ hst)
+  subst hs
+  simp [leastOf]
+
+omit [Fintype Validator] in
+/-- The candidates a smaller view commits directly, the larger commits. -/
+theorem commitFilter_subset (hWV : W.ids ⊆ V.ids) {k : ℕ} :
+    (candidatesIn U W k).filter
+        (fun L => (schemeAnchored p σ).Commit U W L (S.slotRound k) (S.kind k)) ⊆
+      (candidatesIn U V k).filter
+        (fun L => (schemeAnchored p σ).Commit U V L (S.slotRound k) (S.kind k)) := by
+  intro L hL
+  obtain ⟨hc, hcommit⟩ := Finset.mem_filter.mp hL
+  obtain ⟨hLW, hrest⟩ := mem_candidatesIn.mp hc
+  exact Finset.mem_filter.mpr ⟨mem_candidatesIn.mpr ⟨hWV hLW, hrest⟩,
+    HoldsAtLeast.mono hWV hcommit⟩
+
+omit [Fintype Validator] in
+/-- **A smaller view decides nothing directly that the larger leaves open.** -/
+theorem tryDirect_none_of_subset (hWV : W.ids ⊆ V.ids) {k : ℕ}
+    (h : tryDirect p σ U V k = none) : tryDirect p σ U W k = none := by
+  unfold tryDirect at h ⊢
+  split at h
+  · cases h
+  · rename_i hskip
+    rw [if_neg fun h' => hskip (HoldsAtLeast.mono hWV h'),
+      leastOf_none_of_subset (commitFilter_subset hWV) (Option.map_eq_none_iff.mp h)]
+    rfl
+
+omit [Fintype Validator] in
+/-- A view holding the blames a larger view holds skips as it does. -/
+theorem tryDirect_skip_of_witness {k : ℕ} (h : tryDirect p σ U V k = some none)
+    (hw : blamersAt p σ U k ∩ V.ids ⊆ W.ids) : tryDirect p σ U W k = some none := by
+  unfold tryDirect at h ⊢
+  split at h
+  · rename_i hskip
+    rw [if_pos (HoldsAtLeast.of_inter hw hskip)]
+  · simp at h
+
+omit [Fintype Validator] in
+/-- A smaller view holding the certificates a larger view holds commits as it
+does, at positive commit and certificate thresholds. -/
+theorem tryDirect_commit_of_witness (hcm : 1 ≤ p.commitThreshold)
+    (hc : p.voteIsCert = false → 1 ≤ p.certThreshold) (hWV : W.ids ⊆ V.ids) {k : ℕ}
+    {L : BlockId} (h : tryDirect p σ U V k = some (some L))
+    (hw : certsAt p σ U L (S.slotRound k) ∩ V.ids ⊆ W.ids) :
+    tryDirect p σ U W k = some (some L) := by
+  unfold tryDirect at h ⊢
+  split at h
+  · cases h
+  · rename_i hskip
+    rw [if_neg fun h' => hskip (HoldsAtLeast.mono hWV h')]
+    obtain ⟨M, hM, hML⟩ := Option.map_eq_some_iff.mp h
+    rw [Option.some.injEq] at hML
+    subst hML
+    obtain ⟨hmem, -⟩ := leastOf_eq_some hM
+    obtain ⟨hcV, hcommit⟩ := Finset.mem_filter.mp hmem
+    have hcW : (schemeAnchored p σ).Commit U W M (S.slotRound k) (S.kind k) :=
+      HoldsAtLeast.of_inter hw hcommit
+    have hMW := mem_view_of_commit hcm hc hcW
+    rw [leastOf_of_subset (commitFilter_subset hWV) hM (Finset.mem_filter.mpr
+      ⟨mem_candidatesIn.mpr ⟨hMW, (mem_candidatesIn.mp hcV).2⟩, hcW⟩)]
+    rfl
+
+omit [Fintype Validator] in
+/-- **The walk decides alike on a smaller view** holding the witness of the walk,
+when each slot it reads is decided alike on that view once the slot's witness
+is held, and each commit on it names a block the view holds. -/
+theorem tryIndirect_of_witness (hl : 1 ≤ p.linkSize)
+    (hc : p.voteIsCert = false → 1 ≤ p.certThreshold) (hWV : W.ids ⊆ V.ids) {k : ℕ}
+    {wit : ℕ → Finset BlockId} :
+    ∀ (lV lW : List (ℕ × Option (Option BlockId))), lV.map Prod.fst = lW.map Prod.fst →
+      (∀ e ∈ lW, ∀ A, e.2 = some (some A) → A ∈ W.ids) →
+      (∀ e ∈ lV, ∀ e' ∈ lW, e'.1 = e.1 → ∀ v, e.2 = some v → wit e.1 ⊆ W.ids →
+        e'.2 = some v) →
+      anchorWitness (S := S) p k wit lV ⊆ W.ids → ∀ v, tryIndirect p σ U V k lV = some v →
+        tryIndirect p σ U W k lW = some v := by
+  intro lV
+  induction lV with
+  | nil => intro _ _ _ _ _ v hv; cases hv
+  | cons e rest ih =>
+    obtain ⟨j, s⟩ := e
+    intro lW hfst hA hstep hwit v hv
+    cases lW with
+    | nil => simp at hfst
+    | cons e' restW =>
+      obtain ⟨j', s'⟩ := e'
+      simp only [List.map_cons, List.cons.injEq] at hfst
+      obtain ⟨hjj, hfst⟩ := hfst
+      subst hjj
+      have hss : ∀ v, s = some v → wit j ⊆ W.ids → s' = some v := fun v h1 h2 =>
+        hstep (j, s) List.mem_cons_self (j, s') List.mem_cons_self rfl v h1 h2
+      have hA' := fun e he => hA e (List.mem_cons_of_mem (j, s') he)
+      have hstep' := fun e he e' he' =>
+        hstep e (List.mem_cons_of_mem (j, s) he) e' (List.mem_cons_of_mem (j, s') he')
+      unfold tryIndirect at hv ⊢
+      unfold anchorWitness at hwit
+      split at hv
+      · rename_i helig
+        rw [if_pos helig] at hwit ⊢
+        rcases s with _ | _ | A
+        · cases hv
+        · rw [hss none rfl (Finset.union_subset_left hwit)]
+          exact ih restW hfst hA' hstep' (Finset.union_subset_right hwit) v hv
+        · have hs' := hss (some A) rfl hwit
+          have hAW := hA (j, s') List.mem_cons_self A hs'
+          rw [hs']
+          have hset : (candidatesIn U W k).filter (fun L => p.linkSize ≤
+                (creatorsOf U.block (linkCerts p σ U A L (S.slotRound k))).card) =
+              (candidatesIn U V k).filter (fun L => p.linkSize ≤
+                (creatorsOf U.block (linkCerts p σ U A L (S.slotRound k))).card) := by
+            ext L
+            simp only [Finset.mem_filter, mem_candidatesIn]
+            constructor
+            · rintro ⟨⟨h1, h2⟩, h3⟩
+              exact ⟨⟨hWV h1, h2⟩, h3⟩
+            · rintro ⟨⟨-, h2⟩, h3⟩
+              exact ⟨⟨mem_view_of_link hl hc hAW h3, h2⟩, h3⟩
+          simp only [hset]
+          exact hv
+      · rename_i hne
+        rw [if_neg hne] at hwit ⊢
+        exact ih restW hfst hA' hstep' hwit v hv
+
+omit [Fintype Validator] [DecidableEq Validator] in
+theorem anchorWitness_subset {k : ℕ} {wit : ℕ → Finset BlockId} {X : Finset BlockId}
+    (h : ∀ j, wit j ⊆ X) : ∀ l, anchorWitness (S := S) p k wit l ⊆ X := by
+  intro l
+  induction l with
+  | nil => exact Finset.empty_subset _
+  | cons e rest ih =>
+    obtain ⟨j, s⟩ := e
+    unfold anchorWitness
+    split
+    · rcases s with _ | _ | A
+      · exact Finset.empty_subset _
+      · exact Finset.union_subset (h j) ih
+      · exact h j
+    · exact ih
+
+omit [Fintype Validator] in
+/-- **A witness is held by its view.** -/
+theorem witnessAt_subset (N : ℕ) : ∀ k, witnessAt p σ U V N k ⊆ V.ids := by
+  suffices h : ∀ n k, N + 1 - k = n → witnessAt p σ U V N k ⊆ V.ids from fun k => h _ k rfl
+  intro n
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+    intro k hn
+    rw [witnessAt]
+    split
+    · exact Finset.inter_subset_right
+    · exact Finset.inter_subset_right
+    · refine anchorWitness_subset (fun j => ?_) _
+      split
+      · rename_i hj
+        exact ih (N + 1 - j) (by omega) j rfl
+      · exact Finset.empty_subset _
+
+omit [Fintype Validator] in
+/-- **The witness decides as the view does.** A view `W ⊆ V` holding the
+witness of slot `k`'s decision on `V` decides `k` alike, at positive link,
+commit and certificate thresholds. -/
+theorem decisionAt_of_witness (hl : 1 ≤ p.linkSize) (hcm : 1 ≤ p.commitThreshold)
+    (hc : p.voteIsCert = false → 1 ≤ p.certThreshold) (N : ℕ) :
+    ∀ k, ∀ W : U.View, W.ids ⊆ V.ids → witnessAt p σ U V N k ⊆ W.ids → ∀ v,
+      decisionAt p σ U V N k = some v → decisionAt p σ U W N k = some v := by
+  suffices h : ∀ n k, N + 1 - k = n → ∀ W : U.View, W.ids ⊆ V.ids →
+      witnessAt p σ U V N k ⊆ W.ids → ∀ v,
+        decisionAt p σ U V N k = some v → decisionAt p σ U W N k = some v from
+    fun k => h _ k rfl
+  intro n
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+    intro k hn W hWV hwit v hv
+    rw [witnessAt] at hwit
+    simp only [decisionAt, decideSlot] at hv ⊢
+    cases hd : tryDirect p σ U V k with
+    | some w =>
+      rw [hd] at hv hwit
+      obtain rfl : w = v := Option.some.inj hv
+      rcases w with _ | L
+      · rw [tryDirect_skip_of_witness hd hwit]
+      · rw [tryDirect_commit_of_witness hcm hc hWV hd hwit]
+    | none =>
+      rw [hd] at hv hwit
+      rw [tryDirect_none_of_subset hWV hd]
+      obtain ⟨hrV, -⟩ := scan_sound (σ := σ) (U := U) (V := V) hl hc N (N - k) (by omega)
+      obtain ⟨hrW, hsW⟩ := scan_sound (σ := σ) (U := U) (V := W) hl hc N (N - k) (by omega)
+      refine tryIndirect_of_witness hl hc hWV _ _ (hrV.trans hrW.symm)
+        (fun e he A hA => (mem_candidatesIn.mp ((hsW e he (some A) hA).2 A rfl)).1)
+        (fun e he e' he' hee v' hv' hw' => ?_) hwit v hv
+      have hmem : e.1 ∈ List.range' (N + 1 - (N - k)) (N - k) := hrV ▸ List.mem_map_of_mem he
+      rw [List.mem_range'_1] at hmem
+      have hkj : k < e.1 ∧ e.1 ≤ N := by omega
+      have hw'' : witnessAt p σ U V N e.1 ⊆ W.ids := by simpa [hkj] using hw'
+      rw [scan_entry (V := W) N (N - k) (by omega) e' he', hee]
+      exact ih (N + 1 - e.1) (by omega) e.1 rfl W hWV hw'' v'
+        (scan_entry N (N - k) (by omega) e he ▸ hv')
+
+omit [Fintype Validator] in
+/-- The scan to slot `N` covers slots up to `N`. -/
+theorem scan_le (N : ℕ) : ∀ m, ∀ e ∈ scan p σ U V N m, e.1 ≤ N
+  | 0, e, he => by simp [scan] at he
+  | m + 1, e, he => by
+    rcases List.mem_cons.mp he with rfl | he
+    · exact Nat.sub_le N m
+    · exact scan_le N m e he
+
+omit [Fintype Validator] in
+/-- An output of the loop is its decision for its slot. -/
+theorem decisionAt_of_mem_tryDecide {lo N k : ℕ} {v : Option BlockId}
+    (h : (k, v) ∈ tryDecide p σ U V lo N) : k ≤ N ∧ decisionAt p σ U V N k = some v := by
+  unfold tryDecide at h
+  obtain ⟨e, he, hev⟩ := List.mem_map.mp h
+  obtain ⟨hmem, hsome⟩ := mem_takeWhile' he
+  have hent := scan_entry N (N + 1 - lo) (by omega) e hmem
+  obtain ⟨w, hw⟩ := Option.isSome_iff_exists.mp hsome
+  simp only [Prod.mk.injEq] at hev
+  obtain ⟨rfl, hv⟩ := hev
+  refine ⟨scan_le N _ e hmem, ?_⟩
+  rw [hw] at hv
+  rw [← hent, hw]
+  simpa using hv
+
+omit [Fintype Validator] in
+/-- A decision of slot `k` is the first output of the loop from `k`. -/
+theorem mem_tryDecide_of_decisionAt {N k : ℕ} {v : Option BlockId} (hk : k ≤ N)
+    (h : decisionAt p σ U V N k = some v) : (k, v) ∈ tryDecide p σ U V k N := by
+  have hscan : scan p σ U V N (N + 1 - k) =
+      (k, decisionAt p σ U V N k) :: scan p σ U V N (N - k) := by
+    rw [show N + 1 - k = N - k + 1 by omega, scan, decisionAt,
+      show N - (N - k) = k by omega]
+  unfold tryDecide
+  rw [hscan, h, List.takeWhile_cons_of_pos (by simp)]
+  exact List.mem_cons_self
+
+variable [P.Mechanised]
+
+/-- **The witness's histories**, as a view. -/
+def witnessView (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
+    (U : BlockRecord Validator BlockId Payload P honest) (V : U.View) (N k : ℕ) : U.View :=
+  U.historiesView (witnessAt p σ U V N k) ((witnessAt_subset N k).trans V.subset_ids)
+
+omit [Fintype Validator] in
+theorem witnessView_subset (N k : ℕ) : (witnessView p σ U V N k).ids ⊆ V.ids := fun _ hi => by
+  obtain ⟨a, ha, hia⟩ := Finset.mem_biUnion.mp
+    (show _ ∈ (witnessAt p σ U V N k).biUnion (history U) from hi)
+  exact history_subset_view (witnessAt_subset N k ha) hia
+
+omit [Fintype Validator] in
+/-- **The witness's histories decide as the view does.** -/
+theorem decisionAt_witnessView (hl : 1 ≤ p.linkSize) (hcm : 1 ≤ p.commitThreshold)
+    (hc : p.voteIsCert = false → 1 ≤ p.certThreshold) {N k : ℕ} {v : Option BlockId}
+    (h : decisionAt p σ U V N k = some v) :
+    decisionAt p σ U (witnessView p σ U V N k) N k = some v :=
+  decisionAt_of_witness hl hcm hc N k _ (witnessView_subset N k)
+    (fun a ha => Finset.mem_biUnion.mpr ⟨a, ha, mem_history_self⟩) v h
+
+end Scheme
+
+end LeanDag

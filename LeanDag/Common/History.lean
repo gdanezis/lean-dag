@@ -88,6 +88,18 @@ def BlockRecord.historyView (U : BlockRecord Validator BlockId Payload P honest)
   complete := fun _ hi _ hj =>
     (mem_history_iff hA).mpr (((mem_history_iff hA).mp hi).trans (ReachesFrom.single hj))
 
+/-- **The causal histories of a set of blocks, as a view.** -/
+def BlockRecord.historiesView (U : BlockRecord Validator BlockId Payload P honest)
+    (A : Finset BlockId) (hA : A ⊆ U.ids) : U.View where
+  ids := A.biUnion (history U)
+  subset_ids := fun _ hi => by
+    obtain ⟨a, ha, hia⟩ := Finset.mem_biUnion.mp hi
+    exact history_subset_ids (hA ha) hia
+  complete := fun _ hi _ hj => by
+    obtain ⟨a, ha, hia⟩ := Finset.mem_biUnion.mp hi
+    exact Finset.mem_biUnion.mpr ⟨a, ha, (mem_history_iff (hA ha)).mpr
+      (((mem_history_iff (hA ha)).mp hia).trans (ReachesFrom.single hj))⟩
+
 /-- Histories nest along reachability — the `Finset` form of transitivity, and
 what makes D12 one line. -/
 theorem history_subset_of_reaches {c b : BlockId} (hc : c ∈ U.ids) (h : Reaches U c b) :

@@ -523,6 +523,7 @@ import LeanDag.Scheme.Model.Variants
 import LeanDag.Scheme.Model.LeastSel
 import LeanDag.Scheme.Model.VotedBlock
 import LeanDag.Scheme.Model.TryDecide
+import LeanDag.Scheme.Model.Witness
 import LeanDag.Scheme.Model.Local
 import LeanDag.Scheme.Model.Hydrozoan
 import LeanDag.Scheme.Model.Async
@@ -538,6 +539,7 @@ import LeanDag.Scheme.Helpers.Buffered
 import LeanDag.Scheme.Helpers.VotedBlock
 import LeanDag.Scheme.Helpers.Sufficiency
 import LeanDag.Scheme.Helpers.TryDecide
+import LeanDag.Scheme.Helpers.Witness
 import LeanDag.Scheme.Helpers.Local
 import LeanDag.Scheme.Helpers.Band
 import LeanDag.Scheme.Helpers.Support

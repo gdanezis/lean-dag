@@ -283,14 +283,21 @@ store closed, and needs none of this.
 
 **Preparation for step 4.**
 
-* **The witness of a verdict.** The loop returns verdicts, not the blocks
-  that decide them. A function of the scheme is to return, for each
-  verdict, its deciding blocks as D13 lists them, with a lemma: those
-  blocks, with their histories down to `slotRound k − 1`, form a view of
-  the padded record on which the slot is decided. A smaller view holds no
-  certificate or skip pattern the larger lacks, and the absences an
-  indirect verdict reads lie in the anchor's history, which the proof
-  holds.
+* **The witness of a verdict.** Done. `witnessAt`
+  (`Scheme/Model/Witness.lean`) returns, for the loop's decision of slot
+  `k`, the blames a direct skip counts, the certificates a direct commit
+  counts, and for an indirect verdict the witnesses of the anchor and of
+  the skipped eligible slots between. The leader, the certificates the
+  anchor links and the path to them lie in the anchor's history. Every
+  view `W ⊆ V` holding the witness decides `k` as `V` does, by the loop
+  itself (`decisionAt_of_witness`, `Scheme/Helpers/Witness.lean`): a
+  smaller view holds no skip or commit the larger lacks, and the
+  candidates linked from the anchor lie in its history. So the loop on
+  the witness's histories alone (`witnessView`) returns the verdict,
+  which is the receiver's check of D16. For `G ≤ slotRound k`, those
+  histories from round `G` up, with the synthetic blocks below, are a
+  view of the record padded below `G` on which `k` is decided
+  (`decided_witness`, `Node/Helpers/CutVerdict.lean`).
 * **Catch-up as messages** (D16). A request naming the slot, a reply
   with the proof and the blocks of the commit, the stall timer `T_c`, and
   the receiver's check: the loop on the proof.
