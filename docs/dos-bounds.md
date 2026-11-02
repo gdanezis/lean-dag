@@ -68,8 +68,8 @@ The constants are fixed in Phase 0 and checked in Phase 1.
   `n + |D|` blocks of each round, except at the rounds of at most `f`
   bands. A band is at most `L + 2` rounds long, and the node holds at
   most `n + f (f + 1) / 2` blocks of each of its rounds. Below its cut it
-  holds only ordered blocks and the blocks of rounds whose ordered blocks
-  above come from fewer than `q` authors.
+  takes in only ordered blocks and the blocks of rounds whose ordered
+  blocks above come from fewer than `q` authors.
 * **B4. Histories.** The bound of B3 holds for the history of every block
   the node holds or takes in.
 * **B5. Memory.** The memory holds the rounds from the floor to the top,
@@ -102,7 +102,7 @@ proves; the simulator of Phase 1 measures it.
 * **E4. Out of scope**, as in §1.
 
 The node's design and the decisions it raises are Stage 5 of
-`docs/node-sync.md` (§2.3, D10 to D15). D10, the checks at and below the
+`docs/node-sync.md` (§2.3, D10 to D16). D10, the checks at and below the
 cut, decides what record the safety and the bounds of the run are
 stated on.
 
@@ -112,13 +112,15 @@ stated on.
 node's new state (ordered set, horizon, certificates), the new messages
 (sign requests and answers), the rule for taking a block in (each
 reference held or bypassed), the builder, the signer, and the join test.
+Done: `docs/node-sync.md` §2.3 and D10 to D16.
 The theorems of §3 are stated in full, with their constants.
 
 **Phase 1. The simulator.** `scripts/sync-auth.py` runs the node of
 Phase 0: bypass below commit with certification, synchrony from the
-start, and the builder of Phase 0. It reports each quantity of §1 under
-every attack, against the constants of §3, and checks that every run is
-live.
+start, and the builder of Phase 0. Each node decides from the blocks it
+holds, not by an oracle, so that nodes have different cuts (D16). It
+reports each quantity of §1 under every attack, against the constants of
+§3, and checks that every run is live.
 
 **Phase 2. Lemmas on the record.**
 
@@ -147,9 +149,10 @@ any timing), B1 (liveness in synchrony) and V13 are proved again.
 2. **Bypass.** The store need not be closed: a block is kept once each
    reference is held or bypassed (`BypassRun`). The store's invariant
    (`keep` requires every reference on disk), `ready`, the checks and V12
-   change with it.
+   change with it, and a node behind catches up by decision (D16).
 3. **Certification.** Sign requests and answers, the signer's
-   conviction, the builder's wait for a certificate, and the join test.
+   conviction, the builder's wait for a certificate, and the join test
+   on admission.
 
 **Phase 4. The bounds.** B2 to B6 on the node of Phase 3, from R1 to R5,
 V13 and the invariant of `BypassRun`.
