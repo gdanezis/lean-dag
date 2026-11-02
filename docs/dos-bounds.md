@@ -240,9 +240,12 @@ store closed, and needs none of this.
   read only the block map and the ordered set, but the bypass test reads
   the round of the bypassed block from its own header. Under bypass a
   correct node may order a block whose bypassed reference no correct
-  node ever held. The test is to read that round as the referrer's round
-  less one, and the ledger is to be stated on the blocks the correct
-  nodes knew, without completeness or validity.
+  node ever held. Done: the ledger read from a block map (`ledgerOn`)
+  reads the round of a block of a layer off the leader, so it never
+  reads a bypassed block. It depends only on the blocks it reads
+  (`ledgerOn_congr`), agrees for agreeing verdicts
+  (`ledgerOn_agree_of`) and only grows (`ledgerOn_mono`), with no record;
+  on a record it is `bypassLedger` (`ledgerOn_eq`).
 * **One record for each cut.** `globalRecord` (`Node/Helpers/Global.lean`)
   holds the blocks that are real all the way down: known, valid, with
   real references. A block a correct node holds at or below its cut may

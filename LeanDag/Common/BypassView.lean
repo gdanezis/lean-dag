@@ -21,6 +21,11 @@ holds is held, or lies at a round `r` with `r + 1 < H` and is bypassed in
   computed from a block map that agrees with the record on a set holding the
   ordered blocks and the leader, and that reads only blocks of that set,
   orders the blocks of `flush`.
+* **The ledger on the blocks it reads** (`ledgerOn_congr`): the ledger read
+  from a block map never reads the block of a bypassed reference, and two
+  block maps that agree on the committed leaders and the blocks ordered give
+  the same ledger; verdicts that agree give the same ledger
+  (`ledgerOn_agree_of`), and it only grows (`ledgerOn_mono`).
 * **A node under bypass** (`BypassRun`): from holding nothing, a node
   accepts blocks whose references it follows only up to bypassed blocks,
   may drop blocks that are bypassed and not ordered, and decides the slots
@@ -318,6 +323,100 @@ theorem ledgerOn_eq [S : Slots Validator] (V : U.View)
       have hf := flushOn_eq W hblk hL
       simp only [ledgerOn, bypassLedger, hgn, ih, hf]
       exact ⟨trivial, Finset.union_subset hsub (flush_subset W hL)⟩
+
+/-! ## The ledger on the blocks it reads
+
+`layerOn` reads the round of a block of a layer off the leader, and the
+bypass test off the ordered blocks and the layer above, so a commit never
+reads the block of a bypassed reference. Two block maps that agree on the
+blocks a ledger reads give the same ledger (`ledgerOn_congr`): the ledger is
+a function of the blocks the correct nodes knew, with no record. -/
+
+/-- The bypassers read from two block maps that agree on the witnesses are one. -/
+theorem bypassersOn_congr {blk blk' : BlockId → Block Validator BlockId Payload}
+    {V : Finset BlockId} (hblk : ∀ i ∈ V, blk i = blk' i) (x : BlockId) (r : ℕ) :
+    bypassersOn blk V x r = bypassersOn blk' V x r := by
+  ext v
+  simp only [bypassersOn, mem_creatorsOf, Finset.mem_filter]
+  constructor
+  · rintro ⟨y, ⟨hy, hr, hx⟩, hc⟩
+    exact ⟨y, ⟨hy, hblk y hy ▸ hr, hblk y hy ▸ hx⟩, hblk y hy ▸ hc⟩
+  · rintro ⟨y, ⟨hy, hr, hx⟩, hc⟩
+    exact ⟨y, ⟨hy, (hblk y hy).symm ▸ hr, (hblk y hy).symm ▸ hx⟩, (hblk y hy).symm ▸ hc⟩
+
+/-- **A commit depends only on the blocks it reads**: two block maps that
+agree on a set holding the ordered blocks, the leader and every block the
+commit reads give the same commit. -/
+theorem flushOn_congr {A : Finset BlockId} {blk blk' : BlockId → Block Validator BlockId Payload}
+    (hblk : ∀ i ∈ A, blk i = blk' i) {H : ℕ} {C : Finset BlockId} (hCA : C ⊆ A) {L : BlockId}
+    (hL : L ∈ A) (hsub : flushOn blk q H C L ⊆ A) :
+    flushOn blk q H C L = flushOn blk' q H C L := by
+  have hon : ∀ d, d ≤ (blk L).round → layerOn blk q H C L d ⊆ A := fun d hd x hx =>
+    hsub (Finset.mem_biUnion.mpr ⟨d, Finset.mem_range.mpr (by omega), hx⟩)
+  have key : ∀ d, d ≤ (blk L).round → layerOn blk q H C L d = layerOn blk' q H C L d := by
+    intro d
+    induction d with
+    | zero => intro _; simp only [layerOn]
+    | succ d ih =>
+      intro hd
+      have heq := ih (by omega)
+      have hsubd := hon d (by omega)
+      have hV : C ∪ layerOn blk q H C L d ⊆ A := Finset.union_subset hCA hsubd
+      have hrefs : (layerOn blk q H C L d).biUnion (fun y => (blk y).refs) =
+          (layerOn blk q H C L d).biUnion (fun y => (blk' y).refs) :=
+        Finset.biUnion_congr rfl fun y hy => by rw [hblk y (hsubd hy)]
+      simp only [layerOn]
+      rw [← heq, hrefs, hblk L hL]
+      refine Finset.filter_congr fun x _ => ?_
+      rw [bypassersOn_congr (fun i hi => hblk i (hV hi))]
+  simp only [flushOn]
+  rw [hblk L hL]
+  exact Finset.biUnion_congr rfl fun d hd =>
+    key d (by rw [hblk L hL]; simp at hd; omega)
+
+/-- **No retraction**: the ledger read from a block map only grows. -/
+theorem ledgerOn_mono [S : Slots Validator] {blk : BlockId → Block Validator BlockId Payload}
+    {g : ℕ → Option BlockId} {n m : ℕ} (h : n ≤ m) : ledgerOn blk q g n ⊆ ledgerOn blk q g m := by
+  induction m, h using Nat.le_induction with
+  | base => exact subset_rfl
+  | succ m _ ih =>
+    refine ih.trans ?_
+    simp only [ledgerOn]
+    split
+    · exact subset_rfl
+    · exact Finset.subset_union_left
+
+/-- **Agreement**: verdicts that agree below `n` give the same ledger. -/
+theorem ledgerOn_agree_of [S : Slots Validator] {blk : BlockId → Block Validator BlockId Payload}
+    {g₁ g₂ : ℕ → Option BlockId} :
+    ∀ {n}, (∀ k, k < n → g₁ k = g₂ k) → ledgerOn blk q g₁ n = ledgerOn blk q g₂ n
+  | 0, _ => rfl
+  | n + 1, hg => by
+    have ih := ledgerOn_agree_of (blk := blk) (n := n) fun k hk => hg k (by omega)
+    simp only [ledgerOn, hg n (by omega), ih]
+
+/-- **The ledger depends only on the blocks it reads**: two block maps that
+agree on a set holding the committed leaders and every block the ledger
+orders give the same ledger. -/
+theorem ledgerOn_congr [S : Slots Validator] {A : Finset BlockId}
+    {blk blk' : BlockId → Block Validator BlockId Payload} (hblk : ∀ i ∈ A, blk i = blk' i)
+    {g : ℕ → Option BlockId} :
+    ∀ n, (∀ k < n, ∀ L, g k = some L → L ∈ A) → ledgerOn blk q g n ⊆ A →
+      ledgerOn blk q g n = ledgerOn blk' q g n
+  | 0, _, _ => rfl
+  | n + 1, hg, hsub => by
+    have hn : ledgerOn blk q g n ⊆ A := (ledgerOn_mono (Nat.le_succ n)).trans hsub
+    have ih := ledgerOn_congr hblk n (fun k hk => hg k (by omega)) hn
+    cases hgn : g n with
+    | none => simp only [ledgerOn, hgn, ih]
+    | some L =>
+      have hL := hg n (by omega) L hgn
+      have hf : flushOn blk q (S.slotRound n) (ledgerOn blk q g n) L ⊆ A := by
+        refine fun x hx => hsub ?_
+        simp only [ledgerOn, hgn]
+        exact Finset.mem_union_right _ hx
+      simp only [ledgerOn, hgn]
+      rw [flushOn_congr hblk hn hL hf, ih]
 
 /-! ## A node under bypass -/
 
