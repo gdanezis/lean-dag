@@ -90,9 +90,11 @@ bound R5 proves. The bound `n + f (f + 1) / 2` that §4 argues for one
 history fails in the simulator (§6): a correct block joins, at the
 frontier, the structures that its references adopted. No attack in the
 simulator, the structures of §4 included, exceeds `n + (n − f) · f`: 31
-at `n = 10` and 49 at `n = 13`, against 22 and 44 seen. `M` grows as
-`n · f²`, about 37,700 at `n = 100, f = 33`, so R5 aims at
-`n + (n − f) · f`.
+at `n = 10` and 49 at `n = 13`, against 28 and 45 seen. The 28 and 45
+are `n + f · (n − f − 1)`, reached for one round when every Byzantine
+author shows each correct node its own block (`alltwins`), so the bound
+is within `f` of what an attack achieves. `M` grows as `n · f²`, about
+37,700 at `n = 100, f = 33`, so R5 aims at `n + (n − f) · f`.
 
 ## 4. Decisions
 
@@ -218,9 +220,9 @@ and `late deaf`:
 |---|---|---|---|---|
 | Lag `top − H` | 6 | 8 | `L = 3 + (c + 1)` | 7, 8 |
 | Memory | 77 | 125 | `(L + 1) · M` | 416, 927 |
-| Taken in at a round | 22 | 44 | `M` | 52, 103 |
+| Taken in at a round | 28 | 45 | `M` | 52, 103 |
 | Rounds above `n + ∣D∣` | 8 | 10 | `f · (L + 2)` | 27, 40 |
-| History at a round | 16 | 27 | `M` | 52, 103 |
+| History at a round | 28 | 45 | `M` | 52, 103 |
 | Piece per round of target | 11.8 | 19.8 | `M` | 52, 103 |
 
 * **The join test.** A node reads the history of a block as it saw it,
@@ -238,7 +240,13 @@ and `late deaf`:
   certificate a receiver has not taken in, and the receivers refuse 36
   correct blocks at `n = 10`, and 64 at `n = 13`, for good.
 * **The bands.** One round under `twins` exceeds `n + |D|`, before X is
-  convicted. The other such rounds are those of `nest` and `flat`, and
+  convicted. Under `alltwins` every Byzantine author shows each correct
+  node its own block; at the next round each correct block references
+  the blocks of other correct nodes, which carry other twins, so a
+  correct node takes in `n + f · (n − f − 1)` blocks of one round: 28 at
+  `n = 10` and 45 at `n = 13`. The joins are made at once, every author
+  is convicted, and no other round exceeds `n + |D|`. The other such
+  rounds are those of `nest` and `flat`, and
   lie within `L + 2` rounds of the run of skipped Byzantine leaders
   before the attack's frontier. There the ordered set is thin and bypass
   does not apply, and each correct node adopts at the frontier its own
@@ -246,8 +254,8 @@ and `late deaf`:
   A correct block then joins its references' structures under a
   certificate. At `n = 13` under `nest`, a round holds 10 blocks of each
   of three Byzantine authors, one for each of 9 correct nodes and one
-  more. The structures of `docs/sync-auth.md` §4 (`flat`) give the most:
-  22 blocks taken in at a round at `n = 10`, and a history with 27 at
+  more. The structures of `docs/sync-auth.md` §4 (`flat`) give 22
+  blocks taken in at a round at `n = 10`, and a history with 27 at
   `n = 13`. All are within `n + (n − f) · f`; the `f (f + 1) / 2` chains
   for each correct node that `M` allows do not appear.
 * **What is kept.** Below the cut a node keeps 7 to 13 blocks a round,

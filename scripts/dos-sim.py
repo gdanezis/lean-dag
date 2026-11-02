@@ -43,7 +43,8 @@ decides on the proof, and takes the blocks in with the commit (D16).
 **Attacks.** `none`: each Byzantine node builds one block a round on q honest
 blocks. `silent`. `lead`: as `none`, with each Byzantine leader block shown to f + 1
 honest nodes only, so that its slot is decided indirectly. `twins`: as `none`, and X
-shows each honest node its own block each round. `carrier`: as `none`, and Y carries
+shows each honest node its own block each round; `alltwins`, every Byzantine author
+does. `carrier`: as `none`, and Y carries
 a fresh X chain `depth` rounds deep each round. `nest`: the nested families of
 `sync-auth.py`, back-dated `depth` rounds. `late`: as `lead`, and when two honest
 horizons differ, X builds a chain from just below the lower one up to the frontier, Y
@@ -812,10 +813,11 @@ class Sim:
                     self.show(BYZ[r - R0], self.flat(r - R0, max(1, R0 - self.depth), R0), [h])
             return
         busy = set()
-        if att == 'twins' and r > 1:
-            for h in HON:
-                self.show(X, self.mk(X, r, []), [h])
-            busy.add(X)
+        if att in ('twins', 'alltwins') and r > 1:
+            for a in (BYZ if att == 'alltwins' else [X]):
+                for h in HON:
+                    self.show(a, self.mk(a, r, []), [h])
+                busy.add(a)
         if att == 'carrier' and r > self.depth + 2:
             self.show(Y, self.mk(Y, r, [self.chain(X, r - self.depth, r - 1)[-1]]))
             busy |= {X, Y}
@@ -880,7 +882,8 @@ class Sim:
                 'bcerts': sum(1 for b in CERT if blocks[b][0] in BYZ)}
 
 
-ATTACKS = [('none', {}), ('silent', {}), ('lead', {}), ('twins', {}), ('carrier', dict(depth=8)),
+ATTACKS = [('none', {}), ('silent', {}), ('lead', {}), ('twins', {}), ('alltwins', {}),
+           ('carrier', dict(depth=8)),
            ('nest', dict(depth=13)), ('nest', dict(depth=39)), ('flat', dict(depth=3)),
            ('flat', dict(depth=13)), ('late', {}), ('race', {}), ('race', dict(width=2)),
            ('nest', dict(depth=13, join='cut')), ('nest', dict(depth=39, join='cut')),
