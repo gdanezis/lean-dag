@@ -3,21 +3,19 @@ import LeanDag.Common.BypassView
 /-!
 # Safety under bypass below the decided horizon, at any carrier on the record
 
-`docs/sync-auth.md` §8. A validator that applies the rule of §8 holds a
-bypass view: its ordered blocks, and every reference of a held block,
-unless the reference is bypassed below the horizon. It decides slot `n`
-on the part of its bypass view at or above `slotRound n - 1`, which is a
-view of the record cut there (`BypassView.chop`).
+`docs/sync-auth.md` §8. A node that runs the rule (`BypassRun`) accepts a
+block once it has followed its references up to bypassed blocks, decides
+slot `n` on the blocks it holds at or above `slotRound n - 1`
+(`DecOnCut`), and orders each commit from the blocks it holds.
 
-* **Agreement of two bypass views** (`decided_agree_bypass`): any two such
-  validators agree on the slot, by `Agree` on the cut.
-* **And with a full history** (`decided_agree_bypass_full`): a rule with
-  `Banded` gives the verdict of every validator holding a view of the
-  whole record, as for garbage collection.
-* **Safety** (`bypassLedger_agree_bypass`): two validators that decide
-  every slot below `N` so, each on a bypass view of its own ledger, order
-  the same blocks; `flushOn_eq` says each computes its commits from the
-  blocks it holds.
+* **It can decide on what it holds** (`exists_cutView`): those blocks form
+  a view of the record cut at that round, since no reference there is
+  bypassed.
+* **Safety** (`bypassRun_agree`): under `Agree`, two such nodes agree on
+  every verdict and order the same blocks, the ledger of those verdicts.
+* **And with a full history** (`bypassRun_agree_full`): under `Banded`,
+  their verdicts are those of any node holding a view of the whole record,
+  by `decided_agree_chop` of garbage collection.
 -/
 
 namespace LeanDag
@@ -41,60 +39,57 @@ def bypassView {C : Finset BlockId} (W : BypassView (c.toRec U) q H C) (G : ℕ)
     (hG : H ≤ G + 1) : R.View (c.chop U G) :=
   c.ofView (W.chop G hG)
 
-/-- **Agreement of two bypass views**: two validators deciding a slot on
-their bypass views, cut at one round, agree. -/
-theorem decided_agree_bypass (ha : Agree R) (hd : G ≤ S.slotRound d)
-    {H₁ H₂ : ℕ} {C₁ C₂ : Finset BlockId}
-    {W₁ : BypassView (c.toRec U) q H₁ C₁} {W₂ : BypassView (c.toRec U) q H₂ C₂}
-    (h₁ : H₁ ≤ G + 1) (h₂ : H₂ ≤ G + 1) {k : ℕ} {w₁ w₂ : Option BlockId}
-    (hW₁ : R.Decided (S.chop G d hd) (c.bypassView W₁ G h₁) k w₁)
-    (hW₂ : R.Decided (S.chop G d hd) (c.bypassView W₂ G h₂) k w₂) : w₁ = w₂ :=
-  ha _ _ _ k w₁ w₂ hW₁ hW₂
+theorem viewIds_bypassView {C : Finset BlockId} (W : BypassView (c.toRec U) q H C) (G : ℕ)
+    (hG : H ≤ G + 1) :
+    R.viewIds (c.bypassView W G hG) = W.ids.filter fun i => G ≤ (R.block U i).round := by
+  have h := c.viewIds_of (h := Invariant.Chops.chop G (c.inv U)) (W.chop G hG)
+  rw [BypassView.chop_ids, c.block_to] at h
+  exact h
 
-/-- **And with a full history**: under `Banded`, a validator deciding on its
-bypass view agrees with any validator holding a view of the whole record. -/
-theorem decided_agree_bypass_full (ha : Agree R) (hb : Banded R) (hd : G ≤ S.slotRound d)
-    {C : Finset BlockId} {W : BypassView (c.toRec U) q H C} (hG : H ≤ G + 1)
-    {V : R.View U} {k : ℕ} {w v : Option BlockId}
-    (hW : R.Decided (S.chop G d hd) (c.bypassView W G hG) k w)
-    (hV : R.Decided S V (d + k) v) : w = v :=
-  c.decided_agree_chop ha hb hd hW hV
+/-- The decision of slot `n` on the blocks `held`: the rule's verdict on a
+view of the cut at `slotRound n - 1` that holds exactly the blocks of
+`held` at or above that round. -/
+def DecOnCut (U : R.Universe) (S : Slots Validator) (held : Finset BlockId) (n : ℕ)
+    (v : Option BlockId) : Prop :=
+  ∃ V : R.View (c.chop U (S.slotRound n - 1)),
+    R.viewIds V = held.filter (fun i => S.slotRound n - 1 ≤ (R.block U i).round) ∧
+    R.Decided (S.chop (S.slotRound n - 1) n (Nat.sub_le _ _)) V 0 v
 
-/-- `g` is decided, slot by slot below `N`, on bypass views: slot `n` on a
-bypass view of the ledger after `n` slots at the horizon `slotRound n`,
-cut one round below it. -/
-def DecidedOnBypass (U : R.Universe) (S : Slots Validator) (q N : ℕ)
-    (g : ℕ → Option BlockId) : Prop :=
-  ∀ n, n < N → ∃ W : BypassView (c.toRec U) q (S.slotRound n) (bypassLedger (c.toRec U) q g n),
-    R.Decided (S.chop (S.slotRound n - 1) n (Nat.sub_le _ _))
-      (c.bypassView W (S.slotRound n - 1) (by omega)) 0 (g n)
+/-- **A node can decide on what it holds**: in every state of a run, the
+blocks held at or above `slotRound n - 1` form a view of the cut there. -/
+theorem exists_cutView {Dec : Finset BlockId → ℕ → Option BlockId → Prop}
+    {g : ℕ → Option BlockId} {held led : Finset BlockId} {n : ℕ}
+    (h : BypassRun (S := S) (c.toRec U) q Dec g held n led) :
+    ∃ V : R.View (c.chop U (S.slotRound n - 1)),
+      R.viewIds V = held.filter (fun i => S.slotRound n - 1 ≤ (R.block U i).round) := by
+  obtain ⟨-, W, rfl⟩ := h.inv
+  exact ⟨c.bypassView W _ (by omega), c.viewIds_bypassView W _ _⟩
 
-/-- **Safety under bypass**: two validators that decide every slot below `N`
-on bypass views of their own ledgers agree on every verdict, and order the
-same blocks. -/
-theorem bypassLedger_agree_bypass (ha : Agree R) {N : ℕ} {g₁ g₂ : ℕ → Option BlockId}
-    (h₁ : c.DecidedOnBypass U S q N g₁) (h₂ : c.DecidedOnBypass U S q N g₂) :
-    (∀ n, n < N → g₁ n = g₂ n) ∧
-      bypassLedger (c.toRec U) q g₁ N = bypassLedger (c.toRec U) q g₂ N := by
+/-- **Safety under bypass**: two nodes that run the rule, each deciding the
+slots on the blocks it holds, agree on every verdict below `N` and order the
+same blocks, the ledger of those verdicts. -/
+theorem bypassRun_agree (ha : Agree R) {N : ℕ} {g₁ g₂ : ℕ → Option BlockId}
+    {held₁ held₂ led₁ led₂ : Finset BlockId}
+    (h₁ : BypassRun (S := S) (c.toRec U) q (c.DecOnCut U S) g₁ held₁ N led₁)
+    (h₂ : BypassRun (S := S) (c.toRec U) q (c.DecOnCut U S) g₂ held₂ N led₂) :
+    (∀ n, n < N → g₁ n = g₂ n) ∧ led₁ = led₂ ∧ led₁ = bypassLedger (c.toRec U) q g₁ N := by
   have hg : ∀ n, n < N → g₁ n = g₂ n := fun n hn => by
-    obtain ⟨W₁, hW₁⟩ := h₁ n hn
-    obtain ⟨W₂, hW₂⟩ := h₂ n hn
-    exact c.decided_agree_bypass ha _ _ _ hW₁ hW₂
-  exact ⟨hg, bypassLedger_agree_of hg⟩
+    obtain ⟨_, V₁, -, hV₁⟩ := h₁.decided n hn
+    obtain ⟨_, V₂, -, hV₂⟩ := h₂.decided n hn
+    exact ha _ _ _ 0 _ _ hV₁ hV₂
+  refine ⟨hg, ?_, h₁.inv.1⟩
+  rw [h₁.inv.1, h₂.inv.1]
+  exact bypassLedger_agree_of hg
 
-/-- **And with a full history**: under `Banded`, a validator that decides
-every slot below `N` on bypass views orders the blocks that the verdicts of
-a validator holding views of the whole record give. -/
-theorem bypassLedger_agree_bypass_full (ha : Agree R) (hb : Banded R) {N : ℕ}
-    {g g' : ℕ → Option BlockId} (h : c.DecidedOnBypass U S q N g)
-    (h' : ∀ n, n < N → ∃ V : R.View U, R.Decided S V n (g' n)) :
-    (∀ n, n < N → g n = g' n) ∧
-      bypassLedger (c.toRec U) q g N = bypassLedger (c.toRec U) q g' N := by
-  have hg : ∀ n, n < N → g n = g' n := fun n hn => by
-    obtain ⟨W, hW⟩ := h n hn
-    obtain ⟨V, hV⟩ := h' n hn
-    exact c.decided_agree_bypass_full ha hb _ _ hW hV
-  exact ⟨hg, bypassLedger_agree_of hg⟩
+/-- **And with a full history**: under `Banded`, the verdicts of a node that
+runs the rule are those of any node holding a view of the whole record. -/
+theorem bypassRun_agree_full (ha : Agree R) (hb : Banded R) {N : ℕ}
+    {g : ℕ → Option BlockId} {held led : Finset BlockId}
+    (h : BypassRun (S := S) (c.toRec U) q (c.DecOnCut U S) g held N led)
+    {n : ℕ} (hn : n < N) {V : R.View U} {v : Option BlockId} (hV : R.Decided S V n v) :
+    g n = v := by
+  obtain ⟨_, W, -, hW⟩ := h.decided n hn
+  exact c.decided_agree_chop ha hb _ hW hV
 
 end DagRule.OnRecord
 

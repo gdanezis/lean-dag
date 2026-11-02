@@ -20830,7 +20830,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 635 theorems the body or Appendix A names, each
+The 636 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -26893,6 +26893,17 @@ theorem distinct_creators [P.Distinct] {i j k : BlockId} (hi : i ∈ U.ids)
 ```
 
 Two references of one block by one author are one reference.
+
+#### `decided`
+
+*theorem, `Common.BypassView.lean`*
+
+```lean
+theorem decided (h : BypassRun U q Dec g held n led) :
+    ∀ k, k < n → ∃ held', Dec held' k (g k)
+```
+
+**The decisions of a run**: every slot below `n` was decided on the blocks held at the time.
 
 #### `ledgerSet_mono`
 

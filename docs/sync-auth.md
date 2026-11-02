@@ -401,22 +401,41 @@ each of its blocks. A node that applies the rule does not.
   orders the blocks of `flush`, whatever the map says of other ids. The
   blocks a commit orders are held.
 
-`LeanDag/Properties/Arcs/Bypass.lean` then proves safety for any rule on
-the record with `Agree`. A node decides slot `n` on the part of its
-bypass view at or above `slotRound n − 1`, a view of the cut there, with
-`C` its ledger after `n` slots and `H = slotRound n`
-(`DecidedOnBypass`).
+**A node under bypass** (`BypassRun`). A node starts holding nothing, and
+its states record what it holds, the slots it has decided, and the
+blocks it has ordered. It moves by three steps.
 
-* **Agreement of decisions** (`decided_agree_bypass`). Two nodes deciding
-  a slot on bypass views cut at the same round agree, by `Agree` on the
-  cut.
-* **Safety** (`bypassLedger_agree_bypass`). Two nodes that decide every
-  slot below `N` on bypass views of their own ledgers agree on every
-  verdict, and order the same blocks.
-* **With a full history** (`decided_agree_bypass_full`,
-  `bypassLedger_agree_bypass_full`). Under `Banded`, the verdicts and the
-  ledger are those of a node holding views of the whole record. This is
-  `decided_agree_chop` of garbage collection.
+* **Accept.** It takes in a set of new blocks once every reference of
+  each is held, among the new blocks, or bypassed: of round `r` with
+  `r + 1 < slotRound n` and bypassed in what it has ordered. It follows
+  references only up to bypassed blocks, and never fetches those.
+* **Skip.** It decides that slot `n` is skipped.
+* **Commit.** It decides that slot `n` commits a leader it holds, and
+  orders the leader's history with `flushOn`, from a block map that
+  agrees with the record on what it holds.
+
+`BypassView.extend` and `BypassView.raise` give the invariant
+(`BypassRun.inv`). In every state, what the node has ordered is the
+ledger of its verdicts, and what it holds is a bypass view of that
+ledger at the horizon `slotRound n`. A bypassed block stays bypassed,
+since the ordered set and the horizon only grow, so the node never
+needs it later.
+
+`LeanDag/Properties/Arcs/Bypass.lean` adds the decisions, for any rule on
+the record. The node decides slot `n` on the blocks it holds at or above
+`slotRound n − 1`, read as a view of the record cut there (`DecOnCut`).
+
+* **It can decide on what it holds** (`exists_cutView`). In every state
+  those blocks form a view of the cut, by the invariant and
+  `BypassView.chop`.
+* **Safety** (`bypassRun_agree`). Under `Agree`, two nodes that run the
+  rule agree on every verdict and order the same blocks, the ledger of
+  those verdicts. Both new decisions and the order of every block are
+  agreed.
+* **With a full history** (`bypassRun_agree_full`). Under `Banded`, the
+  verdicts of a node that runs the rule are those of any node holding a
+  view of the whole record, by `decided_agree_chop` of garbage
+  collection.
 
 The core rule has both premises (`MysticetiProperties.onRecord`,
 `MysticetiProperties.agree`, `MysticetiProperties.banded`).
