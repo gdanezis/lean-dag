@@ -28,12 +28,12 @@ variable {tr : Trace Validator BlockId Payload}
 /-- **What a node made is on its disk.** -/
 theorem own_stored {w : Validator} {E : ℕ} {x : BlockId × Block Validator BlockId Payload}
     (hx : x ∈ persists (run (cfg.at w) (State.init (cfg.at w)) (inputsBefore tr E w)).2) :
-    x.1 ∈ (stateBefore cfg tr E w).disk.ids ∧ (stateBefore cfg tr E w).disk.blk x.1 = x.2 := by
+    x.1 ∈ (stateBefore cfg tr E w).disk.ids ∧ (stateBefore cfg tr E w).disk.full x.1 = x.2 := by
   obtain ⟨j, hjE, hjw, hxj⟩ := mem_persists_before (cfg := cfg) w E hx
   obtain ⟨inp, hj⟩ := event_of_map hjw
   obtain ⟨h₁, h₂⟩ := persist_stored hj hxj
   have hg := grows_before (cfg := cfg) (tr := tr) w (show j + 1 ≤ E by omega)
-  exact ⟨hg.1 h₁, by rw [hg.blk h₁]; exact h₂⟩
+  exact ⟨hg.1 h₁, by rw [hg.full h₁]; exact h₂⟩
 
 /-- **What a node made by an event it made by the end.** -/
 theorem persists_final {w : Validator} {E : ℕ} {x : BlockId × Block Validator BlockId Payload}
@@ -67,10 +67,14 @@ theorem not_detected (htime : TimelyAuthentic cfg H tr) (hev : EvidenceAuthentic
   rcases (hE.2 e he).2 with ⟨ha, ha', hac, hac', hr⟩ | ⟨c, hc, hce⟩
   · have hown : ∀ c ∈ (stateBefore cfg tr i v).disk.ids,
         ((stateBefore cfg tr i v).disk.blk c).creator = e.1 →
-        (c, (stateBefore cfg tr i v).disk.blk c) ∈ persists (runOf cfg tr e.1).2 := fun c hc hcu =>
-      persists_final (own_known (v := e.1) htime hv hu hi ((inv_before i v).known c hc) hcu)
-    exact hne (Prod.mk.inj (eq_of_persists e.1 (hown _ ha hac) (hown _ ha' hac') hr)).1
-  · exact hev _ (stored_known hv hc) e hce hne hu
+        (c, (stateBefore cfg tr i v).disk.full c) ∈ persists (runOf cfg tr e.1).2 := fun c hc hcu =>
+      persists_final (own_known (v := e.1) htime hv hu hi ((inv_before i v).known c hc)
+        (by simp only; rw [((stateBefore cfg tr i v).disk.full_fields c).2.1]; exact hcu))
+    exact hne (Prod.mk.inj (eq_of_persists e.1 (hown _ ha hac) (hown _ ha' hac') (by
+      simp only; rw [((stateBefore cfg tr i v).disk.full_fields _).1,
+        ((stateBefore cfg tr i v).disk.full_fields _).1]; exact hr))).1
+  · exact hev _ (stored_known hv hc) e
+      (by simp only; rw [((stateBefore cfg tr i v).disk.full_fields c).2.2]; exact hce) hne hu
 
 /-- **An honest node leaves out no honest author**, given authentic
 evidence. -/
@@ -87,14 +91,19 @@ theorem not_excluded (htime : TimelyAuthentic cfg H tr) (hev : EvidenceAuthentic
     rcases (hE.2 e he).2 with ⟨ha, ha', hac, hac', hr⟩ | ⟨c, hc, hce⟩
     · have hown : ∀ c ∈ (stateBefore cfg tr i v).disk.ids,
           ((stateBefore cfg tr i v).disk.blk c).creator = e.1 →
-          (c, (stateBefore cfg tr i v).disk.blk c) ∈ persists (runOf cfg tr e.1).2 :=
+          (c, (stateBefore cfg tr i v).disk.full c) ∈ persists (runOf cfg tr e.1).2 :=
         fun c hc hcu =>
-          persists_final (own_known (v := e.1) htime hv hu hi ((inv_before i v).known c hc) hcu)
-      exact hne (Prod.mk.inj (eq_of_persists e.1 (hown _ ha hac) (hown _ ha' hac') hr)).1
-    · exact hev _ (stored_known hv hc) e hce hne hu
+          persists_final (own_known (v := e.1) htime hv hu hi ((inv_before i v).known c hc)
+            (by simp only; rw [((stateBefore cfg tr i v).disk.full_fields c).2.1]; exact hcu))
+      exact hne (Prod.mk.inj (eq_of_persists e.1 (hown _ ha hac) (hown _ ha' hac') (by
+        simp only; rw [((stateBefore cfg tr i v).disk.full_fields _).1,
+          ((stateBefore cfg tr i v).disk.full_fields _).1]; exact hr))).1
+    · exact hev _ (stored_known hv hc) e
+        (by simp only; rw [((stateBefore cfg tr i v).disk.full_fields c).2.2]; exact hce) hne hu
   · obtain ⟨c, hcR, hcm⟩ := Finset.mem_biUnion.mp hm
     exact ex_not_named (inv_before (cfg := cfg) (tr := tr) i v).valid
-      (fun j hj e he hne => hev _ (stored_known hv hj) e he hne) c
+      (fun j hj e he hne => hev _ (stored_known hv hj) e
+        (by simp only; rw [((stateBefore cfg tr i v).disk.full_fields j).2.2]; exact he) hne) c
       (Store.mem_atRound.mp hcR).1 u hcm hu
 
 /-- **The last request of a sync**: a sync present at `τ` was asked for

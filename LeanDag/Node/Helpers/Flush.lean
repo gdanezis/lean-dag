@@ -20,9 +20,9 @@ variable {cfg : Config Validator BlockId Payload}
 
 variable (g : BlockId → Block Validator BlockId Payload)
 
-/-- **A store reading as `g`.** -/
+/-- **A store reading as `g`**: its blocks as accepted are those of `g`. -/
 def ReadsAs (st : Store Validator BlockId Payload) : Prop :=
-  ∀ j ∈ st.ids, st.blk j = g j
+  ∀ j ∈ st.ids, st.full j = g j
 
 variable {g}
 
@@ -35,13 +35,12 @@ theorem ReadsAs.accept {st : Store Validator BlockId Payload} (h : ReadsAs g st)
   · rename_i hc
     intro j hj
     rw [Store.insert_ids] at hj
+    rw [Store.full_insert]
     by_cases hj' : j = id
     · subst hj'
-      simp only [Store.blk, Store.insert, Std.TreeMap.getD_insert_self]
+      rw [if_pos rfl]
       exact hb.symm
-    · have := Grows.blk (Grows.insert st (hnew := hc.1) (hrefs := hc.2.1)
-        (hpred := hc.2.2.1)) ((Finset.mem_insert.mp hj).resolve_left hj')
-      rw [this]
+    · rw [if_neg hj']
       exact h j ((Finset.mem_insert.mp hj).resolve_left hj')
   · exact h
 
@@ -75,11 +74,16 @@ theorem fits_of_valid {y : BlockId × Block Validator BlockId Payload}
   · have hrefs : y.2.refs ⊆ st.ids := by
       simp only [readyOn, Store.Checks, decide_eq_true_eq] at hr
       exact hr.1
-    have hag : ∀ j ∈ y.2.refs, st.blk j = g j := fun j hj => hst j (hrefs hj)
-    rw [dif_pos ⟨hin, hrefs, fun j hj => by rw [hag j hj]; exact hv.1 j hj,
+    have hag : ∀ j ∈ y.2.refs, (st.blk j).round = (g j).round ∧
+        (st.blk j).creator = (g j).creator ∧ (st.blk j).payload = (g j).payload := fun j hj => by
+      rw [← hst j (hrefs hj)]
+      have := st.full_fields j
+      exact ⟨this.1.symm, this.2.1.symm, this.2.2.symm⟩
+    rw [dif_pos ⟨hin, hrefs, fun j hj => by rw [(hag j hj).1]; exact hv.1 j hj,
       rowValid_congr (fun j hj => by
         have hj' : j ≠ y.1 := fun e => hin (e ▸ hrefs hj)
-        rw [Function.update_of_ne hj', hag j hj]; exact ⟨rfl, rfl, rfl⟩) hv.2⟩]
+        rw [Function.update_of_ne hj']
+        exact ⟨(hag j hj).1.symm, (hag j hj).2.1.symm, (hag j hj).2.2.symm⟩) hv.2⟩]
     exact Store.mem_insert_self
 
 omit [Fintype Validator] in
@@ -88,12 +92,13 @@ theorem ready_mono {st st' : Store Validator BlockId Payload} (hg : Grows st st'
     (h : readyOn cfg st e = true) : readyOn cfg st' e = true := by
   simp only [readyOn, Store.Checks, decide_eq_true_eq] at h ⊢
   obtain ⟨h₁, h₂, h₃⟩ := h
-  refine ⟨h₁.trans hg.1, fun j hj => by rw [hg.blk (h₁ hj)]; exact h₂ j hj,
+  refine ⟨h₁.trans hg.1, fun j hj => by rw [(hg.fields (h₁ hj)).1]; exact h₂ j hj,
     rowValid_congr (fun j hj => ?_) h₃⟩
   by_cases hje : j = e.1
   · subst hje; simp
-  · rw [Function.update_of_ne hje, Function.update_of_ne hje, hg.blk (h₁ hj)]
-    exact ⟨rfl, rfl, rfl⟩
+  · rw [Function.update_of_ne hje, Function.update_of_ne hje]
+    have := hg.fields (h₁ hj)
+    exact ⟨this.1.symm, this.2.1.symm, this.2.2.symm⟩
 
 omit [Fintype Validator] in
 theorem foldl_takes : ∀ (l : List (BlockId × Block Validator BlockId Payload))
@@ -112,9 +117,9 @@ theorem foldl_takes : ∀ (l : List (BlockId × Block Validator BlockId Payload)
 
 omit [Fintype Validator] in
 theorem accept_in {K : Set (BlockId × Block Validator BlockId Payload)}
-    {st : Store Validator BlockId Payload} (hK : ∀ j ∈ st.ids, (j, st.blk j) ∈ K)
+    {st : Store Validator BlockId Payload} (hK : ∀ j ∈ st.ids, (j, st.full j) ∈ K)
     {id : BlockId} {b : Block Validator BlockId Payload} (hb : (id, b) ∈ K) :
-    ∀ j ∈ (acceptOn cfg st id b).ids, (j, (acceptOn cfg st id b).blk j) ∈ K := by
+    ∀ j ∈ (acceptOn cfg st id b).ids, (j, (acceptOn cfg st id b).full j) ∈ K := by
   unfold acceptOn
   split
   · exact known_insert hK hb
@@ -123,9 +128,9 @@ theorem accept_in {K : Set (BlockId × Block Validator BlockId Payload)}
 omit [Fintype Validator] in
 theorem foldl_in {K : Set (BlockId × Block Validator BlockId Payload)} :
     ∀ (l : List (BlockId × Block Validator BlockId Payload)) {st : Store Validator BlockId Payload},
-    (∀ j ∈ st.ids, (j, st.blk j) ∈ K) → (∀ e ∈ l, e ∈ K) →
+    (∀ j ∈ st.ids, (j, st.full j) ∈ K) → (∀ e ∈ l, e ∈ K) →
     let st' := l.foldl (fun s e => acceptOn cfg s e.1 e.2) st
-    ∀ j ∈ st'.ids, (j, st'.blk j) ∈ K
+    ∀ j ∈ st'.ids, (j, st'.full j) ∈ K
   | [], _, hK, _ => hK
   | e :: l, _, hK, hl =>
     foldl_in l (accept_in hK (hl e List.mem_cons_self)) fun x hx => hl x (List.mem_cons_of_mem _ hx)

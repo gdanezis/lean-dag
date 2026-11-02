@@ -55,7 +55,12 @@ theorem verdict_decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H f
     have hT : tryDecide cfg.p boundedSel s.disk.toRecord s.disk.view s.lo
         (decidable cfg s.disk.topRound - 1) =
         tryDecide cfg.p boundedSel U V' s.lo (decidable cfg s.disk.topRound - 1) :=
-      (ViewsAbove.of_store hiff fun i hi => hc.eq hi).tryDecide_eq cfg.p hw _ (Nat.zero_le _)
+      (ViewsAbove.of_storeAbove (cfg.slots.slotRound s.lo) hiff
+        (fun i hi => ⟨hc.round hi, hc.creator hi⟩)
+        (fun i hi hR => hc.eq_blk hi (by
+          by_contra hk
+          have := s.low i hk
+          omega))).tryDecide_eq cfg.p hw _ le_rfl
     rw [tryDecide_memory hσ hw s hfl, hT] at he
     exact ⟨V', (Loop.sound _ _ _ P H cfg.p boundedSel U V' s.lo _ hl hcv (by omega)).2 e he⟩
   · simp [commitsOf] at he

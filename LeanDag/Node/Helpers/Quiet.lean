@@ -26,7 +26,7 @@ variable {cfg : Config Validator BlockId Payload}
 syncs' blocks. -/
 def InK (K : Set (BlockId × Block Validator BlockId Payload)) (s : State Validator BlockId Payload) :
     Prop :=
-  (∀ j ∈ s.disk.ids, (j, s.disk.blk j) ∈ K) ∧ ∀ e ∈ s.syncs, e.2.1 ∈ K
+  (∀ j ∈ s.disk.ids, (j, s.disk.full j) ∈ K) ∧ ∀ e ∈ s.syncs, e.2.1 ∈ K
 
 variable (cfg) in
 /-- **The blocks of a settle from a state of rounds at most `R`**: of any
@@ -42,9 +42,9 @@ theorem InK.tryBuild {K : Set (BlockId × Block Validator BlockId Payload)}
     (hK : ∀ e ∈ persists out, e ∈ K) : InK K s' := by
   obtain ⟨r, id, b, hnew, hrefs, hpred, -, -, -, hid, -, hst, -, hpd, -, hout⟩ :=
     tryBuild_some hb
-  refine ⟨?_, by rw [hpd]; exact h.2⟩
-  rw [hst]
-  exact known_insert h.1 (hK _ (by rw [hout]; simp [built, persists]))
+  refine ⟨fun j hj => ?_, by rw [hpd]; exact h.2⟩
+  rw [hst.full]
+  exact known_insert h.1 (hK _ (by rw [hout]; simp [built, persists])) j (hst.ids ▸ hj)
 
 omit [Fintype Validator] in
 /-- Building keeps the blocks in `K`, given the blocks it builds. -/
@@ -73,7 +73,10 @@ theorem InK.advance {K : Set (BlockId × Block Validator BlockId Payload)}
   have h₁ := InK.progress _ h fun e he => hK e (List.mem_append_left _ he)
   generalize Node.progress cfg (s.disk.topRound + 2) s = r at h₁ ⊢
   have h₂ : InK K (Node.decideStep cfg r.1).1 := by
-    rw [InK, decideStep_disk, decideStep_syncs (cfg := cfg) r.1]; exact h₁
+    have hd := decideStep_disk (cfg := cfg) r.1
+    refine ⟨fun j hj => ?_, by rw [decideStep_syncs (cfg := cfg) r.1]; exact h₁.2⟩
+    rw [hd.full]
+    exact h₁.1 j (hd.ids ▸ hj)
   set d := (Node.decideStep cfg r.1).1
   obtain ⟨⟨L, hL, hd⟩, -, hsub, -⟩ := flushSyncs_eq (cfg := cfg) (d.syncs.length + 1) d
   refine ⟨by
@@ -89,8 +92,11 @@ omit [Fintype Validator] in
 round at most `R`. -/
 theorem below_blk {R : ℕ} {s : State Validator BlockId Payload} (h : InK (Below cfg R) s)
     {j : BlockId} (hj : j ∈ s.disk.ids) :
-    (s.disk.blk j).round ≤ R ∨ ((s.disk.blk j).creator = cfg.me ∧ (s.disk.blk j).round ≤ R + 1) :=
-  h.1 j hj
+    (s.disk.blk j).round ≤ R ∨
+      ((s.disk.blk j).creator = cfg.me ∧ (s.disk.blk j).round ≤ R + 1) := by
+  have := h.1 j hj
+  rw [Below, Set.mem_setOf_eq, (s.disk.full_fields j).1, (s.disk.full_fields j).2.1] at this
+  exact this
 
 omit [Fintype Validator] in
 /-- **The disk's top round** within a settle is at most `R + 1`. -/
@@ -186,7 +192,7 @@ raises the next undecided slot to at most the slots at the disk's
 rounds. -/
 theorem decideStep_bound (s : State Validator BlockId Payload) :
     let d := (Node.decideStep cfg s).1
-    d.disk = s.disk ∧ d.syncs = s.syncs ∧ d.top = s.top ∧ s.lo ≤ d.lo ∧
+    Store.Restrips d.floor s.disk d.disk ∧ d.syncs = s.syncs ∧ d.top = s.top ∧ s.lo ≤ d.lo ∧
       d.lo ≤ max s.lo (decidable cfg s.disk.topRound) :=
   ⟨decideStep_disk s, decideStep_syncs s, decideStep_top s, decideStep_lo s,
     decideStep_lo_le s⟩
@@ -370,8 +376,8 @@ theorem tryBuild_none_of {s s' : State Validator BlockId Payload}
     (hrc : s'.recovering = s.recovering) (hp : s'.syncs = s.syncs)
     (he : s'.evidence = s.evidence) :
     Node.tryBuild cfg s' = none := by
-  obtain ⟨st, mem, fl, mir, pd, dt, ev, top, own, fired, lo, dc, ar, rc⟩ := s
-  obtain ⟨st', mem', fl', mir', pd', dt', ev', top', own', fired', lo', dc', ar', rc'⟩ := s'
+  obtain ⟨st, mem, fl, mir, lw, pd, dt, ev, top, own, fired, lo, dc, ar, rc⟩ := s
+  obtain ⟨st', mem', fl', mir', lw', pd', dt', ev', top', own', fired', lo', dc', ar', rc'⟩ := s'
   simp only at hst hm ht ho hf hrc hp he
   subst hst hm ht ho hf hrc hp he
   unfold Node.tryBuild Node.buildAbove Node.syncTop at h ⊢
@@ -464,7 +470,8 @@ theorem within_start (s : State Validator BlockId Payload) :
   · left
     have hle : (s.disk.blk j).round ≤ s.disk.topRound := by
       rw [Store.topRound_eq]; exact Finset.le_sup (f := fun i => (s.disk.blk i).round) hj
-    change (s.disk.blk j).round ≤ _
+    change (s.disk.full j).round ≤ _
+    rw [(s.disk.full_fields j).1]
     omega
   · left
     have := le_syncTop he

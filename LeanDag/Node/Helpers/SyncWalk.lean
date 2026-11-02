@@ -42,7 +42,7 @@ omit [Fintype Validator] [DecidableEq Validator] in
 blocks it met, and what it met is on the store and carried. -/
 theorem streamAt_spec : ∀ k : ℕ,
     (∀ x ∈ (streamAt st carries t k).2, x ∈ st.ids ∧ carries x = true) ∧
-    (∀ x ∈ (streamAt st carries t k).2, ∀ y ∈ (st.blk x).refs, y ∈ st.ids → carries y = true →
+    (∀ x ∈ (streamAt st carries t k).2, ∀ y ∈ (st.full x).refs, y ∈ st.ids → carries y = true →
       y ∈ (streamAt st carries t k).2 ∨ y ∈ (streamAt st carries t k).1) ∧
     (∀ x ∈ (streamAt st carries t k).1, x ∈ st.ids →
       (st.blk x).round + k = (st.blk t).round)
@@ -79,7 +79,7 @@ theorem streamAt_spec : ∀ k : ℕ,
       rw [Finset.mem_sort] at hxp
       obtain ⟨hpw, hpst, -, -⟩ := hfront p hp
       have hr : (st.blk p).round + k = (st.blk t).round := h₃ p hpw hpst
-      have hpr : (st.blk x).round + 1 = (st.blk p).round := st.pred p hpst x hxp
+      have hpr : (st.blk x).round + 1 = (st.blk p).round := (st.full_refs p hpst x hxp).2
       omega
 
 omit [Fintype Validator] [DecidableEq Validator] in
@@ -95,13 +95,13 @@ theorem mem_streamOf_iff {fr : Validator → ℕ} {ids : List BlockId} {x : Bloc
     obtain ⟨i, hi, rfl⟩ := List.mem_map.mp (List.mem_mergeSort.mp he)
     exact hi
   · intro hx
-    exact List.mem_map.mpr ⟨(x, st.blk x), List.mem_mergeSort.mpr (List.mem_map.mpr ⟨x, hx, rfl⟩),
+    exact List.mem_map.mpr ⟨(x, st.full x), List.mem_mergeSort.mpr (List.mem_map.mpr ⟨x, hx, rfl⟩),
       rfl⟩
 
 omit [Fintype Validator] [DecidableEq Validator] in
 /-- **The stream is closed under carried references on the store.** -/
 theorem streamOf_closed {fr : Validator → ℕ} {ids : List BlockId} {x y : BlockId}
-    (hx : x ∈ (streamOf st t fr ids).map Prod.fst) (hy : y ∈ (st.blk x).refs) (hyst : y ∈ st.ids)
+    (hx : x ∈ (streamOf st t fr ids).map Prod.fst) (hy : y ∈ (st.full x).refs) (hyst : y ∈ st.ids)
     (hyc : y = t ∨ y ∈ ids ∨ fr (st.blk y).creator ≤ (st.blk y).round) :
     y ∈ (streamOf st t fr ids).map Prod.fst := by
   rw [mem_streamOf_iff] at hx ⊢
@@ -135,7 +135,7 @@ omit [Fintype Validator] [DecidableEq Validator] in
 /-- **The stream's blocks are the store's.** -/
 theorem mem_streamOf {fr : Validator → ℕ} {ids : List BlockId}
     {e : BlockId × Block Validator BlockId Payload} (he : e ∈ streamOf st t fr ids) :
-    e.1 ∈ st.ids ∧ e.2 = st.blk e.1 := by
+    e.1 ∈ st.ids ∧ e.2 = st.full e.1 := by
   unfold streamOf at he
   obtain ⟨i, hi, rfl⟩ := List.mem_map.mp (List.mem_mergeSort.mp he)
   exact ⟨((streamAt_spec st _ t _).1 i hi).1, rfl⟩
@@ -287,12 +287,17 @@ theorem ready_of_refs {g : BlockId → Block Validator BlockId Payload}
     (hv : (∀ j ∈ y.2.refs, (g j).round + 1 = y.2.round) ∧ rowValid cfg.q cfg.xp g y.2)
     {st : Store Validator BlockId Payload} (hst : ReadsAs g st) (hrefs : y.2.refs ⊆ st.ids)
     (hnin : y.1 ∉ st.ids) : readyOn cfg st y = true := by
-  have hag : ∀ j ∈ y.2.refs, st.blk j = g j := fun j hj => hst j (hrefs hj)
+  have hag : ∀ j ∈ y.2.refs, (st.blk j).round = (g j).round ∧
+      (st.blk j).creator = (g j).creator ∧ (st.blk j).payload = (g j).payload := fun j hj => by
+    rw [← hst j (hrefs hj)]
+    have := st.full_fields j
+    exact ⟨this.1.symm, this.2.1.symm, this.2.2.symm⟩
   simp only [readyOn, Store.Checks, decide_eq_true_eq]
-  refine ⟨hrefs, fun j hj => by rw [hag j hj]; exact hv.1 j hj,
+  refine ⟨hrefs, fun j hj => by rw [(hag j hj).1]; exact hv.1 j hj,
     rowValid_congr (fun j hj => ?_) hv.2⟩
   have hj' : j ≠ y.1 := fun e => hnin (e ▸ hrefs hj)
-  rw [Function.update_of_ne hj', hag j hj]; exact ⟨rfl, rfl, rfl⟩
+  rw [Function.update_of_ne hj']
+  exact ⟨(hag j hj).1.symm, (hag j hj).2.1.symm, (hag j hj).2.2.symm⟩
 
 omit [Fintype Validator] in
 /-- **Blocks taken in whole**: blocks in order of round, valid under a

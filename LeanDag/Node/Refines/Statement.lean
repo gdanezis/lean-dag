@@ -44,12 +44,12 @@ variable {Validator BlockId Payload : Type} [Fintype Validator] [DecidableEq Val
 variable [LinearOrder BlockId]
 
 /-- **Holdings**: every honest node's disk, before every event, is a cut
-of `U`. -/
+of `U`: its blocks, as accepted, are blocks of `U`. -/
 def Holds (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload)
     (U : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H) : Prop :=
   ∀ v ∈ H, ∀ i, ∀ j ∈ (stateBefore cfg tr i v).disk.ids,
-    j ∈ U.ids ∧ U.block j = (stateBefore cfg tr i v).disk.blk j
+    j ∈ U.ids ∧ U.block j = (stateBefore cfg tr i v).disk.full j
 
 /-- **Decisions**: every honest node's decisions before every event are
 none, or the scheme's loop from slot `0` on a view of `U` its disk

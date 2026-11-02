@@ -33,10 +33,10 @@ variable [LinearOrder BlockId]
 variable {cfg : Config Validator BlockId Payload}
 variable {P : Validity Validator BlockId Payload} {H : Finset Validator}
 
-/-- **Every block of a store is good.** -/
+/-- **Every block of a store is good**, as accepted. -/
 def AllGood (Good : BlockId → Block Validator BlockId Payload → Prop)
     (st : Store Validator BlockId Payload) : Prop :=
-  ∀ j ∈ st.ids, Good j (st.blk j)
+  ∀ j ∈ st.ids, Good j (st.full j)
 
 variable (cfg) in
 /-- **A store takes in only good blocks from `K`**: a known new block whose
@@ -47,8 +47,8 @@ def Grounds (Good : BlockId → Block Validator BlockId Payload → Prop)
   ∀ st : Store Validator BlockId Payload, AllGood Good st → ∀ x ∈ K, x.1 ∉ st.ids →
     x.2.refs ⊆ st.ids → rowValid cfg.q cfg.xp (Function.update st.blk x.1 x.2) x.2 → Good x.1 x.2
 
-/-- **A store is a cut of a record**: its blocks are the record's, read as
-the record reads them. -/
+/-- **A store is a cut of a record**: its blocks, as accepted, are the
+record's. -/
 def IsCut (U : BlockRecord Validator BlockId Payload P H) (st : Store Validator BlockId Payload) :
     Prop :=
   AllGood (fun j b => j ∈ U.ids ∧ U.block j = b) st
@@ -69,33 +69,46 @@ section Cut
 variable {st : Store Validator BlockId Payload}
 
 omit [Fintype Validator] [DecidableEq Validator] in
-/-- A cut reads its blocks as the record does. -/
-theorem IsCut.eq (hc : IsCut U st) {j : BlockId} (hj : j ∈ st.ids) : U.block j = st.blk j :=
+/-- A cut holds its blocks as the record does. -/
+theorem IsCut.eq (hc : IsCut U st) {j : BlockId} (hj : j ∈ st.ids) : U.block j = st.full j :=
   (hc j hj).2
+
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- A cut reads a block it keeps with its references as the record does. -/
+theorem IsCut.eq_blk (hc : IsCut U st) {j : BlockId} (hj : j ∈ st.ids)
+    (hk : st.kept[j]? = none) : U.block j = st.blk j := by
+  rw [hc.eq hj, st.full_of_kept_none hk]
 
 omit [Fintype Validator] [DecidableEq Validator] in
 theorem IsCut.round (hc : IsCut U st) {j : BlockId} (hj : j ∈ st.ids) :
     (U.block j).round = (st.blk j).round := by
-  rw [hc.eq hj]
+  rw [hc.eq hj]; exact (st.full_fields j).1
 
 omit [Fintype Validator] [DecidableEq Validator] in
 theorem IsCut.creator (hc : IsCut U st) {j : BlockId} (hj : j ∈ st.ids) :
     (U.block j).creator = (st.blk j).creator := by
-  rw [hc.eq hj]
+  rw [hc.eq hj]; exact (st.full_fields j).2.1
 
 omit [Fintype Validator] [DecidableEq Validator] in
 theorem AllGood.insert (hc : AllGood Good st) {id : BlockId} {b : Block Validator BlockId Payload}
     {hnew hrefs hpred} (hb : Good id b) : AllGood Good (st.insert id b hnew hrefs hpred) := by
   intro j hj
   rw [Store.insert_ids] at hj
+  rw [Store.full_insert]
   by_cases h : j = id
   · subst h
-    change Good j ((st.map.insert j b).getD j st.junk)
-    rw [Std.TreeMap.getD_insert_self]
+    rw [if_pos rfl]
     exact hb
-  · change Good j ((st.map.insert id b).getD j st.junk)
-    rw [treeMap_getD_insert_ne (Ne.symm h)]
+  · rw [if_neg h]
     exact hc j ((Finset.mem_insert.mp hj).resolve_left h)
+
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- Keeping blocks without their references keeps the store good. -/
+theorem AllGood.restrips {F : ℕ} {st' : Store Validator BlockId Payload} (hc : AllGood Good st)
+    (h : Store.Restrips F st st') : AllGood Good st' := by
+  intro j hj
+  rw [h.full]
+  exact hc j (h.ids ▸ hj)
 
 omit [Fintype Validator] in
 /-- **Validity over the store is validity over the record**, at the
@@ -183,8 +196,8 @@ theorem IsCut.down (hc : IsCut U st) {i : BlockId} :
   | refl => exact hj
   | @head a c hstep hrest ih =>
     have hstep : c ∈ (U.block a).refs := hstep
-    have hcs : c ∈ (st.blk a).refs := by rw [← hc.eq hj]; exact hstep
-    exact ih (st.complete a hj c hcs)
+    have hcs : c ∈ (st.full a).refs := by rw [← hc.eq hj]; exact hstep
+    exact ih (st.full_refs a hj c hcs).1
 
 omit [Fintype Validator] [DecidableEq Validator] in
 /-- **A view grown by a cut**: a view whose blocks the cut holds grows into
@@ -194,7 +207,7 @@ theorem IsCut.extend (hc : IsCut U st) (V : U.View) (hV : ∀ i ∈ V.ids, i ∈
   refine ⟨⟨st.ids, fun j hj => (hc j hj).1, fun i hi j hj => ?_⟩, fun i hi => hV i hi,
     fun i => Iff.rfl⟩
   rw [hc.eq hi] at hj
-  exact st.complete i hi j hj
+  exact (st.full_refs i hi j hj).1
 
 end Cut
 
@@ -232,8 +245,7 @@ theorem AllGood.tryBuild (hg : Grounds cfg Good K) {s s' : State Validator Block
     AllGood Good s'.disk := by
   obtain ⟨r, id, b, hnew, hrefs, hpred, -, -, -, -, hv, hst, -, -, -, hout⟩ := tryBuild_some h
   have hx : (id, b) ∈ K := hb _ (by rw [hout, persists_built]; exact List.mem_singleton_self _)
-  rw [hst]
-  exact hc.insert (hg _ hc _ hx hnew hrefs hv)
+  exact (hc.insert (hg _ hc _ hx hnew hrefs hv)).restrips hst
 
 omit [Fintype Validator] in
 /-- **Building known blocks keeps the disk good.** -/
@@ -264,8 +276,7 @@ theorem AllGood.advanceStore (hg : Grounds cfg Good K) {s : State Validator Bloc
   rw [persists_append] at hb
   have hc₁ := AllGood.progress hg _ hc fun e he => hb e (List.mem_append_left _ he)
   generalize Node.progress cfg (s.disk.topRound + 2) s = r at hp₁ hc₁ ⊢
-  have hc₂ : AllGood Good (Node.decideStep cfg r.1).1.disk := by
-    rw [decideStep_disk]; exact hc₁
+  have hc₂ : AllGood Good (Node.decideStep cfg r.1).1.disk := hc₁.restrips (decideStep_disk _)
   have hgp : ∀ e ∈ (Node.decideStep cfg r.1).1.syncs, e.2.1 ∈ K := by
     rw [decideStep_syncs (cfg := cfg) r.1, hp₁]; exact hp
   exact AllGood.flushSyncs hg _ hc₂ hgp
@@ -327,15 +338,19 @@ theorem CommitInv.decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H
   have hw : 2 ≤ cfg.p.waveLength := by
     rcases ht.2.2 with ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ <;> omega
   -- the disk decides as a view of `U` grown from any view the invariant allows
-  have hgrow : ∀ V : U.View, (∀ i ∈ V.ids, i ∈ s.disk.ids) →
+  have hgrow : s.floor ≤ cfg.slots.slotRound s.lo → ∀ V : U.View, (∀ i ∈ V.ids, i ∈ s.disk.ids) →
       ∃ V' : U.View, V.ids ⊆ V'.ids ∧ (∀ i ∈ V'.ids, i ∈ s.disk.ids) ∧
         ∀ N, tryDecide cfg.p boundedSel s.disk.toRecord s.disk.view s.lo N =
           tryDecide cfg.p boundedSel U V' s.lo N := by
-    intro V hV
+    intro hfl V hV
     obtain ⟨V', hVV, hiff⟩ := hc.extend V hV
     refine ⟨V', hVV, fun i hi => (hiff i).mp hi, fun N => ?_⟩
-    exact (ViewsAbove.of_store hiff fun i hi => hc.eq hi).tryDecide_eq cfg.p hw N
-      (Nat.zero_le _)
+    exact (ViewsAbove.of_storeAbove (cfg.slots.slotRound s.lo) hiff
+      (fun i hi => ⟨hc.round hi, hc.creator hi⟩)
+      (fun i hi hR => hc.eq_blk hi (by
+        by_contra hk
+        have := s.low i hk
+        omega))).tryDecide_eq cfg.p hw N le_rfl
   have hempty : ∀ i ∈ (⟨∅, Finset.empty_subset _,
       fun _ h => absurd h (Finset.notMem_empty _)⟩ : U.View).ids, i ∈ s.disk.ids :=
     fun i hi => absurd hi (Finset.notMem_empty i)
@@ -346,18 +361,18 @@ theorem CommitInv.decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H
     obtain ⟨hlt, hfl, -⟩ := hlt
     rw [commitsOf_map, tryDecide_memory hσ hw s hfl]
     unfold CommitInv
-    simp only [release_lo, release_disk]
+    simp only [release_lo, release_ids, release_topRound]
     refine ⟨?_, Or.inr ?_⟩
     · change s.lo + _ = _
       rw [List.length_append, h.1]
     rcases h.2 with h0 | ⟨V, N, hV, hN, hcs⟩
     · subst h0
-      obtain ⟨V', -, hV', hT⟩ := hgrow _ hempty
+      obtain ⟨V', -, hV', hT⟩ := hgrow hfl _ hempty
       have hlo : s.lo = 0 := h.1
       refine ⟨V', decidable cfg s.disk.topRound - 1, hV',
         by change _ ≤ decidable cfg s.disk.topRound; omega, ?_⟩
       rw [List.nil_append, hT, hlo]
-    · obtain ⟨V', hVV, hV', hT⟩ := hgrow V hV
+    · obtain ⟨V', hVV, hV', hT⟩ := hgrow hfl V hV
       refine ⟨V', decidable cfg s.disk.topRound - 1, hV',
         by change _ ≤ decidable cfg s.disk.topRound; omega, ?_⟩
       rw [hT, h.1, hcs]

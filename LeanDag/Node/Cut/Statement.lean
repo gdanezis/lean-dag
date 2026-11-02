@@ -10,7 +10,8 @@ outside the honest set `H`, for every round `G` there is a block record `U`
 at quorum `q` whose honest set is `H`, such that:
 
 * **holdings** (`Cuts`): every honest disk's blocks at or above `G` are blocks
-  of `U`, at the same round and author, and above `G` the same blocks;
+  of `U`, at the same round and author, and above `G` the same blocks, as the
+  disk accepted them;
 * **decisions** (`Cuts`): every honest node's decision of a slot whose round
   is `G + 1`, or `0` for `G = 0`, is a verdict on a view of `U`.
 
@@ -42,7 +43,7 @@ def Cuts : Prop :=
         j ∈ U.ids ∧ (U.block j).round = ((stateBefore cfg tr i v).disk.blk j).round ∧
           (U.block j).creator = ((stateBefore cfg tr i v).disk.blk j).creator ∧
           (G < ((stateBefore cfg tr i v).disk.blk j).round →
-            U.block j = (stateBefore cfg tr i v).disk.blk j)) ∧
+            U.block j = (stateBefore cfg tr i v).disk.full j)) ∧
       ∀ v ∈ H, ∀ i,
         ∀ e ∈ commitsOf (run (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr i v)).2,
           cfg.slots.slotRound e.1 - 1 = G →

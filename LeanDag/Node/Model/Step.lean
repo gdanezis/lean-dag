@@ -12,7 +12,10 @@ input `i` in the state `s`: the new state and the outputs.
   decides and arms its timers on the memory, and answers requests and
   resends from the disk. When it builds or decides, it releases the
   memory below the lowest round it reads, the round of its next
-  undecided slot and `voteOffset` below its top (`floorOf`).
+  undecided slot and `voteOffset` below its top (`floorOf`), and keeps the
+  disk's blocks below that round without their references, holding them
+  apart (`Store.strip`); it sends, streams and orders the blocks as accepted
+  (`Store.full`).
 * **Receipt** (`deliver`, `stream`): a block a peer sends in its own
   name, under its hash, not on disk, from a peer not detected, is
   accepted if its references are accepted and it satisfies `rowValid q E`,
@@ -112,6 +115,8 @@ structure State where
   floor : ℕ
   /-- The memory holds the disk's blocks from `floor` up. -/
   mirrors : memory.Mirrors disk floor
+  /-- The disk keeps blocks without their references only below `floor`. -/
+  low : ∀ j, disk.kept[j]? ≠ none → (disk.blk j).round < floor
   /-- The syncs with peers, at most one each: the peer, its block the
   node lacks, and the identifiers asked for by name. -/
   syncs : List (Validator × (BlockId × Block Validator BlockId Payload) × List BlockId)
@@ -143,7 +148,8 @@ def Config.genesis : Block Validator BlockId Payload := ⟨0, cfg.me, ∅, cfg.p
 
 /-- The state before start. -/
 def State.init : State Validator BlockId Payload :=
-  ⟨Store.empty cfg.genesis, Store.empty cfg.genesis, 0, Store.Mirrors.empty, [], ∅, ∅, none,
+  ⟨Store.empty cfg.genesis, Store.empty cfg.genesis, 0, Store.Mirrors.empty,
+    fun _ h => absurd (by simp [Store.empty]) h, [], ∅, ∅, none,
     none, ∅, 0, [], none, false⟩
 
 /-- **Keep a block**: on disk, and in memory if its round is the floor or
@@ -155,7 +161,8 @@ def keep (s : State Validator BlockId Payload) (id : BlockId) (b : Block Validat
     disk := s.disk.insert id b hnew hrefs hpred
     memory := s.memory.put s.floor id b (s.mirrors.notMem hnew) (s.mirrors.refs_mem hrefs hpred)
       (s.mirrors.pred_mem hrefs hpred)
-    mirrors := s.mirrors.put hnew hrefs hpred }
+    mirrors := s.mirrors.put hnew hrefs hpred
+    low := Store.low_insert s.low }
 
 /-- **A block is ready** when its references are accepted, one round below
 it, and it is valid at the row: checked in memory if its round is above
@@ -304,13 +311,18 @@ slot, and `voteOffset` below its top. -/
 def floorOf (s : State Validator BlockId Payload) : ℕ :=
   min (cfg.slots.slotRound s.lo) (s.top.getD 0 - cfg.p.voteOffset)
 
-/-- **Release the memory below the lowest round the node reads.** -/
+/-- **Release the memory below the lowest round the node reads**, and keep
+the disk's blocks below that round without their references. -/
 def release (s : State Validator BlockId Payload) : State Validator BlockId Payload :=
   if h : s.floor < floorOf cfg s then
     { s with
+      disk := s.disk.stripAll (s.disk.roundsFrom s.floor (floorOf cfg s))
       memory := s.memory.above (floorOf cfg s)
       floor := floorOf cfg s
-      mirrors := s.mirrors.above h.le }
+      mirrors := (s.mirrors.above h.le).stripAll fun _ hj =>
+        ((s.disk.mem_roundsFrom).mp hj).2.2
+      low := (s.disk.restrips_stripAll fun _ hj => ((s.disk.mem_roundsFrom).mp hj).2.2).low_of
+        s.low h.le }
   else s
 
 /-- The highest round of a sync's block, `0` without one. -/
@@ -416,7 +428,7 @@ not met already, that the stream carries, and their references next. -/
 def streamLevel (st : Store Validator BlockId Payload) (carries : BlockId → Bool)
     (w : List BlockId × List BlockId) : List BlockId × List BlockId :=
   let front := (w.1.filter fun x => decide (x ∈ st.ids) && carries x && decide (x ∉ w.2)).dedup
-  (front.flatMap fun x => (st.blk x).refs.sort (· ≤ ·), w.2 ++ front)
+  (front.flatMap fun x => (st.full x).refs.sort (· ≤ ·), w.2 ++ front)
 
 /-- **The stream for a request**: the blocks of the store in the history
 of `t` that are `t`, asked for by name, or at or above their author's
@@ -426,7 +438,7 @@ def streamOf (st : Store Validator BlockId Payload) (t : BlockId) (fr : Validato
   let carries := fun i =>
     decide (i = t ∨ i ∈ ids ∨ fr (st.blk i).creator ≤ (st.blk i).round)
   let found := ((streamLevel st carries)^[(st.blk t).round + 1] ([t], [])).2
-  (found.map fun i => (i, st.blk i)).mergeSort fun x y => decide (x.2.round ≤ y.2.round)
+  (found.map fun i => (i, st.full i)).mergeSort fun x y => decide (x.2.round ≤ y.2.round)
 
 /-- **One level of the walk through a stream piece**: the front's
 identifiers the piece holds, not met already, and their references next. -/
@@ -496,7 +508,7 @@ round, then ask again in every sync. -/
 def resend (s : State Validator BlockId Payload) : List (Output Validator BlockId Payload) :=
   (match s.top, s.own with
     | some r, some id =>
-      [.broadcast id (s.disk.blk id), .setTimer (r - 1) (2 * cfg.timeout (r - 1)), .ask r]
+      [.broadcast id (s.disk.full id), .setTimer (r - 1) (2 * cfg.timeout (r - 1)), .ask r]
     | _, _ => []) ++ resync s
 
 /-- **The node's own block of round `r`** on its disk. -/
@@ -614,7 +626,7 @@ def step (s : State Validator BlockId Payload) :
     (s, if peer ∈ s.detected ∨ L.isEmpty then [] else [.stream peer L])
   | .ask peer r =>
     (s, if peer ∈ s.detected then [] else match ownAt cfg s r with
-      | some i => [.send peer i (s.disk.blk i)]
+      | some i => [.send peer i (s.disk.full i)]
       | none => [])
   | .restart =>
     let r := settle cfg { s with recovering := true }

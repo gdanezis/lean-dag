@@ -33,34 +33,38 @@ theorem bounded : Bounded := by
   have hC : Steady (cfg.at v) s := steady_before hinj hv i
   have hval : StoreValid cfg.q cfg.xp st := (Converge.inv_before (cfg := cfg) (tr := tr) i v).valid
   -- each block above round `0` references an honest block one round below
-  have hcb : CorrectBelow st.blk st.ids H := by
+  have hcb : CorrectBelow st.full st.ids H := by
     intro b hb hr
     by_contra hno
     push Not at hno
-    have hsub : creators st.blk (st.blk b) ⊆ Hᶜ := by
+    have hsub : creators st.full (st.full b) ⊆ Hᶜ := by
       intro Y hY
       obtain ⟨j, hj, rfl⟩ := mem_creatorsOf.mp hY
       exact Finset.mem_compl.mpr fun hYH =>
-        hno j hj (st.complete b hb j hj) hYH (st.pred b hb j hj)
-    have := ((hval b hb).quorum hr).trans (Finset.card_le_card hsub)
+        hno j hj (st.full_refs b hb j hj).1 hYH (st.causal_full.refs_round b hb j hj)
+    have := ((hval b hb).2.quorum hr).trans (Finset.card_le_card hsub)
     change cfg.q ≤ Hᶜ.card at this
     omega
-  have hdos : DoSValidOn st.blk st.ids fun b X => X ∈ cfg.xp.ex (st.blk b).payload :=
-    fun b hb j hj => (hval b hb).clause.2.2 j hj
-  have hup : InheritedOn st.blk st.ids fun b X => X ∈ cfg.xp.ex (st.blk b).payload := by
+  have hdos : DoSValidOn st.full st.ids fun b X => X ∈ cfg.xp.ex (st.full b).payload :=
+    fun b hb j hj => (hval b hb).2.clause.2.2 j hj
+  have hup : InheritedOn st.full st.ids fun b X => X ∈ cfg.xp.ex (st.full b).payload := by
     intro b hb j hj X hX
-    rw [(hval b hb).clause.2.1]
+    rw [(hval b hb).2.clause.2.1]
     exact Finset.mem_union_right _ (Finset.mem_biUnion.mpr ⟨j, hj, hX⟩)
   -- from round `m + 1` on, no block of a convicted author is referenced
-  have hfree : ∀ X ∈ s.detected, ∀ x ∈ st.ids, (st.blk x).creator = X → m + 1 ≤ (st.blk x).round →
-      ∀ z ∈ st.ids, x ∉ (st.blk z).refs := by
+  have hfree : ∀ X ∈ s.detected, ∀ x ∈ st.ids, (st.full x).creator = X → m + 1 ≤ (st.full x).round →
+      ∀ z ∈ st.ids, x ∉ (st.full z).refs := by
     intro X hX x hx hxc hxr z hz hxz
-    have hzr : (st.blk x).round + 1 = (st.blk z).round := st.pred z hz x hxz
+    have hzr : (st.full x).round + 1 = (st.full z).round := st.causal_full.refs_round z hz x hxz
     exact not_mem_creators_refs_of_correct_exposed (n := m) hcb hdos hup
-      (fun c hc hcr hcH => hexp c hc hcr hcH X hX) hz (by omega) (mem_creatorsOf.mpr ⟨x, hxz, hxc⟩)
+      (fun c hc hcr hcH => by
+        have hf := st.full_fields c
+        rw [hf.2.2]
+        exact hexp c hc (by rw [← hf.1]; exact hcr) (by rw [← hf.2.1]; exact hcH) X hX)
+      hz (by omega) (mem_creatorsOf.mpr ⟨x, hxz, hxc⟩)
   -- each author's blocks of round `k`
   set D := s.detected
-  set of := fun Y => st.ids.filter fun j => (st.blk j).creator = Y ∧ (st.blk j).round = k
+  set of := fun Y => st.ids.filter fun j => (st.full j).creator = Y ∧ (st.full j).round = k
   have hper : ∀ Y, (of Y).card ≤ 1 + if Y ∈ D then 1 else 0 := by
     intro Y
     by_cases hYv : Y = v
@@ -88,8 +92,8 @@ theorem bounded : Bounded := by
   have hsub : st.atRound k ⊆ Finset.univ.biUnion of := by
     intro j hj
     obtain ⟨hj, hjr⟩ := Store.mem_atRound.mp hj
-    exact Finset.mem_biUnion.mpr ⟨(st.blk j).creator, Finset.mem_univ _,
-      Finset.mem_filter.mpr ⟨hj, rfl, hjr⟩⟩
+    exact Finset.mem_biUnion.mpr ⟨(st.full j).creator, Finset.mem_univ _,
+      Finset.mem_filter.mpr ⟨hj, rfl, by rw [(st.full_fields j).1]; exact hjr⟩⟩
   calc (st.atRound k).card ≤ ∑ Y, (of Y).card :=
         (Finset.card_le_card hsub).trans Finset.card_biUnion_le
     _ ≤ ∑ Y, (1 + if Y ∈ D then 1 else 0) := Finset.sum_le_sum fun Y _ => hper Y
@@ -124,9 +128,9 @@ theorem exposes_spread {Validator BlockId Payload : Type} [Fintype Validator]
   have hcut := (cut_before hσ hadm hf htime hinj i v hv).1
   have hcU := (hcut _ hc).1
   have hcc : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-      c).creator = (s.disk.blk c).creator := by rw [hcut.eq hc]
+      c).creator = (s.disk.blk c).creator := hcut.creator hc
   have hcr' : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-      c).round = r + 1 := by rw [hcut.eq hc]; exact hcr
+      c).round = r + 1 := by rw [hcut.round hc]; exact hcr
   obtain ⟨iw, inpw, xw, oww, hiw, -, hbsw, hshw, -, ⟨-, -, -, -, hew⟩, -, -, -, -, hpay⟩ :=
     built_block (fun _ => 0) hσ hadm hf htime hinj hcH hcU hcc hcr'
   have ho : ∀ j, oww = some j →
@@ -141,7 +145,7 @@ theorem exposes_spread {Validator BlockId Payload : Type} [Fintype Validator]
   -- its builder had convicted the author
   obtain ⟨e, he, he1, hne⟩ := hbsw.ev.1 X
     (hbsw.det (hsp.2.2 iw _ inpw hiw hcH _ hew (by rw [hcr']; omega) hXD))
-  rw [← hcut.eq hc, hpay]
+  rw [← (s.disk.full_fields c).2.2, ← hcut.eq hc, hpay]
   unfold payloadFor
   erw [(hfa _ _ _).2]
   refine Finset.mem_union_left _ (Finset.mem_image.mpr ⟨e, Finset.mem_filter.mpr

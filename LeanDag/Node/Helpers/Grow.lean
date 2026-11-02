@@ -3,7 +3,9 @@ import LeanDag.Node.Helpers.Local
 # A node's disk grows
 
 Across a step the disk only gains blocks (`Grows`, `Helpers/Local.lean`):
-building and taking blocks in insert, and deciding leaves the disk alone.
+building and taking blocks in insert, and deciding keeps the disk's blocks,
+those below the new floor perhaps without their references
+(`decideStep_disk`).
 -/
 
 namespace LeanDag
@@ -24,18 +26,20 @@ theorem Grows.progress : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
     · rename_i s₁ out h
       obtain ⟨r, id, b, hnew, hrefs, hpred, -, -, -, -, -, hst, -, -, hlo, -⟩ := tryBuild_some h
       have ih := Grows.progress fuel s₁
-      have hg : Grows s.disk s₁.disk := hst ▸ Grows.insert s.disk
+      have hg : Grows s.disk s₁.disk := (Grows.insert s.disk).trans (Grows.of_restrips hst)
       exact ⟨hg.trans ih.1, ih.2.trans hlo⟩
     · exact ⟨Grows.refl _, rfl⟩
 
 omit [Fintype Validator] in
+/-- **Deciding keeps the disk's blocks**, those below the new floor perhaps
+without their references. -/
 theorem decideStep_disk (s : State Validator BlockId Payload) :
-    (Node.decideStep cfg s).1.disk = s.disk := by
+    Store.Restrips (Node.decideStep cfg s).1.floor s.disk (Node.decideStep cfg s).1.disk := by
   unfold Node.decideStep
   dsimp only
   split
   · exact release_disk _
-  · rfl
+  · exact Store.Restrips.refl _ _
 
 omit [Fintype Validator] in
 theorem Grows.absorb (s : State Validator BlockId Payload)
@@ -49,7 +53,8 @@ theorem Grows.advance (s : State Validator BlockId Payload) :
   rw [advance_disk]
   simp only [Node.pass]
   refine (Grows.progress (cfg := cfg) (s.disk.topRound + 2) s).1.trans ?_
-  rw [← decideStep_disk (cfg := cfg) (Node.progress cfg (s.disk.topRound + 2) s).1]
+  refine (Grows.of_restrips
+    (decideStep_disk (cfg := cfg) (Node.progress cfg (s.disk.topRound + 2) s).1)).trans ?_
   obtain ⟨L, -, hL⟩ := (flushSyncs_eq (cfg := cfg) _ _).1
   rw [hL]
   exact Grows.foldl _ _

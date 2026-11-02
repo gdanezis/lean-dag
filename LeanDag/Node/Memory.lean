@@ -320,6 +320,9 @@ def above (st : Store Validator BlockId Payload) (F : ℕ) : Store Validator Blo
       rw [above_round st F hm] at hir
       have := (Finset.mem_filter.mp hm).2
       omega
+  kept := ∅
+  kept_spec := fun j h => by simp [Std.TreeMap.contains_emptyc] at h
+  kept_closed := fun j R h => by simp at h
 
 theorem above_ids (st : Store Validator BlockId Payload) (F : ℕ) :
     (st.above F).ids = st.ids.filter fun i => F ≤ (st.blk i).round := rfl
@@ -351,6 +354,21 @@ theorem Mirrors.above (h : m.Mirrors d F) {F' : ℕ} (hF : F ≤ F') : (m.above 
     dsimp only
     split <;> split <;> simp_all
     omega
+
+omit [DecidableEq Validator] in
+/-- **Keeping blocks below `F` without their references keeps the memory the
+disk's window at `F`.** -/
+theorem Mirrors.stripAll (h : m.Mirrors d F) {l : List BlockId}
+    (hl : ∀ j ∈ l, (d.blk j).round < F) : m.Mirrors (d.stripAll l) F := by
+  obtain ⟨hids, -, hb⟩ := Store.stripAll_cases l d
+  refine ⟨fun i => ?_, fun i hi => ?_⟩
+  · rw [h.mem i, hids, (hb i).1]
+  · have hiF : F ≤ (d.blk i).round := ((h.mem i).mp hi).2
+    have hnl : i ∉ l := fun hil => by have := hl i hil; omega
+    rw [h.blk i hi]
+    unfold windowBlk
+    dsimp only
+    rw [(hb i).2.2.2.1 hnl]
 
 omit [LinearOrder BlockId] in
 /-- **Validity at the row reads only the references' rounds, authors and

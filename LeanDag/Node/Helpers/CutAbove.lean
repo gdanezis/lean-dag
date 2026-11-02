@@ -77,8 +77,8 @@ theorem grounds_padded (G : ℕ) (v : Validator) :
   have hreal : RealDown cfg H tr G x.1 := by
     by_cases hle : x.2.round ≤ G
     · exact .base (by rw [hcx]; exact hle)
-    · have hjG : ∀ j ∈ x.2.refs, G ≤ (st.blk j).round := fun j hj => by
-        have := hpred j hj; omega
+    · have hjG : ∀ j ∈ x.2.refs, G ≤ (st.full j).round := fun j hj => by
+        have := hpred j hj; rw [(st.full_fields j).1]; omega
       have hjc : ∀ j ∈ x.2.refs, j ∈ globalCutIds cfg H tr G := fun j hj =>
         CutAbove.mem_globalCutIds hinj hauth hq (hc j (hrefs hj)) (hjG j hj)
       have hfields : ∀ j ∈ x.2.refs, (content cfg H tr j).round = (st.blk j).round ∧
@@ -86,7 +86,8 @@ theorem grounds_padded (G : ℕ) (v : Validator) :
         obtain ⟨hjk, -, -⟩ := mem_globalCutIds.mp (hjc j hj)
         obtain ⟨-, hr, hcr, -⟩ := hc j (hrefs hj) (hjG j hj)
         have hf := padBlk_known_fields (G := G) hjk
-        exact ⟨hf.1.symm.trans hr, hf.2.1.symm.trans hcr⟩
+        have hs := st.full_fields j
+        exact ⟨hf.1.symm.trans (hr.trans hs.1), hf.2.1.symm.trans (hcr.trans hs.2.1)⟩
       refine .intro (by rw [hcx]; omega) (by rw [hcx]; exact fun j hj =>
           (mem_globalCutIds.mp (hjc j hj)).1) ⟨fun j hj => ?_, fun h0 => ?_, trivial⟩
         (by rw [hcx]; exact fun j hj => (mem_globalCutIds.mp (hjc j hj)).2.2)
@@ -111,7 +112,7 @@ view of the record padded below `G`. -/
 noncomputable def storeView (G : ℕ) (st : Store Validator BlockId Payload)
     (hc : AllGood (CutAbove (padded hinj hauth hq G) G) st) :
     (padded hinj hauth hq G).View where
-  ids := st.ids.filter (fun i => G ≤ (st.blk i).round) ∪
+  ids := st.ids.filter (fun i => G ≤ (st.full i).round) ∪
     (Finset.range G).biUnion (ladder cfg H tr)
   subset_ids := by
     intro x hx
@@ -126,16 +127,16 @@ noncomputable def storeView (G : ℕ) (st : Store Validator BlockId Payload)
     rcases Finset.mem_union.mp hi with hi | hi
     · obtain ⟨his, hiG⟩ := Finset.mem_filter.mp hi
       obtain ⟨-, hr, -, hblk⟩ := hc i his hiG
-      rcases Nat.lt_or_ge G (st.blk i).round with hlt | hle
-      · have hb' : padBlk cfg H tr G i = st.blk i := hblk hlt
+      rcases Nat.lt_or_ge G (st.full i).round with hlt | hle
+      · have hb' : padBlk cfg H tr G i = st.full i := hblk hlt
         rw [hb'] at hx
-        have := st.pred i his x hx
-        change (st.blk x).round + 1 = (st.blk i).round at this
-        exact Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨st.complete i his x hx, by omega⟩)
+        obtain ⟨hxs, hxr⟩ := st.full_refs i his x hx
+        rw [← (st.full_fields x).1, ← (st.full_fields i).1] at hxr
+        exact Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨hxs, by omega⟩)
       · have hik := (mem_globalCutIds.mp
           (CutAbove.mem_globalCutIds hinj hauth hq (hc i his) hiG)).1
         have hf := (padBlk_known_fields (G := G) hik).1
-        change (padBlk cfg H tr G i).round = (st.blk i).round at hr
+        change (padBlk cfg H tr G i).round = (st.full i).round at hr
         rw [padBlk_known hik, if_pos (by omega)] at hx
         dsimp only at hx
         split at hx
@@ -148,20 +149,42 @@ noncomputable def storeView (G : ℕ) (st : Store Validator BlockId Payload)
       · exact absurd hx (Finset.notMem_empty x)
       · exact Finset.mem_union_right _ (ladder_sub_range (by omega) hx)
 
-/-- **The store view agrees with the store from `G` up.** -/
+/-- **The store view agrees with the store from `R ≥ G` up**, when the store
+keeps every block above `R` with its references. -/
 theorem viewsAbove_store (G : ℕ) (st : Store Validator BlockId Payload)
-    (hc : AllGood (CutAbove (padded hinj hauth hq G) G) st) :
-    ViewsAbove G boundedSel boundedSel st.view (storeView hinj hauth hq G st hc) := by
-  refine ViewsAbove.of_boundedSel (fun i hi hG => ?_) (fun i hi hG => ?_)
-    (fun i hi hG => (hc i hi hG).2.1) (fun i hi hG => (hc i hi hG).2.2.1)
-    (fun i hi hG => by rw [(hc i hi (le_of_lt hG)).2.2.2 hG]; rfl)
-  · exact Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨hi, hG⟩)
+    (hc : AllGood (CutAbove (padded hinj hauth hq G) G) st) {R : ℕ} (hGR : G ≤ R)
+    (hk : ∀ i ∈ st.ids, R < (st.blk i).round → st.kept[i]? = none) :
+    ViewsAbove R boundedSel boundedSel st.view (storeView hinj hauth hq G st hc) := by
+  have hround : ∀ i, (st.toRecord.block i).round = (st.full i).round :=
+    fun i => (st.full_fields i).1.symm
+  refine ViewsAbove.of_boundedSel (fun i hi hR => ?_) (fun i hi hR => ?_)
+    (fun i hi hR => ?_) (fun i hi hR => ?_) (fun i hi hR => ?_)
+  · rw [hround] at hR
+    exact Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨hi, by omega⟩)
   · rcases Finset.mem_union.mp hi with hi | hi
-    · exact Finset.mem_filter.mp hi
+    · obtain ⟨his, -⟩ := Finset.mem_filter.mp hi
+      refine ⟨his, ?_⟩
+      rw [hround]
+      have := (hc i his (by
+        obtain ⟨-, hiG⟩ := Finset.mem_filter.mp hi; exact hiG)).2.1
+      change R ≤ (padBlk cfg H tr G i).round at hR
+      change (padBlk cfg H tr G i).round = _ at this
+      omega
     · obtain ⟨v, r, hr, rfl⟩ := mem_ladder_range hi
       have : (padBlk cfg H tr G (fresh cfg H tr (v, r))).round < G := round_fresh_lt hr
-      change G ≤ (padBlk cfg H tr G (fresh cfg H tr (v, r))).round at hG
+      change R ≤ (padBlk cfg H tr G (fresh cfg H tr (v, r))).round at hR
       omega
+  · rw [hround] at hR ⊢
+    exact (hc i hi (by omega)).2.1
+  · rw [hround] at hR
+    rw [(hc i hi (by omega)).2.2.1]
+    exact (st.full_fields i).2.1
+  · change R < (st.blk i).round at hR
+    have hlt : G < (st.full i).round := by rw [(st.full_fields i).1]; omega
+    change (padBlk cfg H tr G i).refs = (st.blk i).refs
+    have := (hc i hi hlt.le).2.2.2 hlt
+    change padBlk cfg H tr G i = st.full i at this
+    rw [this, st.full_of_kept_none (hk i hi hR)]
 
 include hinj hauth hq in
 /-- **A decision step from a disk read as the padded record reads it from `G`
@@ -186,9 +209,23 @@ theorem decidesWell_padded (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
   · rename_i hlt
     obtain ⟨hlt, hfl, -⟩ := hlt
     rw [commitsOf_map, tryDecide_memory (cfg := cfg.at v) hσ hw s hfl] at he
-    exact ⟨storeView hinj hauth hq G s.disk hc,
-      (viewsAbove_store hinj hauth hq G s.disk hc).decided_of_mem cfg.p hw hl hcv
-        (lo := s.lo) (by omega) hGe he⟩
+    have hfl' : s.floor ≤ cfg.slots.slotRound s.lo := hfl
+    have hlo := (tryDecide_sound (p := (cfg.at v).p) (σ := boundedSel) (S := (cfg.at v).slots)
+      hl hcv
+      (U := s.disk.toRecord) (V := s.disk.view) (lo := s.lo)
+      (N := decidable (cfg.at v) s.disk.topRound - 1) (by omega)).1
+    have hke : s.lo ≤ e.1 := by
+      have := List.mem_map_of_mem (f := Prod.fst) he
+      rw [hlo, List.mem_range'_1] at this
+      exact this.1
+    refine ⟨storeView hinj hauth hq G s.disk hc,
+      (viewsAbove_store hinj hauth hq G s.disk hc (R := max G (cfg.slots.slotRound s.lo))
+        (le_max_left _ _) fun i hi hR => ?_).decided_of_mem cfg.p hw hl hcv
+        (lo := s.lo) (by omega) (max_le hGe (cfg.slots.mono hke)) he⟩
+    by_contra hk
+    have := s.low i hk
+    have := le_max_right G (cfg.slots.slotRound s.lo)
+    omega
   · simp [commitsOf] at he
 
 section Run

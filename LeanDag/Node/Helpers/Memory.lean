@@ -9,8 +9,9 @@ accepting a block, a stream piece and the syncs' blocks change the disk
 as `acceptOn` changes it read alone (`accept_disk`, `absorb_disk`,
 `flushSyncs_eq`), and leave the rest of the state but the memory, the
 detected authors and the syncs (`accept_rest`, `absorb_rest`). Keeping a
-block inserts it on disk (`keep_disk`), and releasing the memory changes
-nothing else (`release_disk`, …).
+block inserts it on disk (`keep_disk`), and releasing the memory keeps the
+disk's blocks as accepted, those below the new floor perhaps without their
+references, and changes nothing else (`release_disk`, …).
 -/
 
 namespace LeanDag
@@ -235,8 +236,11 @@ section Release
 variable (s : State Validator BlockId Payload)
 
 omit [Fintype Validator] in
-/-- **Releasing the memory changes nothing else.** -/
-theorem release_eq : (release cfg s).disk = s.disk ∧ (release cfg s).syncs = s.syncs ∧
+/-- **Releasing the memory changes nothing else** but the disk's blocks
+below the new floor, kept without their references. -/
+theorem release_eq : (release cfg s).disk = (if s.floor < floorOf cfg s then
+      s.disk.stripAll (s.disk.roundsFrom s.floor (floorOf cfg s)) else s.disk) ∧
+    (release cfg s).syncs = s.syncs ∧
     (release cfg s).top = s.top ∧ (release cfg s).own = s.own ∧
     (release cfg s).fired = s.fired ∧ (release cfg s).lo = s.lo ∧
     (release cfg s).decided = s.decided ∧ (release cfg s).armed = s.armed ∧
@@ -245,7 +249,33 @@ theorem release_eq : (release cfg s).disk = s.disk ∧ (release cfg s).syncs = s
   split <;> exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 omit [Fintype Validator] in
-@[simp] theorem release_disk : (release cfg s).disk = s.disk := (release_eq s).1
+/-- **Releasing keeps the disk's blocks**, those below the new floor perhaps
+without their references. -/
+theorem release_disk : Store.Restrips (release cfg s).floor s.disk (release cfg s).disk := by
+  unfold release
+  split
+  · exact s.disk.restrips_stripAll fun j hj => (s.disk.mem_roundsFrom.mp hj).2.2
+  · exact Store.Restrips.refl _ _
+
+omit [Fintype Validator] in
+@[simp] theorem release_ids : (release cfg s).disk.ids = s.disk.ids := (release_disk s).ids
+omit [Fintype Validator] in
+@[simp] theorem release_topRound : (release cfg s).disk.topRound = s.disk.topRound :=
+  (release_disk s).topRound
+omit [Fintype Validator] in
+@[simp] theorem release_full (j : BlockId) : (release cfg s).disk.full j = s.disk.full j :=
+  (release_disk s).full j
+omit [Fintype Validator] in
+@[simp] theorem release_round (j : BlockId) :
+    ((release cfg s).disk.blk j).round = (s.disk.blk j).round := ((release_disk s).fields j).1
+omit [Fintype Validator] in
+@[simp] theorem release_creator (j : BlockId) :
+    ((release cfg s).disk.blk j).creator = (s.disk.blk j).creator :=
+  ((release_disk s).fields j).2.1
+omit [Fintype Validator] in
+@[simp] theorem release_payload (j : BlockId) :
+    ((release cfg s).disk.blk j).payload = (s.disk.blk j).payload :=
+  ((release_disk s).fields j).2.2
 omit [Fintype Validator] in
 @[simp] theorem release_syncs : (release cfg s).syncs = s.syncs := (release_eq s).2.1
 omit [Fintype Validator] in

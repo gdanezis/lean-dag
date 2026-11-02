@@ -263,10 +263,12 @@ theorem own_le_top {H : Finset Validator} (htime : Converge.TimelyAuthentic cfg 
     (hc : ((stateBefore cfg tr E v).disk.blk z).creator = v) :
     ((stateBefore cfg tr E v).disk.blk z).round ≤ t := by
   have hk := (Converge.inv_before (cfg := cfg) (tr := tr) E v).known _ hz
-  have hB := own_known htime hv hv le_rfl hk hc
+  have hf := (stateBefore cfg tr E v).disk.full_fields z
+  have hB := own_known htime hv hv le_rfl hk (by simp only; rw [hf.2.1]; exact hc)
   rcases (Converge.inv_before (cfg := cfg) (tr := tr) E v).rounds with ⟨h, -⟩ | ⟨t', ht', hR⟩
   · rw [h] at ht; cases ht
   · rw [ht] at ht'; cases ht'
+    rw [← hf.1]
     exact hR.2 _ hB
 
 /-- **No block on a node's disk has the identifier of its next block**, with
@@ -279,13 +281,13 @@ theorem fresh_before {H : Finset Validator} (hid : Function.Injective cfg.idOf)
   set st := (stateBefore cfg tr E v).disk
   have hk := (Converge.inv_before (cfg := cfg) (tr := tr) E v).known _ hin
   have hidk := Converge.id_of_knownIn (Converge.knownBefore_sub hv E hk)
-  have hraw : st.blk _ = (⟨t + 1, v, R, P⟩ : Block Validator BlockId Payload) := hid hidk.symm
-  have hB := own_known htime hv hv le_rfl hk (by change (st.blk _).creator = v; rw [hraw])
+  have hraw : st.full _ = (⟨t + 1, v, R, P⟩ : Block Validator BlockId Payload) := hid hidk.symm
+  have hB := own_known htime hv hv le_rfl hk (by change (st.full _).creator = v; rw [hraw])
   rcases (Converge.inv_before (cfg := cfg) (tr := tr) E v).rounds with ⟨h, -⟩ | ⟨t', ht', hR⟩
   · rw [h] at ht; cases ht
   · rw [ht] at ht'; cases ht'
     have := hR.2 _ hB
-    change (st.blk _).round ≤ t at this
+    change (st.full _).round ≤ t at this
     rw [hraw] at this
     simp at this
 
@@ -308,9 +310,9 @@ theorem started_after {H : Finset Validator} (hadm : cfg.Admissible) (hfa : cfg.
         by simp [Config.genesis, Config.at, hev, hex, named], fun i hi => ?_⟩⟩
       · have hk := (Converge.inv_before (cfg := cfg) (tr := tr) st v).known _ hin
         have hidk := Converge.id_of_knownIn (Converge.knownBefore_sub hv st hk)
-        have hraw : s.disk.blk _ = (cfg.at v).genesis := hid hidk.symm
+        have hraw : s.disk.full _ = (cfg.at v).genesis := hid hidk.symm
         have hB := own_known htime hv hv le_rfl hk (by
-          change (s.disk.blk _).creator = v; rw [hraw]; rfl)
+          change (s.disk.full _).creator = v; rw [hraw]; rfl)
         rw [hB0] at hB; cases hB
       · simp [Config.genesis] at hi
       · simp [Config.genesis] at h
@@ -429,16 +431,17 @@ theorem held_as_built (htime : Converge.TimelyAuthentic cfg H tr)
     {τ : ℕ} (hin : e.1 ∈ (stateAt cfg tr time v τ).disk.ids) :
     ((stateAt cfg tr time v τ).disk.blk e.1).round = e.2.round ∧
       ((stateAt cfg tr time v τ).disk.blk e.1).creator = u ∧
-      (stateAt cfg tr time v τ).disk.blk e.1 = e.2 := by
+      (stateAt cfg tr time v τ).disk.full e.1 = e.2 := by
   have hbu : (tr[b]?.map Prod.fst) = some u := by rw [hb]; rfl
   have hgood := ((Converge.inv_before (cfg := cfg) (tr := tr) (b + 1) u).good e
     (persists_of_event hb hep)).2.1
   set Z := stateAt cfg tr time v τ
   have hk := Converge.knownBefore_sub (hTH hv) (eventsBy tr time τ)
     ((Converge.inv_before (cfg := cfg) (tr := tr) (eventsBy tr time τ) v).known e.1 hin)
-  have hblk : Z.disk.blk e.1 = e.2 :=
+  have hblk : Z.disk.full e.1 = e.2 :=
     Converge.content_eq hinj hk (Or.inr ⟨b, u, hbu, hTH hu, hep⟩) rfl
-  exact ⟨by rw [hblk], by rw [hblk]; exact hgood, hblk⟩
+  have hf := Z.disk.full_fields e.1
+  exact ⟨by rw [← hf.1, hblk], by rw [← hf.2.1, hblk]; exact hgood, hblk⟩
 
 /-- **A reliable peer's top block arrives**: past `G`, a reliable node's
 block of its round at `s` is held by a reliable node `v` after `v`'s events

@@ -34,7 +34,7 @@ omit [Fintype Validator] in
 /-- Resending broadcasts the node's own block at its top. -/
 theorem broadcast_mem_resend {s : State Validator BlockId Payload} {n : ℕ} {j : BlockId}
     (ht : s.top = some n) (ho : s.own = some j) :
-    Output.broadcast j (s.disk.blk j) ∈ Node.resend cfg s := by
+    Output.broadcast j (s.disk.full j) ∈ Node.resend cfg s := by
   simp [Node.resend, ht, ho]
 
 open Classical in
@@ -128,7 +128,7 @@ theorem sends_again (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time
         ((stateBefore cfg tr (f + 1) u).disk.blk j).round = m ∧
         ((stateBefore cfg tr (f + 1) u).disk.blk j).creator = u ∧
         Output.setTimer (m - 1) (2 * cfg.timeout (m - 1)) ∈ outputsAt cfg tr f ∧
-        Output.broadcast j ((stateBefore cfg tr (f + 1) u).disk.blk j) ∈ outputsAt cfg tr f) := by
+        Output.broadcast j ((stateBefore cfg tr (f + 1) u).disk.full j) ∈ outputsAt cfg tr f) := by
     intro h₁ h₂
     obtain ⟨j, hj, -, hjr, hjc⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := u) (f + 1) m h₂
     have h₂' := h₂
@@ -183,8 +183,9 @@ theorem sends_again (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time
   · by_cases hstay : (stateBefore cfg tr (f + 1) u).top = some m
     · -- it resends its round-`m` block
       obtain ⟨j, -, hjr, hjc, -, hb⟩ := hres hfm hstay
-      exact ⟨f, _, (j, (stateBefore cfg tr (f + 1) u).disk.blk j), hf, htf₀, hfle,
-        mem_broadcasts.mpr hb, by simp [hjr], hjc⟩
+      have hfj := (stateBefore cfg tr (f + 1) u).disk.full_fields j
+      exact ⟨f, _, (j, (stateBefore cfg tr (f + 1) u).disk.full j), hf, htf₀, hfle,
+        mem_broadcasts.mpr hb, by simp [hfj.1, hjr], by simp only; rw [hfj.2.1]; exact hjc⟩
     · -- it builds above `m`
       obtain ⟨h₁, h₂, -⟩ := rises_before (cfg := cfg) (tr := tr) u (show f ≤ f + 1 by omega)
       rw [hfm] at h₁ h₂

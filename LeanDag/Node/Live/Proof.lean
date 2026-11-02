@@ -150,8 +150,8 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
           (by omega)
       have hjE : j ∈ Z.disk.ids := hgτ.1 hj
       have hjr' : (Z.disk.blk j).round = topAt cfg tr time w s := by
-        rw [hgτ.blk hj]; exact hjr
-      have hjc' : (Z.disk.blk j).creator = w := by rw [hgτ.blk hj]; exact hjc
+        rw [hgτ.round hj]; exact hjr
+      have hjc' : (Z.disk.blk j).creator = w := by rw [hgτ.creator hj]; exact hjc
       -- an honest author's block of round `n + 1`: `w`'s, or one of the quorum below it
       obtain ⟨z, hz, hzr, hzH⟩ : ∃ z ∈ Z.disk.ids, (Z.disk.blk z).round = n + 1 ∧
           (Z.disk.blk z).creator ∈ H := by
@@ -175,6 +175,9 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
       exact Or.inr ⟨_, lent_mem_lents hz hzr hzm
         (lent_avoids_before hσ hadm hf htime hinj time hsp (hTH hv) E hz hzr hzH hnE'),
         (lent_buildable (cfg := cfg.at v) hvalid hz hzr
+        ((Converge.inv_before (cfg := cfg) (tr := tr) E v).unkept (by rw [hZt])
+          (by change _ ≤ (Z.disk.blk z).round; rw [hzr]
+              exact le_trans (Nat.sub_le _ _) (Nat.le_succ n)))
         hfa (fresh_before hid htime (hTH hv) hZt) _).2⟩
     · push Not at hup
       refine Or.inl (refsFor_buildable (cfg := cfg.at v) _ hfa
@@ -191,9 +194,9 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
             (by omega)
         exact ⟨j, hgτ.1 hj, by
           change (Z.disk.blk j).round = n
-          rw [hgτ.blk hj]; exact hjr.trans (le_antisymm (hup w hw hwv) (hall w hw)), by
+          rw [hgτ.round hj]; exact hjr.trans (le_antisymm (hup w hw hwv) (hall w hw)), by
           change (Z.disk.blk j).creator = w
-          rw [hgτ.blk hj]; exact hjc⟩
+          rw [hgτ.creator hj]; exact hjc⟩
   -- so it builds, against its being settled
   have hsome := tryBuild_isSome (cfg := cfg.at v) hZt
     (harr.recovered (by omega) v hv E (eventsBy_mono (tr := tr) (time := time) (by omega))
@@ -260,7 +263,15 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
     · rw [ht'] at h; cases h
     · exact h
   have hcut := (cut_before hσ hadm hf htime hinj E v (hTH hv)).1
-  have hva := ViewsAbove.of_store hiff fun i hi => (hcut i hi).2
+  have hfZ : Z.floor ≤ cfg.slots.slotRound Z.lo := Converge.floor_lo_before (cfg := cfg) E v
+  have hva := ViewsAbove.of_storeAbove (cfg.slots.slotRound Z.lo) hiff
+    (fun i hi => ⟨hcut.round hi, hcut.creator hi⟩)
+    (fun i hi hR => hcut.eq_blk hi (by
+      by_contra hk
+      have := Z.low i hk
+      change (Z.disk.blk i).round < Z.floor at this
+      change cfg.slots.slotRound Z.lo < (Z.disk.blk i).round at hR
+      omega))
   have hlow := hdw Z.lo (by omega)
   -- and the scan reaches it
   obtain ⟨o, -, hoi, hor, -⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) E t' ht'
@@ -281,12 +292,11 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
   have hmem := Scheme.tryDecide_within hls hcms hcs hlaws trivial (lo := Z.lo) (k := Z.lo)
     (B := b + c) (N := decidable cfg Z.disk.topRound - 1) le_rfl (by omega) (by omega)
     (fun m h1 h2 => ⟨w, by rwa [show m = Z.lo by omega]⟩) w hwd.toDecided
-  have hfZ : Z.floor ≤ cfg.slots.slotRound Z.lo := Converge.floor_lo_before (cfg := cfg) E v
   have hempty := hSet.decided (show Z.lo < decidable cfg Z.disk.topRound by omega) hfZ
   have heq : Scheme.tryDecide (S := cfg.slots) cfg.p boundedSel Z.disk.toRecord Z.disk.view Z.lo
       (decidable cfg Z.disk.topRound - 1) =
       Scheme.tryDecide cfg.p boundedSel U V Z.lo (decidable cfg Z.disk.topRound - 1) :=
-    hva.tryDecide_eq cfg.p hw _ (Nat.zero_le _)
+    hva.tryDecide_eq cfg.p hw _ le_rfl
   change Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ (Z.memory.window (cfg.slots.slotRound Z.lo))
     (Z.memory.windowView (cfg.slots.slotRound Z.lo)) Z.lo
     (decidable cfg Z.disk.topRound - 1) = [] at hempty

@@ -485,6 +485,27 @@ theorem ViewsAbove.of_store {P : Validity Validator BlockId Payload} [P.Mechanis
     (fun i hi _ => by change (U.block i).refs = (st.blk i).refs; rw [hU i hi])
 
 omit [Fintype Validator] in
+/-- **A store agrees from `R` up with every view holding its blocks**, read
+at the same rounds and authors, and above `R` as the store reads them. -/
+theorem ViewsAbove.of_storeAbove {P : Validity Validator BlockId Payload} [P.Mechanised]
+    {H : Finset Validator} {st : Store Validator BlockId Payload}
+    {U : BlockRecord Validator BlockId Payload P H} {V : U.View} (R : ℕ)
+    (hV : ∀ i, i ∈ V.ids ↔ i ∈ st.ids)
+    (hf : ∀ i ∈ st.ids, (U.block i).round = (st.blk i).round ∧
+      (U.block i).creator = (st.blk i).creator)
+    (hU : ∀ i ∈ st.ids, R < (st.blk i).round → U.block i = st.blk i) :
+    ViewsAbove R boundedSel boundedSel st.view V :=
+  ViewsAbove.of_boundedSel (fun i hi _ => (hV i).mpr hi)
+    (fun i hi hR => ⟨(hV i).mp hi, by
+      have := (hf i ((hV i).mp hi)).1
+      change R ≤ (U.block i).round at hR
+      change R ≤ (st.blk i).round
+      omega⟩)
+    (fun i hi _ => (hf i hi).1)
+    (fun i hi _ => (hf i hi).2)
+    (fun i hi hR => by change (U.block i).refs = (st.blk i).refs; rw [hU i hi hR])
+
+omit [Fintype Validator] in
 /-- **A store and its window at `R` agree from `R` up**, at the bounded
 vote. -/
 theorem ViewsAbove.window (st : Store Validator BlockId Payload) (R : ℕ) :

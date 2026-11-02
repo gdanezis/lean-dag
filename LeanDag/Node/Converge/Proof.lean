@@ -28,7 +28,7 @@ theorem converges : Converges := by
   intro Validator BlockId Payload _ _ _ cfg H tr hdel htime hinj hev u hu j hown y hy v hv
   have hiu := inv_before (cfg := cfg) (tr := tr) tr.length u
   obtain ⟨hjd, hjB⟩ := hiu.own j hown
-  set b := (stateBefore cfg tr tr.length u).disk.blk j with hb
+  set b := (stateBefore cfg tr tr.length u).disk.full j with hb
   have hpers : (j, b) ∈ persists (runOf cfg tr u).2 := hjB
   -- every block `u` made lies at or below `b`'s round
   have htop : ∀ x ∈ persists (runOf cfg tr u).2, x.2.round ≤ b.round := by
@@ -38,7 +38,7 @@ theorem converges : Converges := by
       rw [hown] at hj'
       obtain rfl := Option.some.inj hj'
       intro x hx
-      rw [hjr]
+      rw [hb, ((stateBefore cfg tr tr.length u).disk.full_fields j).1, hjr]
       exact hR.2 x hx
   obtain ⟨hid, hc, -, -⟩ := hiu.good _ hjB
   change j = cfg.idOf b at hid
@@ -54,7 +54,7 @@ theorem converges : Converges := by
     · exact hlackL ((grows_before (cfg := cfg) v hτ).1 h)
     · exact hlackL (by rwa [stateBefore_of_le hτ] at h)
   have hval : 0 < b.round → cfg.q ≤ b.refs.card := fun hpos =>
-    ((hiu.valid j hjd).quorum hpos).trans Finset.card_image_le
+    ((hiu.valid j hjd).2.quorum hpos).trans Finset.card_image_le
   -- `u` broadcast `(j, b)`; `v` was given it, and has had a sync for it since
   obtain ⟨p, -, hpu, hpp⟩ := mem_persists_before (cfg := cfg) u tr.length hjB
   obtain ⟨inpp, hp⟩ := event_of_map hpu
@@ -73,7 +73,7 @@ theorem converges : Converges := by
     own_stored (own_known (v := u) htime hv hu (show R + 1 ≤ R' by omega) hkn hc)
   set st := (stateBefore cfg tr R' u).disk with hst
   set Lu := streamOf st j fr ids with hLu
-  have hLmap : ∀ e ∈ Lu, e.2 = st.blk e.1 := fun e he => (mem_streamOf st j he).2
+  have hLmap : ∀ e ∈ Lu, e.2 = st.full e.1 := fun e he => (mem_streamOf st j he).2
   have hjLu : j ∈ Lu.map Prod.fst := mem_streamOf_self st j hju
   have hout : Output.stream v Lu ∈ outputsAt cfg tr R' := by
     rw [outputsAt_eq hR']
@@ -102,7 +102,7 @@ theorem converges : Converges := by
   -- the piece's part in `j`'s history
   set P := inHistory (cfg.at v) (j, b) Lu with hP
   set Lh := hashed (cfg.at v) Lu with hLh
-  have hLhmap : ∀ e ∈ Lh, e.2 = st.blk e.1 := fun e he => hLmap e ((mem_hashed Lu).mp he).1
+  have hLhmap : ∀ e ∈ Lh, e.2 = st.full e.1 := fun e he => hLmap e ((mem_hashed Lu).mp he).1
   have hjLh : (j, b) ∈ Lh := by
     obtain ⟨e, he, hej⟩ := List.mem_map.mp hjLu
     have hjb : e = (j, b) := Prod.ext hej (by rw [hLmap e he, hej, hjbu])
@@ -111,7 +111,7 @@ theorem converges : Converges := by
     (mem_inHistory Lu).mpr ⟨hjLh, by change b.creator ≠ v; rw [hc]; exact huv,
       found_self Lh j (List.mem_map_of_mem (f := Prod.fst) hjLh)⟩
   have hRu := reads_before hinj hu R'
-  have hPLu : ∀ e ∈ P, e ∈ Lu ∧ e.1 ∈ st.ids ∧ e.2 = st.blk e.1 := fun e he => by
+  have hPLu : ∀ e ∈ P, e ∈ Lu ∧ e.1 ∈ st.ids ∧ e.2 = st.full e.1 := fun e he => by
     have heL := ((mem_hashed Lu).mp ((mem_inHistory Lu).mp he).1).1
     exact ⟨heL, (mem_streamOf st j heL).1, hLmap e heL⟩
   -- some block of the part references a block neither `v` nor the part holds
@@ -132,10 +132,10 @@ theorem converges : Converges := by
       rw [heb, hRu _ hest]
     · obtain ⟨-, hest, heb⟩ := hPLu e he
       rw [heb]
-      refine ⟨fun k hk => ?_, rowValid_congr (fun k hk => ?_) ((inv_before R' u).valid _ hest)⟩
-      · rw [← hRu k (st.complete _ hest k hk)]
-        exact st.pred _ hest k hk
-      · rw [hRu k (st.complete _ hest k hk)]
+      refine ⟨fun k hk => ?_, rowValid_congr (fun k hk => ?_) ((inv_before R' u).valid _ hest).2⟩
+      · rw [← hRu k (st.full_refs _ hest k hk).1]
+        exact st.causal_full.refs_round _ hest k hk
+      · rw [hRu k (st.full_refs _ hest k hk).1]
         exact ⟨rfl, rfl, rfl⟩
     · by_cases hyd : y ∈ s.disk.ids
       · exact Or.inl hyd
@@ -144,7 +144,7 @@ theorem converges : Converges := by
   have hxf := ((mem_inHistory Lu).mp hxP).2.2
   have hxLh := ((mem_inHistory Lu).mp hxP).1
   obtain ⟨xi, xb⟩ := x
-  change xb = st.blk xi at hxb
+  change xb = st.full xi at hxb
   subst hxb
   have hxi : xi ∈ Lu.map Prod.fst := List.mem_map_of_mem (f := Prod.fst) hxLu
   have hxi' : xi ∈ Lh.map Prod.fst := List.mem_map_of_mem (f := Prod.fst) hxLh
@@ -154,15 +154,15 @@ theorem converges : Converges := by
     rcases List.mem_cons.mp h with h | h
     · exact hyP (h ▸ List.mem_map_of_mem (f := Prod.fst) hjP)
     · exact hyP h))
-  have hyst : y' ∈ st.ids := st.complete xi hxst y' hy'
+  have hyst : y' ∈ st.ids := (st.full_refs xi hxst y' hy').1
   have hyLu : y' ∈ Lu.map Prod.fst := streamOf_closed st j hxi hy' hyst (Or.inr (Or.inl hyids))
-  have hyLu' : (y', st.blk y') ∈ Lu := by
+  have hyLu' : (y', st.full y') ∈ Lu := by
     obtain ⟨e, he, hey⟩ := List.mem_map.mp hyLu
-    have : e = (y', st.blk y') := Prod.ext hey (by rw [hLmap e he, hey])
+    have : e = (y', st.full y') := Prod.ext hey (by rw [hLmap e he, hey])
     exact this ▸ he
-  have hyLh : (y', st.blk y') ∈ Lh :=
+  have hyLh : (y', st.full y') ∈ Lh :=
     (mem_hashed Lu).mpr ⟨hyLu', id_of_knownIn (stored_known hu hyst)⟩
-  have hyP' : (y', st.blk y') ∈ P := by
+  have hyP' : (y', st.full y') ∈ P := by
     refine (mem_inHistory Lu).mpr ⟨hyLh, fun hcv => ?_,
       found_closed Lh j hxf ((pieceRefs_of_map Lh hLhmap hxi').mpr hy')
         (List.mem_map_of_mem (f := Prod.fst) hyLh)⟩

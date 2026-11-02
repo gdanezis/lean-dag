@@ -82,7 +82,7 @@ theorem ordered_eq (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
       simpa using h.symm
     obtain rfl : n = 0 := by omega
     exact ⟨rfl, Finset.empty_subset _, fun k hk => absurd hk (Nat.not_lt_zero _)⟩
-  · have hblk : ∀ x ∈ V.ids, s.disk.blk x = U.block x := fun x hx => (hcut.1 x (hV hx)).2.symm
+  · have hblk : ∀ x ∈ V.ids, s.disk.full x = U.block x := fun x hx => (hcut.1 x (hV hx)).2.symm
     have hlead : ∀ k < n, ∀ L, verdictIn s.decided k = some L → L ∈ V.ids := by
       intro k hk L hL
       obtain ⟨e, he, hek, hev⟩ := hmemk k (by omega)

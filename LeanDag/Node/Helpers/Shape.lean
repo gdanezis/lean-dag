@@ -118,16 +118,18 @@ theorem progress_shape : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
 omit [Fintype Validator] in
 theorem decideStep_shape (s : State Validator BlockId Payload) :
     let d := Node.decideStep cfg s
-    d.1.fired = s.fired ∧ d.1.top = s.top ∧ d.1.disk = s.disk ∧
+    d.1.fired = s.fired ∧ d.1.top = s.top ∧ Store.Restrips d.1.floor s.disk d.1.disk ∧
       Silent d.2 := by
   intro d
-  unfold d Node.decideStep
-  dsimp only
-  split
-  · refine ⟨release_fired _, release_top _, release_disk _, Silent.of_quiet fun o h => ?_⟩
+  refine ⟨?_, ?_, decideStep_disk s, ?_⟩ <;> unfold d Node.decideStep <;> dsimp only <;> split
+  · exact release_fired _
+  · rfl
+  · exact release_top _
+  · rfl
+  · refine Silent.of_quiet fun o h => ?_
     obtain ⟨_, -, rfl⟩ := List.mem_map.mp h
     exact ⟨fun _ _ h => (nomatch h), fun _ _ h => (nomatch h)⟩
-  · exact ⟨rfl, rfl, rfl, Silent.nil⟩
+  · exact Silent.nil
 
 omit [Fintype Validator] in
 theorem timer_of_built {bs : List (BlockId × Block Validator BlockId Payload)}

@@ -314,14 +314,17 @@ store closed, and needs none of this.
      padded record from `G` up (`CutAbove`, `grounds_padded`,
      `decidesWell_padded`) proves `Cut.Cuts`; V12 (`IsCut`,
      `CommitInv`) is its instance on the run's record.
-  2. *Blocks below the base kept without references.* The disk keeps
-     its blocks at or below a base round without their references, as
-     the memory keeps its floor, and their references apart; a node
-     serves and orders the blocks as received. The store stays closed,
-     so `toRecord` and the proofs that read the disk as a record stand.
-     The proofs that read it as a cut of the run's record (`IsCut`, in
-     V11 and V13) are to read it from the base up, as `CutAbove` does.
-     The base stays below the memory's floor.
+  2. *Blocks below the floor kept without references.* Done. When the
+     node releases its memory below a round, its disk keeps the blocks
+     below that round without their references and holds the references
+     apart (`Store.strip`, `Store.kept`); the store stays closed. The node
+     sends, streams and orders the blocks as accepted (`Store.full`). The
+     proofs read the disk's content as accepted (`Grows`, `Inv`, `IsCut`,
+     `CutAbove`, the exposure bound) and read it as a record only from the
+     floor up, where no block is kept without its references
+     (`State.low`, `Inv.unkept`, `ViewsAbove.of_storeAbove`). V12's
+     holdings, `Cut.Cuts` and convergence now speak of the blocks as
+     accepted.
   3. *Dropping* (D13), below the base: the ordered blocks and the
      proofs (`witnessView`) are kept.
   4. *Catch-up* (D16), with the jump of a node whose top lies below its

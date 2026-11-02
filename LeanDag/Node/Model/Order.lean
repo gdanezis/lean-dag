@@ -22,10 +22,10 @@ def verdictIn (ds : List (ℕ × Option BlockId)) (k : ℕ) : Option BlockId :=
   ((ds.find? fun e => e.1 == k).map Prod.snd).join
 
 /-- **The blocks a node ordered after `n` slots**: the ledger of its verdicts,
-read from its disk. -/
+read from the blocks of its disk as accepted. -/
 def State.ordered [S : Slots Validator] (q : ℕ) (s : State Validator BlockId Payload) (n : ℕ) :
     Finset BlockId :=
-  ledgerOn s.disk.blk q (verdictIn s.decided) n
+  ledgerOn s.disk.full q (verdictIn s.decided) n
 
 end Node
 

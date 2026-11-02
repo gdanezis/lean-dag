@@ -76,7 +76,7 @@ def Converges : Prop :=
     Delivered cfg H tr → TimelyAuthentic cfg H tr → HashInjective cfg H tr →
     EvidenceAuthentic cfg H tr →
     ∀ u ∈ H, ∀ j, (stateBefore cfg tr tr.length u).own = some j →
-      ∀ y ∈ historyFrom (stateBefore cfg tr tr.length u).disk.blk j, ∀ v ∈ H,
+      ∀ y ∈ historyFrom (stateBefore cfg tr tr.length u).disk.full j, ∀ v ∈ H,
         y ∈ (stateBefore cfg tr tr.length v).disk.ids
 
 /-- Syncing makes the honest nodes converge. -/
