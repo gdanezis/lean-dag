@@ -568,6 +568,56 @@ theorem tryDecide_eventually (hl : 1 ≤ p.linkSize) (hcm : 1 ≤ p.commitThresh
   obtain ⟨v, hv⟩ := hB m h1 h2
   exact ⟨v, hv.mono (Finset.le_sup (f := B) (Finset.mem_range.mpr (by omega)))⟩
 
+omit [Fintype Validator] in
+/-- The indirect rule commits only a candidate the view holds. -/
+theorem tryIndirect_mem_ids {k : ℕ} :
+    ∀ (l : List (ℕ × Option (Option BlockId))) {L : BlockId},
+      tryIndirect p σ U V k l = some (some L) → L ∈ V.ids
+  | [], _, h => by simp [tryIndirect] at h
+  | (j, s) :: rest, L, h => by
+    unfold tryIndirect at h
+    split_ifs at h
+    · rcases s with _ | _ | A
+      · simp at h
+      · exact tryIndirect_mem_ids rest h
+      · have h' := leastOf_eq_some (Option.some.inj h)
+        exact (mem_candidatesIn.mp (Finset.mem_filter.mp h'.1).1).1
+    · exact tryIndirect_mem_ids rest h
+
+omit [Fintype Validator] in
+/-- A slot's decision commits only a candidate the view holds. -/
+theorem decideSlot_mem_ids {k : ℕ} {later : List (ℕ × Option (Option BlockId))} {L : BlockId}
+    (h : decideSlot p σ U V k later = some (some L)) : L ∈ V.ids := by
+  unfold decideSlot at h
+  cases hd : tryDirect p σ U V k with
+  | none => rw [hd] at h; exact tryIndirect_mem_ids _ h
+  | some v =>
+    rw [hd] at h
+    cases Option.some.inj h
+    unfold tryDirect at hd
+    split_ifs at hd
+    · simp at hd
+    · obtain ⟨L', hL', hLL⟩ := Option.map_eq_some_iff.mp hd
+      cases Option.some.inj hLL
+      exact (mem_candidatesIn.mp (Finset.mem_filter.mp (leastOf_eq_some hL').1).1).1
+
+omit [Fintype Validator] in
+/-- **The loop commits only candidates the view holds.** -/
+theorem tryDecide_mem_ids {lo N k : ℕ} {L : BlockId}
+    (h : (k, some L) ∈ tryDecide p σ U V lo N) : L ∈ V.ids := by
+  unfold tryDecide at h
+  obtain ⟨e, he, hee⟩ := List.mem_map.mp h
+  have hj : e.2.join = some L := (Prod.ext_iff.mp hee).2
+  have hmem := (mem_takeWhile' he).1
+  clear he hee h
+  generalize N + 1 - lo = m at hmem
+  induction m with
+  | zero => simp [scan] at hmem
+  | succ m ih =>
+    rcases List.mem_cons.mp hmem with rfl | hmem
+    · exact decideSlot_mem_ids (Option.join_eq_some_iff.mp hj)
+    · exact ih hmem
+
 end Scheme
 
 end LeanDag

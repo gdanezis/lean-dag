@@ -223,6 +223,34 @@ theorem flush_subset (W : BypassView U q H C) {L : BlockId} (hL : L ∈ W.ids) :
   let ⟨d, _, hd⟩ := mem_flush.mp hx
   (layerOn_eq W (blk := U.block) (fun _ _ => rfl) hL d).2 hd
 
+/-- `bypassLedger`, read from the block map `blk`. -/
+def ledgerOn [S : Slots Validator] (blk : BlockId → Block Validator BlockId Payload) (q : ℕ)
+    (g : ℕ → Option BlockId) : ℕ → Finset BlockId
+  | 0 => ∅
+  | n + 1 =>
+    match g n with
+    | none => ledgerOn blk q g n
+    | some L => ledgerOn blk q g n ∪ flushOn blk q (S.slotRound n) (ledgerOn blk q g n) L
+
+/-- **The ledger read from a view is the record's**, and held, when every
+committed leader is in the view and the block map agrees with the record on it. -/
+theorem ledgerOn_eq [S : Slots Validator] (V : U.View)
+    {blk : BlockId → Block Validator BlockId Payload} (hblk : ∀ i ∈ V.ids, blk i = U.block i)
+    {g : ℕ → Option BlockId} :
+    ∀ n, (∀ k < n, ∀ L, g k = some L → L ∈ V.ids) →
+      ledgerOn blk q g n = bypassLedger U q g n ∧ bypassLedger U q g n ⊆ V.ids
+  | 0, _ => ⟨rfl, Finset.empty_subset _⟩
+  | n + 1, hg => by
+    obtain ⟨ih, hsub⟩ := ledgerOn_eq V hblk n fun k hk => hg k (by omega)
+    cases hgn : g n with
+    | none => simp only [ledgerOn, bypassLedger, hgn, ih]; exact ⟨trivial, hsub⟩
+    | some L =>
+      have hL := hg n (by omega) L hgn
+      let W : BypassView U q (S.slotRound n) (bypassLedger U q g n) := V.toBypassView hsub
+      have hf := flushOn_eq W hblk hL
+      simp only [ledgerOn, bypassLedger, hgn, ih, hf]
+      exact ⟨trivial, Finset.union_subset hsub (flush_subset W hL)⟩
+
 /-! ## A node under bypass -/
 
 /-- **A node under bypass**, with the decision `Dec` read on the blocks it

@@ -211,7 +211,13 @@ They are proved in Phase 4, on the node of Phase 3.
 any timing), B1 (liveness in synchrony) and V13 are proved again.
 
 1. **Ordering.** The node computes its ledger and its decided horizon
-   from its verdicts (`bypassLedger`).
+   from its verdicts (`bypassLedger`). Done: what a node ordered after
+   `n` slots is the ledger of its verdicts read from its disk
+   (`State.ordered`, `ledgerOn`, `Node/Model/Order.lean`). Two honest
+   nodes order the same blocks after any number of slots both decided
+   (`Order.Agrees`), and an honest node holds what it ordered
+   (`Order.Held`), in `Node/Order`. The ordered set is read off the
+   state, so no step changes, and V11, V12 and V13 stand as they are.
 2. **Bypass.** First, `BypassRun` gains the step that takes the blocks
    of a commit in with the commit (D16), with its invariant and B0;
    catch-up, on which B1 rests, and the exemption of those blocks from
@@ -337,6 +343,9 @@ and `late deaf`:
   may drop bypassed blocks, and its invariant), `Properties/Arcs/Bypass.lean`
   (proofs of verdicts, and safety of the run deciding on proofs under
   `Agree`, and with a full history under `Banded`).
+* **Ordering on the node.** `Node/Order`: the ledger read from the disk
+  is the record's (`ledgerOn_eq`), and two honest nodes order the same
+  blocks (Phase 3.1).
 * **Exposure and conviction on the node.** V13 (`Node.Bound`), S5 to S8
   (`Node.Sync`), Stages 1 to 4 of `docs/node-sync.md`.
 * **Certification.** Simulated in `scripts/sync-auth.py`, with the
