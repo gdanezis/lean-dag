@@ -36,6 +36,15 @@ block, and a reference to one counts as held; it stores every block it receives
 whose references it holds or finds bypassed, bypassed blocks included, and these
 count towards bypassing the round below.
 
+With `bypass = 'commit'`, the leader of round a, by author a mod n, is decided once
+every honest node is two rounds past a: committed if its author is honest and built
+at round a, and skipped otherwise. The decided horizon is the round of the last
+decided leader. A block below it is bypassed when the ordered blocks one round above
+it that do not reference it come from q authors; no node fetches, stores or follows
+it, and a reference to it counts as held. A commit orders its leader's history from
+the top down, and orders a block below the previous horizon only if it is not
+bypassed.
+
 `python3 sync-auth.py table rule` prints, at n = 10, f = 3 with no horizon over
 300 ticks, rounds, blocks of Byzantine authors in honest histories (all /
 largest in a round), the least share, the most failed requests of a node, and
@@ -44,8 +53,8 @@ the largest E, under evidence checks, twin checks, and certificates.
 the history that validity follows (all / largest in a round), on the fullest
 honest disk, and processed by one honest node, and the honest blocks cut, under
 twin checks without pruning, with `prune = 3` and no references below the
-previous round, and with `bypass`; `fast` is no attack with Byzantine blocks that
-arrive first.
+previous round, with `bypass`, and with `bypass = 'commit'`; `fast` is no attack
+with Byzantine blocks that arrive first.
 """
 import random
 import sys
@@ -64,6 +73,11 @@ NOW = [0]
 HBUILT = defaultdict(list)
 SEAL = [0]
 KEPT = set()
+CORD = set()
+CRND = defaultdict(set)
+HZC = [0]
+BYPC = set()
+NOTC = {}
 CUR = [None]
 BYPF = [None]
 HELD = [None]
@@ -81,11 +95,32 @@ def setup(n, f):
     W, S = 0, Q - 1
 
 
+def bypc(x):
+    """Under `bypass = 'commit'`, x lies below the decided horizon, and the ordered
+    blocks one round above it that do not reference it come from q authors."""
+    r = blocks[x][1]
+    if x in BYPC:
+        return True
+    if r == 0 or r >= HZC[0] or x in CORD:
+        return False
+    above = CRND.get(r + 1, ())
+    if NOTC.get(x) == len(above):
+        return False
+    if len({blocks[y][0] for y in above if x not in blocks[y][2]}) >= Q:
+        BYPC.add(x)
+        return True
+    NOTC[x] = len(above)
+    return False
+
+
 def cut(x):
-    """Under `bypass`, a block the current node finds bypassed; else a block of a
-    sealed round that the seal did not keep."""
+    """Under `bypass`, a block the current node finds bypassed; under `bypass =
+    'commit'`, a block bypassed below the decided horizon; else a block of a sealed
+    round that the seal did not keep."""
     if CUR[0] is not None:
         return BYPF[0](CUR[0], x)
+    if CORD:
+        return bypc(x)
     return 0 < blocks[x][1] <= SEAL[0] and x not in KEPT
 
 
@@ -217,6 +252,10 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
     AUTH[0] = auth
     SEAL[0] = 0
     KEPT.clear()
+    for c in (CORD, CRND, BYPC, NOTC):
+        c.clear()
+    HZC[0] = 0
+    lead_at = [0]
     CUR[0] = None
     clock = [0]
     req = {}
@@ -261,7 +300,7 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
 
     BYPF[0] = byp
     HELD[0] = disk
-    ctx = (lambda v: v) if bypass else (lambda v: None)
+    ctx = (lambda v: v) if bypass is True else (lambda v: None)
     top = {v: 0 for v in builders}
     own = {v: gen[v] for v in builders}
     target = {v: {} for v in builders}
@@ -517,7 +556,7 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
                 if rq and (rq['r'], rq['E']) == b:
                     rq['sig' if kind == 'sig' else 'no'].add(u)
                 continue
-            if b in disk[v] or blocks[b][1] < hz[v] or (not bypass and cut(b)):
+            if b in disk[v] or blocks[b][1] < hz[v] or (bypass is not True and cut(b)):
                 continue
             if kind == 'ann':
                 if u in conv[v] or u in bad[v]:
@@ -655,6 +694,36 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
                 hz[v] = nh
         CUR[0] = None
         series.append((min(top.values()), dict(proc), dict(procB)))
+        while bypass == 'commit':
+            # the leader of round a, by author a mod n, is decided once every honest
+            # node is two rounds past a: committed if honest and built, else skipped.
+            # The commit orders the leader's history from the top down; a block below
+            # the previous horizon is ordered only if not bypassed by the ordered
+            # blocks one round above it, those of this commit included
+            a = lead_at[0] + 1
+            if min(top.values()) < a + 2:
+                break
+            lead_at[0] = a
+            lead = honest_at[a].get(a % N) if a % N in HON else None
+            if lead is not None:
+                CORD.add(lead)
+                CRND[a].add(lead)
+                pend = defaultdict(set)
+                for x in blocks[lead][2]:
+                    pend[blocks[x][1]].add(x)
+                for r in range(a - 1, -1, -1):
+                    if not any(pend.values()):
+                        break
+                    for x in sorted(pend.pop(r, set()) - CORD):
+                        if bypc(x):
+                            continue
+                        CORD.add(x)
+                        CRND[r].add(x)
+                        for y in blocks[x][2]:
+                            if y not in CORD:
+                                pend[blocks[y][1]].add(y)
+            HZC[0] = a
+            CACHE.clear()
         while prune:
             # the commit of the first honest leader at round a >= r + prune + 1 seals
             # round r once every honest node is two rounds past a: a block of round r
@@ -875,7 +944,7 @@ def run(attack, rule='react', ticks=600, k=8, kb=64, d=5, L=20, depth=13, D=5, g
             vper[blocks[x][1]] += 1
     hcut = sum(1 for rd in honest_at.values() for b in rd.values() if cut(b))
     split = 0
-    if bypass:
+    if bypass is True:
         # what each node follows: from its own blocks, through references it does not
         # find bypassed
         vh = set()
@@ -984,10 +1053,12 @@ def prune_table(rule, n, f, ticks=300):
             ('isolate', {}), ('twins', {}), ('inject', dict(d=8)), ('nest', dict(depth=13)),
             ('nest', dict(depth=39)), ('bulk', dict(depth=39)), ('oldjoin', dict(depth=25)),
             ('force', dict(depth=13)), ('flat', dict(depth=13)), ('rtnest', dict(depth=13))]
-    print(f"{rule} n={n} f={f} ticks={ticks}, no horizon: twin checks; prune = 3; bypass")
+    print(f"{rule} n={n} f={f} ticks={ticks}, no horizon: twin checks; prune = 3; bypass; "
+          "bypass below commit")
     for a, kw in atts:
         cells = []
-        for ck in (dict(), dict(prune=3, weak=False), dict(bypass=True)):
+        for ck in (dict(), dict(prune=3, weak=False), dict(bypass=True),
+                   dict(bypass='commit')):
             r = run(None if a == 'fast' else a, rule, ticks=ticks, L=1000, twin=True,
                     **kw, **ck)
             cells.append(f"{r['rounds']}r {r['vhist']}/{r['vmax']} D{r['disk']} "

@@ -19,7 +19,6 @@ import LeanDag.Common.DedupLemmas
 import LeanDag.Common.Persistence
 import LeanDag.Common.CommonCore
 import LeanDag.Common.Bypass
-import LeanDag.Common.Depth
 import LeanDag.Common.Anchored.ReadAlike
 import LeanDag.Mysticeti.Model.Validity
 import LeanDag.Mysticeti.Model.Rule

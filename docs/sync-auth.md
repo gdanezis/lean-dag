@@ -330,73 +330,133 @@ the third row `v` reads the references of a bypassed block it reaches
 from a block it follows, and goes no further; a bypassed structure costs
 at most `n + n²` more blocks.
 
-## 8. The mass of a window
+## 8. Bypass below the decided horizon
 
-A node that bypasses only below the rounds whose leaders it has all
-decided never reads a bypassed round in a decision, and such a cut is the
-cut of `LeanDag/GC`: decisions survive it (`GC/ChopDecided.lean`), and
-validators cutting at different horizons agree (`GC/Horizon.lean`). Below
-that horizon the node needs no block, so the test of §6 is not needed
-there. A block that arrives below the horizon after the cut is not
-ordered.
+**The rule.** A node applies the test of §6 only below its decided
+horizon, and takes the witnesses from the blocks it has ordered, not from
+the blocks it holds.
 
-Under the horizon `L` of `scripts/sync-auth.py`, which trails each
-node's frontier by `W` rounds, the blocks of Byzantine authors that one
-honest node processes are, at `n = 10, f = 3` under `react` with twin
-checks:
+* The *decided horizon* `h` of a node is the highest round such that the
+  node has decided every leader of round `h` or below.
+* The *ordered set* `C` of a node is the set of blocks its commits have
+  ordered.
+* A block `x` of round `r < h` is *bypassed* when the blocks of `C` at
+  round `r + 1` that do not reference `x` come from at least `q` authors
+  (`Bypassed U C q x`). No block of round `h` or above is bypassed.
+* A node does not fetch, store, follow or order a bypassed block, and a
+  reference to a bypassed block counts as held.
+* A commit orders the history of its leader from the top down. A block of
+  a round below the horizon before the commit is ordered only if it is
+  not bypassed by the ordered blocks one round above it, those that this
+  commit orders included.
 
-| Attack | No horizon | `W = 8` | `W = 5` | `W = 3` | Bypass, §6 |
-|---|---|---|---|---|---|
-| `nest`, `depth = 13` | 732 | 351 | 191 | 64 | 27 |
-| `nest`, `depth = 39` | 2153 | 351 | 191 | 64 | 27 |
-| `flat`, `depth = 13` | 703 | 343 | 191 | 64 | 27 |
-| `bulk`, `depth = 39` | 153 | 31 | 19 | 11 | 7 |
-| `inject`, `d = 8` | 14185 | 160 | 157 | 155 | 154 |
+**Agreement.** A decision reads only the rounds of undecided leaders, all
+of them at or above `h`, so the rule changes no decision. Whether a
+block is bypassed depends only on `C`. Nodes that commit the same
+sequence of leaders therefore order the same blocks and bypass the same
+blocks, by induction on the sequence. Two nodes never disagree about a
+bypass, unlike under §6, where the witnesses are the blocks a node holds
+and §7 finds a disagreement. This induction is argued here; it is not
+yet proved.
 
-The cost depends on `W` and not on the depth, and every run is live.
+**What a node follows below the horizon.** If the ordered blocks of round
+`r + 1` come from at least `q` authors and none references `x`, then `x`
+is bypassed (`bypassed_of_unreferenced_in`). If an ordered block
+references `x` and `x` was not ordered with it, then `x` was bypassed
+then and is bypassed still (`Bypassed.mono`). At a round below the
+horizon whose ordered blocks one round above come from at least `q`
+authors, a node therefore follows exactly the ordered blocks. A block
+that arrives after the round above it is ordered is never fetched: the
+test reads only the references of ordered blocks.
 
-`LeanDag/Common/Depth.lean` proves the bound on a block record. A node
-keeps no block at or below a horizon `h` and fetches above it the
-histories of the blocks it takes as *tops*.
+**The bound.** Let `C` hold a block of round `r + 1` of every honest
+validator.
 
-* **The depth bound** (`card_depthBlocks_le`). The blocks of a block's
-  history `k` rounds below it number at most `n ^ k`.
-* **The window bound** (`card_window_le`). If every held block above `h`
-  lies in the history of a top, every top lies at most `W` rounds above
-  `h`, and a round holds at most `B` tops, each round above `h` holds at
-  most `B · Σ_{k < W} n ^ k` held blocks.
-* **The tops** (`card_tops_le`). At most one top of an author in a round,
-  or two for an author in a set `D`, are at most `n + |D|` tops a round.
-* **The bound** (`card_window_le_of_tops`). Each round above `h` holds
-  at most `(n + |D|) · Σ_{k < W} n ^ k` held blocks.
+* Every block of round `r` that is not bypassed is referenced by an
+  honest block of `C` at round `r + 1`
+  (`exists_honest_ref_of_not_bypassed`).
+* At most `|honest|` blocks of any one author at round `r` are not
+  bypassed (`card_not_bypassed_creator_le`). An honest block references
+  at most one block of each author.
+* If each author outside a set `D` that is not honest has at most one
+  block at round `r`, at most `|D| · |honest| + (n − |D|)` blocks of
+  round `r` are not bypassed (`card_not_bypassed_le_of_twins`).
 
-The premises are what the node must supply: `W` from the decision bound
-`DecidesBy` of V11 past `GST`, the tops from exclusion (Stage 2), and the
-horizon from a cut the node of `LeanDag/Node` does not yet make.
+The bound holds at every round below the horizon. It does not depend on
+how far below the horizon an attack is dated or on when its blocks are
+shown. Above the horizon nothing is bypassed. There S7 of
+`docs/sync.md` bounds what a node holds by `n + |D|` blocks a round from
+the round `m` at which every honest block exposes `D`.
+
+**Simulation.** Under `bypass = 'commit'`, `scripts/sync-auth.py` decides
+the leader of round `a`, by author `a mod n`, once every honest node is
+two rounds past `a`. The leader is committed if its author is honest and
+built at round `a`, and skipped otherwise. Each cell gives the same
+measures as §6 at `n = 10, f = 3` under `react` with twin checks: the
+rounds reached; the blocks of Byzantine authors that some honest node
+follows; the number on the fullest honest disk; the number one honest
+node processes; and the honest blocks bypassed.
+
+| Attack | No rule | §6 | Below the horizon |
+|---|---|---|---|
+| `fast` | 150, 149, 153, 150, 0 | 150, 149, 153, 150, 87 | 150, 149, 153, 150, 74 |
+| `split` | 54, 15, 20, 17, 0 | 55, 15, 20, 17, 1 | 54, 15, 20, 17, 0 |
+| `isolate` | 55, 21, 27, 24, 0 | 54, 0, 27, 24, 0 | 55, 21, 27, 24, 0 |
+| `filler` | 55, 65, 71, 108, 0 | 56, 9, 32, 29, 3 | 55, 23, 58, 74, 1 |
+| `inject`, `d = 8` | 79, 41, 300, 14185, 0 | 150, 150, 157, 154, 96 | 150, 153, 160, 157, 76 |
+| `nest`, `depth = 13` | 52, 616, 622, 732, 0 | 56, 7, 30, 27, 2 | 55, 22, 146, 163, 1 |
+| `nest`, `depth = 39` | 43, 1890, 1896, 2153, 0 | 56, 7, 30, 27, 2 | 55, 22, 146, 163, 1 |
+| `flat`, `depth = 13` | 52, 539, 545, 703, 0 | 56, 7, 30, 27, 2 | 55, 22, 143, 158, 1 |
+| `bulk`, `depth = 39` | 54, 153, 156, 153, 0 | 55, 3, 10, 7, 1 | 55, 7, 22, 19, 1 |
+| `rtnest`, `depth = 13` | 53, 91, 151, 529, 0 | 55, 14, 31, 28, 0 | 54, 8, 64, 163, 0 |
+
+* **The system stays live** under every attack, under `react` and `min`,
+  and at `n = 13, f = 4`.
+* **The cost of an attack does not depend on its depth.** Under `nest`
+  one honest node processes 163 blocks of Byzantine authors at both
+  depths, against 732 and 2153 without the rule. At `n = 13, f = 4` it
+  processes 203 at both depths, against 1764 and 4106.
+* **The rule costs more than §6.** A node
+  follows an attack down to the first round whose ordered blocks one
+  round above come from `q` authors. The leaders of rounds 37, 38 and 39
+  are Byzantine and skipped, so until the leader of round 40 commits, the
+  ordered blocks of round 36 come from one author, and `nest` is
+  followed down to round 35. The fullest disk holds 25 blocks of
+  Byzantine authors in each of rounds 35 to 37, and none below.
+* **Slow honest blocks are bypassed** as under §6: under `fast`, 74
+  under `react`, 100 under `min`, and 64 at `n = 13`. A block that no
+  commit orders before its round falls below the horizon is not ordered
+  later.
 
 ## 9. Open
 
-* **Validity under bypass.** Whether a reference is bypassed depends on
+* **Validity under the rule of §6.** Whether a reference is bypassed depends on
   what a node holds, and a node holds a block back until each reference
   is held or bypassed. The bound on how long it waits, and the agreement
   of two nodes that come to hold the same blocks, are not proved.
 * **Slow honest blocks.** A rule that bypasses fewer honest blocks, for
   example by counting witnesses from more than the next round, without
-  losing the bound of §6.
+  losing the bound of §6 or §8.
 * **A proof of safety for the third row of §7.** At `R = r + 3` it is
   the standard argument: `A` references an honest certificate, and `v`
   holds it and its votes. For a later anchor, a path of followed blocks
   from `A` to such a certificate must be shown to exist; a followed block
   may have every reference bypassed. A commit must also order the same
   history at every node.
-* **The window on the node.** §8 holds on a block record. On the node
-  it needs a cut at the decided horizon, which `LeanDag/Node` does not
-  make, a bound in rounds on the lag of that horizon behind the frontier,
-  from `DecidesBy`, and the bound on tops from exclusion.
-* **A tighter window bound.** `n ^ k` is far above what the simulator
-  measures; the exposure argument of S8 may bound the rounds of the
-  window above the time of detection by `n + |D|`.
-* **Before the honest blocks arrive.** Under asynchrony, the last honest
+* **Agreement below the horizon.** The induction of §8, that nodes
+  committing the same leaders order and bypass the same blocks, on the
+  ordering of `LeanDag`.
+* **Unordered honest blocks.** The bound of §8 assumes that `C` holds a
+  block of round `r + 1` of every honest validator. When a slow honest
+  block of that round is not ordered, Byzantine ordered blocks alone may
+  keep a block of round `r` from being bypassed. The bound then follows
+  only from the ordered blocks of round `r + 1`, at most one block of an
+  author for each of them, and grows from round to round downward.
+* **Between the horizon and the round of exposure.** Above `h`, S7
+  bounds what a node holds from the round `m` on. Between `h` and `m`
+  twins of `D` are bounded by the blocks one round above, at most one
+  for each, which is not proved on the node.
+* **Before the honest blocks arrive.** Under §6 and asynchrony, the last honest
   block of round `r + 1` may come late, and until then a node cannot tell
   a secret block from a late honest one.
 * **Certificates under pruning.** Below the seal, back-dated joins are
