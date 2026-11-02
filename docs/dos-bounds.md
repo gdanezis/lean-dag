@@ -68,9 +68,12 @@ The constants are fixed in Phase 0 and checked in Phase 1.
   leader, at most `f` under a fair schedule with one leader a slot round.
   For the rule of Phase 1, `w = 3` and `per = 1`.
 * **B3. The store.** In a synchronous run, a correct node takes in at
-  most `n + |D|` blocks of each round, except at the rounds of at most
-  `f` bands. A band is at most `L + 2` rounds long, and the node takes in
-  at most `M = n + (n − f) · f (f + 1) / 2` blocks of each of its rounds.
+  most `n + |D|` blocks of each round, except at the rounds of bands. The
+  band of a Byzantine author is the set of rounds at which the node takes
+  in twins of it. Each author has at most one band, of at most `L + 2`
+  rounds. At each round the node takes in at most
+  `K = n + (n − f) · f` blocks, and over the run at most
+  `f · (n − f) · (L + 2)` blocks beyond one of each author a round.
   Below its cut it takes in only ordered blocks and the blocks of rounds
   whose ordered blocks above come from fewer than `q` authors, and keeps
   only ordered blocks, the blocks of a proof of a verdict, and blocks not
@@ -78,23 +81,34 @@ The constants are fixed in Phase 0 and checked in Phase 1.
 * **B4. Histories.** The bound of B3 holds for the history of every block
   the node holds or takes in.
 * **B5. Memory.** The memory holds the rounds from the floor to the top,
-  at most `L + 1` of them, so at most `(L + 1) · M` blocks.
+  at most `L + 1` of them, so at most `(L + 1) · K` blocks.
 * **B6. Sync.** The blocks a node takes in at a round number at most the
   bound of B3 for that round. A piece from a correct responder holds
   only blocks at or above the requester's cut, so at most
-  `(t − G + 1) · M` blocks for a target of round `t`.
+  `(t − G + 1) · K` blocks for a target of round `t`.
 
-The constant `M` of a band is the argument of `docs/sync-auth.md` §4 for
-the union of the honest histories, to be proved in R5 or replaced by the
-bound R5 proves. The bound `n + f (f + 1) / 2` that §4 argues for one
+**The constant `K`.** No attack in the simulator exceeds `K`: 31 at
+`n = 10` and 49 at `n = 13`, against 28 and 45 seen. The 28 and 45 are
+`n + f · (n − f − 1)`, reached for one round when every Byzantine author
+shows each correct node its own block (`alltwins`), so `K` is within `f`
+of what an attack achieves. The argument of `docs/sync-auth.md` §4 for
+the union of the honest histories gives only
+`M = n + (n − f) · f (f + 1) / 2`, which grows as `n · f²`: 37,687 at
+`n = 100, f = 33`, against `K = 2,311`. R5 is to prove `K`, with `M` as
+the fallback. The bound `n + f (f + 1) / 2` that §4 argues for one
 history fails in the simulator (§6): a correct block joins, at the
-frontier, the structures that its references adopted. No attack in the
-simulator, the structures of §4 included, exceeds `n + (n − f) · f`: 31
-at `n = 10` and 49 at `n = 13`, against 28 and 45 seen. The 28 and 45
-are `n + f · (n − f − 1)`, reached for one round when every Byzantine
-author shows each correct node its own block (`alltwins`), so the bound
-is within `f` of what an attack achieves. `M` grows as `n · f²`, about
-37,700 at `n = 100, f = 33`, so R5 aims at `n + (n − f) · f`.
+frontier, the structures that its references adopted.
+
+**The length of a band.** A band can last as long as the lag. In the
+simulator the band of one author spans up to 8 rounds at `n = 10, f = 3`
+and 7 at `n = 13, f = 4`, within `L + 2` (9 and 10). The long bands lie
+at rounds below the cut where bypass does not apply, after a run of
+skipped Byzantine leaders. Bands can therefore fill the memory, and B5
+is `(L + 1) · K`, not `(L + 1) · (n + |D|)` with the mass of a band
+added. Both `L` and the length of a band shrink only with `c`, the run
+of slots without a correct leader. A leader schedule that bounds `c` by
+a constant, by reputation for instance, would bound both, but changes
+the commit rule and its proof of safety; it is not in this plan.
 
 ## 4. Decisions
 
@@ -177,7 +191,7 @@ They are proved in Phase 4, on the node of Phase 3.
   twins' author, so a band ends one round above its last join. That the
   joins are made at the frontier, so that a band lasts at most `L + 2`
   rounds, needs time. A band holds a bounded number of twins a round:
-  `(n − f) · f`, or failing that `M − n`.
+  `K − n = (n − f) · f`, or failing that `M − n`.
 * **R6.** What a node behind needs. In a synchronous run, the history
   down to a correct node's cut of the blocks from which another correct
   node decided its next slot is held by a correct node: on its disk
@@ -219,18 +233,18 @@ and `late deaf`:
 | Quantity | `n = 10` | `n = 13` | Bound of §3 | Bound |
 |---|---|---|---|---|
 | Lag `top − H` | 6 | 8 | `L = 3 + (c + 1)` | 7, 8 |
-| Memory | 77 | 125 | `(L + 1) · M` | 416, 927 |
-| Taken in at a round | 28 | 45 | `M` | 52, 103 |
+| Memory | 77 | 125 | `(L + 1) · K` | 248, 441 |
+| Taken in at a round | 28 | 45 | `K` | 31, 49 |
 | Rounds above `n + ∣D∣` | 8 | 10 | `f · (L + 2)` | 27, 40 |
-| History at a round | 28 | 45 | `M` | 52, 103 |
-| Piece per round of target | 11.8 | 19.8 | `M` | 52, 103 |
+| History at a round | 28 | 45 | `K` | 31, 49 |
+| Piece per round of target | 11.8 | 19.8 | `K` | 31, 49 |
 
 * **The join test.** A node reads the history of a block as it saw it,
   through the references it held when it took the block in. This gives
   the counts of a test on full histories, and no node refuses a correct
   block on it. With the test of D11 as first decided, on pairs at or
   above the cut, `nest` puts 56 blocks of one round into a correct node
-  at `n = 10`, above `M = 52`. The families of `nest` join their twins
+  at `n = 10`, above `K = 31` and `M = 52`. The families of `nest` join their twins
   below the frontier, at rounds that are below the cut but not bypassed:
   the round above holds ordered blocks of fewer than `q` authors after
   Byzantine leaders are skipped. Taken over the blocks the node follows
@@ -246,9 +260,8 @@ and `late deaf`:
   correct node takes in `n + f · (n − f − 1)` blocks of one round: 28 at
   `n = 10` and 45 at `n = 13`. The joins are made at once, every author
   is convicted, and no other round exceeds `n + |D|`. The other such
-  rounds are those of `nest` and `flat`, and
-  lie within `L + 2` rounds of the run of skipped Byzantine leaders
-  before the attack's frontier. There the ordered set is thin and bypass
+  rounds are those of `nest` and `flat`, and lie within `L + 2` rounds
+  of the run of skipped Byzantine leaders before the attack's frontier. There the ordered set is thin and bypass
   does not apply, and each correct node adopts at the frontier its own
   structure of Byzantine chains, which joins nothing below the frontier.
   A correct block then joins its references' structures under a
@@ -256,8 +269,14 @@ and `late deaf`:
   of three Byzantine authors, one for each of 9 correct nodes and one
   more. The structures of `docs/sync-auth.md` §4 (`flat`) give 22
   blocks taken in at a round at `n = 10`, and a history with 27 at
-  `n = 13`. All are within `n + (n − f) · f`; the `f (f + 1) / 2` chains
-  for each correct node that `M` allows do not appear.
+  `n = 13`. All are within `K`; the `f (f + 1) / 2` chains for each
+  correct node that `M` allows do not appear.
+* **The band of one author.** Under `nest` and `flat` the band of one
+  author at one node spans up to 8 rounds at `n = 10` and 7 at
+  `n = 13`, within `L + 2`, and the author adds up to 40 and 67 blocks
+  beyond one a round, within `(n − f) · (L + 2)`, 63 and 90. At one round it may have more blocks than `n − f`,
+  10 at `n = 10` and 11 at `n = 13`, so the bound of B3 is on the round,
+  not on the author.
 * **What is kept.** Below the cut a node keeps 7 to 13 blocks a round,
   nearly all ordered; proofs add at most 0.7 a round. In all, the nodes
   drop 250 and 784 blocks under `nest`, 357 and 857 under `flat` at

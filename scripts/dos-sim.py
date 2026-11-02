@@ -64,7 +64,10 @@ blocks taken in at a round, rounds where some node took in more than `n + |D|`, 
 piece per round of its target above the cut, history of a built block at a round
 above the cut, the blocks kept below the cut a round (ordered, in a proof only,
 other), the blocks dropped, the catch-ups, and the honest blocks some node refused on
-the join test (`jr`), and of those, the ones it never took in (`jp`). `nest cut` and
+the join test (`jr`), and of those, the ones it never took in (`jp`), the longest band
+of one author at one node (`span`: from the lowest to the highest round at which the
+node took in twins of it), and the most blocks one author adds to one node beyond one
+a round (`xa`). `nest cut` and
 `nest cert` run with `JOIN = 'cut'` and `'cert'`;
 `late deaf` cuts the last honest node off from ticks 60 to 160, outside synchrony.
 """
@@ -865,6 +868,17 @@ class Sim:
         for r in range(1, min(nd.top for nd in nds) + 1):
             if max(nd.taken[r] for nd in nds) > N + len(D):
                 over += 1
+        span = extra = 0
+        for nd in nds:
+            cnt = defaultdict(int)
+            for b in nd.ever:
+                if blocks[b][0] in BYZ:
+                    cnt[blocks[b][:2]] += 1
+            for a in BYZ:
+                rs = [k[1] for k, c in cnt.items() if k[0] == a and c >= 2]
+                if rs:
+                    span = max(span, max(rs) - min(rs) + 1)
+                extra = max(extra, sum(c - 1 for k, c in cnt.items() if k[0] == a))
         store = max(max((sum(1 for b in nd.disk | nd.proof if blocks[b][1] == r)
                          for r in range(1, nd.top + 1)), default=0) for nd in nds)
         return {'top': min(nd.top for nd in nds), 'lo': min(nd.lo for nd in nds),
@@ -876,6 +890,7 @@ class Sim:
                 'kept': [k / max(1, rounds) for k in kept],
                 'drop': sum(nd.ndrop for nd in nds), 'cu': sum(nd.ncu for nd in nds),
                 'cubad': sum(nd.cubad for nd in nds),
+                'span': span, 'extra': extra,
                 'jr': sum(len(nd.jref) for nd in nds),
                 'jp': sum(len(nd.jref - nd.ever) for nd in nds), 'late': self.nlate, 'over': over,
                 'certs': sum(1 for b in CERT if blocks[b][0] in HON),
@@ -897,7 +912,7 @@ def table(n, f, ticks):
           f"n + f(f+1)/2 = {n + f * (f + 1) // 2}")
     print(f"{'attack':16}{'top':>5}{'H':>5}{'agree':>6}{'D':>3}{'lag':>4}{'mem':>5}"
           f"{'store':>6}{'taken':>6}{'over':>5}{'piece':>6}{'p/r':>6}{'hist':>5}"
-          f"{'kept o/p/x':>15}{'drop':>6}{'cu':>3}{'jr':>4}{'jp':>4}")
+          f"{'kept o/p/x':>15}{'drop':>6}{'cu':>3}{'jr':>4}{'jp':>4}{'span':>5}{'xa':>4}")
     for a, kw in ATTACKS:
         JOIN = kw.get('join', 'view')
         res = Sim(a, ticks, kw.get('depth', 8), 1, kw.get('deaf'), kw.get('width')).run()
@@ -910,7 +925,7 @@ def table(n, f, ticks):
               f"{res['lag']:>4}{res['mem']:>5}{res['store']:>6}{res['taken']:>6}"
               f"{res['over']:>5}{res['piece']:>6}{res['pratio']:>6.1f}{res['hist']:>5}"
               f"{k[0]:>6.1f}/{k[1]:.1f}/{k[2]:.1f}{res['drop']:>6}{res['cu']:>3}"
-              f"{res['jr']:>4}{res['jp']:>4}",
+              f"{res['jr']:>4}{res['jp']:>4}{res['span']:>5}{res['extra']:>4}",
               flush=True)
 
 
