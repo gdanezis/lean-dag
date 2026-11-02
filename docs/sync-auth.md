@@ -330,7 +330,51 @@ the third row `v` reads the references of a bypassed block it reaches
 from a block it follows, and goes no further; a bypassed structure costs
 at most `n + n²` more blocks.
 
-## 8. Open
+## 8. The mass of a window
+
+A node that bypasses only below the rounds whose leaders it has all
+decided never reads a bypassed round in a decision, and such a cut is the
+cut of `LeanDag/GC`: decisions survive it (`GC/ChopDecided.lean`), and
+validators cutting at different horizons agree (`GC/Horizon.lean`). Below
+that horizon the node needs no block, so the test of §6 is not needed
+there. A block that arrives below the horizon after the cut is not
+ordered.
+
+Under the horizon `L` of `scripts/sync-auth.py`, which trails each
+node's frontier by `W` rounds, the blocks of Byzantine authors that one
+honest node processes are, at `n = 10, f = 3` under `react` with twin
+checks:
+
+| Attack | No horizon | `W = 8` | `W = 5` | `W = 3` | Bypass, §6 |
+|---|---|---|---|---|---|
+| `nest`, `depth = 13` | 732 | 351 | 191 | 64 | 27 |
+| `nest`, `depth = 39` | 2153 | 351 | 191 | 64 | 27 |
+| `flat`, `depth = 13` | 703 | 343 | 191 | 64 | 27 |
+| `bulk`, `depth = 39` | 153 | 31 | 19 | 11 | 7 |
+| `inject`, `d = 8` | 14185 | 160 | 157 | 155 | 154 |
+
+The cost depends on `W` and not on the depth, and every run is live.
+
+`LeanDag/Common/Depth.lean` proves the bound on a block record. A node
+keeps no block at or below a horizon `h` and fetches above it the
+histories of the blocks it takes as *tops*.
+
+* **The depth bound** (`card_depthBlocks_le`). The blocks of a block's
+  history `k` rounds below it number at most `n ^ k`.
+* **The window bound** (`card_window_le`). If every held block above `h`
+  lies in the history of a top, every top lies at most `W` rounds above
+  `h`, and a round holds at most `B` tops, each round above `h` holds at
+  most `B · Σ_{k < W} n ^ k` held blocks.
+* **The tops** (`card_tops_le`). At most one top of an author in a round,
+  or two for an author in a set `D`, are at most `n + |D|` tops a round.
+* **The bound** (`card_window_le_of_tops`). Each round above `h` holds
+  at most `(n + |D|) · Σ_{k < W} n ^ k` held blocks.
+
+The premises are what the node must supply: `W` from the decision bound
+`DecidesBy` of V11 past `GST`, the tops from exclusion (Stage 2), and the
+horizon from a cut the node of `LeanDag/Node` does not yet make.
+
+## 9. Open
 
 * **Validity under bypass.** Whether a reference is bypassed depends on
   what a node holds, and a node holds a block back until each reference
@@ -345,10 +389,13 @@ at most `n + n²` more blocks.
   from `A` to such a certificate must be shown to exist; a followed block
   may have every reference bypassed. A commit must also order the same
   history at every node.
-* **Bypass below the decided rounds only.** If a node bypasses only
-  blocks of rounds whose leaders it has all decided, the commit rule never
-  reads a bypassed round, and safety follows from the results on the cut
-  below a horizon. Inside the undecided rounds nothing is bypassed.
+* **The window on the node.** §8 holds on a block record. On the node
+  it needs a cut at the decided horizon, which `LeanDag/Node` does not
+  make, a bound in rounds on the lag of that horizon behind the frontier,
+  from `DecidesBy`, and the bound on tops from exclusion.
+* **A tighter window bound.** `n ^ k` is far above what the simulator
+  measures; the exposure argument of S8 may bound the rounds of the
+  window above the time of detection by `n + |D|`.
 * **Before the honest blocks arrive.** Under asynchrony, the last honest
   block of round `r + 1` may come late, and until then a node cannot tell
   a secret block from a late honest one.
