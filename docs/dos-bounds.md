@@ -261,22 +261,23 @@ and `late deaf`:
   `n = 10` and 45 at `n = 13`. The joins are made at once, every author
   is convicted, and no other round exceeds `n + |D|`. The other such
   rounds are those of `nest` and `flat`, and lie within `L + 2` rounds
-  of the run of skipped Byzantine leaders before the attack's frontier. There the ordered set is thin and bypass
-  does not apply, and each correct node adopts at the frontier its own
-  structure of Byzantine chains, which joins nothing below the frontier.
-  A correct block then joins its references' structures under a
-  certificate. At `n = 13` under `nest`, a round holds 10 blocks of each
-  of three Byzantine authors, one for each of 9 correct nodes and one
-  more. The structures of `docs/sync-auth.md` §4 (`flat`) give 22
-  blocks taken in at a round at `n = 10`, and a history with 27 at
-  `n = 13`. All are within `K`; the `f (f + 1) / 2` chains for each
-  correct node that `M` allows do not appear.
+  of the run of skipped Byzantine leaders before the attack's frontier.
+  There the ordered set is thin and bypass does not apply, and each
+  correct node adopts at the frontier its own structure of Byzantine
+  chains, which joins nothing below the frontier. A correct block then
+  joins its references' structures under a certificate. At `n = 13`
+  under `nest`, a round holds 10 blocks of each of three Byzantine
+  authors, one for each of 9 correct nodes and one more. The structures
+  of `docs/sync-auth.md` §4 (`flat`) give 22 blocks taken in at a round
+  at `n = 10`, and a history with 27 at `n = 13`. All are within `K`;
+  the `f (f + 1) / 2` chains for each correct node that `M` allows do
+  not appear.
 * **The band of one author.** Under `nest` and `flat` the band of one
-  author at one node spans up to 8 rounds at `n = 10` and 7 at
-  `n = 13`, within `L + 2`, and the author adds up to 40 and 67 blocks
-  beyond one a round, within `(n − f) · (L + 2)`, 63 and 90. At one round it may have more blocks than `n − f`,
-  10 at `n = 10` and 11 at `n = 13`, so the bound of B3 is on the round,
-  not on the author.
+  author at one node spans up to 8 rounds at `n = 10` and 7 at `n = 13`,
+  within `L + 2`, and the author adds up to 40 and 67 blocks beyond one
+  a round, within `(n − f) · (L + 2)`, 63 and 90. At one round it may
+  have more blocks than `n − f`, 10 at `n = 10` and 11 at `n = 13`, so
+  the bound of B3 is on the round, not on the author.
 * **What is kept.** Below the cut a node keeps 7 to 13 blocks a round,
   nearly all ordered; proofs add at most 0.7 a round. In all, the nodes
   drop 250 and 784 blocks under `nest`, 357 and 857 under `flat` at
