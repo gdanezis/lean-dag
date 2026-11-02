@@ -281,6 +281,28 @@ store closed, and needs none of this.
 * **Checks at the cut.** A block of round `G` or below is checked on its
   own header only (D10), so `ready` and the checks change below the cut.
 
+**Preparation for step 4.**
+
+* **The witness of a verdict.** The loop returns verdicts, not the blocks
+  that decide them. A function of the scheme is to return, for each
+  verdict, its deciding blocks as D13 lists them, with a lemma: those
+  blocks, with their histories down to `slotRound k − 1`, form a view of
+  the padded record on which the slot is decided. A smaller view holds no
+  certificate or skip pattern the larger lacks, and the absences an
+  indirect verdict reads lie in the anchor's history, which the proof
+  holds.
+* **Catch-up as messages** (D16). A request naming the slot, a reply
+  with the proof and the blocks of the commit, the stall timer `T_c`, and
+  the receiver's check: the loop on the proof.
+* **Sync with the horizon** (D15). A responder streams only blocks at or
+  above the requester's cut; V3′ and `SyncsBound` are proved again.
+* **Staging.** About 18 files of `Node` read the store as closed
+  (`Store.complete`, `toRecord`) or as a cut of one record (`IsCut`). The
+  increments, each with `lake build` green: the disk invariant (every
+  held block real down to the node's cut) beside `IsCut`; dropping; the
+  store not closed below the cut, with `Cut.Cuts` proved directly;
+  catch-up; sync with the horizon; V11 and V13 on the new node.
+
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase
 3, from R1 to R5, V13 and the invariant of `BypassRun`. R6 is optional.
 

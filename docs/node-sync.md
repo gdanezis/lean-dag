@@ -122,7 +122,8 @@ reference `x` come from at least `q` authors (`Bypassed U ordered q x`).
 * **Proofs.** A *proof* of the verdict of slot `k` is a set of blocks
   that is a view of the record cut at `slotRound k − 1` on which the rule
   decides slot `k` (`Proves`). Its blocks of round `slotRound k − 1` are
-  base blocks (D10).
+  base blocks (D10). The proof a node keeps is the blocks that decide the
+  slot, with their histories down to `slotRound k − 1` (D13).
 * **Keeping.** The node keeps its ordered blocks and, for each slot it
   has decided, a proof of the verdict. It drops every other bypassed
   block (D13). Its disk stays a bypass view of `ordered` at `H`
@@ -263,6 +264,25 @@ its history and in the history of no single reference of it.
   way, since a proof may hold any block the node took in at its rounds;
   what is dropped is what a band or a slow author leaves outside every
   proof and the ledger.
+  *The proof kept* (decided with the user). For slot `k` of round `s`,
+  the blocks that decide it, with their histories down to round `s − 1`:
+  * a direct commit: the certificates and the votes they count;
+  * a direct skip: the blocks of the skip pattern, at round `s + 1`;
+  * an indirect commit: the anchor's proof, the skip proofs of the
+    eligible slots between, and the certificates of the leader that the
+    anchor links, with the path to them;
+  * an indirect skip: the anchor's proof and the skip proofs of the
+    eligible slots between.
+
+  The histories are needed in every case. Under the bounded vote, the
+  leader a vote counts for depends on its voter's history at the slot's
+  round, and whether a block omits the leader is read from the headers
+  of its references. An indirect verdict also reads absences: the lower
+  rungs are empty and the leader is the least linked candidate, or no
+  candidate is linked. These are read on the anchor's whole history over
+  the certificate rounds, which the anchor's history down to `s − 1`
+  holds. In the simulator the proofs, so taken, add at most 0.7 blocks a
+  round to what the node keeps below its cut.
 * **D14. A signer refuses a join at or below its cut.** *Decided.* It no
   longer holds the histories that `clean` reads there. A correct signer
   past round `r` holds a clean block of round `r`, its own, so `clean`
