@@ -234,14 +234,15 @@ omit [Fintype Validator] in
 round-`n + 1` block of the store, under a faithful payload source, with no
 block on the store under the identifier of a block of the node's own above
 round `n`. -/
-theorem lent_buildable {Z : Store Validator BlockId Payload} (hZ : StoreValid cfg.q cfg.xp Z)
-    {n : ℕ} {z : BlockId} (hzZ : z ∈ Z.ids) (hzr : (Z.blk z).round = n + 1)
+theorem lent_buildable {Z : Store Validator BlockId Payload} {n : ℕ}
+    (hZ : UpperValid cfg.q cfg.xp (n + 1) Z) {z : BlockId} (hzZ : z ∈ Z.ids)
+    (hzr : (Z.blk z).round = n + 1)
     (hkz : Z.kept[z]? = none)
     (hfa : cfg.Faithful) (hfresh : ∀ (P : Payload) R, cfg.idOf ⟨n + 1, cfg.me, R, P⟩ ∉ Z.ids)
     (E : Finset (Validator × BlockId × BlockId))
     (hbk : ∀ j ∈ Z.ids, (Z.blk j).round = n → cfg.xp.ex (Z.blk j).payload ⊆ named E) :
     lent Z z ⊆ Z.ids ∧ buildable cfg Z n (lent Z z) E = true := by
-  have hv := (hZ z hzZ).2
+  have hv := (hZ z hzZ (by rw [hzr])).2
   rw [Z.full_of_kept_none hkz] at hv
   refine ⟨fun j hj => Z.complete z hzZ j hj, lent_buildable_of E hfa hbk hzZ hzr
     (rowValid_congr (fun j _ => ?_) hv) (hfresh _ _)⟩
@@ -324,31 +325,22 @@ theorem event_of_mem (hinj : Converge.HashInjective cfg H tr)
   have hex : e₀ = x := eq_of_persists v he₀p hxp (by rw [he₀r, hxr])
   exact ⟨i₀, inp, e₀, hi₀, he₀, by rw [hex], he₀r, hbt⟩
 
-/-- **A reliable node's block is in the run's record**, at its round and
-by its author: the disk after the event holds it, and is a cut. -/
-theorem built_mem (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
-    (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    (hdr : cfg.drops = false) {v : Validator} (hv : v ∈ H) {p : ℕ}
+/-- **A reliable node's block is in a base's record**, at its round and by
+its author, when it lies at the base's round or above and stays on the
+node's disk after the event: that disk is read as the record reads it. -/
+theorem built_mem {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H}
+    {B E₀ E₁ : ℕ} (hbase : Base cfg H tr R B E₀ E₁) {v : Validator} (hv : v ∈ H) {p : ℕ}
     {inp : Input Validator BlockId Payload} (hp : tr[p]? = some (v, inp))
-    {e : BlockId × Block Validator BlockId Payload} (he : e ∈ persists (outputsAt cfg tr p)) :
-    e.1 ∈ (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).ids ∧
-      ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-        e.1).round = e.2.round ∧
-      ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-        e.1).creator = v := by
-  have hinjR := hashInjective_of_trace hinj
-  have hK : e ∈ knownAll cfg H tr :=
-    ⟨v, hv, List.mem_append_right _
-      (mem_persists_iff.mpr (mem_outputs_of_event hp (mem_persists_iff.mp he)))⟩
-  have hcont := content_of_known hinjR hK
+    {e : BlockId × Block Validator BlockId Payload} (he : e ∈ persists (outputsAt cfg tr p))
+    (hp₁ : p + 1 ≤ E₁) (hB : B ≤ e.2.round)
+    (hkeep : cfg.drops = false ∨ (stateBefore cfg tr (p + 1) v).floor ≤ e.2.round) :
+    e.1 ∈ R.ids ∧ (R.block e.1).round = e.2.round ∧ (R.block e.1).creator = v := by
   have hgood := ((Converge.inv_before (cfg := cfg) (tr := tr) (p + 1) v).good e
     (persists_of_event hp he)).2.1
-  refine ⟨?_, by simp only [globalRecord, hcont], by simp only [globalRecord, hcont]; exact hgood⟩
-  have hin : e.1 ∈ (stateBefore cfg tr (p + 1) v).disk.ids := by
-    rw [outputsAt_eq hp] at he
-    rw [stateBefore_succ hp, if_pos rfl]
-    exact (step_persist (cfg := cfg.at v) e he (Or.inl hdr)).1
-  exact ((cut_before hσ hadm hf htime hinj hdr (p + 1) v hv).1 e.1 hin).1
+  obtain ⟨hin, hfull⟩ := Converge.persist_stored hp he (Nat.lt_succ_self p) hkeep
+  have hr : B ≤ ((stateBefore cfg tr (p + 1) v).disk.full e.1).round := by rw [hfull]; exact hB
+  obtain ⟨hU, hround, hcr, -⟩ := (hbase.disk v hv (p + 1) hp₁).1 e.1 hin hr
+  exact ⟨hU, by rw [hround, hfull], by rw [hcr, hfull]; exact hgood⟩
 
 end Record
 
@@ -360,19 +352,18 @@ section Lend
 left out only authors its evidence names, its block carries that evidence
 against each, since it references none of them, and the borrower holds
 the block, so holds the evidence. -/
-theorem excluded_lent {K : Set (BlockId × Block Validator BlockId Payload)}
-    (hfa : cfg.Faithful) (hdr : cfg.drops = false) {w h : Validator}
+theorem excluded_lent {K : Set (BlockId × Block Validator BlockId Payload)} {G : ℕ}
+    (hfa : cfg.Faithful) {w h : Validator}
     {s s' xw x : State Validator BlockId Payload} {inp inp' : Input Validator BlockId Payload}
-    (hbsw : BuildState (cfg.at w) U K s inp xw) (hbs : BuildState (cfg.at h) U K s' inp' x)
-    {n : ℕ} {ow : Option BlockId}
+    (hbsw : BuildState (cfg.at w) U G K s inp xw) (hbs : BuildState (cfg.at h) U G K s' inp' x)
+    {n : ℕ} (hn : cfg.drops = false ∨ xw.floor ≤ n) {ow : Option BlockId}
     (ho : ∀ j, ow = some j → (xw.disk.blk j).creator = (cfg.at w).me)
-    {z : BlockId} (hz : z ∈ x.disk.ids)
-    (hzrefs : (U.block z).refs = refsAt (cfg.at w) xw.disk n ow xw.evidence)
+    {z : BlockId} (hz : z ∈ x.disk.ids) (hzG : G < (x.disk.blk z).round)
     (hzpay : (U.block z).payload =
       payloadFor (cfg.at w) xw.disk n (refsAt (cfg.at w) xw.disk n ow xw.evidence) xw.evidence) :
     excluded (cfg.at w) xw.disk n xw.evidence ⊆ excluded (cfg.at h) x.disk n x.evidence := by
   intro a ha
-  obtain ⟨e, hef, rfl⟩ := Finset.mem_image.mp (hbsw.excluded_sub_named hdr hfa n ha)
+  obtain ⟨e, hef, rfl⟩ := Finset.mem_image.mp (hbsw.excluded_sub_named hfa hn ha)
   obtain ⟨he, hne⟩ := Finset.mem_filter.mp hef
   -- the lent block references no block of the author, so carries the evidence
   have hnot : e.1 ∉ creatorsOf xw.disk.blk (refsAt (cfg.at w) xw.disk n ow xw.evidence) :=
@@ -380,7 +371,8 @@ theorem excluded_lent {K : Set (BlockId × Block Validator BlockId Payload)}
       obtain ⟨k, hk, hkc⟩ := mem_creatorsOf.mp hm
       exact refsAt_avoids ho k hk (by rw [hkc]; exact ha)
   have hez : e ∈ cfg.xp.ev (x.disk.blk z).payload := by
-    rw [← (x.disk.full_fields z).2.2, ← hbs.cut.eq hz, hzpay]
+    have hzG' : G < (x.disk.full z).round := by rw [(x.disk.full_fields z).1]; exact hzG
+    rw [← (x.disk.full_fields z).2.2, ← (hbs.cut z hz hzG'.le).2.2.2 hzG', hzpay]
     unfold payloadFor
     erw [(hfa _ _ _).1]
     exact Finset.mem_filter.mpr ⟨he, hnot⟩
@@ -397,54 +389,62 @@ variable {tr : Trace Validator BlockId Payload} {D : Finset Validator} {nE : ℕ
 `D`**, at a state it builds from. -/
 theorem excluded_sub_spread (hsp : Live.Spread cfg H tr D nE) {v : Validator}
     {s x : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
-    (h : BuildState (cfg.at v) U (knownAll cfg H tr) s inp x) (hdr : cfg.drops = false) (r : ℕ) :
+    {G : ℕ} (h : BuildState (cfg.at v) U G (knownAll cfg H tr) s inp x) {r : ℕ}
+    (hr : cfg.drops = false ∨ cfg.Faithful ∧ x.floor ≤ r) :
     excluded (cfg.at v) x.disk r x.evidence ⊆ D :=
-  h.excluded_sub hdr
+  h.excluded_sub
     (fun y hy e he hne => by
       obtain ⟨u, hu, hk⟩ := hy
       exact hsp.1 y (knownOf_sub hu hk) e he hne)
     (fun y hy z hz hne hc hr => by
       obtain ⟨u, hu, hk⟩ := hy
       obtain ⟨u', hu', hk'⟩ := hz
-      exact hsp.2.1 y (knownOf_sub hu hk) z (knownOf_sub hu' hk') hne hc hr) r
+      exact hsp.2.1 y (knownOf_sub hu hk) z (knownOf_sub hu' hk') hne hc hr) hr
 
 /-- **Under spread evidence, an honest node leaves out only authors of
-`D`**, at the state before an event. -/
-theorem excluded_before_spread (hsp : Live.Spread cfg H tr D nE) (hdr : cfg.drops = false)
-    {v : Validator} (hv : v ∈ H) (i r : ℕ) :
+`D`**, at the state before an event: at a round at or above its floor under
+a faithful payload source, when it drops. -/
+theorem excluded_before_spread (hsp : Live.Spread cfg H tr D nE) {v : Validator} (hv : v ∈ H)
+    (i r : ℕ) (hr : cfg.drops = false ∨ cfg.Faithful ∧ (stateBefore cfg tr i v).floor ≤ r) :
     excluded (cfg.at v) (stateBefore cfg tr i v).disk r (stateBefore cfg tr i v).evidence ⊆ D := by
-  have hE := Converge.evidenceOn_before (cfg := cfg) (tr := tr) v hdr i
-  have hV := (Converge.inv_before (cfg := cfg) (tr := tr) i v).valid hdr
+  set Z := stateBefore cfg tr i v with hZ
+  have hi := Converge.inv_before (cfg := cfg) (tr := tr) i v
+  -- the authors its evidence names are of `D`
+  have hE : named Z.evidence ⊆ D := by
+    intro a ha
+    obtain ⟨e, he, rfl⟩ := Finset.mem_image.mp ha
+    obtain ⟨hne, ⟨y, hy, z, hz, hy1, hz1, hyc, hzc, hrd⟩ | ⟨y, hy, hye⟩⟩ :=
+      hi.evidence.2 e (Finset.mem_filter.mp he).1
+    · rw [← hyc]
+      exact hsp.2.1 y (Converge.knownBefore_sub hv i hy) z (Converge.knownBefore_sub hv i hz)
+        (by rw [hy1, hz1]; exact hne) (hyc.trans hzc.symm) hrd
+    · exact hsp.1 y (Converge.knownBefore_sub hv i hy) e hye hne
   intro a hm
   rcases Finset.mem_union.mp hm with hm | hm
-  · obtain ⟨e, he, rfl⟩ := Finset.mem_image.mp hm
-    obtain ⟨he, hne⟩ := Finset.mem_filter.mp he
-    rcases (hE.2 e he).2 with ⟨h₁, h₂, h₃, h₄, h₅⟩ | ⟨c, hc, hce⟩
-    · have hf := (stateBefore cfg tr i v).disk.full_fields
-      have := hsp.2.1 _ (Converge.stored_known hv h₁) _ (Converge.stored_known hv h₂) hne
-        (by simp only; rw [(hf _).2.1, (hf _).2.1, h₃, h₄])
-        (by simp only; rw [(hf _).1, (hf _).1, h₅])
-      simp only at this
-      rwa [(hf _).2.1, h₃] at this
-    · exact hsp.1 _ (Converge.stored_known hv hc) e
-        (by simp only; rw [((stateBefore cfg tr i v).disk.full_fields c).2.2]; exact hce) hne
+  · exact hE hm
   · obtain ⟨c, hcR, hcm⟩ := Finset.mem_biUnion.mp hm
-    by_contra hD
-    exact ex_not_named (A := Dᶜ) hV
-      (fun j hj e he hne hc => Finset.mem_compl.mp hc (hsp.1 _ (Converge.stored_known hv hj) e
-        (by simp only; rw [((stateBefore cfg tr i v).disk.full_fields j).2.2]; exact he) hne))
-      c (Store.mem_atRound.mp hcR).1 _ hcm (Finset.mem_compl.mpr hD)
+    obtain ⟨hcd, hcr⟩ := Store.mem_atRound.mp hcR
+    rcases hr with hd | ⟨hf, hF⟩
+    · by_contra hD
+      exact ex_not_named (A := Dᶜ) (hi.valid hd)
+        (fun j hj e he hne hc => Finset.mem_compl.mp hc (hsp.1 _ (Converge.stored_known hv hj) e
+          (by simp only; rw [(Z.disk.full_fields j).2.2]; exact he) hne))
+        c hcd _ hcm (Finset.mem_compl.mpr hD)
+    · exact hE ((Converge.kept_before hf v i).exposed hcd
+        (hi.above c hcd (by rw [hcr]; exact hF)).2 hcm)
 
 /-- **Under spread evidence, an honest node that builds above `nE` leaves
 out every author of `D`**. -/
 theorem spread_sub_excluded (hsp : Live.Spread cfg H tr D nE) {i : ℕ} {w : Validator}
     {inp : Input Validator BlockId Payload} {x : State Validator BlockId Payload}
     (hi : tr[i]? = some (w, inp)) (hw : w ∈ H)
-    (hbs : BuildState (cfg.at w) U (knownAll cfg H tr) (stateBefore cfg tr i w) inp x)
+    {G : ℕ} (hbs : BuildState (cfg.at w) U G (knownAll cfg H tr) (stateBefore cfg tr i w) inp x)
     {e : BlockId × Block Validator BlockId Payload} (he : e ∈ persists (outputsAt cfg tr i))
     (her : nE < e.2.round) (r : ℕ) : D ⊆ excluded (cfg.at w) x.disk r x.evidence :=
     fun a ha => by
-  obtain ⟨e', he', he'1, hne⟩ := hbs.ev.1 _ (hbs.det (hsp.2.2 i w inp hi hw e he her ha))
+  obtain ⟨Bs, hiX⟩ := hbs.inv
+  obtain ⟨e', he', he'1⟩ := hiX.evidence.1 _ (hbs.det (hsp.2.2 i w inp hi hw e he her ha))
+  have hne := (hiX.evidence.2 e' he').1
   exact Finset.mem_union_left _
     (Finset.mem_image.mpr ⟨e', Finset.mem_filter.mpr ⟨he', hne⟩, he'1⟩)
 
@@ -453,8 +453,8 @@ references no author of `D`**: its builder convicted them before the event,
 and leaves out the authors it convicted. -/
 theorem refs_avoid_spread (hsp : Live.Spread cfg H tr D nE) {i : ℕ} {w : Validator}
     {inp : Input Validator BlockId Payload} {x : State Validator BlockId Payload}
-    {ow : Option BlockId} {r : ℕ} (hi : tr[i]? = some (w, inp)) (hw : w ∈ H)
-    (hbs : BuildState (cfg.at w) U (knownAll cfg H tr) (stateBefore cfg tr i w) inp x)
+    {ow : Option BlockId} {r : ℕ} (hi : tr[i]? = some (w, inp)) (hw : w ∈ H) {G : ℕ}
+    (hbs : BuildState (cfg.at w) U G (knownAll cfg H tr) (stateBefore cfg tr i w) inp x)
     {e : BlockId × Block Validator BlockId Payload} (he : e ∈ persists (outputsAt cfg tr i))
     (her : nE < e.2.round) (ho : ∀ j, ow = some j → (x.disk.blk j).creator = (cfg.at w).me) :
     ∀ k ∈ refsAt (cfg.at w) x.disk r ow x.evidence, (x.disk.blk k).creator ∉ D := by
@@ -464,25 +464,32 @@ theorem refs_avoid_spread (hsp : Live.Spread cfg H tr D nE) {i : ℕ} {w : Valid
 /-- **Under spread evidence, an honest author's block above `nE` lends
 references avoiding the authors an honest node leaves out**, at the state
 before an event. -/
-theorem lent_avoids_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
-    (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
+theorem lent_avoids_before (hσ : cfg.σ = boundedSel) (htime : Converge.TimelyAuthentic cfg H tr)
     (hinj : Converge.HashInjective cfg H tr)
-    (hdr : cfg.drops = false) (time : ℕ → ℕ) (hsp : Live.Spread cfg H tr D nE)
-    {v : Validator} (hv : v ∈ H) (E : ℕ) {m : ℕ} {z : BlockId}
+    {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H} {B E₀ E₁ : ℕ}
+    (hbase : Base cfg H tr R B E₀ E₁) (time : ℕ → ℕ) (hsp : Live.Spread cfg H tr D nE)
+    {v : Validator} (hv : v ∈ H) {E : ℕ} (hE : E ≤ E₁) {m : ℕ} {z : BlockId}
     (hz : z ∈ (stateBefore cfg tr E v).disk.ids)
     (hzr : ((stateBefore cfg tr E v).disk.blk z).round = m + 1)
-    (hzH : ((stateBefore cfg tr E v).disk.blk z).creator ∈ H) (hmE : nE ≤ m) :
+    (hzH : ((stateBefore cfg tr E v).disk.blk z).creator ∈ H) (hmE : nE ≤ m) (hmB : B ≤ m)
+    (hrV : cfg.drops = true → B + 1 + cfg.p.voteOffset ≤ m)
+    (hr : cfg.drops = false ∨ cfg.Faithful ∧ (stateBefore cfg tr E v).floor ≤ m) :
     ∀ k ∈ lent (stateBefore cfg tr E v).disk z, ((stateBefore cfg tr E v).disk.blk k).creator ∉
       excluded (cfg.at v) (stateBefore cfg tr E v).disk m (stateBefore cfg tr E v).evidence := by
   set Z := stateBefore cfg tr E v with hZ
-  have hcut := (cut_before hσ hadm hf htime hinj hdr E v hv).1
-  have hzU := (hcut _ hz).1
-  have hzc : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-      z).creator = (Z.disk.blk z).creator := hcut.creator hz
-  have hzr' : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-      z).round = m + 1 := by rw [hcut.round hz]; exact hzr
+  have hcut := (hbase.disk v hv E hE).1
+  have hzf : (Z.disk.full z).round = m + 1 := by rw [(Z.disk.full_fields z).1]; exact hzr
+  obtain ⟨hzU, hzr₀, hzc₀, hzeq⟩ := hcut z hz (by rw [hzf]; omega)
+  have hzc : (R.block z).creator = (Z.disk.blk z).creator := by
+    rw [hzc₀, (Z.disk.full_fields z).2.1]
+  have hzr' : (R.block z).round = m + 1 := by rw [hzr₀, hzf]
+  -- its author built it before the event
+  have hzk := (Converge.inv_before (cfg := cfg) (tr := tr) E v).known z hz
+  obtain ⟨j, hjE, hjw, hjz⟩ := mem_persists_before (cfg := cfg) (tr := tr) _ E
+    (own_known htime hv hzH le_rfl hzk (Z.disk.full_fields z).2.1)
   obtain ⟨iw, inpw, xw, oww, hiw, -, hbsw, hshw, -, ⟨-, -, -, -, hew⟩, hzrefs, hzsub, -, -, -⟩ :=
-    built_block time hσ hadm hf htime hinj hdr hzH hzU hzc hzr'
+    built_block time hσ htime hinj hbase hzH hzU hzc hzr' hmB hrV
+      ⟨j, by omega, hjw, _, hjz, hzf⟩
   have ho : ∀ j, oww = some j →
       (xw.disk.blk j).creator = (cfg.at (Z.disk.blk z).creator).me := fun j hj => by
     rcases hshw.2.2 with ⟨ht, hoe⟩ | ⟨-, hon, -⟩
@@ -494,11 +501,26 @@ theorem lent_avoids_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
   have hAD := refs_avoid_spread (r := m) hsp hiw hzH hbsw hew (by rw [hzr']; omega) ho
   intro k hk hmk
   have hk' : k ∈ refsAt (cfg.at (Z.disk.blk z).creator) xw.disk m oww xw.evidence := by
-    rw [← hzrefs, hcut.eq hz]; exact Z.disk.refs_sub_full z hk
+    rw [← hzrefs, hzeq (by rw [hzf]; omega)]; exact Z.disk.refs_sub_full z hk
   have hkZ : k ∈ Z.disk.ids := Z.disk.complete z hz k hk
+  -- the reference lies at round `m`, on both disks
+  have hkm : (Z.disk.full k).round = m := by
+    have := Z.disk.pred z hz k hk
+    change (Z.disk.blk k).round + 1 = (Z.disk.blk z).round at this
+    rw [(Z.disk.full_fields k).1]; omega
+  have hkx : (xw.disk.full k).round = m := by
+    rw [(xw.disk.full_fields k).1]
+    rcases mem_refsAt_of hk' with h | h
+    · exact (Store.mem_atRound.mp h).2
+    · rcases hshw.2.2 with ⟨ht, hoe⟩ | ⟨-, hon, -⟩
+      · obtain ⟨j', hj', -, hjr, -⟩ := hbsw.own m ht
+        rw [hoe, hj'] at h; cases h; exact hjr
+      · rw [hon] at h; cases h
   have hcr : (Z.disk.blk k).creator = (xw.disk.blk k).creator := by
-    rw [← hcut.creator hkZ, ← hbsw.cut.creator (hzsub hk')]
-  exact hAD k hk' (hcr ▸ excluded_before_spread hsp hdr hv E m hmk)
+    rw [← (Z.disk.full_fields k).2.1, ← (xw.disk.full_fields k).2.1,
+      ← (hcut k hkZ (by rw [hkm]; exact hmB)).2.2.1,
+      (hbsw.cut k (hzsub hk') (by rw [hkx]; exact hmB)).2.2.1]
+  exact hAD k hk' (hcr ▸ excluded_before_spread hsp hv E m hr hmk)
 
 /-- **A store with more than `f` authors of a round holds an honest
 author's block of it.** -/
@@ -585,11 +607,12 @@ theorem behind_honest (htime : Converge.TimelyAuthentic cfg H tr)
     {i : ℕ} {inp : Input Validator BlockId Payload} (hi : tr[i]? = some (w, inp))
     {x y : State Validator BlockId Payload} {o : List (Output Validator BlockId Payload)}
     {e : BlockId × Block Validator BlockId Payload} {n : ℕ}
-    (hx : BuildState (cfg.at w) (globalRecord (hashInjective_of_trace hinj)
-      (authentic_of_timely htime)) (knownAll cfg H tr) (stateBefore cfg tr i w) inp x)
+    {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H} {G : ℕ}
+    (hx : BuildState (cfg.at w) R G (knownAll cfg H tr) (stateBefore cfg tr i w) inp x)
     (hb : tryBuild (cfg.at w) x = some (y, o)) (heo : e ∈ persists o)
     (he : e ∈ persists (outputsAt cfg tr i)) (her : e.2.round = n + 1)
-    (hgx : Grows x.disk (stateBefore cfg tr (i + 1) w).disk)
+    (hgx : DiskRises (cfg.at w) x (stateBefore cfg tr (i + 1) w))
+    (hkeep : cfg.drops = false ∨ (stateBefore cfg tr (i + 1) w).floor ≤ n + 1)
     (hbeh : behind (cfg.at w) x.disk n) :
     ∃ w' ∈ H, w' ≠ w ∧ ∃ j < i, ∃ inp' z, tr[j]? = some (w', inp') ∧
       z ∈ persists (outputsAt cfg tr j) ∧ z.2.round = n + 1 ∧ z.1 ∈ x.disk.ids ∧
@@ -625,9 +648,9 @@ theorem behind_honest (htime : Converge.TimelyAuthentic cfg H tr)
       (by change (x.disk.full z).round = b.round; rw [hfz.1, hz.2]; exact her.symm)
     exact hnew (by rw [← (Prod.mk.inj this).1]; exact hz.1)
   -- it persisted the block before the event
-  have hzF := hgx.1 hz.1
+  obtain ⟨hzF, hzfull⟩ := hgx.2 z hz.1 (by rw [hz.2]; exact hkeep)
   have hk := (Converge.inv_before (cfg := cfg) (tr := tr) (i + 1) w).known z hzF
-  rw [hgx.full hz.1] at hk
+  rw [hzfull] at hk
   have hp := own_known htime hw hw'T le_rfl hk (by simp only; rw [hfz.2.1]; exact hzc)
   obtain ⟨j, hj, hjw', hjz⟩ := mem_persists_before (cfg := cfg) w' (i + 1) hp
   have hji : j ≠ i := by
@@ -638,73 +661,33 @@ theorem behind_honest (htime : Converge.TimelyAuthentic cfg H tr)
   exact ⟨w', hw'T, hww, j, by omega, inp', (z, x.disk.full z), hj', hjz,
     by simp only; rw [hfz.1]; exact hz.2, hz.1, rfl⟩
 
-/-- **A reliable block of round `m + 1` that a node holds brings a quorum
-of round `m`**: its references, `q` authors, are held with it. -/
-theorem quorum_of_held (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
-    (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    (hdr : cfg.drops = false)
-    {v w : Validator} (hv : v ∈ H) (hw : w ∈ H) {i : ℕ} {inp : Input Validator BlockId Payload}
-    (hi : tr[i]? = some (w, inp)) {e : BlockId × Block Validator BlockId Payload}
-    (he : e ∈ persists (outputsAt cfg tr i)) {m : ℕ} (her : e.2.round = m + 1) {E : ℕ}
-    (hin : e.1 ∈ (stateBefore cfg tr E v).disk.ids)
-    (hblk : (stateBefore cfg tr E v).disk.blk e.1 = e.2) :
-    cfg.q ≤ (authorsIn (stateBefore cfg tr E v).disk.toRecord
-      (stateBefore cfg tr E v).disk.ids m).card := by
-  set Z := stateBefore cfg tr E v with hZ
-  have hZcut := (cut_before hσ hadm hf htime hinj hdr E v hv).1
-  obtain ⟨x, y, out, hbs, hb, heo, -⟩ := build_witness hσ hadm hf htime hinj hdr hw hi he (by omega)
-  obtain ⟨r', id, b, hnew, hrefs, -, -, hbr, -, -, hrv, -, -, -, -, hout'⟩ := tryBuild_some hb
-  rw [hout', persists_built, List.mem_singleton] at heo
-  subst heo
-  simp only at her hin hblk
-  obtain ⟨hRq, -⟩ := refs_of_rowValid (cfg := cfg.at w) hnew hrefs (by omega) hrv
-  have hRZ : ∀ j ∈ b.refs, j ∈ Z.disk.ids ∧ (Z.disk.blk j).round = m := fun j hj => by
-    have hj' : j ∈ (Z.disk.blk id).refs := by rw [hblk]; exact hj
-    have := Z.disk.pred id hin j hj'
-    change (Z.disk.blk j).round + 1 = (Z.disk.blk id).round at this
-    rw [hblk, her] at this
-    exact ⟨Z.disk.complete id hin j hj', by omega⟩
-  have hcre : creatorsOf Z.disk.blk b.refs = creatorsOf x.disk.blk b.refs :=
-    Finset.image_congr fun j hj => by
-      rw [← hZcut.creator (hRZ j hj).1, hbs.cut.creator (hrefs hj)]
-  refine le_trans hRq (le_trans (le_of_eq (congrArg Finset.card hcre.symm))
-    (Finset.card_le_card fun a ha => ?_))
-  obtain ⟨j, hj, rfl⟩ := Finset.mem_image.mp ha
-  exact mem_authorsIn.mpr ⟨j, (hRZ j hj).1, (hRZ j hj).2, rfl⟩
-
-/-- **A held block brings a quorum of each round below it**: its
-references, `q` authors of the round below, are held with it, and one of
-them leads further down. -/
-theorem quorum_below (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
-    (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    (hdr : cfg.drops = false)
-    {v : Validator} (hv : v ∈ H) (E : ℕ) :
+/-- **A held block brings a quorum of each round below it**, down to the
+round above a base's: the disk is valid there, so the block's references,
+`q` authors of the round below, are held with it, and one of them leads
+further down. -/
+theorem quorum_below {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H}
+    {B E₀ E₁ : ℕ} (hbase : Base cfg H tr R B E₀ E₁) (hadm : cfg.Admissible) {v : Validator}
+    (hv : v ∈ H) {E : ℕ} (hE : E ≤ E₁) :
     ∀ (k : ℕ) {j : BlockId}, j ∈ (stateBefore cfg tr E v).disk.ids →
-      ((stateBefore cfg tr E v).disk.blk j).round = k → ∀ r < k,
+      ((stateBefore cfg tr E v).disk.blk j).round = k → ∀ r < k, B ≤ r →
       cfg.q ≤ (authorsIn (stateBefore cfg tr E v).disk.toRecord
         (stateBefore cfg tr E v).disk.ids r).card := by
   set Z := (stateBefore cfg tr E v).disk with hZ
-  have hcut := (cut_before hσ hadm hf htime hinj hdr E v hv).1
+  have hup := (hbase.disk v hv E hE).2.1
   intro k
   induction k with
   | zero => intro j _ _ r hr; omega
   | succ k ih =>
-    intro j hj hjr r hr
-    obtain ⟨hjU, hjb⟩ := hcut j hj
-    have hq := ((globalRecord (hashInjective_of_trace hinj)
-      (authentic_of_timely htime)).valid j hjU).quorum
-        (by rw [hjb, (Z.full_fields j).1, hjr]; omega)
+    intro j hj hjr r hr hBr
+    obtain ⟨hsub, hval⟩ := hup j hj (by rw [hjr]; omega)
+    have hq := hval.quorum (by rw [(Z.full_fields j).1, hjr]; omega)
     -- the references are held, one round below
     have hrefs : ∀ i ∈ (Z.full j).refs, i ∈ Z.ids ∧ (Z.blk i).round = k := fun i hi => by
-      have := ((Converge.inv_before (cfg := cfg) (tr := tr) E v).valid hdr).fullClosed j hj i hi
-      have h₂ : (Z.blk i).round + 1 = (Z.blk j).round := this.2
-      exact ⟨this.1, by omega⟩
-    have hcre : creators (globalRecord (hashInjective_of_trace hinj)
-        (authentic_of_timely htime)).block ((globalRecord (hashInjective_of_trace hinj)
-        (authentic_of_timely htime)).block j) = creatorsOf Z.blk (Z.full j).refs := by
-      unfold creators
-      rw [hjb]
-      exact Finset.image_congr fun i hi => hcut.creator (hrefs i hi).1
+      have h₂ := hval.predecessor i hi
+      rw [(Z.full_fields i).1, (Z.full_fields j).1, hjr] at h₂
+      exact ⟨hsub hi, by omega⟩
+    have hcre : creators Z.full (Z.full j) = creatorsOf Z.blk (Z.full j).refs :=
+      Finset.image_congr fun i _ => (Z.full_fields i).2.1
     rw [hcre] at hq
     by_cases hrk : r = k
     · subst hrk
@@ -718,7 +701,7 @@ theorem quorum_below (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H
         have := hadm.2.2.2.1
         simp [creatorsOf] at hq
         omega
-      exact ih (hrefs i hi).1 (hrefs i hi).2 r (by omega)
+      exact ih (hrefs i hi).1 (hrefs i hi).2 r (by omega) hBr
 
 /-- **A reliable node has started** at any time from GST on. -/
 theorem started_at (hadm : cfg.Admissible) (hfa : cfg.Faithful) (hid : Function.Injective cfg.idOf)
@@ -739,14 +722,18 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
     (hadm : cfg.Admissible) (hfa : cfg.Faithful) (hf : Hᶜ.card ≤ cfg.f) (hid : Function.Injective
         cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    (hdr : cfg.drops = false)
+    {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H} {B E₀ E₁ : ℕ}
+    (hbase : Base cfg H tr R B E₀ E₁)
     (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
     (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁) (hstart : Live.StartedBy T tr time gst)
     {S : Finset Validator} (hST : S ⊆ T) (hS : cfg.f + 1 ≤ S.card) {τ n : ℕ} (hgτ : gst ≤ τ)
-    (hτ₁ : τ + (Δ + Δₛ) ≤ t₁)
+    (hτ₁ : τ + (Δ + Δₛ) ≤ t₁) (hE₀ : E₀ ≤ eventsBy tr time (τ + (Δ + Δₛ)))
+    (hE₁ : eventsBy tr time (τ + (Δ + Δₛ)) ≤ E₁)
     (hSn : ∀ w ∈ S, (stateAt cfg tr time w τ).top.isSome ∧ n ≤ topAt cfg tr time w τ)
     {D : Finset Validator} {nE : ℕ} (hsp : Live.Spread cfg H tr D nE)
-    {v : Validator} (hv : v ∈ T) (hvE : nE ≤ topAt cfg tr time v gst) :
+    {v : Validator} (hv : v ∈ T) (hvE : nE ≤ topAt cfg tr time v gst)
+    (hvB : B ≤ topAt cfg tr time v gst)
+    (hvV : cfg.drops = true → B + 1 + cfg.p.voteOffset ≤ topAt cfg tr time v gst) :
     n ≤ topAt cfg tr time v (τ + (Δ + Δₛ)) := by
   set E := eventsBy tr time (τ + (Δ + Δₛ)) with hE
   by_contra hlt
@@ -774,8 +761,22 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
   -- one of them brings a quorum of round `m`
   obtain ⟨w₀, hw₀⟩ : S.Nonempty := Finset.card_pos.mp (by omega)
   obtain ⟨j₀, hj₀, hj₀r, -⟩ := htops w₀ hw₀
-  have hcard := quorum_below hσ hadm hf htime hinj hdr (hTH hv) E _ hj₀ hj₀r m
-    (by have := (hSn w₀ hw₀).2; omega)
+  -- `v` is at its round at GST or above, so above the base
+  have hmg : topAt cfg tr time v gst ≤ m := by
+    have := (rises_before (cfg := cfg) (tr := tr) v (eventsBy_mono (tr := tr) (time := time)
+      (show gst ≤ τ + (Δ + Δₛ) by omega))).1
+    change topAt cfg tr time v gst ≤ (stateBefore cfg tr E v).top.getD 0 at this
+    rw [hm] at this
+    simpa using this
+  have hmB : B ≤ m := hvB.trans hmg
+  have hmV : cfg.drops = true → B + 1 + cfg.p.voteOffset ≤ m := fun hd => (hvV hd).trans hmg
+  have hFm : Z.floor ≤ m := by
+    cases hd : cfg.drops
+    · exact (Converge.floor_before (cfg := cfg) (tr := tr) hd hm).trans (Nat.sub_le _ _)
+    · have := (hbase.window v (hTH hv) E hE₀ hE₁).2.1
+      rw [hm] at this; exact this
+  have hcard := quorum_below hbase hadm (hTH hv) hE₁ _ hj₀ hj₀r m
+    (by have := (hSn w₀ hw₀).2; omega) hmB
   -- and they are `f + 1` authors of round `m + 1`, or one is above it
   have hbeh : behind (cfg.at v) Z.disk m := by
     change cfg.f + 1 ≤ (Z.disk.authorsAt (m + 1)).card
@@ -783,7 +784,7 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
     by_cases hup : ∃ w ∈ S, m + 1 < topAt cfg tr time w τ
     · obtain ⟨w, hw, hwm⟩ := hup
       obtain ⟨j, hj, hjr, -⟩ := htops w hw
-      have h₁ := quorum_below hσ hadm hf htime hinj hdr (hTH hv) E _ hj hjr (m + 1) hwm
+      have h₁ := quorum_below hbase hadm (hTH hv) hE₁ _ hj hjr (m + 1) hwm (by omega)
       have h₂ := two_f_c_lt_q hadm
       exact (show cfg.f + 1 ≤ cfg.q by omega).trans h₁
     · push Not at hup
@@ -806,24 +807,25 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
     have h₁ : (Z.disk.blk z).round ≤ m := own_le_top htime (hTH hv) hm hzZ h
     have h₂ : (Z.disk.blk z).round = m + 1 := hzr
     omega
-  have hav := lent_avoids_before hσ hadm hf htime hinj hdr time hsp (hTH hv) E hzZ hzr hzH hmE
+  have hav := lent_avoids_before hσ htime hinj hbase time hsp (hTH hv) hE₁ hzZ hzr hzH hmE hmB
+    hmV (by cases hd : cfg.drops; exact Or.inl rfl; exact Or.inr ⟨hfa, hFm⟩)
   have hsome := tryBuild_isSome (cfg := cfg.at v) hm
     (harr.recovered (by omega) v hv E (eventsBy_mono (tr := tr) (time := time) (by omega))
       (eventsBy_mono (by omega)))
     (Or.inr hbeh) hcard
     (fun j hj => by rw [hoo] at hj; cases hj; exact ⟨hoi, hor, hoc⟩)
     (Or.inr ⟨_, lent_mem_lents hzZ hzr hzm hav, (lent_buildable (cfg := cfg.at v)
-      ((Converge.inv_before (cfg := cfg) (tr := tr) E v).valid hdr) hzZ hzr (by
+      (fun j hj hjr => hbase.valid (hTH hv) hE₁ hj (by
+        cases hd : cfg.drops; exact Or.inl rfl; exact Or.inr (by omega))) hzZ hzr (by
         by_contra hk
         have h₁ := Z.low z hk
-        have h₂ : Z.floor ≤ m - (cfg.at v).p.voteOffset :=
-          Converge.floor_before (cfg := cfg) (tr := tr) hdr hm
         have h₃ : (Z.disk.blk z).round = m + 1 := hzr
         omega) hfa
       (fresh_before hid htime (hTH hv) hm) _
-      (fun j hj _ => (Converge.kept_before hfa v E).exposed hj
-        (((Converge.inv_before (cfg := cfg) (tr := tr) E v).valid hdr) j hj).2)).2⟩)
-    (fresh_before hid htime (hTH hv) hm) ((Converge.floor_before hdr hm).trans (Nat.sub_le _ _))
+      (fun j hj hjr => (Converge.kept_before hfa v E).exposed hj
+        (hbase.valid (hTH hv) hE₁ hj (by
+          cases hd : cfg.drops; exact Or.inl rfl; exact Or.inr (by have := hmV hd; omega))).2)).2⟩)
+    (fresh_before hid htime (hTH hv) hm) hFm
   rw [hSet.build] at hsome
   cases hsome
 

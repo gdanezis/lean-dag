@@ -1,16 +1,17 @@
-import LeanDag.Node.Helpers.Agree
+import LeanDag.Node.Helpers.Base
 import LeanDag.Node.Helpers.Wait
 import LeanDag.Node.Helpers.SyncInv
 import LeanDag.Node.Live.Statement
 /-!
 # A reliable node's builds along a trace
 
-`docs/validator.md` §5.3. Over a trace on which honest
-disks are cuts of the run's record (`cut_before`), each block a reliable
-node builds at an event comes from one build, at a state whose disk is a
-cut of the record grown from the disk before the event (`build_witness`).
-A block of the record by a reliable node was built at the node's first
-event persisting a block of its round (`builtAt_first`, `built_block`).
+`docs/validator.md` §5.3. Over a stretch of a trace on which a record is a
+base (`Base`), each block a reliable node builds at an event comes from one
+build, at a state whose disk is read as the record reads it from the base's
+round up, grown from the disk before the event (`build_witness`). A block
+of the record above that round by a reliable node was built at the node's
+first event persisting a block of its round (`builtAt_first`,
+`built_block`).
 -/
 
 namespace LeanDag
@@ -22,31 +23,30 @@ variable [LinearOrder BlockId]
 variable {cfg : Config Validator BlockId Payload} {tr : Trace Validator BlockId Payload}
 variable {H : Finset Validator}
 
-/-- **Each block a reliable node builds at an event comes from one
-build**, at a state whose disk is a cut of the run's record grown from
-the disk before the event. -/
-theorem build_witness (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
-    (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    (hdr : cfg.drops = false) {v : Validator} (hv : v ∈ H) {i : ℕ}
-    {inp : Input Validator BlockId Payload} (hi : tr[i]? = some (v, inp))
-    {e : BlockId × Block Validator BlockId Payload} (he : e ∈ persists (outputsAt cfg tr i))
-    (hr : e.2.round ≠ 0) :
-    ∃ x y o, BuildState (cfg.at v) (globalRecord (hashInjective_of_trace hinj)
-        (authentic_of_timely htime)) (knownAll cfg H tr) (stateBefore cfg tr i v) inp x ∧
+/-- **Each block a reliable node builds at an event before a base's end
+comes from one build**, at a state whose disk is read as the base's record
+reads it, and keeps the disk before the event from its floor up. -/
+theorem build_witness {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H}
+    {B E₀ E₁ : ℕ} (hbase : Base cfg H tr R B E₀ E₁) {v : Validator} (hv : v ∈ H) {i : ℕ}
+    {inp : Input Validator BlockId Payload} (hi : tr[i]? = some (v, inp)) (h₁ : i + 1 ≤ E₁)
+    {e : BlockId × Block Validator BlockId Payload}
+    (he : e ∈ persists (outputsAt cfg tr i)) (hr : e.2.round ≠ 0) :
+    ∃ x y o, BuildState (cfg.at v) R B (knownAll cfg H tr) (stateBefore cfg tr i v) inp x ∧
       tryBuild (cfg.at v) x = some (y, o) ∧ e ∈ persists o ∧
-      Grows x.disk (stateBefore cfg tr (i + 1) v).disk := by
+      DiskRises (cfg.at v) x (stateBefore cfg tr (i + 1) v) := by
   have hK : ∀ x ∈ knownOf cfg tr v, x ∈ knownAll cfg H tr := fun x hx => ⟨v, hv, hx⟩
-  have hg := ground (cfg := cfg) (hashInjective_of_trace hinj) (authentic_of_timely htime)
   have hinv := Converge.inv_before (cfg := cfg) (tr := tr) i v
   obtain ⟨hd, hb⟩ := event_knownOf (cfg := cfg) hi
+  obtain ⟨hcut, -, -⟩ := hbase.disk v hv i (by omega)
+  have hfin := (hbase.disk v hv (i + 1) h₁).2.2
+  rw [Converge.step_before hi] at hfin
   rw [outputsAt_eq hi] at he
-  rcases step_witness (cfg := cfg.at v) hg
-      (hinv.mono fun x hx => hK x (knownBefore_knownOf hx))
-      (cut_before hσ hadm hf htime hinj hdr i v hv).1 (Held.run (cfg := cfg.at v) hdr _ Held.init)
-      (ownTop_before (cfg := cfg) i) (Converge.evidenceOn_before (cfg := cfg) (tr := tr) v hdr i)
-      (fun hfa => Converge.kept_before (cfg := cfg) (tr := tr) hfa v i) hdr
+  rcases step_witness (cfg := cfg.at v) ⟨hbase.grounds v hv, hbase.known⟩
+      (hinv.mono fun x hx => hK x (knownBefore_knownOf hx)) hcut
+      (ownTop_before (cfg := cfg) i)
+      (fun hfa => Converge.kept_before (cfg := cfg) (tr := tr) hfa v i)
       (fun x hx => hK _ (knownBefore_knownOf (hinv.pend x hx)))
-      (fun x hx => hK x (hd x hx)) (fun x hx => hK x (hb x hx)) e he with h | h
+      (fun x hx => hK x (hd x hx)) (fun x hx => hK x (hb x hx)) hfin e he with h | h
   · exact absurd h hr
   · rw [stateBefore_succ hi, if_pos rfl]; exact h
 
@@ -105,33 +105,30 @@ disk grows into the disk after the event, by the build rule: its
 references are `refsAt`'s on that state's disk, held there, and pass
 the reach and certificate tests, or follow the round's timer with
 `refsFor`'s, or follow the node's being behind with `refsFor`'s. -/
-theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
+theorem built_block (hσ : cfg.σ = boundedSel)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    (hdr : cfg.drops = false) {v : Validator} (hv : v ∈ H) {c : BlockId} {r : ℕ}
-    (hcU : c ∈ (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).ids)
-    (hcv : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-      c).creator = v)
-    (hcr : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-      c).round = r + 1) :
+    {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H} {B E₀ E₁ : ℕ}
+    (hbase : Base cfg H tr R B E₀ E₁) {v : Validator} (hv : v ∈ H) {c : BlockId} {r : ℕ}
+    (hcU : c ∈ R.ids) (hcv : (R.block c).creator = v) (hcr : (R.block c).round = r + 1)
+    (hrB : B ≤ r) (hrV : cfg.drops = true → B + 1 + cfg.p.voteOffset ≤ r)
+    (hwin : ∃ j, j + 1 ≤ E₁ ∧ (tr[j]?.map Prod.fst) = some v ∧
+      ∃ e ∈ persists (outputsAt cfg tr j), e.2.round = r + 1) :
     ∃ i₀ inp x ow, tr[i₀]? = some (v, inp) ∧ builtAt cfg tr time v (r + 1) = time i₀ ∧
-      BuildState (cfg.at v) (globalRecord (hashInjective_of_trace hinj)
-        (authentic_of_timely htime)) (knownAll cfg H tr) (stateBefore cfg tr i₀ v) inp x ∧
+      BuildState (cfg.at v) R B (knownAll cfg H tr) (stateBefore cfg tr i₀ v) inp x ∧
         (x.top.isSome ∧ x.top.getD 0 ≤ r ∧
-          ((x.top = some r ∧ ow = x.own) ∨ (x.recovering = true ∧ ow = none ∧
+          ((x.top = some r ∧ ow = x.own) ∨
+            ((x.recovering = true ∨ (cfg.drops = true ∧ x.top.getD 0 < x.floor)) ∧ ow = none ∧
             reachReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow x.evidence) r
               (excluded (cfg.at v) x.disk r x.evidence) = true ∧
             certReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow x.evidence) r
               (excluded (cfg.at v) x.disk r x.evidence) = true))) ∧
         c ∉ x.disk.ids ∧
       (∃ y o, tryBuild (cfg.at v) x = some (y, o) ∧
-        (c, (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c) ∈
-          persists o ∧
-        (c, (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c) ∈
-          persists (outputsAt cfg tr i₀)) ∧
-      ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c).refs =
+        (c, R.block c) ∈ persists o ∧ (c, R.block c) ∈ persists (outputsAt cfg tr i₀)) ∧
+      (R.block c).refs =
         refsAt (cfg.at v) x.disk r ow x.evidence ∧
       refsAt (cfg.at v) x.disk r ow x.evidence ⊆ x.disk.ids ∧
-      Grows x.disk (stateBefore cfg tr (i₀ + 1) v).disk ∧
+      DiskRises (cfg.at v) x (stateBefore cfg tr (i₀ + 1) v) ∧
       ((reachReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow x.evidence) r
         (excluded (cfg.at v) x.disk r x.evidence) = true ∧
           certReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow x.evidence) r
@@ -140,26 +137,22 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
           (refsAt (cfg.at v) x.disk r ow x.evidence = refsFor (cfg.at v) x.disk r ow x.evidence ∨
             buildable (cfg.at v) x.disk r (refsFor (cfg.at v) x.disk r ow x.evidence)
               x.evidence = false))) ∧
-      ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c).payload =
+      (R.block c).payload =
         payloadFor (cfg.at v) x.disk r (refsAt (cfg.at v) x.disk r ow x.evidence) x.evidence
     := by
   have hinjR := hashInjective_of_trace hinj
   have hauthR := authentic_of_timely htime
-  set U := globalRecord hinjR hauthR with hU
-  have hg := ground (cfg := cfg) hinjR hauthR
   -- the block, as the honest nodes knew it, is one of `v`'s own
-  obtain ⟨x, hxK, rfl⟩ := exists_of_mem_knownIds (mem_globalIds.mp hcU).1
-  have hcont := content_of_known hinjR hxK
-  have hxc : x.2.creator = v := by
-    have := hcv; simp only [U, globalRecord, hcont] at this; exact this
-  have hxr : x.2.round = r + 1 := by
-    have := hcr; simp only [U, globalRecord, hcont] at this; exact this
+  obtain ⟨x, hxdef⟩ : ∃ x : BlockId × Block Validator BlockId Payload, x = (c, R.block c) :=
+    ⟨_, rfl⟩
+  have hxK : x ∈ knownAll cfg H tr := hxdef ▸ hbase.real c hcU (by rw [hcr]; omega)
+  have hxc : x.2.creator = v := by rw [hxdef]; exact hcv
+  have hxr : x.2.round = r + 1 := by rw [hxdef]; exact hcr
   have hxp := mem_persists_of_known hinjR hauthR hxK (by rw [hxc]; exact hv)
   rw [hxc] at hxp
-  obtain ⟨j, -, hjv, hxj⟩ := mem_persists_before (cfg := cfg) (tr := tr) v tr.length hxp
   -- the first event building round `r + 1` builds it
-  obtain ⟨i₀, -, hbt, hi₀v, e₀, he₀, he₀r⟩ :=
-    builtAt_first (cfg := cfg) time hjv ⟨x, hxj, hxr⟩
+  obtain ⟨j, hj₁, hjv, hje⟩ := hwin
+  obtain ⟨i₀, hi₀j, hbt, hi₀v, e₀, he₀, he₀r⟩ := builtAt_first (cfg := cfg) time hjv hje
   obtain ⟨inp, hi₀⟩ : ∃ inp, tr[i₀]? = some (v, inp) := by
     rcases h : tr[i₀]? with _ | ⟨w, inp⟩
     · rw [h] at hi₀v; cases hi₀v
@@ -168,14 +161,40 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     mem_persists_iff.mpr (mem_outputs_of_event hi₀ (mem_persists_iff.mp he₀))
   have hex : e₀ = x := eq_of_persists v he₀p hxp (by rw [he₀r, hxr])
   subst hex
-  obtain ⟨x', y, o, hbs, hb, heo, hgx⟩ := build_witness hσ hadm hf htime hinj hdr hv hi₀ he₀
+  have hc₁ : e₀.1 = c := by rw [hxdef]
+  subst hc₁
+  have hw₁ : i₀ + 1 ≤ E₁ := by omega
+  obtain ⟨x', y, o, hbs, hb, heo, hgx⟩ := build_witness hbase hv hi₀ hw₁ he₀
     (by rw [he₀r]; omega)
   obtain ⟨r', ow, hsome, hle, hro, -, hexit, hout⟩ := tryBuild_exit hb
+  -- it builds round `r + 1`
+  have hr'r : r' = r := by
+    obtain ⟨r'', id, b, -, -, -, -, hbr, -, -, -, -, -, -, -, hout'⟩ := tryBuild_some hb
+    have h₁ := congrArg persists (hout.symm.trans hout')
+    rw [persists_built, persists_built, List.singleton_inj] at h₁
+    have h₂ := congrArg (fun e => e.2.round) h₁
+    simp only [blockOn] at h₂
+    have heo' := heo
+    rw [hout', persists_built, List.mem_singleton] at heo'
+    have h₃ := congrArg (fun e => e.2.round) heo'
+    simp only at h₃
+    omega
+  -- at a node that drops, its floor lies at the round of its next undecided slot
+  have hFl : cfg.drops = true → x'.floor ≤ B + 1 := fun hdr => by
+    obtain ⟨Bs, hi⟩ := hbs.inv
+    have h₁ := hi.floor
+    unfold floorOf at h₁
+    rw [if_pos (show (cfg.at v).drops = true from hdr)] at h₁
+    exact h₁.trans (hbs.slot hdr)
   -- the build read in memory as on disk
   have hF : x'.floor ≤ r' - (cfg.at v).p.voteOffset := by
-    obtain ⟨B, hi⟩ := hbs.inv
-    exact hi.floor.trans ((floorOf_le_top (cfg := cfg.at v) hdr _).trans
-      (Nat.sub_le_sub_right hle _))
+    cases hdr : cfg.drops
+    · obtain ⟨Bs, hi⟩ := hbs.inv
+      exact hi.floor.trans ((floorOf_le_top (cfg := cfg.at v) hdr _).trans
+        (Nat.sub_le_sub_right hle _))
+    · have := hFl hdr; have := hrV hdr
+      change x'.floor ≤ r' - cfg.p.voteOffset
+      omega
   have ho : ∀ j, ow = some j → j ∈ x'.disk.ids ∧ (x'.disk.blk j).round = r' := fun j hj => by
     rcases hro with ⟨hr', rfl⟩ | ⟨-, hnone, -⟩
     · obtain ⟨j', hj', hjd, hjr, -⟩ := hbs.own r' hr'
@@ -211,7 +230,8 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     omega
   subst hrr
   -- the record reads the block as built
-  have hy := BuildState.tryBuild (cfg := cfg.at v) hg hbs hb (fun e he => by
+  have hy := BuildState.tryBuild (cfg := cfg.at v) ⟨hbase.grounds v hv, hbase.known⟩
+    hbs hb (fun e he => by
     rw [hout, persists_built, List.mem_singleton] at he
     have : e = e₀ := he.trans heo.symm
     rw [this]; exact hxK)
@@ -222,7 +242,9 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     rw [heo', hst.ids]; exact Store.mem_insert_self
   have hyb : y.disk.full e₀.1 = b := by
     rw [heo', hst.full, Store.full_insert, if_pos rfl]
-  have hUb : U.block e₀.1 = b := (hy.cut.eq hcy).trans hyb
+  have hUb : R.block e₀.1 = b := by
+    have hround : (y.disk.full e₀.1).round = e₀.2.round := by rw [hyb, heo']
+    exact ((hy.cut e₀.1 hcy (by rw [hround]; omega)).2.2.2 (by rw [hround]; omega)).trans hyb
   have hbrefs : b.refs = refsAt (cfg.at v) x'.disk r' ow x'.evidence := by
     have := congrArg (fun e => e.2.refs) hAB
     simp only at this
@@ -232,9 +254,9 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     have := congrArg (fun e => e.2.payload) hAB
     simp only [blockOn] at this
     rw [← e₆]; exact this.symm
-  have hce : (e₀.1, U.block e₀.1) = e₀ := by rw [hUb, heo']
+  have hce : (e₀.1, R.block e₀.1) = e₀ := by rw [hUb, heo']
   refine ⟨i₀, inp, x', ow, hi₀, hbt, hbs, ⟨hsome, hle,
-    hro.imp_right fun h => ⟨h.1.resolve_right (by simp [Config.at, hdr]), h.2⟩⟩,
+    hro⟩,
     by rw [heo']; exact hnew,
     ⟨y, o, hb, by rw [hce, hout, persists_built, List.mem_singleton]; exact heo,
       by rw [hce]; exact he₀⟩, by rw [hUb, hbrefs], ?_, hgx, hexit, by rw [hUb, hbpay]⟩

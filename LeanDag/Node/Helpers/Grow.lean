@@ -489,10 +489,10 @@ theorem growsUnless_decideStep (s : State Validator BlockId Payload) :
   · exact GrowsUnless.refl s
 
 omit [Fintype Validator] in
-theorem growsUnless_advance (s : State Validator BlockId Payload) :
-    GrowsUnless s (Node.advance cfg s).1 := by
+/-- After building, the rest of a pass grows the disk unless it decides. -/
+theorem growsUnless_advance_rest (s : State Validator BlockId Payload) :
+    GrowsUnless (Node.progress cfg (s.disk.topRound + 2) s).1 (Node.advance cfg s).1 := by
   set p := (Node.progress cfg (s.disk.topRound + 2) s).1
-  have h₁ : GrowsUnless s p := growsUnless_progress _ s
   have h₂ := growsUnless_decideStep (cfg := cfg) p
   have h₃ : GrowsUnless (Node.decideStep cfg p).1 (Node.pass cfg s).1 := by
     obtain ⟨⟨L, -, hL⟩, -, -, -, -, -, hlo, -⟩ := flushSyncs_eq (cfg := cfg)
@@ -500,14 +500,24 @@ theorem growsUnless_advance (s : State Validator BlockId Payload) :
     exact GrowsUnless.of_grows (by simp only [Node.pass]; rw [hL]; exact Grows.foldl _ _ _) hlo
   have h₄ : GrowsUnless (Node.pass cfg s).1 (Node.advance cfg s).1 :=
     GrowsUnless.of_grows (by rw [advance_disk]; exact Grows.refl _) (by simp [Node.advance])
-  exact h₁.trans (h₂.trans (h₃.trans h₄))
+  exact h₂.trans (h₃.trans h₄)
+
+omit [Fintype Validator] in
+theorem growsUnless_advance (s : State Validator BlockId Payload) :
+    GrowsUnless s (Node.advance cfg s).1 :=
+  (growsUnless_progress _ s).trans (growsUnless_advance_rest s)
+
+omit [Fintype Validator] in
+theorem growsUnless_quiesce (n : ℕ) (s : State Validator BlockId Payload) :
+    GrowsUnless s (Node.quiesce cfg n s).1 :=
+  (quiesce_rel (P := fun _ => True) (R := fun a _ b => GrowsUnless a b) GrowsUnless.refl
+    (fun _ _ _ _ _ h₁ h₂ => h₁.trans h₂) (fun s _ => ⟨growsUnless_advance s, trivial⟩) n s
+    trivial).1
 
 omit [Fintype Validator] in
 theorem growsUnless_settle (s : State Validator BlockId Payload) :
     GrowsUnless s (Node.settle cfg s).1 :=
-  (quiesce_rel (P := fun _ => True) (R := fun a _ b => GrowsUnless a b) GrowsUnless.refl
-    (fun _ _ _ _ _ h₁ h₂ => h₁.trans h₂) (fun s _ => ⟨growsUnless_advance s, trivial⟩) _ s
-    trivial).1
+  growsUnless_quiesce _ s
 
 /-- **A step grows the disk unless the node decides.** -/
 theorem growsUnless_step (s : State Validator BlockId Payload)

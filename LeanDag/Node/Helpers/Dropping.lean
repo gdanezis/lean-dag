@@ -242,26 +242,55 @@ theorem UpperValid.mono {q : ℕ} {E : Exposure Validator BlockId Payload} {F F'
 
 /-- **In a steady window of the honest nodes, the record padded below the
 round under slot `L`'s is a base from that round on**, at a node that
-drops: every honest disk is read as the padded record from there up
-(`cutAbove_before`), its floor is slot `L`'s round (`Steady.floor`), at or
-below its top, it grows while its next undecided slot stays
-(`Converge.grows_of_lo`), and its steps are regular (`Steady.regular`). -/
+drops: it takes in what the honest nodes knew (`grounds_padded`), and a
+known block at or below that round (`cutAbove_known`); every honest disk is
+read as it from there up (`cutAbove_before`), its floor is slot `L`'s round
+(`Steady.floor`), at or below its top, it grows while its next undecided
+slot stays (`Converge.grows_of_lo`), and its steps are regular
+(`Steady.regular`). -/
 theorem base_steady {H : Finset Validator} [Infinite BlockId] (hσ : cfg.σ = boundedSel)
     (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
     (hinj : Converge.HashInjective cfg H tr) (hq : cfg.q ≤ Fintype.card Validator)
-    (hdr : cfg.drops = true) (hst : Live.Steady cfg H tr time G t₁ L) (hL : 1 ≤ L) :
-    Base cfg H tr time
+    (hdr : cfg.drops = true) (hst : Live.Steady cfg H tr time G t₁ L) (hL : 1 ≤ L)
+    (hGt : G ≤ t₁) :
+    Base cfg H tr
       (padded (hashInjective_of_trace hinj) (authentic_of_timely htime) hq
         (cfg.slots.slotRound L - 1))
-      (cfg.slots.slotRound L - 1) G t₁ := by
-  intro v hv k h₁ h₂
-  obtain ⟨hlo, -⟩ := hst v hv k h₁ h₂
-  have hfl := Steady.floor hdr hst hL hv h₁ h₂
-  exact ⟨(cutAbove_before (hashInjective_of_trace hinj) (authentic_of_timely htime) hq hσ hadm
-      hf (cfg.slots.slotRound L - 1) k v hv).1 (by rw [hlo]; omega),
-    ((Converge.inv_before (cfg := cfg) (tr := tr) k v).above).mono (by rw [hfl]; omega),
-    fun k' hk hk' => Converge.grows_of_lo v hk (by rw [(hst v hv k' (by omega) hk').1, hlo]),
-    by rw [hfl]; exact (hst v hv k h₁ h₂).2, fun hk => Steady.regular hdr hst hL hv h₁ hk⟩
+      (cfg.slots.slotRound L - 1) (eventsBy tr time G) (eventsBy tr time t₁) := by
+  refine ⟨fun v _ => grounds_padded (hashInjective_of_trace hinj) (authentic_of_timely htime) hq
+      (cfg.slots.slotRound L - 1) v,
+    fun _ x hx hle => cutAbove_known (hashInjective_of_trace hinj) (authentic_of_timely htime) hq
+      hx hle, fun c hc hcr => ?_, fun v hv k h₂ => ?_, fun v hv k h₁ h₂ => ?_⟩
+  · -- a block of the padded record above its padding is a known one
+    rcases mem_paddedIds.mp hc with hc | ⟨x, hx, rfl⟩
+    · obtain ⟨hck, -, -⟩ := mem_globalCutIds.mp hc
+      obtain ⟨y, hy, rfl⟩ := exists_of_mem_knownIds hck
+      have hcont := content_of_known (hashInjective_of_trace hinj) hy
+      change (y.1, padBlk cfg H tr _ y.1) ∈ _
+      change cfg.slots.slotRound L - 1 < (padBlk cfg H tr _ y.1).round at hcr
+      rw [padBlk_known hck] at hcr ⊢
+      rw [if_neg (by rw [hcont]; split_ifs at hcr with h <;> simp_all <;> omega), hcont]
+      exact hy
+    · exfalso
+      have := round_fresh_lt (cfg := cfg) (H := H) (tr := tr) (G := cfg.slots.slotRound L - 1) hx
+      change cfg.slots.slotRound L - 1 < (padBlk cfg H tr _ (fresh cfg H tr x)).round at hcr
+      omega
+  · -- up to the window's end the next undecided slot is at most `L`
+    have hle : (stateBefore cfg tr k v).lo ≤ L := by
+      rw [← (hst v hv (eventsBy tr time t₁) (eventsBy_mono hGt) le_rfl).1]
+      exact (rises_before (cfg := cfg) (tr := tr) v h₂).2.2
+    have hsl := cfg.slots.mono hle
+    have hF : (stateBefore cfg tr k v).floor ≤ cfg.slots.slotRound (stateBefore cfg tr k v).lo :=
+      (Converge.inv_before (cfg := cfg) (tr := tr) k v).floor.trans (floorOf_le _)
+    exact ⟨(cutAbove_before (hashInjective_of_trace hinj) (authentic_of_timely htime) hq hσ hadm
+        hf (cfg.slots.slotRound L - 1) k v hv).1 (by omega),
+      ((Converge.inv_before (cfg := cfg) (tr := tr) k v).above).mono (by omega),
+      fun _ => by omega⟩
+  · obtain ⟨hlo, -⟩ := hst v hv k h₁ h₂
+    have hfl := Steady.floor hdr hst hL hv h₁ h₂
+    exact ⟨fun k' hk hk' => Converge.grows_of_lo v hk
+        (by rw [(hst v hv k' (by omega) hk').1, hlo]),
+      by rw [hfl]; exact (hst v hv k h₁ h₂).2, fun hk => Steady.regular hdr hst hL hv h₁ hk⟩
 
 end Steady
 

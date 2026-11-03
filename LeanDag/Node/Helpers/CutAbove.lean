@@ -39,14 +39,6 @@ variable [LinearOrder BlockId]
 
 variable {P : Validity Validator BlockId Payload} {H : Finset Validator}
 
-/-- **A block of a store read as the record reads it from `G` up**: at or
-above `G`, a block of the record at the same round and author, and above `G`
-the record's block. -/
-def CutAbove (U : BlockRecord Validator BlockId Payload P H) (G : ℕ) (j : BlockId)
-    (b : Block Validator BlockId Payload) : Prop :=
-  G ≤ b.round → j ∈ U.ids ∧ (U.block j).round = b.round ∧ (U.block j).creator = b.creator ∧
-    (G < b.round → U.block j = b)
-
 variable {cfg : Config Validator BlockId Payload} {tr : Trace Validator BlockId Payload}
 variable (hinj : HashInjective cfg H tr) (hauth : Authentic cfg H tr) [Infinite BlockId]
 variable (hq : cfg.q ≤ Fintype.card Validator)

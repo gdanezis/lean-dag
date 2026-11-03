@@ -125,7 +125,7 @@ theorem exposes_spread {Validator BlockId Payload : Type} [Fintype Validator]
   -- the author is in `D`
   have hXD : X ∈ D := by
     obtain ⟨e, he, he1, hne⟩ := (Converge.evidenceOn_before (cfg := cfg) (tr := tr) v hdr i).1 X hX
-    exact excluded_before_spread hsp hdr hv i 0 (Finset.mem_union_left _
+    exact excluded_before_spread hsp hv i 0 (Or.inl hdr) (Finset.mem_union_left _
       (Finset.mem_image.mpr ⟨e, Finset.mem_filter.mpr ⟨he, hne⟩, he1⟩))
   -- the block as its builder built it
   have hcut := (cut_before hσ hadm hf htime hinj hdr i v hv).1
@@ -134,8 +134,14 @@ theorem exposes_spread {Validator BlockId Payload : Type} [Fintype Validator]
       c).creator = (s.disk.blk c).creator := hcut.creator hc
   have hcr' : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
       c).round = r + 1 := by rw [hcut.round hc]; exact hcr
+  -- its author built it before the event
+  have hck := (Converge.inv_before (cfg := cfg) (tr := tr) i v).known c hc
+  obtain ⟨j, hji, hjw, hjc⟩ := mem_persists_before (cfg := cfg) (tr := tr) _ i
+    (own_known htime hv hcH le_rfl hck (s.disk.full_fields c).2.1)
   obtain ⟨iw, inpw, xw, oww, hiw, -, hbsw, hshw, -, ⟨-, -, -, -, hew⟩, -, -, -, -, hpay⟩ :=
-    built_block (fun _ => 0) hσ hadm hf htime hinj hdr hcH hcU hcc hcr'
+    built_block (fun _ => 0) hσ htime hinj (base_of_false hσ hadm hf htime hinj hdr 0 i) hcH hcU
+      hcc hcr' (Nat.zero_le _) (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true)
+      ⟨j, by omega, hjw, _, hjc, by rw [(s.disk.full_fields c).1]; exact hcr⟩
   have ho : ∀ j, oww = some j →
       (xw.disk.blk j).creator = (cfg.at (s.disk.blk c).creator).me := fun j hj => by
     rcases hshw.2.2 with ⟨ht, hoe⟩ | ⟨-, hon, -⟩
@@ -146,8 +152,10 @@ theorem exposes_spread {Validator BlockId Payload : Type} [Fintype Validator]
     · rw [hon] at hj; cases hj
   have hAD := refs_avoid_spread (r := r) hsp hiw hcH hbsw hew (by rw [hcr']; omega) ho
   -- its builder had convicted the author
-  obtain ⟨e, he, he1, hne⟩ := hbsw.ev.1 X
+  obtain ⟨Bs, hiX⟩ := hbsw.inv
+  obtain ⟨e, he, he1⟩ := hiX.evidence.1 X
     (hbsw.det (hsp.2.2 iw _ inpw hiw hcH _ hew (by rw [hcr']; omega) hXD))
+  have hne := (hiX.evidence.2 e he).1
   rw [← (s.disk.full_fields c).2.2, ← hcut.eq hc, hpay]
   unfold payloadFor
   erw [(hfa _ _ _).2]

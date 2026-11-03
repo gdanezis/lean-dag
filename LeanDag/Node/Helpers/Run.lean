@@ -95,7 +95,9 @@ theorem waveFacts_of_run (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf
       obtain ⟨i, inp, e, hi, he, her, -, -⟩ :=
         built_of_top hmono (hst w hw') ((htop w hw').trans' hnN)
           (harr.no_jump hdr hmono hw' ((hbelow w hw').trans_le hn0) (by omega))
-      obtain ⟨h₁, h₂, h₃⟩ := built_mem hσ hadm hf htime hinj hdr (hTH hw') hi he
+      obtain ⟨h₁, h₂, h₃⟩ := built_mem (base_of_false hσ hadm hf htime hinj hdr 0 tr.length)
+        (hTH hw') hi he (by have := (List.getElem?_eq_some_iff.mp hi).1; omega) (Nat.zero_le _)
+        (Or.inl hdr)
       exact ⟨e.1, h₁, h₃, h₂.trans her⟩
     reach_or_refs := fun w hw' _ hRk hNk hlk L hL _ hm _ hc hcc hcr =>
       reach_or_refs_node hσ hadm hfa hf htime hinj hev hTH hmono harr hbelow hst htop ht₁ hdr hq hto

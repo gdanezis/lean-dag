@@ -528,6 +528,16 @@ store closed, and needs none of this.
         `Kept.exposed`) in place of the evidence on its disk. It reads at a
         floor only for the decision of slot `L` itself, which the padded
         record's view covers (`viewsAbove_store`, `decidesWell_padded`).
+        The state a node builds from (`BuildState`) and the build of an
+        honest block (`built_block`, `built_mem`), catch-up (`catches_up`),
+        the lent references (`lent_avoids_before`, `excluded_lent`) and
+        the quorums below a block (`quorum_below`) now read any `Base`; the
+        wave facts (`Helpers/Wave.lean`, `Helpers/Run.lean`) and V11 read
+        them at `base_of_false`, and a build state is a cut of the record
+        of the run there (`cut_of_rises`). Next: the wave facts on any
+        `Base`, through `CutAbove` forms of the reach and certificate tests
+        on the record (`reaches_of_reachReady`, `isCert_of_certReady`,
+        `ready_transfer`, `mem_refsFor_of_cut`).
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase

@@ -54,6 +54,14 @@ def IsCut (U : BlockRecord Validator BlockId Payload P H) (st : Store Validator 
     Prop :=
   AllGood (fun j b => j ∈ U.ids ∧ U.block j = b) st
 
+/-- **A block of a store read as the record reads it from `G` up**: at or
+above `G`, a block of the record at the same round and author, and above `G`
+the record's block. -/
+def CutAbove (U : BlockRecord Validator BlockId Payload P H) (G : ℕ) (j : BlockId)
+    (b : Block Validator BlockId Payload) : Prop :=
+  G ≤ b.round → j ∈ U.ids ∧ (U.block j).round = b.round ∧ (U.block j).creator = b.creator ∧
+    (G < b.round → U.block j = b)
+
 /-- **A record grounds what a node knew**, at quorum `q`: a known block
 valid at `q` over blocks of the record is the record's block. -/
 structure Ground (U : BlockRecord Validator BlockId Payload P H)
@@ -141,6 +149,29 @@ theorem Ground.grounds (hg : Ground U K cfg.q) :
     Grounds cfg (fun j b => j ∈ U.ids ∧ U.block j = b) K :=
   fun _ hc x hx hnew hrefs hv =>
     hg.real x hx (fun j hj => (hc j (hrefs hj)).1) (validAt_of_cut hc hnew hrefs hv)
+
+/-- **A record grounds what a node knew read from round `0` up**: the
+references of a known block valid over a store read so are blocks of the
+record at the rounds and authors the store reads, so the block is the
+record's. -/
+theorem Ground.groundsAbove (hg : Ground U K cfg.q) : Grounds cfg (CutAbove U 0) K := by
+  intro st hc x hx hnew hrefs hv _
+  have hblk : ∀ j ∈ x.2.refs, Function.update st.blk x.1 x.2 j = st.blk j := fun j hj =>
+    Function.update_of_ne (fun e => hnew (by rw [← e]; exact hrefs hj)) _ _
+  have hcj : ∀ j ∈ x.2.refs, j ∈ U.ids ∧ (U.block j).round = (st.blk j).round ∧
+      (U.block j).creator = (st.blk j).creator := fun j hj => by
+    obtain ⟨hU, hr, hcr, -⟩ := hc j (hrefs hj) (Nat.zero_le _)
+    exact ⟨hU, hr.trans (st.full_fields j).1, hcr.trans (st.full_fields j).2.1⟩
+  have hV : ValidAt cfg.q Clause.none U.block x.2 := by
+    refine ⟨fun j hj => ?_, fun h0 => ?_, trivial⟩
+    · rw [(hcj j hj).2.1, ← hblk j hj]
+      exact hv.predecessor j hj
+    · have hcr : creators U.block x.2 = creators (Function.update st.blk x.1 x.2) x.2 :=
+        Finset.image_congr fun j hj => by rw [hblk j hj]; exact (hcj j hj).2.2
+      rw [hcr]
+      exact hv.quorum h0
+  obtain ⟨h₁, h₂⟩ := hg.real x hx (fun j hj => (hcj j hj).1) hV
+  exact ⟨h₁, by rw [h₂], by rw [h₂], fun _ => h₂⟩
 
 omit [Fintype Validator] in
 /-- **Accepting a known block keeps the store good**, when, at a node that

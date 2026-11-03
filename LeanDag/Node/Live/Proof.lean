@@ -108,7 +108,8 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
       obtain ⟨j, hj, hjr, -⟩ :=
         top_arrives htime hinj hTH hmono harr hw hv hwv hgs (hstarted w hw) (τ := τ) le_rfl
           (by omega)
-      exact quorum_below hσ hadm hf htime hinj hdr (hTH hv) _ _ hj hjr n hwn
+      exact quorum_below (base_of_false hσ hadm hf htime hinj hdr 0 tr.length) hadm (hTH hv)
+        (eventsBy_le_length _) _ hj hjr n hwn (Nat.zero_le _)
     · push Not at hup
       refine hqT.trans (Finset.card_le_card fun w hw => ?_)
       rw [mem_authorsIn]
@@ -157,7 +158,8 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
           (Z.disk.blk z).creator ∈ H := by
         by_cases hnt : n + 1 = topAt cfg tr time w s
         · exact ⟨j, hjE, hjr'.trans hnt.symm, hjc' ▸ hTH hw⟩
-        · have h₁ := quorum_below hσ hadm hf htime hinj hdr (hTH hv) E _ hjE hjr' (n + 1) (by omega)
+        · have h₁ := quorum_below (base_of_false hσ hadm hf htime hinj hdr 0 tr.length) hadm
+            (hTH hv) (eventsBy_le_length _) _ hjE hjr' (n + 1) (by omega) (Nat.zero_le _)
           have h₂ := two_f_c_lt_q hadm
           exact exists_honest_at hf (by
             rw [Store.authorsAt_eq]; exact (show cfg.f + 1 ≤ cfg.q by omega).trans h₁)
@@ -173,8 +175,10 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
         simp only [Option.getD_some] at h₁
         exact (hnE v hv).trans h₁
       exact Or.inr ⟨_, lent_mem_lents hz hzr hzm
-        (lent_avoids_before hσ hadm hf htime hinj hdr time hsp (hTH hv) E hz hzr hzH hnE'),
-        (lent_buildable (cfg := cfg.at v) hvalid hz hzr
+        (lent_avoids_before hσ htime hinj (base_of_false hσ hadm hf htime hinj hdr 0 tr.length)
+          time hsp (hTH hv) (eventsBy_le_length _) hz hzr hzH hnE' (Nat.zero_le _)
+          (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true) (Or.inl hdr)),
+        (lent_buildable (cfg := cfg.at v) (fun j hj _ => hvalid j hj) hz hzr
         ((Converge.inv_before (cfg := cfg) (tr := tr) E v).unkept hdr (by rw [hZt])
           (by change _ ≤ (Z.disk.blk z).round; rw [hzr]
               exact le_trans (Nat.sub_le _ _) (Nat.le_succ n)))
