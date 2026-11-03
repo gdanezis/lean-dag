@@ -175,8 +175,8 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
         simp only [Option.getD_some] at h₁
         exact (hnE v hv).trans h₁
       exact Or.inr ⟨_, lent_mem_lents hz hzr hzm
-        (lent_avoids_before hσ htime hinj (base_of_false hσ hadm hf htime hinj hdr 0 tr.length)
-          time hsp (hTH hv) (eventsBy_le_length _) hz hzr hzH hnE' (Nat.zero_le _)
+        (lent_avoids_before htime (base_of_false hσ hadm hf htime hinj hdr 0 tr.length)
+          hsp (hTH hv) (eventsBy_le_length _) hz hzr hzH hnE' (Nat.zero_le _)
           (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true) (Or.inl hdr)),
         (lent_buildable (cfg := cfg.at v) (fun j hj _ => hvalid j hj) hz hzr
         ((Converge.inv_before (cfg := cfg) (tr := tr) E v).unkept hdr (by rw [hZt])

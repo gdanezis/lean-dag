@@ -90,7 +90,7 @@ theorem waited_holds (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel) (hadm : cfg.
     omega
   -- so every reliable node is `A` later
   have hall : ∀ w ∈ T, n ≤ topAt cfg tr time w (time i + (Δ + Δₛ)) := fun w hw =>
-    catches_up hq hσ hadm hfa hf hid htime hinj (base_of_false hσ hadm hf htime hinj hdr 0
+    catches_up hq hadm hfa hf hid htime hinj (base_of_false hσ hadm hf htime hinj hdr 0
       tr.length) hTH hmono harr hstart (fun w hw => (Finset.mem_filter.mp hw).2) hS hgi
       (by omega) (Nat.zero_le _) (eventsBy_le_length _) hSn hsp hw (hE w hw) (Nat.zero_le _)
       (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true)
