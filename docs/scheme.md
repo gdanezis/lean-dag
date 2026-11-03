@@ -233,9 +233,10 @@ it skips directly where Nemo waits for an anchor. Both are safe.
 
 ## 5. The rows as carriers
 
-`Scheme.ReadAlike` is what `Decided` reads; `ReadAlike.decided_iff`
-proves that two rules agreeing on it decide alike, and `toDagRule_eq`
-that their carriers are equal. One round above the candidate, a vote is a
+`AnchoredRule.ReadAlike` (`Common/Anchored/ReadAlike.lean`) is what
+`Decided` reads; `ReadAlike.decided_iff` proves that two rules agreeing
+on it decide alike, and `AnchoredRule.toDagRule_eq` that their carriers
+are equal. One round above the candidate, a vote is a
 reference and a blame a reference to no candidate (`votes_iff`,
 `blamersAt_eq`). `Scheme/Equiv/Statement.lean` then states, at every
 `VoteSel`:
@@ -321,7 +322,7 @@ authors number more than `n + f` together share a block
 slot and does not blame a slot it selects in: this gives each inequality
 of the form `n + f + 1 ≤ a + b`. A block above `c` authors'
 decision-round blocks holds at least `c + q − n − f` of them in its
-history (`card_inHistory_ge`): this gives visibility, the inequality
+history (`card_inHistory_ge`, `Common/History.lean`): this gives visibility, the inequality
 with `q`. In the two-round family the third inequality and `q ≤ n` give
 `commit ≥ link + f`, which the cases of two direct commits, and of a
 direct commit and a direct skip, need.
@@ -689,12 +690,13 @@ row and vote:
 
 **The count, with no network hypothesis.**
 
-* **The common core** (`CommonCore`, from `exists_commonCore`): at
-  `2q ≥ n + f + 1`, a block at round `r + 2` gives an honest round-`r`
-  block in the history of every block from round `r + 2` up. This is the
-  core's double count (`Common/CommonCore.lean`, at `q = n − f`) at a
-  general quorum: some honest author collects so many honest supporters
-  that every round-`(r+2)` block names one (`core_arith`). Every
+* **The common core** (`CommonCore`, from `exists_commonCore`,
+  `Common/CommonCore.lean`): at `2q ≥ n + f + 1`, a block at round
+  `r + 2` gives an honest round-`r` block in the history of every block
+  from round `r + 2` up. Some honest author collects so many honest
+  supporters that every round-`(r+2)` block names one
+  (`commonCore_arith`). The core's T3a and T3c are the case
+  `q = n − f`. Every
   asynchronous row meets the condition at `q = n − f − c`: Mahi-Mahi,
   Cordial Miners Async, Async Nemo-Nemo and Hybrid Mahi-Mahi at
   equality, Blue Bottle Async and Async Orcaella above it.

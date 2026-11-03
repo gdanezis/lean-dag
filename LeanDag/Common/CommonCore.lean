@@ -28,15 +28,198 @@ apparently provable one.
 
 namespace LeanDag
 
+/-! ## At a general quorum
+
+On a block record whose blocks reference `q` distinct authors one round
+down, with at most `f` validators outside its honest set: at
+`2q ≥ n + f + 1`, some honest round-`r` block lies in the history of every
+block from round `r + 2` up. -/
+
+section General
+
+variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
+variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
+variable {P : Validity Validator BlockId Payload} {honest : Finset Validator} [P.Mechanised]
+variable {q : ℕ} [P.Quorate q]
+variable {U : BlockRecord Validator BlockId Payload P honest}
+
+/-- The common core's arithmetic: with `b ≤ f` validators outside the
+honest `c = n − b`, `l ≤ c` honest round-`(r+1)` blocks each naming `q`
+authors, some author collecting `k` with `l·q ≤ c·k + l·b`, and `p ≤ l + b`
+authors at round `r + 1`, `2q ≥ n + f + 1` gives `k + q > p`. -/
+theorem commonCore_arith {n f b c l k p : ℕ}
+    (hbf : b ≤ f) (hq : n + f + 1 ≤ 2 * q) (hqn : q ≤ n) (hcb : c + b = n) (hlc : l ≤ c)
+    (hA : l * q ≤ c * k + l * b) (hE : p ≤ l + b) :
+    p + 1 ≤ k + q := by
+  by_contra h
+  push Not at h
+  have h1 : c * k ≤ c * (l + b - q) := Nat.mul_le_mul_left c (by omega)
+  obtain ⟨e, he⟩ : ∃ e, l + b = q + e := ⟨l + b - q, by omega⟩
+  rw [show l + b - q = e by omega] at h1
+  nlinarith [h1, hA, hlc, hcb, he, hq, hbf]
+
+omit [DecidableEq BlockId] [P.Mechanised] [P.Quorate q] in
+/-- A set of validators is its honest part and at most the others. -/
+theorem card_le_inter_add_compl (s : Finset Validator) :
+    s.card ≤ (s ∩ honest).card + honestᶜ.card := by
+  have hsplit := Finset.card_inter_add_card_sdiff s honest
+  have : (s \ honest).card ≤ honestᶜ.card :=
+    Finset.card_le_card fun x hx => Finset.mem_compl.mpr (Finset.mem_sdiff.mp hx).2
+  omega
+
+/-- The honest blocks of round `n`. -/
+abbrev honestBlocksAt (U : BlockRecord Validator BlockId Payload P honest) (n : ℕ) :
+    Finset BlockId :=
+  (blocksAt U n).filter (fun b => (U.block b).creator ∈ honest)
+
+omit [Fintype Validator] [DecidableEq BlockId] [P.Mechanised] [P.Quorate q] in
+theorem creator_injOn_honestBlocksAt {n : ℕ} :
+    Set.InjOn (fun b => (U.block b).creator) (honestBlocksAt U n) := by
+  intro b hb b' hb' h
+  obtain ⟨hbs, hbh⟩ := Finset.mem_filter.mp hb
+  obtain ⟨hbU, hbr⟩ := mem_blocksAt.mp hbs
+  obtain ⟨hb's, -⟩ := Finset.mem_filter.mp hb'
+  obtain ⟨hb'U, hb'r⟩ := mem_blocksAt.mp hb's
+  exact U.eq_of_creator_eq hbU hb'U hbh rfl h.symm (by rw [hbr, hb'r])
+
+omit [Fintype Validator] [DecidableEq BlockId] [P.Mechanised] [P.Quorate q] in
+theorem card_creatorsOf_honestBlocksAt {n : ℕ} :
+    (creatorsOf U.block (honestBlocksAt U n)).card = (honestBlocksAt U n).card :=
+  Finset.card_image_of_injOn creator_injOn_honestBlocksAt
+
+omit [Fintype Validator] [DecidableEq BlockId] [P.Mechanised] [P.Quorate q] in
+theorem creatorsOf_honestBlocksAt_subset {n : ℕ} :
+    creatorsOf U.block (honestBlocksAt U n) ⊆ honest := by
+  intro v hv
+  obtain ⟨b, hb, rfl⟩ := mem_creatorsOf.mp hv
+  exact (Finset.mem_filter.mp hb).2
+
+omit [DecidableEq BlockId] [P.Mechanised] [P.Quorate q] in
+/-- The authors of a round are its honest authors and at most the others. -/
+theorem card_authorsAt_le_honest {n : ℕ} :
+    (authorsAt U n).card ≤ (honestBlocksAt U n).card + honestᶜ.card := by
+  rw [← card_creatorsOf_honestBlocksAt]
+  refine le_trans (Finset.card_le_card ?_) (Finset.card_union_le _ _)
+  intro v hv
+  obtain ⟨i, hi, hir, rfl⟩ := mem_authorsAt.mp hv
+  by_cases hc : (U.block i).creator ∈ honest
+  · exact Finset.mem_union_left _ (mem_creatorsOf.mpr
+      ⟨i, Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨hi, hir⟩, hc⟩, rfl⟩)
+  · exact Finset.mem_union_right _ (Finset.mem_compl.mpr hc)
+
+/-- **The common core's count**: at `2q ≥ n + f + 1`, given a round-`(r+1)`
+author pool of at least `q`, some honest round-`r` block has so many honest
+supporters at round `r + 1` that with `q` they exceed the pool. -/
+theorem exists_honest_common_support {f r : ℕ} (hf : honestᶜ.card ≤ f)
+    (hq2 : Fintype.card Validator + f + 1 ≤ 2 * q)
+    (hp : q ≤ (authorsAt U (r + 1)).card) :
+    ∃ bw ∈ U.ids, (U.block bw).round = r ∧ (U.block bw).creator ∈ honest ∧
+      (authorsAt U (r + 1)).card + 1 ≤ (supporters U bw (r + 1) ∩ honest).card + q := by
+  classical
+  have hE := card_authorsAt_le_honest (U := U) (n := r + 1)
+  have hlc : (honestBlocksAt U (r + 1)).card ≤ honest.card := by
+    rw [← card_creatorsOf_honestBlocksAt]
+    exact Finset.card_le_card creatorsOf_honestBlocksAt_subset
+  have hcb : honest.card + honestᶜ.card = Fintype.card Validator := Finset.card_add_card_compl _
+  have hqn : q ≤ Fintype.card Validator :=
+    le_trans hp (card_authorsAt_le_univ (U := U) (n := r + 1))
+  set L := honestBlocksAt U (r + 1) with hLdef
+  set g : Validator → ℕ :=
+    fun w => (L.filter (fun x => w ∈ creatorsOf U.block (U.block x).refs)).card with hgdef
+  have hper : ∀ x ∈ L,
+      q ≤ ((creatorsOf U.block (U.block x).refs) ∩ honest).card + honestᶜ.card := by
+    intro x hx
+    obtain ⟨hxs, -⟩ := Finset.mem_filter.mp hx
+    obtain ⟨hxU, hxr⟩ := mem_blocksAt.mp hxs
+    exact le_trans (U.creators_quorum hxU (by omega)) (card_le_inter_add_compl _)
+  have hC_ne : honest.Nonempty := by rw [← Finset.card_pos]; omega
+  obtain ⟨w, hw_mem, hw_max⟩ := honest.exists_max_image g hC_ne
+  have hbig : L.card * (q - honestᶜ.card) ≤ honest.card * g w := by
+    have := Finset.card_nsmul_le_card_nsmul
+      (r := fun (x : BlockId) (v : Validator) => v ∈ creatorsOf U.block (U.block x).refs)
+      (s := L) (t := honest) (m := q - honestᶜ.card) (n := g w)
+      (fun x hx => by
+        have h := hper x hx
+        change q - honestᶜ.card ≤
+          (honest.filter (fun v => v ∈ creatorsOf U.block (U.block x).refs)).card
+        rw [Finset.filter_mem_eq_inter, Finset.inter_comm]
+        omega)
+      (fun v hv => hw_max v hv)
+    simpa [smul_eq_mul] using this
+  have hA : L.card * q ≤ honest.card * g w + L.card * honestᶜ.card := by
+    have hsplit : L.card * q = L.card * (q - honestᶜ.card) + L.card * honestᶜ.card := by
+      rw [← Nat.mul_add, Nat.sub_add_cancel (by omega)]
+    omega
+  have harith := commonCore_arith (q := q) hf hq2 hqn hcb hlc hA hE
+  have hgw_pos : 0 < g w := by omega
+  obtain ⟨x₀, hx₀⟩ := Finset.card_pos.mp hgw_pos
+  obtain ⟨hx₀L, hx₀w⟩ := Finset.mem_filter.mp hx₀
+  obtain ⟨hx₀s, -⟩ := Finset.mem_filter.mp hx₀L
+  obtain ⟨hx₀U, hx₀r⟩ := mem_blocksAt.mp hx₀s
+  obtain ⟨bw, hbw_mem, hbw_creator⟩ := mem_creatorsOf.mp hx₀w
+  have hbwU : bw ∈ U.ids := U.complete _ hx₀U _ hbw_mem
+  have hbwr : (U.block bw).round = r := by
+    have := U.round_of_mem_refs hx₀U hbw_mem; omega
+  refine ⟨bw, hbwU, hbwr, hbw_creator ▸ hw_mem, ?_⟩
+  have hsub : Finset.image (fun x => (U.block x).creator)
+      (L.filter (fun x => w ∈ creatorsOf U.block (U.block x).refs)) ⊆
+        supporters U bw (r + 1) ∩ honest := by
+    intro v hv
+    simp only [Finset.mem_image, Finset.mem_filter] at hv
+    obtain ⟨x, ⟨hxL, hxw⟩, rfl⟩ := hv
+    obtain ⟨hxs, hxh⟩ := Finset.mem_filter.mp hxL
+    obtain ⟨hxU, hxr⟩ := mem_blocksAt.mp hxs
+    obtain ⟨i', hi', hi'c⟩ := mem_creatorsOf.mp hxw
+    have hi'U : i' ∈ U.ids := U.complete x hxU i' hi'
+    have hi'r : (U.block i').round = r := by
+      have := U.round_of_mem_refs hxU hi'; omega
+    have hib : i' = bw := U.eq_of_creator_eq hi'U hbwU hw_mem hi'c hbw_creator (by rw [hi'r, hbwr])
+    exact Finset.mem_inter.mpr ⟨mem_supporters.mpr ⟨x, hxU, hxr, hib ▸ hi', rfl⟩, hxh⟩
+  calc (authorsAt U (r + 1)).card + 1
+      ≤ g w + q := harith
+    _ = (Finset.image (fun x => (U.block x).creator)
+          (L.filter (fun x => w ∈ creatorsOf U.block (U.block x).refs))).card + q := by
+        rw [Finset.card_image_of_injOn
+          (creator_injOn_honestBlocksAt.mono (Finset.coe_subset.mpr (Finset.filter_subset _ _)))]
+    _ ≤ _ := Nat.add_le_add_right (Finset.card_le_card hsub) _
+
+omit [DecidableEq BlockId] in
+/-- **The common core**: at `2q ≥ n + f + 1`, if a block exists at round
+`r + 2`, some honest round-`r` block lies in the history of every block from
+round `r + 2` up. -/
+theorem exists_commonCore {f r : ℕ} (hf : honestᶜ.card ≤ f)
+    (hq2 : Fintype.card Validator + f + 1 ≤ 2 * q) {c₀ : BlockId}
+    (hc₀ : c₀ ∈ U.ids) (hc₀r : (U.block c₀).round = r + 2) :
+    ∃ b ∈ U.ids, (U.block b).round = r ∧ (U.block b).creator ∈ honest ∧
+      ∀ c ∈ U.ids, r + 2 ≤ (U.block c).round → Reaches U c b := by
+  classical
+  have hp : q ≤ (authorsAt U (r + 1)).card :=
+    le_trans (U.creators_quorum hc₀ (by omega))
+      (Finset.card_le_card (creators_refs_subset_authorsAt hc₀ (by omega)))
+  obtain ⟨b, hb, hbr, hbh, hsup⟩ := exists_honest_common_support hf hq2 hp
+  refine ⟨b, hb, hbr, hbh, fun c hc hcr => ?_⟩
+  have hbase : ∀ c ∈ U.ids, (U.block c).round = r + 2 → ∃ b', b' = b ∧ Reaches U c b' :=
+    fun c hc hcr => ⟨b, rfl, reaches_of_honest_support (b := b) (r := r)
+      (S := supporters U b (r + 1) ∩ honest)
+      (fun v hv => mem_supporters.mp (Finset.mem_inter.mp hv).1)
+      (fun v hv => (Finset.mem_inter.mp hv).2) hsup hc hcr⟩
+  obtain ⟨b', rfl, hreach⟩ := reaches_pred_of_round_le (Q := fun b' => b' = b) hbase hc hcr
+  exact hreach
+
+end General
+
+/-! ## The core
+
+At the core's quorum `n − f`, `2q ≥ n + f + 1` is `n ≥ 3f + 1`. -/
+
+section Core
+
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
 variable [F : Faults Validator]
 variable {BlockId : Type*} {Payload : Type*}
 variable {U : BlockUniverse Validator BlockId Payload}
 
-/-- The round-`n` blocks authored by *correct* validators. The counting
-argument ranges over these: a correct author has exactly one block per round
-(T1), so `creator` is injective here and blocks and authors can be counted
-interchangeably. -/
+/-- The round-`n` blocks authored by *correct* validators. -/
 def correctBlocksAt (U : BlockUniverse Validator BlockId Payload) (n : ℕ) : Finset BlockId :=
   (blocksAt U n).filter (fun q => (U.block q).creator ∈ (Correct : Finset Validator))
 
@@ -46,205 +229,42 @@ theorem mem_correctBlocksAt {i : BlockId} {n : ℕ} :
       i ∈ U.ids ∧ (U.block i).round = n ∧ (U.block i).creator ∈ (Correct : Finset Validator) := by
   simp [correctBlocksAt, and_assoc]
 
-/-- Distinct correct round-`n` blocks have distinct authors — non-equivocation
-(T1) in the form the count needs. -/
-theorem creator_injOn_correctBlocksAt {n : ℕ} :
-    Set.InjOn (fun q => (U.block q).creator) (correctBlocksAt U n) := by
-  intro q hq q' hq' h
-  obtain ⟨hq_ids, hq_round, hq_corr⟩ := mem_correctBlocksAt.mp hq
-  obtain ⟨hq'_ids, hq'_round, _⟩ := mem_correctBlocksAt.mp hq'
-  exact U.eq_of_creator_eq hq_ids hq'_ids hq_corr rfl h.symm (by rw [hq_round, hq'_round])
-
-theorem card_creatorsOf_correctBlocksAt {n : ℕ} :
-    (creatorsOf U.block (correctBlocksAt U n)).card = (correctBlocksAt U n).card :=
-  Finset.card_image_of_injOn creator_injOn_correctBlocksAt
-
-theorem creatorsOf_correctBlocksAt_subset {n : ℕ} :
-    creatorsOf U.block (correctBlocksAt U n) ⊆ (Correct : Finset Validator) := by
-  intro v hv
-  rw [mem_creatorsOf] at hv
-  obtain ⟨q, hq, rfl⟩ := hv
-  exact (mem_correctBlocksAt.mp hq).2.2
-
-/-- The author pool at round `n` is covered by the correct authors together
-with the Byzantine validators, bounding `p` by `l + b`. -/
-theorem card_authorsAt_le {n : ℕ} :
-    (authorsAt U n).card ≤ (correctBlocksAt U n).card + F.byzantine.card := by
-  rw [← card_creatorsOf_correctBlocksAt]
-  refine le_trans (Finset.card_le_card ?_) (Finset.card_union_le _ _)
-  intro v hv
-  rw [mem_authorsAt] at hv
-  obtain ⟨i, hi_ids, hi_round, hi_creator⟩ := hv
-  by_cases hc : v ∈ (Correct : Finset Validator)
-  · refine Finset.mem_union_left _ ?_
-    rw [mem_creatorsOf]
-    exact ⟨i, mem_correctBlocksAt.mpr ⟨hi_ids, hi_round, hi_creator ▸ hc⟩, hi_creator⟩
-  · exact Finset.mem_union_right _ (by simpa using hc)
+/-- The core's quorum meets the general count's condition. -/
+theorem card_add_f_lt_two_mul_quorum :
+    Fintype.card Validator + F.f + 1 ≤ 2 * (quorumCard Validator) := by
+  have := F.card_validators; omega
 
 variable [DecidableEq BlockId]
 
-/-- The arithmetic core of T3a, isolated from the combinatorics.
-
-With `f` the fault bound, `b = |Byzantine|`, `c = |Correct|`, `l` the number
-of correct round-`(r+1)` blocks, `k` the largest support degree and `p` the
-author-pool size: the double count gives `hA`, and the conclusion is the
-`p - 2f` coverage threshold. The contradiction is `c² ≤ f(l+c)`, which `l ≤ c` collapses to
-`c ≤ 2f` — impossible, since `b ≤ f` forces `c ≥ 2f+1`. -/
-private theorem support_threshold_arith {f b c l k p n : ℕ}
-    (hbf : b ≤ f) (hn : 3 * f + 1 ≤ n) (hcb : c + b = n) (hlc : l ≤ c)
-    (hA : l * (n - f) ≤ c * k + l * b) (hE : p ≤ l + b) :
-    p + f + 1 ≤ k + n := by
-  obtain ⟨d, rfl⟩ : ∃ d, n = d + f := ⟨n - f, by omega⟩
-  rw [show d + f - f = d from by omega] at hA
-  by_contra hcon
-  push Not at hcon
-  have h1 : k + d ≤ p := by omega
-  have h2 : c * (k + d) ≤ c * (l + b) :=
-    Nat.mul_le_mul_left c (le_trans h1 hE)
-  have hcge : 2 * f + 1 ≤ c := by omega
-  have key : c * c ≤ f * (l + c) := by nlinarith [h2, hA]
-  nlinarith [key, hlc, hcge]
-
 /-- **T3a (Correct-support counting).** Some correct validator's round-`r`
 block is backed by enough correct round-`(r+1)` validators to satisfy the
-`p - 2f` coverage threshold.
-
-Double counting: each correct round-`(r+1)` block names at least
-`(n-f) - b` correct round-`r` authors, and there are `l` such blocks spread
-over `c = n - b` correct validators, so some author `w` collects at least
-`l(n-f-b)/c`. The arithmetic obligation reduces to `c² ≤ f(l+c)`, which
-`l ≤ c` turns into `c ≤ 2f` — impossible, since `b ≤ f` and `n ≥ 3f+1`
-force `c ≥ 2f+1`. The same contradiction as at `n = 3f+1`, verbatim. -/
+`p - 2f` coverage threshold: the general count at the core's quorum. -/
 theorem exists_correct_common_support {r : ℕ}
     (hp : quorumCard Validator ≤ (authorsAt U (r + 1)).card) :
     ∃ bw ∈ U.ids, (U.block bw).round = r ∧
       (U.block bw).creator ∈ (Correct : Finset Validator) ∧
       (authorsAt U (r + 1)).card + F.f + 1
         ≤ (correctSupporters U bw (r + 1)).card + Fintype.card Validator := by
-  classical
-  -- Derive the ambient cardinality facts *before* abbreviating, so that
-  -- `set` rewrites them too; otherwise `omega` sees `Correct.card` and
-  -- `C.card` as unrelated atoms.
-  obtain ⟨hcb, hbf, hnv⟩ := faults_arith (Validator := Validator)
-  have hE := card_authorsAt_le (U := U) (n := r + 1)
-  have hlc : (correctBlocksAt U (r + 1)).card ≤ (Correct : Finset Validator).card := by
-    rw [← card_creatorsOf_correctBlocksAt]
-    exact Finset.card_le_card creatorsOf_correctBlocksAt_subset
-  set L := correctBlocksAt U (r + 1) with hLdef
-  set C := (Correct : Finset Validator) with hCdef
-  set g : Validator → ℕ :=
-    fun w => (L.filter (fun q => w ∈ creatorsOf U.block (U.block q).refs)).card with hgdef
-  -- Each correct round-(r+1) block names n−f validators, at most b Byzantine.
-  have hper : ∀ q ∈ L,
-      quorumCard Validator ≤ ((creatorsOf U.block (U.block q).refs) ∩ C).card + F.byzantine.card := by
-    intro q hq
-    obtain ⟨hq_ids, hq_round, _⟩ := mem_correctBlocksAt.mp hq
-    exact le_trans (U.creators_quorum hq_ids (by omega))
-      (card_le_card_inter_correct_add_byzantine _)
-  -- Pick a correct author of maximum support degree.
-  have hC_ne : C.Nonempty := by
-    rw [← Finset.card_pos]; omega
-  obtain ⟨w, hw_mem, hw_max⟩ := C.exists_max_image g hC_ne
-  -- **Double counting** (`Finset.card_nsmul_le_card_nsmul`): each correct
-  -- round-(r+1) block contributes at least `2f+1 - b` incidences, and each
-  -- correct author absorbs at most `g w`.
-  have hbig : L.card * (quorumCard Validator - F.byzantine.card) ≤ C.card * g w := by
-    have := Finset.card_nsmul_le_card_nsmul
-      (r := fun (q : BlockId) (v : Validator) => v ∈ creatorsOf U.block (U.block q).refs)
-      (s := L) (t := C)
-      (m := quorumCard Validator - F.byzantine.card) (n := g w)
-      (fun q hq => by
-        have h := hper q hq
-        -- `bipartiteAbove` is by definition the filter, so `change` retypes it.
-        change quorumCard Validator - F.byzantine.card
-            ≤ (C.filter (fun v => v ∈ creatorsOf U.block (U.block q).refs)).card
-        rw [Finset.filter_mem_eq_inter, Finset.inter_comm]
-        omega)
-      (fun v hv => hw_max v hv)
-    simpa [smul_eq_mul] using this
-  have hb_le : F.byzantine.card ≤ quorumCard Validator := by omega
-  have hA : L.card * (quorumCard Validator) ≤ C.card * g w + L.card * F.byzantine.card := by
-    have hsplit : L.card * (quorumCard Validator)
-        = L.card * (quorumCard Validator - F.byzantine.card) + L.card * F.byzantine.card := by
-      rw [← Nat.mul_add, Nat.sub_add_cancel hb_le]
-    omega
-  -- The arithmetic core: p ≤ (max degree) + 2f.
-  have harith : (authorsAt U (r + 1)).card + F.f + 1 ≤ g w + Fintype.card Validator :=
-    support_threshold_arith hbf hnv hcb hlc hA hE
-  -- The maximiser has positive degree, so it really does author a round-r block.
-  have hgw_pos : 0 < g w := by omega
-  obtain ⟨q₀, hq₀⟩ := Finset.card_pos.mp hgw_pos
-  rw [Finset.mem_filter] at hq₀
-  obtain ⟨hq₀L, hq₀w⟩ := hq₀
-  obtain ⟨hq₀_ids, hq₀_round, _⟩ := mem_correctBlocksAt.mp hq₀L
-  rw [mem_creatorsOf] at hq₀w
-  obtain ⟨bw, hbw_mem, hbw_creator⟩ := hq₀w
-  have hbw_ids : bw ∈ U.ids := U.complete _ hq₀_ids _ hbw_mem
-  have hbw_round : (U.block bw).round = r := by
-    have := U.round_of_mem_refs hq₀_ids hbw_mem; omega
-  have hw_correct : w ∈ C := hw_mem
-  refine ⟨bw, hbw_ids, hbw_round, hbw_creator ▸ hw_correct, ?_⟩
-  -- Every block counted by `g w` references `bw` (T1), and distinct such
-  -- blocks have distinct correct authors, so they inject into the support set.
-  have hsub : Finset.image (fun q => (U.block q).creator)
-      (L.filter (fun q => w ∈ creatorsOf U.block (U.block q).refs))
-      ⊆ correctSupporters U bw (r + 1) := by
-    intro v hv
-    simp only [Finset.mem_image, Finset.mem_filter] at hv
-    obtain ⟨q, ⟨hqL, hqw⟩, rfl⟩ := hv
-    obtain ⟨hq_ids, hq_round, hq_corr⟩ := mem_correctBlocksAt.mp hqL
-    rw [mem_creatorsOf] at hqw
-    obtain ⟨i', hi'_mem, hi'_creator⟩ := hqw
-    have hi'_ids : i' ∈ U.ids := U.complete q hq_ids i' hi'_mem
-    have hi'_round : (U.block i').round = r := by
-      have := U.round_of_mem_refs hq_ids hi'_mem; omega
-    have hib : i' = bw :=
-      U.eq_of_creator_eq hi'_ids hbw_ids hw_correct hi'_creator hbw_creator
-        (by rw [hi'_round, hbw_round])
-    refine Finset.mem_inter.mpr ⟨?_, hq_corr⟩
-    rw [mem_supporters]
-    exact ⟨q, hq_ids, hq_round, hib ▸ hi'_mem, rfl⟩
-  calc (authorsAt U (r + 1)).card + F.f + 1
-      ≤ g w + Fintype.card Validator := harith
-    _ = (Finset.image (fun q => (U.block q).creator)
-          (L.filter (fun q => w ∈ creatorsOf U.block (U.block q).refs))).card
-        + Fintype.card Validator := by
-        rw [Finset.card_image_of_injOn
-          (creator_injOn_correctBlocksAt.mono (Finset.coe_subset.mpr (Finset.filter_subset _ _)))]
-    _ ≤ _ := Nat.add_le_add_right (Finset.card_le_card hsub) _
+  obtain ⟨bw, hb, hbr, hbc, h⟩ :=
+    exists_honest_common_support card_compl_correct_le card_add_f_lt_two_mul_quorum hp
+  have := F.card_validators
+  exact ⟨bw, hb, hbr, hbc, by unfold correctSupporters; omega⟩
 
 omit [DecidableEq BlockId] in
 /-- **T3c (Common correct ancestor).** If any block exists at round `r+2`,
 some correct validator's round-`r` block lies in the causal history of
-*every* round-`(r+2)` block.
-
-The only premise is that a round-`(r+2)` block exists — a fact about the DAG
-in hand, not an assumption that anyone makes progress. Its own reference
-quorum supplies the `2f+1` author bound T3a needs.
-
-Note the statement mentions no `Finset BlockId` operation, so unlike T3a it
-does **not** require decidable equality on ids; the proof supplies that
-classically. -/
+*every* round-`(r+2)` block: the general common core at the core's
+quorum. -/
 theorem exists_common_correct_ancestor {r : ℕ} {c₀ : BlockId}
     (hc₀ : c₀ ∈ U.ids) (hc₀r : (U.block c₀).round = r + 2) :
     ∃ bw ∈ U.ids, (U.block bw).round = r ∧
       (U.block bw).creator ∈ (Correct : Finset Validator) ∧
       ∀ c ∈ U.ids, (U.block c).round = r + 2 → Reaches U c bw := by
-  -- The statement mentions no `Finset BlockId` operation, so decidable
-  -- equality on ids is an artefact of the proof only.
   classical
-  -- A round-(r+2) block names n−f distinct round-(r+1) authors, so the
-  -- author pool is at least that large -- exactly T3a's hypothesis.
-  have hp : quorumCard Validator ≤ (authorsAt U (r + 1)).card :=
-    le_trans (U.creators_quorum hc₀ (by omega))
-      (Finset.card_le_card (creators_refs_subset_authorsAt hc₀ (by omega)))
-  obtain ⟨bw, hbw_ids, hbw_round, hbw_correct, hbw_support⟩ :=
-    exists_correct_common_support (U := U) (r := r) hp
-  refine ⟨bw, hbw_ids, hbw_round, hbw_correct, fun c hc hcr => ?_⟩
-  refine reaches_of_honest_support (b := bw) (r := r)
-    (S := correctSupporters U bw (r + 1)) ?_ (fun _ hv => correctSupporters_correct hv)
-    (by have := F.card_validators; omega) hc hcr
-  intro v hv
-  exact mem_supporters.mp (correctSupporters_subset hv)
+  obtain ⟨b, hb, hbr, hbc, h⟩ :=
+    exists_commonCore card_compl_correct_le card_add_f_lt_two_mul_quorum hc₀ hc₀r
+  exact ⟨b, hb, hbr, hbc, fun c hc hcr => h c hc hcr.ge⟩
+
+end Core
 
 end LeanDag
