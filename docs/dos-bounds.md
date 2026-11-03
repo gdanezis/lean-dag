@@ -363,8 +363,10 @@ store closed, and needs none of this.
         disks whose cut is at most `G` (`cutAbove_before`); `Cut.Agrees`
         and V3 are unchanged. V12 on one record (`cut_before`) assumes
         that no node drops.
-     2. *The floor at the cut, and the jump.* Done, behind the switch. A
-        node that drops keeps its floor at or above its cut (`floorOf`),
+     2. *The floor above the cut, and the jump.* Done, behind the switch.
+        A node that drops keeps its floor at the round of its next
+        undecided slot, one above its cut (`floorOf`), so that a node
+        deciding on a proof takes all its blocks in and can answer with it,
         accepts a new block below its floor on its header alone, keeping
         it without its references (D10; `accept`, `acceptOn`,
         `Store.base`), and, while its top lies below its floor, builds as a
@@ -372,13 +374,26 @@ store closed, and needs none of this.
         quorum of (`tryBuild`). Taking in a proof is accepting its blocks
         (`decideOn`). Safety holds as in item 4.1: a block accepted on its
         header lies below the cut (`cutAbove_known`).
-     3. *Liveness with dropping on.* Convergence, V11 and V13 are to be
-        proved with dropping on, on the record of each cut, and their
-        premise `cfg.drops = false` removed. The synchronisation premise
-        of V11 (`SyncedWithin`) does not hold of a node far behind when
-        its peers drop, and is to be restated for receivers whose cut is at
-        least every reliable node's floor; catch-up is to bring a node
-        behind there.
+     3. *Liveness with dropping on.* With dropping, V11's timed bounds
+        fail: past GST a reliable node may need a block every reliable
+        node let go of, stall until its retry timer fires, and then catch
+        up at one slot each `2Δ`. A node may also build without ever
+        deciding, when the reliable blocks it needs lie behind such a
+        block; it then asks for a proof at its round timers once its next
+        undecided slot lies more than a wave below its top (`askBehind`).
+        Decided with the user: V11 with dropping is proved first in an
+        eventual form, with a coarse explicit bound, and its
+        synchronisation premise is restated as *held by a reliable node*:
+        a reliable node given a reliable author's block holds it within
+        `Δₛ` when every block of that block's history at or above the
+        receiver's floor is held by some reliable node. The steps: a
+        proof a reliable node keeps decides its slot at the receiver (the
+        replay lemma); a node behind decides a slot a reliable node decided
+        within a bounded time (the catch-up lemma); every reliable block
+        reaches each reliable node, or that node's floor passes it; and
+        the eventual V11, from the observation that a reliable node can
+        need a let-go block only while another reliable node is ahead of it
+        in deciding, which catch-up closes.
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase

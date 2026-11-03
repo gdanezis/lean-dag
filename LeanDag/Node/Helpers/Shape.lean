@@ -314,8 +314,10 @@ theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator 
   | timer r =>
     right
     rcases step_timer_snd (cfg := cfg) s r with h | h
-    · exact ⟨{ s with fired := fire s r, recovering := false }, [], [], step_timer_fst s r,
-        by rw [h]; simp, rfl, rfl, fired_timer, Or.inl ⟨rfl, rfl⟩, fun h => by cases h⟩
+    · exact ⟨{ s with fired := fire s r, recovering := false }, [],
+        Node.askBehind cfg (Node.settle cfg { s with fired := fire s r, recovering := false }).1,
+        step_timer_fst s r, by rw [h]; simp,
+        persists_askBehind _, rfl, fired_timer, Or.inl ⟨rfl, rfl⟩, fun h => by cases h⟩
     · exact ⟨{ s with fired := fire s r, recovering := false }, [],
         Node.resend cfg (Node.settle cfg { s with fired := fire s r, recovering := false }).1,
         step_timer_fst s r, by rw [h]; simp,

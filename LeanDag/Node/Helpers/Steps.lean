@@ -345,7 +345,7 @@ theorem Kept.decideOn {s : State Validator BlockId Payload} (h : Kept cfg s) (k 
   refine Kept.absorb (Kept.restrips (s := { s with
       lo := k + 1
       decided := (k, d) :: s.decided
-      proofs := (k, ((hashed cfg L).map Prod.fst).toFinset) :: s.proofs }) h
+      proofs := (k, (proofStore cfg k L).ids) :: s.proofs }) h
     (release_disk _) (release_evidence _)) _
 
 omit [Fintype Validator] in
@@ -756,7 +756,8 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
     intro e he
     rw [step_timer_fst]
     rcases step_timer_snd (cfg := cfg) s r with h | h <;> rw [h] at he
-    · exact settle_persist { s with fired := fire s r, recovering := false } hd e he
+    · rw [persists_append, persists_askBehind, List.append_nil] at he
+      exact settle_persist { s with fired := fire s r, recovering := false } hd e he
     · rw [persists_append, persists_resend, List.append_nil] at he
       exact settle_persist { s with fired := fire s r, recovering := false } hd e he
   | syncRequest peer t fr ids =>

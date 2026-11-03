@@ -14,8 +14,8 @@ input `i` in the state `s`: the new state and the outputs.
   decides and arms its timers on the memory, and answers requests and
   resends from the disk. When it builds or decides, it releases the
   memory below the lowest round it reads, the round of its next
-  undecided slot and `voteOffset` below its top, and, when it drops, not
-  below its cut (`floorOf`), and keeps the
+  undecided slot and `voteOffset` below its top, or, when it drops, the
+  round of its next undecided slot alone (`floorOf`), and keeps the
   disk's blocks below that round without their references, holding them
   apart (`Store.strip`); it sends, streams and orders the blocks as accepted
   (`Store.full`).
@@ -71,8 +71,10 @@ input `i` in the state `s`: the new state and the outputs.
   to the last slot at a round the disk holds, on the memory's window at
   the round of that slot (`Store.window`); the decisions are kept
   (`State.decided`), the latest first.
-* **Catch-up** (D16, when the node drops): when it resends, the node asks
-  every peer for the proof of its next undecided slot (`askProof`). A peer
+* **Catch-up** (D16, when the node drops): when it resends, and when a
+  timer fires while its top lies more than a wave above the round of its
+  next undecided slot (`askBehind`), the node asks every peer for the proof
+  of that slot (`askProof`). A peer
   that decided the slot answers with the blocks on its disk of the proof it
   keeps for it and of those the slot's commit ordered (`proofReply`). The
   node decides the slot by `tryDecide` on the store the proof's blocks
@@ -337,12 +339,10 @@ instance (st : Store Validator BlockId Payload) (r : ℕ) : Decidable (behind cf
   inferInstanceAs (Decidable (_ ≤ _))
 
 /-- **The lowest round the node reads**: the round of its next undecided
-slot, and `voteOffset` below its top; when the node drops, not below its
-cut, the round below its next undecided slot's. -/
+slot, and `voteOffset` below its top; when the node drops, the round of its
+next undecided slot, above its cut. -/
 def floorOf (s : State Validator BlockId Payload) : ℕ :=
-  if cfg.drops then
-    max (cfg.slots.slotRound s.lo - 1)
-      (min (cfg.slots.slotRound s.lo) (s.top.getD 0 - cfg.p.voteOffset))
+  if cfg.drops then cfg.slots.slotRound s.lo
   else min (cfg.slots.slotRound s.lo) (s.top.getD 0 - cfg.p.voteOffset)
 
 /-- **Release the memory below the lowest round the node reads**, and keep
@@ -601,16 +601,17 @@ def absorb (s : State Validator BlockId Payload)
     (L : List (BlockId × Block Validator BlockId Payload)) : State Validator BlockId Payload :=
   L.foldl (fun s e => accept cfg s e.1 e.2) s
 
-/-- **Decide slot `k` on a proof** (D16): keep the verdict, and the proof
-under `k`, release the memory below the lowest round the node then reads,
-and take in the proof's blocks under their hash, in order of round. -/
+/-- **Decide slot `k` on a proof** (D16): keep the verdict, and under `k` the
+blocks of the store the proof builds, release the memory below the lowest
+round the node then reads, and take in the proof's blocks under their hash,
+in order of round. -/
 def decideOn (s : State Validator BlockId Payload) (k : ℕ) (d : Option BlockId)
     (L : List (BlockId × Block Validator BlockId Payload)) : State Validator BlockId Payload :=
   let s₁ : State Validator BlockId Payload :=
     { s with
       lo := k + 1
       decided := (k, d) :: s.decided
-      proofs := (k, ((hashed cfg L).map Prod.fst).toFinset) :: s.proofs }
+      proofs := (k, (proofStore cfg k L).ids) :: s.proofs }
   absorb cfg (release cfg s₁) ((hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round))
 
 /-- **Take a stream piece in, header first**: its part `L` in the history
@@ -648,6 +649,15 @@ def resend (s : State Validator BlockId Payload) : List (Output Validator BlockI
     | some r, some id =>
       [.broadcast id (s.disk.full id), .setTimer (r - 1) (2 * cfg.timeout (r - 1)), .ask r]
     | _, _ => []) ++ resync s ++ if cfg.drops then [.askProof s.lo] else []
+
+/-- **Ask for the proof of the next undecided slot when the node lags in
+deciding it**: when the node drops and its top lies more than a wave above
+that slot's round. -/
+def askBehind (s : State Validator BlockId Payload) : List (Output Validator BlockId Payload) :=
+  letI := cfg.slots
+  if cfg.drops ∧ cfg.slots.slotRound s.lo + cfg.p.waveLength < s.top.getD 0 then
+    [.askProof s.lo]
+  else []
 
 /-- **The node's own block of round `r`** on its disk. -/
 def ownAt (s : State Validator BlockId Payload) (r : ℕ) : Option BlockId :=
@@ -758,7 +768,7 @@ def step (s : State Validator BlockId Payload) :
     let res := settle cfg { s with fired := fire s r, recovering := false }
     if res.1.top = s.top ∧ (s.top = some r ∨ s.top = some (r + 1)) then
       (res.1, res.2 ++ resend cfg res.1)
-    else res
+    else (res.1, res.2 ++ askBehind cfg res.1)
   | .syncRequest peer t fr ids =>
     let L := streamOf s.disk t fr ids
     (s, if peer ∈ s.detected ∨ L.isEmpty then [] else [.stream peer L])

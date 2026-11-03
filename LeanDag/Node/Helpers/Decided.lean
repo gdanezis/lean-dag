@@ -219,7 +219,7 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger s)
     simp only [Node.step]
     split
     · exact ⟨h₁.trans (Appends.quiet rfl (commitsOf_resend _)), h₂⟩
-    · exact ⟨h₁, h₂⟩
+    · exact ⟨h₁.trans (Appends.quiet rfl (commitsOf_askBehind _)), h₂⟩
   | syncRequest peer t fr ids =>
     refine ⟨Appends.quiet rfl ?_, hL⟩
     simp only [Node.step]

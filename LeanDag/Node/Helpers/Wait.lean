@@ -1117,7 +1117,7 @@ theorem timersSet_step {s : State Validator BlockId Payload} (hA : ArmedQuorum c
     simp only [Node.step]
     split
     · exact ⟨TimersSet.append hts (timersSet_resend _), hAs⟩
-    · exact ⟨hts, hAs⟩
+    · rw [askBehind_of_false hd, List.append_nil]; exact ⟨hts, hAs⟩
   | syncRequest peer t fr ids =>
     refine ⟨TimersSet.of_none fun r a h => ?_, hA⟩
     simp only [Node.step] at h

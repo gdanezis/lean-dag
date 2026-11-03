@@ -402,7 +402,7 @@ theorem decideOn_rest (s : State Validator BlockId Payload) (k : ℕ) (d : Optio
     (release cfg { s with
       lo := k + 1
       decided := (k, d) :: s.decided
-      proofs := (k, ((hashed cfg L).map Prod.fst).toFinset) :: s.proofs })
+      proofs := (k, (proofStore cfg k L).ids) :: s.proofs })
     ((hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round))
   simp only [release_syncs, release_top, release_own, release_fired, release_lo, release_decided,
     release_armed, release_recovering, release_detected] at h₃ h₄ h₅ h₆ h₇ h₈ h₉ h₁₀ h₁₂

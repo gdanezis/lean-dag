@@ -440,7 +440,10 @@ theorem step_timer_plain (s : State Validator BlockId Payload) (r : ℕ) :
       (Thins.of_same (Store.Restrips.refl _ 0) rfl rfl rfl) (Thins.settle _),
       fun peer i fr ids ho => ?_⟩
   rcases step_timer_snd (cfg := cfg) s r with h | h
-  · rw [h] at ho; exact absurd rfl (noAsk_settle _ _ ho peer i fr ids)
+  · rw [h] at ho
+    rcases List.mem_append.mp ho with ho | ho
+    · exact absurd rfl (noAsk_settle _ _ ho peer i fr ids)
+    · cases mem_askBehind ho
   · rw [h] at ho
     rcases List.mem_append.mp ho with ho | ho
     · exact absurd rfl (noAsk_settle _ _ ho peer i fr ids)

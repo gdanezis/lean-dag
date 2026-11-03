@@ -530,8 +530,9 @@ that no honest node convicts an honest one or leaves it out.
 **Dropping and catch-up.** A node whose configuration sets `drops` lets
 go of the bypassed blocks below its floor that it neither ordered nor
 keeps in a proof (D13, `docs/node-sync.md`), and catches up on proofs
-(D16). When it resends, it asks every peer for the proof of its next
-undecided slot (`askProof`). A peer that decided the slot answers with
+(D16). When it resends, and when a timer fires while its top lies more
+than a wave above the round of its next undecided slot (`askBehind`), it
+asks every peer for the proof of that slot (`askProof`). A peer that decided the slot answers with
 the blocks of the proof it keeps and those the slot's commit ordered
 (`proofReply`). The node checks a proof by the loop: it builds a store of
 the proof's blocks under their hash, those of the round below the slot's
@@ -539,8 +540,8 @@ without their references (`proofStore`), and decides the slot by
 `tryDecide` on it (`verdictOn`). It then keeps the verdict and the proof,
 takes the blocks in, keeping those below its floor that are not ready
 without their references (`decideOn`, `takeProof`), and asks for the next
-slot. A node that drops keeps its floor at or above its cut, the round
-below its next undecided slot's (`floorOf`); it accepts a new block below
+slot. A node that drops keeps its floor at the round of its next
+undecided slot, one above its cut (`floorOf`); it accepts a new block below
 its floor on its header alone, keeping it without its references (D10,
 `accept`, `Store.base`); and a node whose top lies below its floor builds
 above the highest round its memory holds a quorum of, as a restarted node

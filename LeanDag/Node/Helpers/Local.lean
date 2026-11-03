@@ -345,7 +345,7 @@ theorem floorOf_mono {s s' : State Validator BlockId Payload} (hlo : s.lo ≤ s'
   have hm := min_le_min (cfg.slots.mono hlo) (Nat.sub_le_sub_right ht cfg.p.voteOffset)
   unfold floorOf
   split
-  · exact max_le_max (Nat.sub_le_sub_right (cfg.slots.mono hlo) 1) hm
+  · exact cfg.slots.mono hlo
   · exact hm
 
 omit [Fintype Validator] in
@@ -354,7 +354,7 @@ theorem floorOf_le (s : State Validator BlockId Payload) :
     floorOf cfg s ≤ cfg.slots.slotRound s.lo := by
   unfold floorOf
   split
-  · exact max_le (Nat.sub_le _ _) (min_le_left _ _)
+  · exact le_rfl
   · exact min_le_left _ _
 
 omit [Fintype Validator] in
@@ -733,7 +733,7 @@ theorem Inv.decideOn {s : State Validator BlockId Payload}
       { s with
         lo := k + 1
         decided := (k, d) :: s.decided
-        proofs := (k, ((hashed cfg L).map Prod.fst).toFinset) :: s.proofs })
+        proofs := (k, (proofStore cfg k L).ids) :: s.proofs })
       rfl rfl rfl rfl rfl hk).release
 
 omit [Fintype Validator] in
@@ -1056,10 +1056,28 @@ theorem step_timer_eq (s : State Validator BlockId Payload) (r : ℕ) :
         (Node.step cfg s (.timer r)).2) :=
   Prod.ext (step_timer_fst s r) rfl
 
-/-- **A timer step's outputs**: the settle's, then possibly a resend. -/
+omit [Fintype Validator] in
+/-- **Asking when behind** asks for the proof of the next undecided slot. -/
+theorem mem_askBehind {s : State Validator BlockId Payload} {o : Output Validator BlockId Payload}
+    (h : o ∈ Node.askBehind cfg s) : o = .askProof s.lo := by
+  unfold Node.askBehind at h
+  split at h
+  · exact List.mem_singleton.mp h
+  · exact absurd h List.not_mem_nil
+
+omit [Fintype Validator] in
+/-- A node that does not drop does not ask when behind. -/
+theorem askBehind_of_false (hd : cfg.drops = false) (s : State Validator BlockId Payload) :
+    Node.askBehind cfg s = [] := by
+  simp [Node.askBehind, hd]
+
+/-- **A timer step's outputs**: the settle's, then a resend or a request for
+a proof when behind. -/
 theorem step_timer_snd (s : State Validator BlockId Payload) (r : ℕ) :
     (Node.step cfg s (.timer r)).2 =
-        (Node.settle cfg { s with fired := fire s r, recovering := false }).2 ∨
+        (Node.settle cfg { s with fired := fire s r, recovering := false }).2 ++
+          Node.askBehind cfg
+            (Node.settle cfg { s with fired := fire s r, recovering := false }).1 ∨
       (Node.step cfg s (.timer r)).2 =
         (Node.settle cfg { s with fired := fire s r, recovering := false }).2 ++
           Node.resend cfg
@@ -1163,19 +1181,37 @@ theorem persists_resend (s : State Validator BlockId Payload) :
   List.filterMap_eq_nil_iff.mpr fun o ho => by
     rcases mem_resend ho with ⟨_, _, _, _, rfl⟩ | ⟨_, _, -, -, rfl | rfl | rfl⟩ | rfl <;> rfl
 
+omit [Fintype Validator] in
+/-- Asking when behind persists no block. -/
+theorem persists_askBehind (s : State Validator BlockId Payload) :
+    persists (Node.askBehind cfg s) = [] :=
+  List.filterMap_eq_nil_iff.mpr fun o ho => by rw [mem_askBehind ho]
+
+omit [Fintype Validator] in
+/-- Asking when behind outputs no decision. -/
+theorem commitsOf_askBehind (s : State Validator BlockId Payload) :
+    commitsOf (Node.askBehind cfg s) = [] :=
+  List.filterMap_eq_nil_iff.mpr fun o ho => by rw [mem_askBehind ho]
+
+omit [Fintype Validator] in
+theorem askBehind_quiet (s : State Validator BlockId Payload) :
+    ∀ o ∈ Node.askBehind cfg s, o.isQuiet := fun o ho => by rw [mem_askBehind ho]; rfl
+
 /-- A timer step persists what its settle persists. -/
 theorem persists_step_timer (s : State Validator BlockId Payload) (r : ℕ) :
     persists (Node.step cfg s (.timer r)).2 =
       persists (Node.settle cfg { s with fired := fire s r, recovering := false }).2 := by
-  rcases step_timer_snd (cfg := cfg) s r with h | h <;> rw [h]
-  rw [persists_append, persists_resend, List.append_nil]
+  rcases step_timer_snd (cfg := cfg) s r with h | h
+  · rw [h, persists_append, persists_askBehind, List.append_nil]
+  · rw [h, persists_append, persists_resend, List.append_nil]
 
 /-- A timer step outputs the decisions its settle outputs. -/
 theorem commitsOf_step_timer (s : State Validator BlockId Payload) (r : ℕ) :
     commitsOf (Node.step cfg s (.timer r)).2 =
       commitsOf (Node.settle cfg { s with fired := fire s r, recovering := false }).2 := by
-  rcases step_timer_snd (cfg := cfg) s r with h | h <;> rw [h]
-  rw [commitsOf_append, commitsOf_resend, List.append_nil]
+  rcases step_timer_snd (cfg := cfg) s r with h | h
+  · rw [h, commitsOf_append, commitsOf_askBehind, List.append_nil]
+  · rw [h, commitsOf_append, commitsOf_resend, List.append_nil]
 
 /-- **A restart step's state** is the settle's, the node recovering. -/
 theorem step_restart_fst (s : State Validator BlockId Payload) :
@@ -1371,7 +1407,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
         rfl rfl le_rfl).settle
     split
     · exact ⟨bs, (Sent.of_out ho).resend hi', hi'⟩
-    · exact ⟨bs, Sent.of_out ho, hi'⟩
+    · exact ⟨bs, Sent.of_out (by simpa using ho.append (out_quiet (askBehind_quiet _))), hi'⟩
   | syncRequest peer t fr ids =>
     simp only [Node.step]
     refine hnil _ fun o ho => ?_
