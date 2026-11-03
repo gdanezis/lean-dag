@@ -315,6 +315,40 @@ theorem Kept.absorb {s : State Validator BlockId Payload} (h : Kept cfg s) :
     exact Kept.absorb (h.accept x.1 x.2) L
 
 omit [Fintype Validator] in
+theorem Kept.takeProof {s : State Validator BlockId Payload} (h : Kept cfg s)
+    (e : BlockId × Block Validator BlockId Payload) : Kept cfg (Node.takeProof cfg s e) := by
+  unfold Node.takeProof
+  split
+  · intro c hc x hx hne
+    change c ∈ (s.disk.base _ _ _).ids at hc
+    change x ∈ cfg.xp.ev ((s.disk.base _ _ _).blk c).payload at hx
+    rw [Store.base_ids] at hc
+    rw [Store.base_blk] at hx
+    split at hx
+    · exact Finset.mem_union_right _ (Finset.mem_union_right _ (Finset.mem_filter.mpr ⟨hx, hne⟩))
+    · rename_i hce
+      exact Finset.mem_union_left _ (h c ((Finset.mem_insert.mp hc).resolve_left hce) x hx hne)
+  · exact h.accept e.1 e.2
+
+omit [Fintype Validator] in
+theorem Kept.decideOn {s : State Validator BlockId Payload} (h : Kept cfg s) (k : ℕ)
+    (d : Option BlockId) (L : List (BlockId × Block Validator BlockId Payload)) :
+    Kept cfg (Node.decideOn cfg s k d L) := by
+  have h₀ : ∀ (l : List (BlockId × Block Validator BlockId Payload))
+      (s' : State Validator BlockId Payload), Kept cfg s' →
+        Kept cfg (l.foldl (Node.takeProof cfg) s') := by
+    intro l
+    induction l with
+    | nil => exact fun _ h => h
+    | cons e l ih => exact fun s' h => ih _ (h.takeProof e)
+  unfold Node.decideOn
+  refine h₀ _ _ (Kept.restrips (s := { s with
+      lo := k + 1
+      decided := (k, d) :: s.decided
+      proofs := (k, ((hashed cfg L).map Prod.fst).toFinset) :: s.proofs }) h
+    (release_disk _) (release_evidence _))
+
+omit [Fintype Validator] in
 theorem EvidenceOn.absorb {s : State Validator BlockId Payload} (h : EvidenceOn cfg s) :
     ∀ L : List (BlockId × Block Validator BlockId Payload), EvidenceOn cfg (Node.absorb cfg s L)
   | [] => h
@@ -553,6 +587,17 @@ theorem step_syncs (s : State Validator BlockId Payload) (inp : Input Validator 
   | syncRequest peer t fr ids => simp only [Node.step]; exact hold
   | ask peer r => simp only [Node.step]; exact hold
   | restart => exact hset _ hold
+  | askProof peer k => exact hold
+  | proof u k L =>
+    simp only [Node.step]
+    split
+    · split
+      · rename_i d _
+        refine hset _ fun e he => hold e ?_
+        rw [← (decideOn_rest (cfg := cfg) s k d L).1]
+        exact (tidy_eq _).2.2.2.2.2.2.2.2.2.2 he
+      · exact hold
+    · exact hold
 
 omit [Fintype Validator] in
 /-- **What building persists is on the disk after it.** -/
@@ -729,6 +774,11 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
     rw [persists_append, persists_append, persists_resend, persists_rearm, List.nil_append,
       List.nil_append] at he
     exact settle_persist { s with recovering := true } hd e he
+  | askProof peer k =>
+    intro e he
+    simp only [Node.step] at he
+    split at he <;> (try split at he) <;> simp [persists] at he
+  | proof u k L => rw [step_proof_of_false hd]; intro e he; simp [persists] at he
 
 variable (cfg) in
 /-- No sync's block is ready. -/
@@ -866,6 +916,14 @@ theorem noReady_step {s : State Validator BlockId Payload} (h : NoReady cfg s)
   | syncRequest peer t fr ids => simp only [Node.step]; exact h
   | ask peer r => simp only [Node.step]; exact h
   | restart => exact noReady_settle _
+  | askProof peer k => exact h
+  | proof u k L =>
+    simp only [Node.step]
+    split
+    · split
+      · exact noReady_settle _
+      · exact h
+    · exact h
 
 end Node
 

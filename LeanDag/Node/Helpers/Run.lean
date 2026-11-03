@@ -158,7 +158,7 @@ theorem run_commits (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : c
     hstart hTc hqT hsp hnE hbelow hst htop ht₁
   -- the view of the node's disk `A` later
   set E := eventsBy tr time (t + (Δ + Δₛ)) with hE
-  have hcut := (cut_before hσ hadm hf htime hinj E v (hTH hv)).1
+  have hcut := (cut_before hσ hadm hf htime hinj hdr E v (hTH hv)).1
   obtain ⟨V, -, hiff⟩ := hcut.extend
     ((Converge.inv_before (cfg := cfg) (tr := tr) E v).valid hdr).fullClosed
     ⟨∅, Finset.empty_subset _, fun i hi => absurd hi (Finset.notMem_empty _)⟩

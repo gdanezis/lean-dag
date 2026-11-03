@@ -76,6 +76,32 @@ theorem decideStep_disk (s : State Validator BlockId Payload) (hd : cfg.drops = 
   · exact Store.Restrips.refl _ _
 
 omit [Fintype Validator] in
+/-- **Deciding on a proof keeps the disk's blocks**, as accepted. -/
+theorem Grows.decideOn (s : State Validator BlockId Payload) (k : ℕ) (d : Option BlockId)
+    (L : List (BlockId × Block Validator BlockId Payload)) :
+    Grows s.disk (Node.decideOn cfg s k d L).disk := by
+  have h₀ : ∀ (l : List (BlockId × Block Validator BlockId Payload))
+      (s' : State Validator BlockId Payload),
+      Grows s'.disk (l.foldl (Node.takeProof cfg) s').disk := by
+    intro l
+    induction l with
+    | nil => exact fun s' => Grows.refl _
+    | cons e l ih =>
+      intro s'
+      refine Grows.trans ?_ (ih (Node.takeProof cfg s' e))
+      rw [takeProof_disk]
+      exact Grows.takeOn _ _ e
+  let s₁ : State Validator BlockId Payload :=
+    { s with
+      lo := k + 1
+      decided := (k, d) :: s.decided
+      proofs := (k, ((hashed cfg L).map Prod.fst).toFinset) :: s.proofs }
+  have e : Node.decideOn cfg s k d L = ((hashed cfg L).mergeSort fun x y =>
+      decide (x.2.round ≤ y.2.round)).foldl (Node.takeProof cfg) (release cfg s₁) := rfl
+  rw [e]
+  exact (Grows.of_restrips (release_disk (cfg := cfg) s₁)).trans (h₀ _ _)
+
+omit [Fintype Validator] in
 theorem Grows.absorb (s : State Validator BlockId Payload)
     (L : List (BlockId × Block Validator BlockId Payload)) :
     Grows s.disk (Node.absorb cfg s L).disk := by
@@ -156,6 +182,8 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
   | syncRequest peer t fr ids => exact Grows.refl _
   | ask peer r => exact Grows.refl _
   | restart => exact Grows.settle_of { s with recovering := true } rfl hd
+  | askProof peer k => exact Grows.refl _
+  | proof u k L => rw [step_proof_of_false hd]; exact Grows.refl _
 
 /-! ## The blocks as accepted stay closed under references -/
 
@@ -255,6 +283,8 @@ theorem closed_step (s : State Validator BlockId Payload) (i : Input Validator B
   | syncRequest peer t fr ids => exact h
   | ask peer r => exact h
   | restart => exact closed_settle { s with recovering := true } hd h
+  | askProof peer k => exact h
+  | proof u k L => rw [step_proof_of_false hd]; exact h
 
 end Node
 

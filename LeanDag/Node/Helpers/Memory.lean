@@ -8,7 +8,11 @@ ready in the state exactly when it is ready on the disk (`ready_eq`), and
 accepting a block, a stream piece and the syncs' blocks change the disk
 as `acceptOn` changes it read alone (`accept_disk`, `absorb_disk`,
 `flushSyncs_eq`), and leave the rest of the state but the memory, the
-detected authors and the syncs (`accept_rest`, `absorb_rest`). Keeping a
+detected authors and the syncs (`accept_rest`, `absorb_rest`). Taking in a
+block of a proof changes the disk as `takeOn` changes it read alone
+(`takeProof_disk`), and deciding on a proof changes the slot, the
+decisions, the proofs, the disk, the memory, the floor and the detected
+authors only (`decideOn_rest`). Keeping a
 block inserts it on disk (`keep_disk`), and releasing the memory keeps the
 disk's blocks as accepted, those below the new floor perhaps without their
 references, and changes nothing else (`release_disk`, …).
@@ -302,6 +306,10 @@ omit [Fintype Validator] in
   unfold release; split <;> rfl
 
 omit [Fintype Validator] in
+@[simp] theorem release_proofs : (release cfg s).proofs = s.proofs := by
+  unfold release; split <;> rfl
+
+omit [Fintype Validator] in
 theorem release_floor : (release cfg s).floor = max s.floor (floorOf cfg s) := by
   unfold release
   split
@@ -368,6 +376,97 @@ omit [Fintype Validator] in
 @[simp] theorem drop_floor : (drop cfg s).floor = s.floor := by unfold drop; split <;> rfl
 
 end Drop
+
+variable (cfg) in
+/-- **Take in a block of a proof on the store `st` with floor `F`**: accept it
+if it is ready, and otherwise, if it is new and below `F`, keep it without its
+references. -/
+def takeOn (F : ℕ) (st : Store Validator BlockId Payload)
+    (e : BlockId × Block Validator BlockId Payload) : Store Validator BlockId Payload :=
+  if h : e.1 ∉ st.ids ∧ e.2.round < F ∧ readyOn cfg st e = false then st.base e.1 e.2 h.1
+  else acceptOn cfg st e.1 e.2
+
+section Proof
+
+variable (s : State Validator BlockId Payload) (e : BlockId × Block Validator BlockId Payload)
+
+omit [Fintype Validator] in
+/-- **Taking in a block of a proof changes the disk as on the disk alone.** -/
+theorem takeProof_disk : (takeProof cfg s e).disk = takeOn cfg s.floor s.disk e := by
+  unfold takeProof takeOn
+  by_cases h : e.1 ∉ s.disk.ids ∧ e.2.round < s.floor ∧ readyOn cfg s.disk e = false
+  · rw [dif_pos h, dif_pos (by rw [ready_eq]; exact h)]
+  · rw [dif_neg h, dif_neg (by rw [ready_eq]; exact h)]
+    exact accept_disk s e.1 e.2
+
+omit [Fintype Validator] in
+/-- **Taking in a block of a proof changes only the disk, the memory and the
+detected authors**, which only grow. -/
+theorem takeProof_rest :
+    (takeProof cfg s e).floor = s.floor ∧ (takeProof cfg s e).syncs = s.syncs ∧
+    (takeProof cfg s e).top = s.top ∧ (takeProof cfg s e).own = s.own ∧
+    (takeProof cfg s e).fired = s.fired ∧ (takeProof cfg s e).lo = s.lo ∧
+    (takeProof cfg s e).decided = s.decided ∧ (takeProof cfg s e).armed = s.armed ∧
+    (takeProof cfg s e).recovering = s.recovering ∧
+    (takeProof cfg s e).proofs = s.proofs ∧ s.detected ⊆ (takeProof cfg s e).detected := by
+  unfold takeProof
+  split
+  · exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, Finset.subset_union_left⟩
+  · obtain ⟨h₁, h₂, h₃, h₄, h₅, h₆, h₇, h₈, h₉, h₁₀⟩ := accept_rest (cfg := cfg) s e.1 e.2
+    refine ⟨h₁, h₂, h₃, h₄, h₅, h₆, h₇, h₈, h₉, ?_, h₁₀⟩
+    unfold accept; split <;> rfl
+
+end Proof
+
+omit [Fintype Validator] in
+theorem foldl_takeProof (l : List (BlockId × Block Validator BlockId Payload)) :
+    ∀ s : State Validator BlockId Payload,
+      (l.foldl (takeProof cfg) s).disk = l.foldl (takeOn cfg s.floor) s.disk ∧
+      (l.foldl (takeProof cfg) s).floor = s.floor ∧
+      (l.foldl (takeProof cfg) s).syncs = s.syncs ∧
+      (l.foldl (takeProof cfg) s).top = s.top ∧
+      (l.foldl (takeProof cfg) s).own = s.own ∧
+      (l.foldl (takeProof cfg) s).fired = s.fired ∧
+      (l.foldl (takeProof cfg) s).lo = s.lo ∧
+      (l.foldl (takeProof cfg) s).decided = s.decided ∧
+      (l.foldl (takeProof cfg) s).armed = s.armed ∧
+      (l.foldl (takeProof cfg) s).recovering = s.recovering ∧
+      (l.foldl (takeProof cfg) s).proofs = s.proofs ∧
+      s.detected ⊆ (l.foldl (takeProof cfg) s).detected := by
+  induction l with
+  | nil => intro s; exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, subset_rfl⟩
+  | cons e l ih =>
+    intro s
+    obtain ⟨h₁, h₂, h₃, h₄, h₅, h₆, h₇, h₈, h₉, h₁₀, h₁₁, h₁₂⟩ := ih (takeProof cfg s e)
+    obtain ⟨a₂, a₃, a₄, a₅, a₆, a₇, a₈, a₉, a₁₀, a₁₁, a₁₂⟩ := takeProof_rest (cfg := cfg) s e
+    simp only [List.foldl_cons]
+    refine ⟨h₁.trans (by rw [takeProof_disk, a₂]), h₂.trans a₂, h₃.trans a₃, h₄.trans a₄,
+      h₅.trans a₅, h₆.trans a₆, h₇.trans a₇, h₈.trans a₈, h₉.trans a₉, h₁₀.trans a₁₀,
+      h₁₁.trans a₁₁, a₁₂.trans h₁₂⟩
+
+omit [Fintype Validator] in
+/-- **Deciding on a proof changes the next undecided slot, the decisions,
+the proofs, the disk, the memory, the floor and the detected authors**,
+which only grow. -/
+theorem decideOn_rest (s : State Validator BlockId Payload) (k : ℕ) (d : Option BlockId)
+    (L : List (BlockId × Block Validator BlockId Payload)) :
+    (decideOn cfg s k d L).syncs = s.syncs ∧ (decideOn cfg s k d L).top = s.top ∧
+    (decideOn cfg s k d L).own = s.own ∧ (decideOn cfg s k d L).fired = s.fired ∧
+    (decideOn cfg s k d L).lo = k + 1 ∧ (decideOn cfg s k d L).decided = (k, d) :: s.decided ∧
+    (decideOn cfg s k d L).armed = s.armed ∧
+    (decideOn cfg s k d L).recovering = s.recovering ∧
+    s.detected ⊆ (decideOn cfg s k d L).detected := by
+  unfold decideOn
+  dsimp only
+  obtain ⟨-, -, h₃, h₄, h₅, h₆, h₇, h₈, h₉, h₁₀, -, h₁₂⟩ := foldl_takeProof (cfg := cfg)
+    ((hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round))
+    (release cfg { s with
+      lo := k + 1
+      decided := (k, d) :: s.decided
+      proofs := (k, ((hashed cfg L).map Prod.fst).toFinset) :: s.proofs })
+  simp only [release_syncs, release_top, release_own, release_fired, release_lo, release_decided,
+    release_armed, release_recovering, release_detected] at h₃ h₄ h₅ h₆ h₇ h₈ h₉ h₁₀ h₁₂
+  exact ⟨h₃, h₄, h₅, h₆, h₇, h₈, h₉, h₁₀, h₁₂⟩
 
 omit [Fintype Validator] in
 /-- **At the bounded vote, the memory and the disk agree from the floor

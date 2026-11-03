@@ -324,11 +324,13 @@ theorem resend_asks {s : State Validator BlockId Payload} {peer : Validator} {i 
     ∃ e ∈ s.syncs, e.1 = peer ∧ e.2.1.1 = i ∧ e.2.2 = ids := by
   unfold resend at h
   rcases List.mem_append.mp h with h | h
+  · rcases List.mem_append.mp h with h | h
+    · split at h <;> simp at h
+    · unfold resync at h
+      obtain ⟨e, he, heq⟩ := List.mem_map.mp h
+      simp only [request, Output.sync.injEq] at heq
+      exact ⟨e, he, heq.1, heq.2.1, heq.2.2.2⟩
   · split at h <;> simp at h
-  · unfold resync at h
-    obtain ⟨e, he, heq⟩ := List.mem_map.mp h
-    simp only [request, Output.sync.injEq] at heq
-    exact ⟨e, he, heq.1, heq.2.1, heq.2.2.2⟩
 
 /-- **A delivery**: nothing, an acceptance, or a new sync for its peer, with
 its block above the peer's old one. -/
@@ -486,6 +488,29 @@ theorem step_restart_plain (s : State Validator BlockId Payload) :
     · obtain ⟨r, -, -, h⟩ := mem_rearm ho; cases h
   · exact absurd rfl (noAsk_settle _ _ ho peer i fr ids)
 
+/-- **A proof is plain.** -/
+theorem step_proof_plain (s : State Validator BlockId Payload) (u : Validator) (k : ℕ)
+    (L : List (BlockId × Block Validator BlockId Payload)) :
+    Plain cfg s (Node.step cfg s (.proof u k L)).1 (Node.step cfg s (.proof u k L)).2 := by
+  simp only [Node.step]
+  split
+  · rename_i hc
+    split
+    · rename_i d _
+      obtain ⟨h₁, -, -, -, -, -, -, -, h₉⟩ := decideOn_rest (cfg := cfg) s k d L
+      have ht : Thins cfg s (Node.decideOn cfg s k d L) :=
+        ⟨h₁ ▸ List.Sublist.refl _, (fun hd => by rw [hc.1] at hd; cases hd),
+          (fun hd => by rw [hc.1] at hd; cases hd), h₉, (fun hd => by rw [hc.1] at hd; cases hd),
+          fun _ h => h.decideOn k d L⟩
+      refine Plain.of ((ht.trans (Thins.tidy _)).trans (Thins.settle _)) fun o ho => ?_
+      rcases List.mem_cons.mp ho with rfl | ho
+      · intro _ _ _ _ h; cases h
+      · rcases List.mem_append.mp ho with ho | ho
+        · exact noAsk_settle _ o ho
+        · rw [List.mem_singleton] at ho; subst ho; intro _ _ _ _ h; cases h
+    · exact Plain.of (Thins.refl s) fun o ho => absurd ho List.not_mem_nil
+  · exact Plain.of (Thins.refl s) fun o ho => absurd ho List.not_mem_nil
+
 /-- **The step's shape**: plain, a new sync for a delivery's peer, or a
 stream piece extending a sync. -/
 theorem step_form {s : State Validator BlockId Payload} (hs : SyncsOn s)
@@ -561,6 +586,12 @@ theorem step_form {s : State Validator BlockId Payload} (hs : SyncsOn s)
   | syncRequest peer t fr ids => exact Or.inl (step_syncRequest_plain s peer t fr ids)
   | ask peer r => exact Or.inl (step_ask_plain s peer r)
   | restart => exact Or.inl (step_restart_plain s)
+  | askProof peer k =>
+    refine Or.inl (Plain.of (Thins.refl s) fun o ho p t fr ids he => ?_)
+    subst he
+    simp only [Node.step] at ho
+    split at ho <;> (try split at ho) <;> simp at ho
+  | proof u k L => exact Or.inl (step_proof_plain s u k L)
 
 /-! ## One sync across a step -/
 

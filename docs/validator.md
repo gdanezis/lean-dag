@@ -81,8 +81,9 @@ and the identifiers asked for by name (`syncs`, §3.4); the evidence the
 node holds (`evidence`) and the authors it convicted (`detected`); the top
 round and
 the node's own block there, the rounds whose timer fired, the next
-undecided slot `lo`, the decisions output, the latest first, and the
-round whose timer is set (`armed`). A timer drops the fired rounds below
+undecided slot `lo`, the decisions output, the latest first, the proofs
+of the decided slots, each slot with the blocks of its proof (`proofs`),
+and the round whose timer is set (`armed`). A timer drops the fired rounds below
 the top, which the node no longer reads (`fire`).
 
 **Inputs** (`Input`): a start, which builds the genesis block; a block a
@@ -90,15 +91,19 @@ peer announced, with its identifier (`deliver`); a stream piece from a
 peer (`stream`); a timer for round `r` that fired; a request from a peer
 for the history of a block, with the peer's frontier and the identifiers
 it asks for by name (`syncRequest`); a request from a peer for the node's
-block of a round (`ask`); and a restart after a crash (§3.6).
+block of a round (`ask`); a restart after a crash (§3.6); a request from a
+peer for the proof of a slot's verdict (`askProof`); and a peer's proof of
+a slot's verdict, with the blocks its commit orders (`proof`).
 
 **Outputs** (`Output`): persist one of its own blocks, before it is
 broadcast; broadcast a block; set a timer for round `r`; commit slot `k`
 with a decision `Option BlockId`; a request to a peer for the history of
 a block, with the node's frontier and the identifiers it asks for by
 name (`sync`); a stream piece to a peer (`stream`); a request to every
-peer for its block of a round (`ask`); and one of the node's own blocks to
-one peer (`send`).
+peer for its block of a round (`ask`); one of the node's own blocks to
+one peer (`send`); a request to every peer for the proof of a slot's
+verdict (`askProof`); and the proof of a slot's verdict, with the blocks
+its commit orders, to one peer (`proof`).
 
 Time is discrete (`ℕ`).
 
@@ -522,12 +527,23 @@ holds of twins, so this is assumed of the other nodes' blocks: what
 signed headers give. V3′, V11, V11′ and V12's timed parts assume it, so
 that no honest node convicts an honest one or leaves it out.
 
-**Dropping.** A node whose configuration sets `drops` lets go of the
-bypassed blocks below its floor that it neither ordered nor keeps in a
-proof (D13, `docs/node-sync.md`). V3 holds with dropping. V3′, V11, V11′,
+**Dropping and catch-up.** A node whose configuration sets `drops` lets
+go of the bypassed blocks below its floor that it neither ordered nor
+keeps in a proof (D13, `docs/node-sync.md`), and catches up on proofs
+(D16). When it resends, it asks every peer for the proof of its next
+undecided slot (`askProof`). A peer that decided the slot answers with
+the blocks of the proof it keeps and those the slot's commit ordered
+(`proofReply`). The node checks a proof by the loop: it builds a store of
+the proof's blocks under their hash, those of the round below the slot's
+without their references (`proofStore`), and decides the slot by
+`tryDecide` on it (`verdictOn`). It then keeps the verdict and the proof,
+takes the blocks in, keeping those below its floor that are not ready
+without their references (`decideOn`, `takeProof`), and asks for the next
+slot. V3 holds with dropping and catch-up: a decision on a proof is a
+verdict on the record of the slot's cut (`Cut.Cuts`). V3′, V11, V11′,
 V12, V13 and the order of `docs/dos-bounds.md` (`Order.Agrees`,
-`Order.Held`) assume that no node drops (`cfg.drops = false`), until the
-node catches up on proofs (D16).
+`Order.Held`) assume that no node drops (`cfg.drops = false`); a node
+that does not drop neither asks for proofs nor decides on them.
 
 **Authentication.** A block delivered to an honest node in an honest
 author's name was broadcast by that author earlier in the trace

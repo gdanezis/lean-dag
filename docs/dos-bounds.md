@@ -343,10 +343,34 @@ store closed, and needs none of this.
      `Order` assume that no node drops (`cfg.drops = false`): a node whose
      cut lies below a peer's floor may wait forever on a block the peer
      let go, until it catches up on proofs (item 4).
-  4. *Catch-up* (D16), with the jump of a node whose top lies below its
-     cut. With it convergence, V11 and V13 are to be proved with dropping
-     on. V12 on one record ends here: a decision on a proof is a verdict
-     on the padded record only.
+  4. *Catch-up* (D16), in two parts.
+     1. *Catch-up as messages.* Done, behind the switch. A node that
+        drops asks every peer for the proof of its next undecided slot
+        when it resends (`askProof`), and again after each slot it decides
+        on a proof. A peer answers from the proof it keeps for that slot
+        and the blocks the slot's commit ordered (`proofReply`, with
+        `State.proofs` now kept for each slot). The node decides the slot
+        by the loop on the store the proof's blocks build, those of the
+        round below the slot's without their references (`proofStore`,
+        `verdictOn`), keeps the verdict and the proof, and takes the blocks
+        in: each is accepted if it is ready, and otherwise kept without
+        its references if it lies below the floor (`decideOn`,
+        `takeProof`, `Store.base`). Safety holds: a decision on a proof of
+        known blocks is a verdict on the record padded below the round
+        under the slot's (`verdict_proof`). A node that takes in blocks
+        without their references holds, from its cut down, blocks whose
+        references it never checked, so `Cut.Cuts` speaks of the honest
+        disks whose cut is at most `G` (`cutAbove_before`); `Cut.Agrees`
+        and V3 are unchanged. V12 on one record (`cut_before`) assumes
+        that no node drops.
+     2. *The jump, and liveness with dropping on.* A node whose top lies
+        below its cut builds above it, and a node behind takes in the
+        commit's blocks at and above its floor once that floor is raised
+        to its cut. With it convergence, V11 and V13 are to be proved with
+        dropping on, and their premise `cfg.drops = false` removed. The
+        synchronisation premise of V11 (`SyncedWithin`) does not hold of a
+        node far behind when its peers drop, and is to be restated for
+        blocks above the node's cut.
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase

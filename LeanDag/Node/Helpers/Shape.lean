@@ -338,6 +338,30 @@ theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator 
       rfl, by simp only [Node.step, List.append_nil], rfl, rfl, fun _ h _ => h,
       Or.inl ⟨?_, rfl⟩, fun _ => Or.inr rfl⟩
     rw [persists_append, persists_resend, persists_rearm, List.append_nil]
+  | askProof p k =>
+    refine Or.inl ⟨rfl, (silent_of fun o ho => ?_).1⟩
+    simp only [Node.step] at ho
+    split at ho
+    · split at ho
+      · rw [List.mem_singleton] at ho; subst ho; trivial
+      · cases ho
+    · cases ho
+  | proof u k L =>
+    by_cases hcnd : cfg.drops = true ∧ u ∉ s.detected ∧ k = s.lo
+    · obtain ⟨hdr, hu, rfl⟩ := hcnd
+      cases hv : verdictOn cfg s.lo L with
+      | none =>
+        exact Or.inl ⟨by simp [Node.step, hdr, hu, hv], by simp [Node.step, hdr, hu, hv]; rfl⟩
+      | some d =>
+        obtain ⟨-, h₂, -, h₄, -, -, -, h₈, -⟩ := decideOn_rest (cfg := cfg) s s.lo d L
+        exact Or.inr ⟨Node.tidy (Node.decideOn cfg s s.lo d L), [.commit s.lo d],
+          [.askProof (Node.settle cfg (Node.tidy (Node.decideOn cfg s s.lo d L))).1.lo],
+          by simp [Node.step, hdr, hu, hv], by simp [Node.step, hdr, hu, hv], rfl,
+          by simp [Node.tidy, h₂], fun _ h _ => by simp [Node.tidy, h₄, h], Or.inl ⟨rfl, by
+            simp [Node.tidy, h₂]⟩,
+          fun h => Or.inl ⟨by simpa [Node.tidy, h₈] using h, fun r hr => by cases hr⟩⟩
+    · exact Or.inl ⟨by simp only [Node.step, if_neg hcnd],
+        by simp only [Node.step, if_neg hcnd]; rfl⟩
 
 section StepFacts
 

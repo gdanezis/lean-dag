@@ -105,27 +105,6 @@ theorem persists_of_broadcasts {i : ℕ} {u : Validator} {inp : Input Validator 
     exact ⟨j, hj.le, inp', hj', hje⟩
   · exact ⟨i, le_rfl, inp, hi, by rw [outputsAt_eq hi, ho.1]; exact he⟩
 
-omit [Fintype Validator] in
-/-- **A block an honest node knew from an input** was delivered to it, or
-streamed. -/
-theorem deliver_of_delivered {j : ℕ} {v : Validator}
-    {inp : Input Validator BlockId Payload} (hj : tr[j]? = some (v, inp))
-    {x : BlockId × Block Validator BlockId Payload} (hx : x ∈ delivered (cfg.at v) [inp]) :
-    ((∃ u, tr[j]? = some (v, .deliver u x.1 x.2)) ∨
-      ∃ u L, tr[j]? = some (v, .stream u L) ∧ x ∈ L) ∧ x.1 = cfg.idOf x.2 := by
-  have hid := id_of_delivered hx
-  refine ⟨?_, hid⟩
-  cases inp with
-  | deliver u id b =>
-    simp only [delivered, List.flatMap_cons, List.flatMap_nil, List.append_nil] at hx
-    split at hx
-    · rw [List.mem_singleton] at hx; subst hx; exact Or.inl ⟨u, hj⟩
-    · exact absurd hx List.not_mem_nil
-  | stream u L =>
-    simp only [delivered, List.flatMap_cons, List.flatMap_nil, List.append_nil] at hx
-    exact Or.inr ⟨u, L, hj, (List.mem_filter.mp hx).1⟩
-  | _ => simp [delivered] at hx
-
 theorem stateBefore_of_le {i : ℕ} (h : tr.length ≤ i) (v : Validator) :
     stateBefore cfg tr i v = stateBefore cfg tr tr.length v := by
   unfold stateBefore; rw [inputsBefore_of_le h]

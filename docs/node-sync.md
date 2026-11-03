@@ -134,7 +134,11 @@ reference `x` come from at least `q` authors (`Bypassed U ordered q x`).
   and, for a commit, the blocks the commit orders. It decides on the
   proof, takes in the blocks with the commit, and so raises its cut
   (D16). Liveness in synchrony rests on it (B1 of
-  `docs/dos-bounds.md`).
+  `docs/dos-bounds.md`). On the node a request is `askProof`, sent when
+  the node resends, so `T_c` is its retry timer, and again after each
+  slot it decides on a proof; the answer is `proof`, and the node checks
+  it by the loop on the proof's own blocks (`verdictOn`) and takes the
+  blocks in (`decideOn`), behind the switch `Config.drops`.
 * **Decisions** read a proof: the disk at or above `G`, a view of the
   record cut at `G` (`BypassView.chop`), as the memory already does from
   its floor, or a proof received in catch-up.

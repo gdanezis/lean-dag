@@ -25,7 +25,8 @@ gathered from `byRound`, those at `R` read without references, and
 `windowView st R` its view of all its blocks.
 
 A store may keep a block without its references (`strip`, `stripAll`),
-holding those references apart (`kept`). The block as accepted (`full`)
+or accept one without them (`base`), holding those references apart
+(`kept`). The block as accepted (`full`)
 restores them; the blocks as accepted are closed under references when no
 reference kept apart was let go (`FullClosed`). `Restrips F st st'` says
 `st'` keeps the blocks of `st`, as accepted, perhaps more of those below `F`
@@ -320,6 +321,68 @@ theorem FullClosed.insert (h : s.FullClosed) {id : BlockId} {b : Block Validator
     obtain ⟨hxs, hxr⟩ := h j hjs x hx
     have hxi : x ≠ id := fun e => hnew (e ▸ hxs)
     exact ⟨mem_insert_of_mem hxs, by rw [hb x hxi, hb j hji]; exact hxr⟩
+
+/-- **Accept a block without its references**, holding them apart. -/
+def base (id : BlockId) (b : Block Validator BlockId Payload) (hnew : id ∉ s.ids) :
+    Store Validator BlockId Payload :=
+  let st := s.insert id { b with refs := ∅ } hnew (Finset.empty_subset _)
+    fun _ hj => absurd hj (Finset.notMem_empty _)
+  { st with
+    kept := st.kept.insert id b.refs
+    kept_spec := fun i hi => by
+      rw [treeMap_contains_insert] at hi
+      rcases hi with rfl | hi
+      · refine ⟨Finset.mem_cons_self (h := hnew), ?_⟩
+        change ((s.map.insert i _).getD i s.junk).refs = ∅
+        rw [Std.TreeMap.getD_insert_self]
+      · exact st.kept_spec i hi }
+
+omit [DecidableEq Validator] in
+variable {s} in
+theorem base_ids {id : BlockId} {b : Block Validator BlockId Payload} {hnew : id ∉ s.ids} :
+    (s.base id b hnew).ids = Insert.insert id s.ids :=
+  Finset.cons_eq_insert id s.ids hnew
+
+omit [DecidableEq Validator] in
+variable {s} in
+theorem base_blk {id : BlockId} {b : Block Validator BlockId Payload} {hnew : id ∉ s.ids}
+    (i : BlockId) :
+    (s.base id b hnew).blk i = if i = id then { b with refs := ∅ } else s.blk i := by
+  change (s.map.insert id _).getD i s.junk = _
+  split
+  · subst i; exact Std.TreeMap.getD_insert_self
+  · rename_i hne; exact treeMap_getD_insert_ne (Ne.symm hne)
+
+omit [DecidableEq Validator] in
+variable {s} in
+/-- **The block accepted without its references is, as accepted, the block.** -/
+theorem full_base {id : BlockId} {b : Block Validator BlockId Payload} {hnew : id ∉ s.ids}
+    (i : BlockId) : (s.base id b hnew).full i = if i = id then b else s.full i := by
+  have hk : (s.base id b hnew).kept = s.kept.insert id b.refs := rfl
+  unfold full
+  rw [hk, Std.TreeMap.getElem?_insert, base_blk]
+  by_cases h : i = id
+  · subst h
+    simp only [show compare i i = Ordering.eq from compare_eq_iff_eq.mpr rfl, if_true]
+  · have hc : ¬ compare id i = Ordering.eq := fun e => h (compare_eq_iff_eq.mp e).symm
+    simp only [hc, if_false, h]
+
+omit [DecidableEq Validator] in
+variable {s} in
+/-- A store keeps blocks without their references only below `F` after
+accepting one without them below `F`. -/
+theorem low_base {F : ℕ} (hlow : ∀ j, s.kept[j]? ≠ none → (s.blk j).round < F) {id : BlockId}
+    {b : Block Validator BlockId Payload} {hnew : id ∉ s.ids} (hb : b.round < F) :
+    ∀ j, (s.base id b hnew).kept[j]? ≠ none → ((s.base id b hnew).blk j).round < F := by
+  intro j hj
+  have hk : (s.base id b hnew).kept = s.kept.insert id b.refs := rfl
+  rw [hk, Std.TreeMap.getElem?_insert] at hj
+  rw [base_blk]
+  by_cases h : j = id
+  · rw [if_pos h]; exact hb
+  · have hc : ¬ compare id j = Ordering.eq := fun e => h (compare_eq_iff_eq.mp e).symm
+    simp only [hc, if_false] at hj
+    rw [if_neg h]; exact hlow j hj
 
 /-- **Keep the block `j` without its references**, its references apart. -/
 def strip (j : BlockId) : Store Validator BlockId Payload :=

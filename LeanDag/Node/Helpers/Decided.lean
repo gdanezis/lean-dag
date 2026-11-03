@@ -233,6 +233,33 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger s)
   | restart =>
     exact hset { s with recovering := true } (Node.resend cfg s ++ Node.rearm cfg s) rfl rfl
       (by rw [commitsOf_append, commitsOf_resend, commitsOf_rearm, List.append_nil])
+  | askProof peer k =>
+    refine ⟨Appends.quiet rfl ?_, hL⟩
+    simp only [Node.step]
+    split
+    · split <;> rfl
+    · rfl
+  | proof u k L =>
+    simp only [Node.step]
+    split
+    · rename_i hc
+      split
+      · rename_i d _
+        obtain ⟨-, -, -, -, hlo, hdec, -⟩ := decideOn_rest (cfg := cfg) s k d L
+        have hL₀ : Ledger (Node.tidy (Node.decideOn cfg s k d L)) := by
+          unfold Ledger
+          change (Node.decideOn cfg s k d L).decided.reverse.map Prod.fst =
+            List.range (Node.decideOn cfg s k d L).lo
+          rw [hdec, hlo, List.reverse_cons, List.map_append, hL, hc.2.2, List.range_succ]
+          rfl
+        obtain ⟨h₁, h₂⟩ := settle_appends (cfg := cfg) hL₀
+        refine ⟨?_, h₂⟩
+        unfold Appends at h₁ ⊢
+        rw [h₁]
+        change (Node.decideOn cfg s k d L).decided.reverse ++ _ = _
+        simp [commitsOf, List.filterMap_append, hdec]
+      · exact ⟨Appends.refl s, hL⟩
+    · exact ⟨Appends.refl s, hL⟩
 
 /-- **A run appends its decisions**, and keeps the ledger. -/
 theorem run_appends : ∀ (is : List (Input Validator BlockId Payload))

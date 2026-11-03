@@ -12,7 +12,9 @@ the same slots. With node `3` down, the others wait out the timer at its
 rounds and skip its slots, over a short run and over a long one. With
 node `3` down and node `2` crashing for a while, losing what is sent to
 it, the others stall without a quorum; once node `2` restarts, the
-resent blocks bring it the history it lost and the chain restarts.
+resent blocks bring it the history it lost and the chain restarts. A
+fresh node that drops, given node `0`'s proof of each slot in turn,
+decides the slots as node `0` did.
 -/
 
 namespace LeanDagTest
@@ -208,6 +210,25 @@ def restarted : Net :=
 #guard_msgs in
 #eval (tops restarted, (List.finRange 4).map fun d => (restarted.commits d).length,
   agree restarted)
+
+/-! ## Catch-up on proofs -/
+
+/-- Node `me`, dropping. -/
+def cfgDrops (me : Fin 4) : Config (Fin 4) ℕ Unit := { cfg me with drops := true }
+
+/-- The decisions of a fresh node `1` that drops, given node `0`'s proofs of
+the slots below `n` in the network `net`, in turn. -/
+def caughtUp (net : Net) (n : ℕ) : List (ℕ × Option ℕ) :=
+  ((List.range n).foldl (fun (r : State (Fin 4) ℕ Unit × List (ℕ × Option ℕ)) k =>
+    match proofReply (cfg 0) (net.states 0) k with
+    | some L =>
+      let x := step (cfgDrops 1) r.1 (.proof 0 k L)
+      (x.1, r.2 ++ commitsOf x.2)
+    | none => r) (State.init (cfgDrops 1), [])).2
+
+/-- info: (6, true) -/
+#guard_msgs in
+#eval ((caughtUp up 6).length, caughtUp up 6 == up.commits 0)
 
 end Node
 

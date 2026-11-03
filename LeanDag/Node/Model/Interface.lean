@@ -159,6 +159,11 @@ inductive Input where
   | ask (peer : Validator) (r : ℕ)
   /-- The node restarts after a crash, from the state it persisted. -/
   | restart
+  /-- A peer asks for the proof of the verdict of slot `k`. -/
+  | askProof (peer : Validator) (k : ℕ)
+  /-- A peer's proof of the verdict of slot `k`, with the blocks its commit
+  orders. -/
+  | proof (peer : Validator) (k : ℕ) (L : List (BlockId × Block Validator BlockId Payload))
 
 /-- **What a node produces.** -/
 inductive Output where
@@ -179,6 +184,11 @@ inductive Output where
   | ask (r : ℕ)
   /-- Send one of the node's own blocks to one peer. -/
   | send (peer : Validator) (id : BlockId) (b : Block Validator BlockId Payload)
+  /-- Ask every peer for the proof of the verdict of slot `k`. -/
+  | askProof (k : ℕ)
+  /-- Send one peer the proof of the verdict of slot `k`, with the blocks its
+  commit orders. -/
+  | proof (peer : Validator) (k : ℕ) (L : List (BlockId × Block Validator BlockId Payload))
 
 end Node
 

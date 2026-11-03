@@ -389,6 +389,24 @@ theorem Mirrors.eraseAll (h : m.Mirrors d F) {l : List BlockId}
     unfold windowBlk
     rw [(h₃ i hi').1]
 
+omit [DecidableEq Validator] in
+/-- **Accepting a block below `F` without its references keeps the memory
+the disk's window at `F`.** -/
+theorem Mirrors.base (h : m.Mirrors d F) {id : BlockId} {b : Block Validator BlockId Payload}
+    (hnew : id ∉ d.ids) (hb : b.round < F) : m.Mirrors (d.base id b hnew) F := by
+  have hm := h.notMem hnew
+  refine ⟨fun i => ?_, fun i hi => ?_⟩
+  · rw [base_ids, Finset.mem_insert, base_blk]
+    by_cases hi : i = id
+    · subst hi
+      rw [if_pos rfl]
+      exact ⟨fun h' => absurd h' hm, fun ⟨_, h'⟩ => absurd h' (by dsimp only; omega)⟩
+    · rw [if_neg hi, h.mem i]; simp [hi]
+  · have hii : i ≠ id := fun e => hm (e ▸ hi)
+    rw [h.blk i hi]
+    unfold windowBlk
+    rw [base_blk, if_neg hii]
+
 omit [LinearOrder BlockId] in
 /-- **Validity at the row reads only the references' rounds, authors and
 payloads.** -/

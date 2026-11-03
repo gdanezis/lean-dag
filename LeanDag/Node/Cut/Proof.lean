@@ -5,9 +5,10 @@ import LeanDag.Node.Helpers.CutAbove
 
 The record of the cut at `G` is the run's record padded below `G`
 (`padded`): fresh identifiers exist, since the identifiers are injective on
-blocks. Along the run every honest disk is read as that record reads it from
-`G` up, and every decision of a slot from round `G` up is a verdict on it
-(`cutAbove_before`); neither reads a block below `G`. Verdicts on one record
+blocks. Along the run every honest disk whose cut is at most `G` is read as
+that record reads it from `G` up, and every decision of a slot of round `G`
+or `G + 1` is a verdict on it (`cutAbove_before`); neither reads a block
+below `G`. Verdicts on one record
 agree (`AnchoredRule.decided_agree`).
 -/
 
@@ -37,12 +38,12 @@ theorem cuts : Cuts := by
   have hinjR := hashInjective_of_trace hinj
   have hauthR := authentic_of_timely htime
   have hq : cfg.q ≤ Fintype.card Validator := hadm.2.2.2.2
-  refine ⟨padded hinjR hauthR hq G, fun v hv i j hj hjG => ?_, fun v hv i e he hG => ?_⟩
+  refine ⟨padded hinjR hauthR hq G, fun v hv i hlo j hj hjG => ?_, fun v hv i e he hG => ?_⟩
   · have hfl := (stateBefore cfg tr i v).disk.full_fields j
-    obtain ⟨h₁, h₂, h₃, h₄⟩ := (cutAbove_before hinjR hauthR hq hσ hadm hf G i v hv).1 j hj
+    obtain ⟨h₁, h₂, h₃, h₄⟩ := (cutAbove_before hinjR hauthR hq hσ hadm hf G i v hv).1 hlo j hj
       (by rw [hfl.1]; exact hjG)
     exact ⟨h₁, h₂.trans hfl.1, h₃.trans hfl.2.1, fun hlt => h₄ (by rw [hfl.1]; exact hlt)⟩
-  · exact (cutAbove_before hinjR hauthR hq hσ hadm hf G i v hv).2 e he (by omega)
+  · exact (cutAbove_before hinjR hauthR hq hσ hadm hf G i v hv).2 e he (by omega) (by omega)
 
 theorem agrees : Agrees := by
   intro Validator BlockId Payload _ _ _ cfg H tr hσ hadm hf htime hinj hid v hv w hw i j e he

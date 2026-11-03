@@ -361,7 +361,7 @@ theorem built_mem (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ
     rw [outputsAt_eq hp] at he
     rw [stateBefore_succ hp, if_pos rfl]
     exact (step_persist (cfg := cfg.at v) hdr e he).1
-  exact ((cut_before hσ hadm hf htime hinj (p + 1) v hv).1 e.1 hin).1
+  exact ((cut_before hσ hadm hf htime hinj hdr (p + 1) v hv).1 e.1 hin).1
 
 end Record
 
@@ -488,7 +488,7 @@ theorem lent_avoids_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     ∀ k ∈ lent (stateBefore cfg tr E v).disk z, ((stateBefore cfg tr E v).disk.blk k).creator ∉
       excluded (cfg.at v) (stateBefore cfg tr E v).disk m (stateBefore cfg tr E v).evidence := by
   set Z := stateBefore cfg tr E v with hZ
-  have hcut := (cut_before hσ hadm hf htime hinj E v hv).1
+  have hcut := (cut_before hσ hadm hf htime hinj hdr E v hv).1
   have hzU := (hcut _ hz).1
   have hzc : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
       z).creator = (Z.disk.blk z).creator := hcut.creator hz
@@ -664,7 +664,7 @@ theorem quorum_of_held (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf :
     cfg.q ≤ (authorsIn (stateBefore cfg tr E v).disk.toRecord
       (stateBefore cfg tr E v).disk.ids m).card := by
   set Z := stateBefore cfg tr E v with hZ
-  have hZcut := (cut_before hσ hadm hf htime hinj E v hv).1
+  have hZcut := (cut_before hσ hadm hf htime hinj hdr E v hv).1
   obtain ⟨x, y, out, hbs, hb, heo, -⟩ := build_witness hσ hadm hf htime hinj hdr hw hi he (by omega)
   obtain ⟨r', id, b, hnew, hrefs, -, -, hbr, -, -, hrv, -, -, -, -, hout'⟩ := tryBuild_some hb
   rw [hout', persists_built, List.mem_singleton] at heo
@@ -697,7 +697,7 @@ theorem quorum_below (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H
       cfg.q ≤ (authorsIn (stateBefore cfg tr E v).disk.toRecord
         (stateBefore cfg tr E v).disk.ids r).card := by
   set Z := (stateBefore cfg tr E v).disk with hZ
-  have hcut := (cut_before hσ hadm hf htime hinj E v hv).1
+  have hcut := (cut_before hσ hadm hf htime hinj hdr E v hv).1
   intro k
   induction k with
   | zero => intro j _ _ r hr; omega

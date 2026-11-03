@@ -71,7 +71,7 @@ theorem waves_leads {cfg : Config Validator BlockId Payload} {H T : Finset Valid
     omega
   obtain ⟨⟨j', d⟩, hmem, rfl⟩ := List.mem_map.mp hj
   -- that decision is a verdict on the record, so it is the leader block
-  obtain ⟨V', hV'⟩ := (cut_before hσ hadm hf htime hinj E v (hTH hv)).2 _ hmem
+  obtain ⟨V', hV'⟩ := (cut_before hσ hadm hf htime hinj hdr E v (hTH hv)).2 _ hmem
   haveI : Validity.Quorate (ValidAt (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) cfg.q Clause.none) cfg.q :=
     Validity.Quorate.of_validAt hadm.2.2.2.1 fun _ _ => Iff.rfl
@@ -86,7 +86,7 @@ theorem waves_leads {cfg : Config Validator BlockId Payload} {H T : Finset Valid
 theorem holds : Statement := by
   intro Validator BlockId Payload _ _ _ cfg H tr hσ hadm hf htime hinj hdr
   refine ⟨globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime),
-    fun v hv i => (cut_before hσ hadm hf htime hinj i v hv).1,
+    fun v hv i => (cut_before hσ hadm hf htime hinj hdr i v hv).1,
     fun v hv i => commitInv_before hσ hadm hf htime hinj hdr hv i, ?_, ?_⟩
   · intro T time gst Δ Δₛ t₁ D nE hTH hfa hev hqT hcT hq hid hto hsp hnE hmono hdel hwait hsync
       hstart hup

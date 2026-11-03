@@ -261,7 +261,7 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
     rcases settled_before (cfg := cfg) hq v E with h | h
     · rw [ht'] at h; cases h
     · exact h
-  have hcut := (cut_before hσ hadm hf htime hinj E v (hTH hv)).1
+  have hcut := (cut_before hσ hadm hf htime hinj hdr E v (hTH hv)).1
   have hfZ : Z.floor ≤ cfg.slots.slotRound Z.lo := Converge.floor_lo_before (cfg := cfg) E v
   have hva := ViewsAbove.of_storeAbove (cfg.slots.slotRound Z.lo) hiff
     (fun i hi => ⟨hcut.round hi, hcut.creator hi⟩)

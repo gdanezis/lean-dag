@@ -324,6 +324,16 @@ theorem Grows.foldl : ∀ (l : List (BlockId × Block Validator BlockId Payload)
   | e :: l, st => (Grows.accept st e.1 e.2).trans (Grows.foldl l _)
 
 omit [Fintype Validator] in
+theorem Grows.takeOn (F : ℕ) (st : Store Validator BlockId Payload)
+    (e : BlockId × Block Validator BlockId Payload) : Grows st (takeOn cfg F st e) := by
+  unfold Node.takeOn
+  split
+  · rename_i h
+    exact ⟨fun _ hj => by rw [Store.base_ids]; exact Finset.mem_insert_of_mem hj, rfl,
+      fun j hj => by rw [Store.full_base, if_neg fun e' : j = e.1 => h.1 (e' ▸ hj)]⟩
+  · exact Grows.accept st e.1 e.2
+
+omit [Fintype Validator] in
 /-- The lowest round the node reads does not fall as its next undecided
 slot and its top rise. -/
 theorem floorOf_mono {s s' : State Validator BlockId Payload} (hlo : s.lo ≤ s'.lo)
@@ -675,6 +685,72 @@ theorem Inv.absorb {s : State Validator BlockId Payload}
     exact hi.floor
 
 omit [Fintype Validator] in
+/-- Taking in a known block of a proof keeps the store known. -/
+theorem takeOn_known {F : ℕ} {st : Store Validator BlockId Payload}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    (hK : ∀ j ∈ st.ids, (j, st.full j) ∈ K) {e : BlockId × Block Validator BlockId Payload}
+    (he : e ∈ K) : ∀ j ∈ (takeOn cfg F st e).ids, (j, (takeOn cfg F st e).full j) ∈ K := by
+  unfold Node.takeOn
+  split
+  · intro j hj
+    rw [Store.base_ids] at hj
+    rw [Store.full_base]
+    split
+    · rename_i hje; subst hje; exact he
+    · rename_i hje; exact hK j ((Finset.mem_insert.mp hj).resolve_left hje)
+  · unfold acceptOn
+    split
+    · exact known_insert hK he
+    · exact hK
+
+omit [Fintype Validator] in
+/-- **Taking in a known block of a proof keeps the invariant**, at a node
+that drops. -/
+theorem Inv.takeProof {s : State Validator BlockId Payload}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B)
+    (hdr : cfg.drops = true) {e : BlockId × Block Validator BlockId Payload} (he : e ∈ K) :
+    Inv cfg (Node.takeProof cfg s e) K B := by
+  obtain ⟨h₁, h₂, h₃, h₄, -, h₆, -⟩ := takeProof_rest (cfg := cfg) s e
+  have hg := Grows.takeOn (cfg := cfg) s.floor s.disk e
+  refine ⟨?_, by rw [h₂]; exact hi.pend, by rw [h₃]; exact hi.rounds, hi.good, hi.sub,
+    (fun hd => by rw [hdr] at hd; cases hd), fun j hj => ?_, ?_⟩
+  · rw [takeProof_disk]; exact takeOn_known hi.known he
+  · rw [h₄] at hj
+    rw [takeProof_disk]
+    exact ⟨hg.1 (hi.own j hj).1, by rw [hg.full (hi.own j hj).1]; exact (hi.own j hj).2⟩
+  · rw [h₁, show floorOf cfg (Node.takeProof cfg s e) = floorOf cfg s by
+      simp only [floorOf, h₆, h₃]]
+    exact hi.floor
+
+omit [Fintype Validator] in
+/-- **Deciding on a proof of known blocks keeps the invariant**, at a node
+that drops. -/
+theorem Inv.decideOn {s : State Validator BlockId Payload}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B)
+    (hdr : cfg.drops = true) {k : ℕ} (hk : s.lo ≤ k + 1) (d : Option BlockId)
+    {L : List (BlockId × Block Validator BlockId Payload)} (hL : ∀ e ∈ hashed cfg L, e ∈ K) :
+    Inv cfg (Node.decideOn cfg s k d L) K B := by
+  have h₀ : ∀ (l : List (BlockId × Block Validator BlockId Payload)), (∀ e ∈ l, e ∈ K) →
+      ∀ s' : State Validator BlockId Payload, Inv cfg s' K B →
+        Inv cfg (l.foldl (Node.takeProof cfg) s') K B := by
+    intro l
+    induction l with
+    | nil => exact fun _ _ h => h
+    | cons e l ih =>
+      exact fun hl s' h => ih (fun x hx => hl x (List.mem_cons_of_mem _ hx)) _
+        (h.takeProof hdr (hl e List.mem_cons_self))
+  unfold Node.decideOn
+  exact h₀ _ (fun e he => hL e (List.mem_mergeSort.mp he)) _
+    (hi.of_eq (s' :=
+      { s with
+        lo := k + 1
+        decided := (k, d) :: s.decided
+        proofs := (k, ((hashed cfg L).map Prod.fst).toFinset) :: s.proofs })
+      rfl rfl rfl rfl rfl hk).release
+
+omit [Fintype Validator] in
 /-- **Dropping syncs keeps the invariant.** -/
 theorem Inv.tidy {s : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
@@ -970,6 +1046,16 @@ theorem Sent.of_out {B bs : List (BlockId × Block Validator BlockId Payload)}
     {out : List (Output Validator BlockId Payload)} (h : Out bs out) : Sent B bs out :=
   ⟨h.1, fun e he => h.2 ▸ he, fun e he => List.mem_append_right _ (h.2 ▸ he)⟩
 
+/-- **A request for a proof leaves the state.** -/
+@[simp] theorem step_askProof_fst (s : State Validator BlockId Payload) (peer : Validator)
+    (k : ℕ) : (Node.step cfg s (.askProof peer k)).1 = s := rfl
+
+/-- **A proof does nothing at a node that does not drop.** -/
+theorem step_proof_of_false (hd : cfg.drops = false) (s : State Validator BlockId Payload)
+    (u : Validator) (k : ℕ) (L : List (BlockId × Block Validator BlockId Payload)) :
+    Node.step cfg s (.proof u k L) = (s, []) := by
+  simp [Node.step, hd]
+
 /-- **A timer step's state** is the settle's after the timer fires,
 whether or not the node resends. -/
 theorem step_timer_fst (s : State Validator BlockId Payload) (r : ℕ) :
@@ -1005,21 +1091,25 @@ theorem mem_resync {s : State Validator BlockId Payload} {o : Output Validator B
   exact ⟨_, _, _, _, rfl⟩
 
 omit [Fintype Validator] in
-/-- **Resending outputs, besides requests, the top block and the retry
-timer.** -/
+/-- **Resending outputs, besides requests, the top block, the retry timer
+and a request for a proof.** -/
 theorem mem_resend {s : State Validator BlockId Payload} {o : Output Validator BlockId Payload}
     (h : o ∈ Node.resend cfg s) :
-    (∃ peer t fr ids, o = .sync peer t fr ids) ∨ ∃ r j, s.top = some r ∧ s.own = some j ∧
+    (∃ peer t fr ids, o = .sync peer t fr ids) ∨ (∃ r j, s.top = some r ∧ s.own = some j ∧
       (o = .broadcast j (s.disk.full j) ∨ o = .setTimer (r - 1) (2 * cfg.timeout (r - 1)) ∨
-        o = .ask r) := by
+        o = .ask r)) ∨ o = .askProof s.lo := by
   unfold Node.resend at h
   rcases List.mem_append.mp h with h | h
+  · rcases List.mem_append.mp h with h | h
+    · split at h
+      · rename_i r j ht ho
+        simp only [List.mem_cons, List.not_mem_nil, or_false] at h
+        exact Or.inr (Or.inl ⟨r, j, ht, ho, h⟩)
+      · exact absurd h List.not_mem_nil
+    · exact Or.inl (mem_resync h)
   · split at h
-    · rename_i r j ht ho
-      simp only [List.mem_cons, List.not_mem_nil, or_false] at h
-      exact Or.inr ⟨r, j, ht, ho, h⟩
+    · exact Or.inr (Or.inr (List.mem_singleton.mp h))
     · exact absurd h List.not_mem_nil
-  · exact Or.inl (mem_resync h)
 
 omit [Fintype Validator] in
 /-- **Setting the top round's timer again** sets it, if it was set. -/
@@ -1078,14 +1168,14 @@ omit [Fintype Validator] in
 theorem commitsOf_resend (s : State Validator BlockId Payload) :
     commitsOf (Node.resend cfg s) = [] :=
   List.filterMap_eq_nil_iff.mpr fun o ho => by
-    rcases mem_resend ho with ⟨_, _, _, _, rfl⟩ | ⟨_, _, -, -, rfl | rfl | rfl⟩ <;> rfl
+    rcases mem_resend ho with ⟨_, _, _, _, rfl⟩ | ⟨_, _, -, -, rfl | rfl | rfl⟩ | rfl <;> rfl
 
 omit [Fintype Validator] in
 /-- Resending persists no block. -/
 theorem persists_resend (s : State Validator BlockId Payload) :
     persists (Node.resend cfg s) = [] :=
   List.filterMap_eq_nil_iff.mpr fun o ho => by
-    rcases mem_resend ho with ⟨_, _, _, _, rfl⟩ | ⟨_, _, -, -, rfl | rfl | rfl⟩ <;> rfl
+    rcases mem_resend ho with ⟨_, _, _, _, rfl⟩ | ⟨_, _, -, -, rfl | rfl | rfl⟩ | rfl <;> rfl
 
 /-- A timer step persists what its settle persists. -/
 theorem persists_step_timer (s : State Validator BlockId Payload) (r : ℕ) :
@@ -1129,12 +1219,13 @@ its timeout. -/
 theorem mem_resend_setTimer {s : State Validator BlockId Payload} {r a : ℕ}
     (h : Output.setTimer r a ∈ Node.resend cfg s) :
     ∃ t, s.top = some t ∧ r = t - 1 ∧ a = 2 * cfg.timeout r := by
-  rcases mem_resend h with ⟨_, _, _, _, h⟩ | ⟨t, j, ht, -, h | h | h⟩
+  rcases mem_resend h with ⟨_, _, _, _, h⟩ | ⟨t, j, ht, -, h | h | h⟩ | h
   · cases h
   · cases h
   · rw [Output.setTimer.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
     exact ⟨t, ht, rfl, rfl⟩
+  · cases h
   · cases h
 
 omit [Fintype Validator] in
@@ -1149,11 +1240,12 @@ theorem Sent.resend {s : State Validator BlockId Payload}
       ∀ e ∈ broadcasts (Node.resend cfg s), e ∈ B ++ bs := by
     refine ⟨persists_resend s, fun e he => ?_⟩
     obtain ⟨o, ho, he⟩ := List.mem_filterMap.mp he
-    rcases mem_resend ho with ⟨_, _, _, _, rfl⟩ | ⟨r, j, -, hj, rfl | rfl | rfl⟩
+    rcases mem_resend ho with ⟨_, _, _, _, rfl⟩ | ⟨r, j, -, hj, rfl | rfl | rfl⟩ | rfl
     · cases he
     · simp only [Option.some.injEq] at he
       subst he
       exact (hi.own j hj).2
+    · cases he
     · cases he
     · cases he
   refine ⟨by rw [persists_append, hr.1, h.1, List.append_nil], fun e he => ?_, fun e he => ?_⟩
@@ -1317,6 +1409,30 @@ theorem Inv.step {s : State Validator BlockId Payload}
     obtain ⟨bs, ho, hi'⟩ :=
       ((hi.mono hsub).of_eq (s' := { s with recovering := true }) rfl rfl rfl rfl rfl le_rfl).settle
     exact ⟨bs, h'.append_out ho, by simpa using hi'⟩
+  | askProof peer k =>
+    simp only [Node.step]
+    refine hnil _ fun o ho => ?_
+    split at ho
+    · split at ho
+      · rw [List.mem_singleton] at ho; subst ho; rfl
+      · exact absurd ho List.not_mem_nil
+    · exact absurd ho List.not_mem_nil
+  | proof u k L =>
+    simp only [Node.step]
+    split
+    · rename_i hc
+      split
+      · rename_i d _
+        have hL : ∀ x ∈ hashed cfg L, x ∈ K' := fun x hx => Or.inr (by
+          unfold hashed at hx; simpa [delivered] using hx)
+        obtain ⟨bs, ho, hi'⟩ := ((hi.mono hsub).decideOn hc.1 (k := k)
+          (by have := hc.2.2; omega) d hL).tidy.settle_of subset_rfl [.commit k d]
+          (by simp [Output.isQuiet])
+        refine ⟨bs, Sent.of_out ?_, hi'⟩
+        simpa using ho.append (out_quiet (xs := [Output.askProof (Node.settle cfg
+          (Node.tidy (Node.decideOn cfg s k d L))).1.lo]) (by simp [Output.isQuiet]))
+      · exact hnil'
+    · exact hnil'
 
 omit [Fintype Validator] in
 /-- What was delivered is identified by its hash. -/
@@ -1331,6 +1447,9 @@ theorem id_of_delivered {is : List (Input Validator BlockId Payload)}
     · rename_i h; rw [List.mem_singleton] at hx; subst hx; exact h
     · exact absurd hx List.not_mem_nil
   | stream u L =>
+    simp only at hx
+    exact of_decide_eq_true (List.mem_filter.mp hx).2
+  | proof u k L =>
     simp only at hx
     exact of_decide_eq_true (List.mem_filter.mp hx).2
   | _ => exact absurd hx List.not_mem_nil

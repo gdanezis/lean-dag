@@ -156,6 +156,8 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
   | ask peer r => simp only [Node.step]; exact h
   | restart =>
     exact Held.settle (h.grow (s' := { s with recovering := true }) (Grows.refl _) rfl) hd
+  | askProof peer k => exact h
+  | proof u k L => rw [step_proof_of_false hd]; exact h
 
 /-- **A run keeps `Held`**, when the node does not drop. -/
 theorem Held.run (hd : cfg.drops = false) : ∀ (is : List (Input Validator BlockId Payload))
@@ -280,6 +282,8 @@ theorem Quorate.step {s : State Validator BlockId Payload} (h : Quorate cfg s)
   | ask peer r => simp only [Node.step]; exact h
   | restart =>
     exact Quorate.settle (h.grow (s' := { s with recovering := true }) (Grows.refl _) rfl) hd
+  | askProof peer k => exact h
+  | proof u k L => rw [step_proof_of_false hd]; exact h
 
 /-- **A run keeps `Quorate`**, when the node does not drop. -/
 theorem Quorate.run (hd : cfg.drops = false) : ∀ (is : List (Input Validator BlockId Payload))

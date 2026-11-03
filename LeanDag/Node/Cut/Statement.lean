@@ -9,16 +9,19 @@ at the bounded vote of an admissible configuration with at most `f` nodes
 outside the honest set `H`, for every round `G` there is a block record `U`
 at quorum `q` whose honest set is `H`, such that:
 
-* **holdings** (`Cuts`): every honest disk's blocks at or above `G` are blocks
-  of `U`, at the same round and author, and above `G` the same blocks, as the
-  disk accepted them;
+* **holdings** (`Cuts`): the blocks at or above `G` of every honest disk
+  whose cut is at most `G`, that is whose next undecided slot's round is at
+  most `G + 1`, are blocks of `U`, at the same round and author, and above
+  `G` the same blocks, as the disk accepted them;
 * **decisions** (`Cuts`): every honest node's decision of a slot whose round
   is `G + 1`, or `0` for `G = 0`, is a verdict on a view of `U`.
 
 So two honest nodes decide each slot alike (`Agrees`), on the record of the
 slot's cut alone. Under bypass a disk may hold, at or below its cut, a block
-whose bypassed reference no honest node knew; the decisions read only the
-record of the slot's cut, which need not hold the history below it.
+whose bypassed reference no honest node knew, and a node that decides on a
+proof takes in blocks below its new cut without their references; the
+decisions read only the record of the slot's cut, which need not hold the
+history below it.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -38,7 +41,8 @@ def Cuts : Prop :=
     Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr →
     Function.Injective cfg.idOf →
     ∀ G, ∃ U : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H,
-      (∀ v ∈ H, ∀ i, ∀ j ∈ (stateBefore cfg tr i v).disk.ids,
+      (∀ v ∈ H, ∀ i, cfg.slots.slotRound (stateBefore cfg tr i v).lo ≤ G + 1 →
+        ∀ j ∈ (stateBefore cfg tr i v).disk.ids,
         G ≤ ((stateBefore cfg tr i v).disk.blk j).round →
         j ∈ U.ids ∧ (U.block j).round = ((stateBefore cfg tr i v).disk.blk j).round ∧
           (U.block j).creator = ((stateBefore cfg tr i v).disk.blk j).creator ∧

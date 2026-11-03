@@ -253,6 +253,19 @@ theorem step_calm (s : State Validator BlockId Payload) (inp : Input Validator B
     intro r h
     rw [step_restart_fst] at h
     exact Or.inl (calm_quiesce (cfg := cfg) _ { s with recovering := true } h)
+  | askProof peer k => exact fun r h => Or.inl h
+  | proof u k L =>
+    intro r h
+    simp only [Node.step] at h
+    split at h
+    · split at h
+      · rename_i d _
+        have := calm_quiesce (cfg := cfg) _ (Node.tidy (Node.decideOn cfg s k d L)) h
+        rw [show (Node.tidy (Node.decideOn cfg s k d L)).fired = s.fired from
+          (decideOn_rest (cfg := cfg) s k d L).2.2.2.1] at this
+        exact Or.inl this
+      · exact Or.inl h
+    · exact Or.inl h
 
 /-- **Each round whose timer node `v` counts as fired before event `i`**
 had its timer input at an earlier event. -/
@@ -404,6 +417,16 @@ theorem OwnTop.step {s : State Validator BlockId Payload} (h : OwnTop cfg s)
   | restart =>
     rw [step_restart_fst]
     exact OwnTop.settle (h.grow (s' := { s with recovering := true }) (Grows.refl _) rfl rfl)
+  | askProof peer k => exact h
+  | proof u k L =>
+    simp only [Node.step]
+    split
+    · split
+      · rename_i d _
+        obtain ⟨-, h₂, h₃, -⟩ := decideOn_rest (cfg := cfg) s k d L
+        exact OwnTop.settle (h.grow (Grows.decideOn s k d L) h₂ h₃)
+      · exact h
+    · exact h
 
 /-- **Node `v`'s own block at its top is on its disk before every event.** -/
 theorem ownTop_before {tr : Trace Validator BlockId Payload} {v : Validator} :
@@ -796,6 +819,11 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
         hev.grow (Grows.refl _) rfl rfl, subset_rfl,
         fun hf => (hkp hf).restrips (Store.Restrips.refl _ 0) rfl⟩ hdr hp hb e
         hev')
+  | askProof peer k =>
+    intro e he
+    simp only [Node.step] at he
+    split at he <;> (try split at he) <;> simp [persists] at he
+  | proof u k L => exact hsame (step_proof_of_false hdr s u k L)
 
 omit [Fintype Validator] in
 theorem decideStep_armed (s : State Validator BlockId Payload) :
@@ -1095,6 +1123,13 @@ theorem timersSet_step {s : State Validator BlockId Payload} (hA : ArmedQuorum c
     refine ⟨TimersSet.of_none fun r a h => ?_, hA⟩
     simp only [Node.step] at h
     split at h <;> (try split at h) <;> simp at h
+  | askProof peer k =>
+    refine ⟨TimersSet.of_none fun r a h => ?_, hA⟩
+    simp only [Node.step] at h
+    split at h <;> (try split at h) <;> simp at h
+  | proof u k L =>
+    rw [step_proof_of_false hd]
+    exact ⟨TimersSet.of_none fun r a h => absurd h List.not_mem_nil, hA⟩
   | restart =>
     have hAs : ArmedQuorum cfg (Node.settle cfg { s with recovering := true }).1 :=
       ArmedQuorum.settle (s := { s with recovering := true }) hA hd

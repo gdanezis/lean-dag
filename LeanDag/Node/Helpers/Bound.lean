@@ -572,6 +572,8 @@ theorem Steady.step {g : BlockId → Block Validator BlockId Payload}
   | restart =>
     rw [step_restart_fst]
     exact Steady.settle hd (h.of_same (Store.Restrips.refl _ 0) rfl rfl)
+  | askProof peer k => exact h
+  | proof u k L => rw [step_proof_of_false hd]; exact h
 
 /-! ## Along a trace -/
 

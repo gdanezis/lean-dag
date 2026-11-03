@@ -8,9 +8,9 @@ Over a trace, what each honest node knew is what the trace delivered
 it and what it made (`knownOf_sub`). Timely authentication and
 the hash over the trace give authentication and the hash at its end
 (`authentic_of_timely`, `hashInjective_of_trace`), so the honest nodes'
-knowledge forms the run's record. By induction over the trace, every
-honest disk is a cut of that record and every decision a verdict on a
-view of it (`cut_before`).
+knowledge forms the run's record. By induction over the trace, when no
+node drops, every honest disk is a cut of that record and every decision
+a verdict on a view of it (`cut_before`).
 -/
 
 namespace LeanDag
@@ -138,10 +138,11 @@ theorem authentic_of_timely (htime : Converge.TimelyAuthentic cfg H tr) :
 /-! ## The run's record -/
 
 /-- **Every honest disk is a cut of the run's record, and every decision
-a verdict on a view of it**, before every event of the trace. -/
+a verdict on a view of it**, before every event of the trace, when no node
+drops. -/
 theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    (t : ℕ) :
+    (hdr : cfg.drops = false) (t : ℕ) :
     ∀ v ∈ H,
       IsCut (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime))
         (stateBefore cfg tr t v).disk ∧
@@ -183,12 +184,14 @@ theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
           obtain ⟨hc, hv₀⟩ := ih t (by omega) w hv
           have hi := Converge.inv_before (cfg := cfg) (tr := tr) t w
           obtain ⟨hd, hb⟩ := event_knownOf (cfg := cfg) hj
-          obtain ⟨hc', hv'⟩ := AllGood.step (cfg := cfg.at w) hg.grounds
-            (fun _ hc => verdict_decideStep hσ ht hc) inp hc
+          obtain ⟨hc', hv'⟩ := AllGood.step (cfg := cfg.at w) (C := fun _ => True)
+            (fun _ _ _ h => h) hg.grounds (fun _ hc => verdict_decideStep hσ ht (hc trivial))
+            (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true)
+            (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true) inp (fun _ => hc) hi.floor
             (fun e he => hK w hv _ (knownBefore_knownOf (hi.pend e he)))
             (fun e he => hK w hv e (hd e he))
             (fun e he => hK w hv e (hb e he))
-          refine ⟨by rw [stateBefore_succ hj, if_pos rfl]; exact hc', fun e he => ?_⟩
+          refine ⟨by rw [stateBefore_succ hj, if_pos rfl]; exact hc' trivial, fun e he => ?_⟩
           rw [inputsBefore_succ hj, if_pos rfl, run_append_single, commitsOf_append] at he
           rcases List.mem_append.mp he with he | he
           · exact hv₀ e he

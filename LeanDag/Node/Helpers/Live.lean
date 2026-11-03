@@ -42,7 +42,7 @@ theorem build_witness (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : 
   rw [outputsAt_eq hi] at he
   rcases step_witness (cfg := cfg.at v) hg
       (hinv.mono fun x hx => hK x (knownBefore_knownOf hx))
-      (cut_before hσ hadm hf htime hinj i v hv).1 (Held.run (cfg := cfg.at v) hdr _ Held.init)
+      (cut_before hσ hadm hf htime hinj hdr i v hv).1 (Held.run (cfg := cfg.at v) hdr _ Held.init)
       (ownTop_before (cfg := cfg) i) (Converge.evidenceOn_before (cfg := cfg) (tr := tr) v hdr i)
       (fun hfa => Converge.kept_before (cfg := cfg) (tr := tr) hfa v i) hdr
       (fun x hx => hK _ (knownBefore_knownOf (hinv.pend x hx)))

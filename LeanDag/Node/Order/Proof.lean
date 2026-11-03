@@ -74,7 +74,7 @@ theorem ordered_eq (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     refine ⟨e, he, rfl, verdictIn_of_mem hnd ?_⟩
     rw [← List.mem_reverse, hd]
     exact he
-  have hcut := cut_before hσ hadm hf htime hinj i v hv
+  have hcut := cut_before hσ hadm hf htime hinj hdr i v hv
   have hn' : n ≤ s.lo := hn
   rcases commitInv_before hσ hadm hf htime hinj hdr hv i with h0 | ⟨V, N, hV, heq⟩
   · have hlo : s.lo = 0 := by

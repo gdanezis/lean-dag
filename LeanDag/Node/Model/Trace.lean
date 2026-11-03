@@ -11,7 +11,8 @@ outputs of event `i` are its node's step there (`outputsAt`); node `v`'s
 run over the whole trace is `runOf`, and what it knew `knownOf`; and an
 output sends a message to other nodes (`Sends`): a broadcast block to
 every other node, a request for blocks and a block sent to the node it
-names.
+names; a request for a proof to every other node, and a proof to the node
+it names.
 
 Definitions only; the claims over traces are `Node/Runs/Statement.lean`,
 `Node/Converge/Statement.lean` and `Node/Live/Statement.lean`.
@@ -65,9 +66,9 @@ def knownOf (tr : Trace Validator BlockId Payload) (v : Validator) :
 def decisionsOf (tr : Trace Validator BlockId Payload) (v : Validator) : List (ℕ × Option BlockId) :=
   commitsOf (runOf cfg tr v).2
 
-/-- **What node `u`'s outputs send**: a broadcast block and a request for
-a round's block to every other node, and a request, a stream and a sent
-block to the node they name. -/
+/-- **What node `u`'s outputs send**: a broadcast block, a request for a
+round's block and a request for a proof to every other node, and a
+request, a stream, a sent block and a proof to the node they name. -/
 def Sends (u : Validator) (out : List (Output Validator BlockId Payload))
     (m : Validator × Input Validator BlockId Payload) : Prop :=
   ∃ o ∈ out, match o with
@@ -76,6 +77,8 @@ def Sends (u : Validator) (out : List (Output Validator BlockId Payload))
     | .stream peer L => m.1 = peer ∧ m.2 = .stream u L
     | .ask r => m.1 ≠ u ∧ m.2 = .ask u r
     | .send peer id b => m.1 = peer ∧ m.2 = .deliver u id b
+    | .askProof k => m.1 ≠ u ∧ m.2 = .askProof u k
+    | .proof peer k L => m.1 = peer ∧ m.2 = .proof u k L
     | _ => False
 
 end Node

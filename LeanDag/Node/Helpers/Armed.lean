@@ -117,6 +117,16 @@ theorem armsBy_step (s : State Validator BlockId Payload) (inp : Input Validator
   | restart =>
     exact ArmsBy.congr (x := { s with recovering := true }) rfl (armsBy_quiesce _ _)
       (List.subset_append_right _ _)
+  | askProof p k => exact ArmsBy.of_armed rfl
+  | proof u k L =>
+    simp only [Node.step]
+    split
+    · split
+      · rename_i d _
+        exact ArmsBy.congr (decideOn_rest (cfg := cfg) s k d L).2.2.2.2.2.2.1 (armsBy_quiesce _ _)
+          fun o ho => List.mem_cons_of_mem _ (List.mem_append_left _ ho)
+      · exact ArmsBy.refl _
+    · exact ArmsBy.refl _
 
 variable (cfg) in
 /-- **The top round is armed once the memory holds a quorum of it.** -/

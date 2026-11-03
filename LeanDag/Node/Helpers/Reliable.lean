@@ -40,6 +40,14 @@ theorem step_settles {s : State Validator BlockId Payload} {inp : Input Validato
   | syncRequest p t fr ids => exact Or.inl rfl
   | ask p r => exact Or.inl rfl
   | restart => exact Or.inr ⟨_, rfl⟩
+  | askProof p k => exact Or.inl rfl
+  | proof u k L =>
+    simp only [Node.step]
+    split
+    · split
+      · exact Or.inr ⟨_, rfl⟩
+      · exact Or.inl rfl
+    · exact Or.inl rfl
 
 /-! ## What only rises -/
 
@@ -134,6 +142,21 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
   | syncRequest p t fr ids => exact Rises.refl s
   | ask p r => exact Rises.refl s
   | restart => exact hset { s with recovering := true } ⟨le_rfl, id, le_rfl⟩ rfl
+  | askProof p k => exact Rises.refl s
+  | proof u k L =>
+    by_cases hcnd : cfg.drops = true ∧ u ∉ s.detected ∧ k = s.lo
+    · obtain ⟨hdr, hu, rfl⟩ := hcnd
+      cases hv : verdictOn cfg s.lo L with
+      | none =>
+        rw [show (Node.step cfg s (.proof u s.lo L)).1 = s by simp [Node.step, hdr, hu, hv]]
+        exact Rises.refl s
+      | some d =>
+        obtain ⟨-, h₂, -, -, h₅, -⟩ := decideOn_rest (cfg := cfg) s s.lo d L
+        refine hset (Node.tidy (Node.decideOn cfg s s.lo d L))
+          ⟨by simp [Node.tidy, h₂], by simp [Node.tidy, h₂], by simp [Node.tidy, h₅]⟩
+          (by simp [Node.step, hdr, hu, hv])
+    · rw [show (Node.step cfg s (.proof u k L)).1 = s by simp only [Node.step, if_neg hcnd]]
+      exact Rises.refl s
 
 /-! ## Along a trace -/
 

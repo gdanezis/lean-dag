@@ -128,7 +128,7 @@ theorem exposes_spread {Validator BlockId Payload : Type} [Fintype Validator]
     exact excluded_before_spread hsp hdr hv i 0 (Finset.mem_union_left _
       (Finset.mem_image.mpr ⟨e, Finset.mem_filter.mpr ⟨he, hne⟩, he1⟩))
   -- the block as its builder built it
-  have hcut := (cut_before hσ hadm hf htime hinj i v hv).1
+  have hcut := (cut_before hσ hadm hf htime hinj hdr i v hv).1
   have hcU := (hcut _ hc).1
   have hcc : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
       c).creator = (s.disk.blk c).creator := hcut.creator hc

@@ -600,6 +600,12 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     rw [step_restart_fst, commitsOf_step_restart]
     exact (h.keeps (s' := { s with recovering := true }) rfl (Keeps.refl _)).settle
       hg hσ hdr ht hc hcl hp hb
+  | askProof peer k =>
+    have hc' : commitsOf (Node.step cfg s (.askProof peer k)).2 = [] := by
+      simp only [Node.step]; split <;> (try split) <;> rfl
+    rw [step_askProof_fst, hc', List.append_nil]
+    exact ⟨h, hc⟩
+  | proof u k L => exact hsame (step_proof_of_false hdr s u k L)
 
 /-- **A run keeps the invariant**, at a record grounding what the node knew. -/
 theorem CommitInv.run (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
