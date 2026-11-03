@@ -7,8 +7,8 @@ piece either changes nothing or is a receipt (`Received`, `step_receipt`):
 the disk gains blocks of the old syncs or of the input, the syncs' blocks
 are old ones or the input's, and what the claims read besides is as
 before. Every block of the node's own that a step outputs is on the disk
-after it (`step_persist`), and after every step no sync's block is ready
-(`noReady_step`).
+after it, at or above its floor when it drops (`step_persist`), and after
+every step no sync's block is ready (`noReady_step`).
 -/
 
 namespace LeanDag
@@ -648,80 +648,75 @@ theorem decideStep_persist (s : State Validator BlockId Payload) :
   · rfl
 
 omit [Fintype Validator] in
-/-- **What a pass persists is on the disk after it**, when the node does not
-drop. -/
-theorem advance_persist (s : State Validator BlockId Payload) (hdr : cfg.drops = false) :
-    ∀ e ∈ persists (Node.advance cfg s).2, e.1 ∈ (Node.advance cfg s).1.disk.ids ∧
-      (Node.advance cfg s).1.disk.full e.1 = e.2 := by
-  intro e he
+/-- **What a pass persists is on the disk after it**, at or above the floor
+when the node drops. -/
+theorem advance_persist (s : State Validator BlockId Payload) :
+    ∀ e ∈ persists (Node.advance cfg s).2,
+      (cfg.drops = false ∨ (Node.advance cfg s).1.floor ≤ e.2.round) →
+      e.1 ∈ (Node.advance cfg s).1.disk.ids ∧ (Node.advance cfg s).1.disk.full e.1 = e.2 := by
+  intro e he hg
   have hp := progress_persist (cfg := cfg) (s.disk.topRound + 2) s
-  rw [advance_disk]
-  simp only [Node.advance, Node.pass] at he ⊢
-  generalize Node.progress cfg (s.disk.topRound + 2) s = r at hp he ⊢
+  have hk := (diskRises_advance_rest (cfg := cfg) s).2
+  simp only [Node.advance, Node.pass] at he
   rw [persists_append, persists_append, decideStep_persist, persists_arm, List.append_nil,
     List.append_nil] at he
   obtain ⟨hin, hval⟩ := hp e he
-  have hd := decideStep_disk (cfg := cfg) r.1 hdr
-  generalize Node.decideStep cfg r.1 = d at hd ⊢
-  rw [← hd.ids] at hin
-  rw [← hd.full] at hval
-  obtain ⟨L, -, hL⟩ := (flushSyncs_eq (cfg := cfg) (d.1.syncs.length + 1) d.1).1
-  have hgf := Grows.foldl (cfg := cfg) d.1.floor L d.1.disk
-  rw [hL]
-  exact ⟨hgf.1 hin, by rw [hgf.full hin]; exact hval⟩
+  exact hk.keeps hin hval hg
 
 omit [Fintype Validator] in
-/-- **What the passes persist is on the disk after them**, when the node does
-not drop. -/
-theorem quiesce_persist (hd : cfg.drops = false) : ∀ (n : ℕ) (s : State Validator BlockId Payload),
-    ∀ e ∈ persists (quiesce cfg n s).2, e.1 ∈ (quiesce cfg n s).1.disk.ids ∧
-      (quiesce cfg n s).1.disk.full e.1 = e.2
+/-- **What the passes persist is on the disk after them**, at or above the
+floor when the node drops. -/
+theorem quiesce_persist : ∀ (n : ℕ) (s : State Validator BlockId Payload),
+    ∀ e ∈ persists (quiesce cfg n s).2,
+      (cfg.drops = false ∨ (quiesce cfg n s).1.floor ≤ e.2.round) →
+      e.1 ∈ (quiesce cfg n s).1.disk.ids ∧ (quiesce cfg n s).1.disk.full e.1 = e.2
   | 0, s => by intro e he; simp [Node.quiesce, persists] at he
   | n + 1, s => by
     rcases quiesce_succ_cases (cfg := cfg) n s with he | he <;> rw [he]
-    · exact advance_persist s hd
-    · have hga := Grows.quiesce (cfg := cfg) n (Node.advance cfg s).1 hd
-      intro e he
+    · exact advance_persist s
+    · have hga := diskRises_quiesce (cfg := cfg) n (Node.advance cfg s).1
+      intro e he hg
       rw [persists_append] at he
       rcases List.mem_append.mp he with he | he
-      · obtain ⟨hin, hval⟩ := advance_persist s hd e he
-        exact ⟨hga.1 hin, by rw [hga.full hin]; exact hval⟩
-      · exact quiesce_persist hd n _ e he
+      · obtain ⟨hin, hval⟩ := advance_persist s e he (hg.imp_right hga.1.1.trans)
+        exact hga.2.keeps hin hval hg
+      · exact quiesce_persist n _ e he hg
 
 omit [Fintype Validator] in
-/-- **What a settle persists is on the disk after it**, when the node does not
-drop. -/
-theorem settle_persist (s : State Validator BlockId Payload) (hd : cfg.drops = false) :
-    ∀ e ∈ persists (Node.settle cfg s).2, e.1 ∈ (Node.settle cfg s).1.disk.ids ∧
-      (Node.settle cfg s).1.disk.full e.1 = e.2 :=
-  quiesce_persist hd _ s
+/-- **What a settle persists is on the disk after it**, at or above the
+floor when the node drops. -/
+theorem settle_persist (s : State Validator BlockId Payload) :
+    ∀ e ∈ persists (Node.settle cfg s).2,
+      (cfg.drops = false ∨ (Node.settle cfg s).1.floor ≤ e.2.round) →
+      e.1 ∈ (Node.settle cfg s).1.disk.ids ∧ (Node.settle cfg s).1.disk.full e.1 = e.2 :=
+  quiesce_persist _ s
 
 omit [Fintype Validator] in
 /-- What a settle persists, after outputs persisting at most one block on
-disk, is on the disk after it. -/
+disk, is on the disk after it, at or above the floor when the node drops. -/
 theorem settle_persist_of {s₀ : State Validator BlockId Payload}
-    {pre : List (Output Validator BlockId Payload)} (hd : cfg.drops = false)
+    {pre : List (Output Validator BlockId Payload)}
     (hpre : persists pre = [] ∨ ∃ e₀, persists pre = [e₀] ∧ e₀.1 ∈ s₀.disk.ids ∧
       s₀.disk.full e₀.1 = e₀.2) :
-    ∀ e ∈ persists (pre ++ (Node.settle cfg s₀).2), e.1 ∈ (Node.settle cfg s₀).1.disk.ids ∧
-      (Node.settle cfg s₀).1.disk.full e.1 = e.2 := by
-  intro e he
+    ∀ e ∈ persists (pre ++ (Node.settle cfg s₀).2),
+      (cfg.drops = false ∨ (Node.settle cfg s₀).1.floor ≤ e.2.round) →
+      e.1 ∈ (Node.settle cfg s₀).1.disk.ids ∧ (Node.settle cfg s₀).1.disk.full e.1 = e.2 := by
+  intro e he hg
   rw [persists_append] at he
   rcases List.mem_append.mp he with he | he
   · rcases hpre with hpre | ⟨e₀, hpre, hin, hval⟩
     · rw [hpre] at he; exact absurd he (List.not_mem_nil)
     · rw [hpre, List.mem_singleton] at he
       subst he
-      have hg := Grows.settle (cfg := cfg) s₀ hd
-      exact ⟨hg.1 hin, by rw [hg.full hin]; exact hval⟩
-  · exact settle_persist s₀ hd e he
+      exact (diskRises_settle (cfg := cfg) s₀).2.keeps hin hval hg
+  · exact settle_persist s₀ e he hg
 
-/-- **What a step persists is on the disk after it**, when the node does not
-drop. -/
-theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
-    (hd : cfg.drops = false) :
-    ∀ e ∈ persists (Node.step cfg s inp).2, e.1 ∈ (Node.step cfg s inp).1.disk.ids ∧
-      (Node.step cfg s inp).1.disk.full e.1 = e.2 := by
+/-- **What a step persists is on the disk after it**, at or above the floor
+when the node drops. -/
+theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload} :
+    ∀ e ∈ persists (Node.step cfg s inp).2,
+      (cfg.drops = false ∨ (Node.step cfg s inp).1.floor ≤ e.2.round) →
+      e.1 ∈ (Node.step cfg s inp).1.disk.ids ∧ (Node.step cfg s inp).1.disk.full e.1 = e.2 := by
   cases inp with
   | start =>
     by_cases h₁ : s.top = none ∧ cfg.Admissible
@@ -741,7 +736,7 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
               (Node.settle cfg s₀).2) := by
           simp only [Node.step, dif_pos h₂, if_pos h₁]; rfl
         rw [he]
-        exact settle_persist_of hd (Or.inr ⟨(cfg.idOf cfg.genesis, cfg.genesis), by
+        exact settle_persist_of (Or.inr ⟨(cfg.idOf cfg.genesis, cfg.genesis), by
           simp [built, persists], (by simp [s₀, keep, Store.insert_ids]), by
           simp [s₀, keep, Store.full_insert]⟩)
       · simp only [Node.step, dif_neg h₂, if_pos h₁]; simp [persists]
@@ -751,22 +746,22 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
       h | ⟨s₁, pre, -, hpre, h⟩
     · rw [h]; simp [persists]
     · rw [h]
-      refine settle_persist_of hd (Or.inl (List.filterMap_eq_nil_iff.mpr fun o ho => ?_))
+      refine settle_persist_of (Or.inl (List.filterMap_eq_nil_iff.mpr fun o ho => ?_))
       obtain ⟨_, _, _, _, rfl⟩ := hpre o ho; rfl
   | stream u L =>
     rcases step_receipt (cfg := cfg) (s := s) (Or.inr ⟨u, L, rfl⟩) with h | ⟨s₁, pre, -, hpre, h⟩
     · rw [h]; simp [persists]
     · rw [h]
-      refine settle_persist_of hd (Or.inl (List.filterMap_eq_nil_iff.mpr fun o ho => ?_))
+      refine settle_persist_of (Or.inl (List.filterMap_eq_nil_iff.mpr fun o ho => ?_))
       obtain ⟨_, _, _, _, rfl⟩ := hpre o ho; rfl
   | timer r =>
     intro e he
     rw [step_timer_fst]
     rcases step_timer_snd (cfg := cfg) s r with h | h <;> rw [h] at he
     · rw [persists_append, persists_askBehind, List.append_nil] at he
-      exact settle_persist { s with fired := fire s r, recovering := false } hd e he
+      exact settle_persist { s with fired := fire s r, recovering := false } e he
     · rw [persists_append, persists_resend, List.append_nil] at he
-      exact settle_persist { s with fired := fire s r, recovering := false } hd e he
+      exact settle_persist { s with fired := fire s r, recovering := false } e he
   | syncRequest peer t fr ids =>
     intro e he
     simp only [Node.step] at he
@@ -781,12 +776,29 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
       (Node.settle cfg { s with recovering := true }).2) at he
     rw [persists_append, persists_append, persists_resend, persists_rearm, List.nil_append,
       List.nil_append] at he
-    exact settle_persist { s with recovering := true } hd e he
+    exact settle_persist { s with recovering := true } e he
   | askProof peer k =>
     intro e he
     simp only [Node.step] at he
     split at he <;> (try split at he) <;> simp [persists] at he
-  | proof u k L => rw [step_proof_of_false hd]; intro e he; simp [persists] at he
+  | proof u k L =>
+    intro e he
+    simp only [Node.step] at he ⊢
+    split
+    · rename_i hc
+      rw [if_pos hc] at he
+      split
+      · rename_i d hv
+        simp only [hv] at he
+        rw [persists_append, show ∀ l : List (Output Validator BlockId Payload),
+            persists (Output.commit k d :: l) = persists l from fun _ => rfl,
+          show persists [Output.askProof (Validator := Validator)
+            (BlockId := BlockId) (Payload := Payload) _] = [] from rfl, List.append_nil] at he
+        exact settle_persist _ e he
+      · rename_i hv
+        simp only [hv] at he; simp [persists] at he
+    · rename_i hc
+      rw [if_neg hc] at he; simp [persists] at he
 
 variable (cfg) in
 /-- No sync's block is ready. -/

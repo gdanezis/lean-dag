@@ -261,7 +261,7 @@ theorem own_held (hd : cfg.drops = false) {p : ℕ} {inp : Input Validator Block
     {E : ℕ} (hpE : p < E) :
     e.1 ∈ (stateBefore cfg tr E v).disk.ids := by
   rw [outputsAt_eq hp] at he
-  have hin := (step_persist (cfg := cfg.at v) hd e he).1
+  have hin := (step_persist (cfg := cfg.at v) e he (Or.inl hd)).1
   have hs : stateBefore cfg tr (p + 1) v =
       (Node.step (cfg.at v) (stateBefore cfg tr p v) inp).1 := by
     rw [stateBefore_succ hp, if_pos rfl]
@@ -361,7 +361,7 @@ theorem built_mem (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ
   have hin : e.1 ∈ (stateBefore cfg tr (p + 1) v).disk.ids := by
     rw [outputsAt_eq hp] at he
     rw [stateBefore_succ hp, if_pos rfl]
-    exact (step_persist (cfg := cfg.at v) hdr e he).1
+    exact (step_persist (cfg := cfg.at v) e he (Or.inl hdr)).1
   exact ((cut_before hσ hadm hf htime hinj hdr (p + 1) v hv).1 e.1 hin).1
 
 end Record

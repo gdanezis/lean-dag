@@ -33,9 +33,7 @@ theorem own_stored (hd : cfg.drops = false) {w : Validator} {E : ℕ}
     x.1 ∈ (stateBefore cfg tr E w).disk.ids ∧ (stateBefore cfg tr E w).disk.full x.1 = x.2 := by
   obtain ⟨j, hjE, hjw, hxj⟩ := mem_persists_before (cfg := cfg) w E hx
   obtain ⟨inp, hj⟩ := event_of_map hjw
-  obtain ⟨h₁, h₂⟩ := persist_stored hd hj hxj
-  have hg := grows_before (cfg := cfg) (tr := tr) w hd (show j + 1 ≤ E by omega)
-  exact ⟨hg.1 h₁, by rw [hg.full h₁]; exact h₂⟩
+  exact persist_stored hj hxj hjE (Or.inl hd)
 
 /-- **What a node made by an event it made by the end.** -/
 theorem persists_final {w : Validator} {E : ℕ} {x : BlockId × Block Validator BlockId Payload}

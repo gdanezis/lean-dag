@@ -7,7 +7,10 @@ Deciding keeps the disk's blocks, as accepted, but those it drops
 (`decideStep_own_mem`). At a node that does not drop, the disk only gains
 blocks across a step (`Grows`, `Helpers/Local.lean`): building and taking
 blocks in insert, and deciding keeps the disk's blocks, those below the new
-floor perhaps without their references (`decideStep_disk`).
+floor perhaps without their references (`decideStep_disk`). At any node a
+step raises the floor and keeps the disk's blocks from the new floor up,
+and at a node that drops, its floor lies at or above the round of its next
+undecided slot once that slot changes (`DiskRises`, `diskRises_step`).
 -/
 
 namespace LeanDag
@@ -170,6 +173,253 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
   | restart => exact Grows.settle_of { s with recovering := true } rfl hd
   | askProof peer k => exact Grows.refl _
   | proof u k L => rw [step_proof_of_false hd]; exact Grows.refl _
+
+/-! ## The floor rises, and the disk keeps its blocks from the floor up -/
+
+variable (cfg) in
+/-- **The floor rises**, and, when the node drops, lies at or above the
+round of the next undecided slot once that slot changes. -/
+def FloorRises (s s' : State Validator BlockId Payload) : Prop :=
+  s.floor ≤ s'.floor ∧ (cfg.drops = true → s'.lo = s.lo ∨ cfg.slots.slotRound s'.lo ≤ s'.floor)
+
+/-- **`st'` keeps the blocks of `st` as accepted**, those from round `F` up,
+or all of them when the node does not drop (`d = false`). -/
+def KeepsFrom (d : Bool) (F : ℕ) (st st' : Store Validator BlockId Payload) : Prop :=
+  ∀ j ∈ st.ids, (d = false ∨ F ≤ (st.blk j).round) → j ∈ st'.ids ∧ st'.full j = st.full j
+
+variable (cfg) in
+/-- **The floor rises and the disk keeps its blocks from the new floor
+up.** -/
+def DiskRises (s s' : State Validator BlockId Payload) : Prop :=
+  FloorRises cfg s s' ∧ KeepsFrom cfg.drops s'.floor s.disk s'.disk
+
+omit [Fintype Validator] [DecidableEq Validator] in
+theorem KeepsFrom.of_grows {d : Bool} {F : ℕ} {st st' : Store Validator BlockId Payload}
+    (h : Grows st st') : KeepsFrom d F st st' :=
+  fun j hj _ => ⟨h.1 hj, h.2.2 j hj⟩
+
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- A block a store keeps from `F` up is kept as it was. -/
+theorem KeepsFrom.keeps {d : Bool} {F : ℕ} {st st' : Store Validator BlockId Payload}
+    (h : KeepsFrom d F st st') {e : BlockId × Block Validator BlockId Payload}
+    (hin : e.1 ∈ st.ids) (hval : st.full e.1 = e.2) (hg : d = false ∨ F ≤ e.2.round) :
+    e.1 ∈ st'.ids ∧ st'.full e.1 = e.2 := by
+  have hr : (st.blk e.1).round = e.2.round := by rw [← (st.full_fields _).1, hval]
+  obtain ⟨h₁, h₂⟩ := h e.1 hin (by rwa [hr])
+  exact ⟨h₁, h₂.trans hval⟩
+
+omit [Fintype Validator] [DecidableEq Validator] in
+theorem KeepsFrom.mono {d : Bool} {F F' : ℕ} {st st' : Store Validator BlockId Payload}
+    (hF : F ≤ F') (h : KeepsFrom d F st st') : KeepsFrom d F' st st' :=
+  fun j hj hg => h j hj (hg.imp_right hF.trans)
+
+omit [Fintype Validator] [DecidableEq Validator] in
+theorem KeepsFrom.trans {d : Bool} {F : ℕ} {a b c : Store Validator BlockId Payload}
+    (h₁ : KeepsFrom d F a b) (h₂ : KeepsFrom d F b c) : KeepsFrom d F a c := by
+  intro j hj hg
+  obtain ⟨hb, hfb⟩ := h₁ j hj hg
+  have hr : (b.blk j).round = (a.blk j).round := by
+    rw [← (b.full_fields j).1, hfb, (a.full_fields j).1]
+  obtain ⟨hc, hfc⟩ := h₂ j hb (by rwa [hr])
+  exact ⟨hc, hfc.trans hfb⟩
+
+omit [Fintype Validator] in
+theorem FloorRises.refl (s : State Validator BlockId Payload) : FloorRises cfg s s :=
+  ⟨le_rfl, fun _ => Or.inl rfl⟩
+
+omit [Fintype Validator] in
+theorem FloorRises.trans {a b c : State Validator BlockId Payload} (h₁ : FloorRises cfg a b)
+    (h₂ : FloorRises cfg b c) : FloorRises cfg a c := by
+  refine ⟨h₁.1.trans h₂.1, fun hd => ?_⟩
+  rcases h₂.2 hd with h | h
+  · rcases h₁.2 hd with h' | h'
+    · exact Or.inl (h.trans h')
+    · exact Or.inr (by rw [h]; exact h'.trans h₂.1)
+  · exact Or.inr h
+
+omit [Fintype Validator] in
+theorem DiskRises.refl (s : State Validator BlockId Payload) : DiskRises cfg s s :=
+  ⟨FloorRises.refl s, fun _ hj _ => ⟨hj, rfl⟩⟩
+
+omit [Fintype Validator] in
+theorem DiskRises.trans {a b c : State Validator BlockId Payload} (h₁ : DiskRises cfg a b)
+    (h₂ : DiskRises cfg b c) : DiskRises cfg a c :=
+  ⟨h₁.1.trans h₂.1, (h₁.2.mono h₂.1.1).trans h₂.2⟩
+
+omit [Fintype Validator] in
+/-- A part of a step that grows the disk and keeps the floor and the next
+undecided slot. -/
+theorem DiskRises.of_grows {s s' : State Validator BlockId Payload} (hg : Grows s.disk s'.disk)
+    (hf : s.floor ≤ s'.floor) (hlo : s'.lo = s.lo) : DiskRises cfg s s' :=
+  ⟨⟨hf, fun _ => Or.inl hlo⟩, KeepsFrom.of_grows hg⟩
+
+omit [Fintype Validator] in
+/-- **Letting go keeps the disk's blocks from the floor up.** -/
+theorem KeepsFrom.of_drop (s : State Validator BlockId Payload) :
+    KeepsFrom cfg.drops s.floor s.disk (Node.drop cfg s).disk := by
+  intro j hj hg
+  cases hd : cfg.drops with
+  | false => rw [drop_of_false _ hd]; exact ⟨hj, rfl⟩
+  | true =>
+    rw [hd] at hg
+    have hr : s.floor ≤ (s.disk.blk j).round := hg.resolve_left (by simp)
+    have hn : j ∉ dropSet cfg s := fun hm => by
+      unfold dropSet at hm
+      have := (List.mem_filter.mp hm).2
+      simp only [decide_eq_true_eq] at this
+      omega
+    have hm : j ∈ (Node.drop cfg s).disk.ids := by
+      unfold Node.drop; rw [if_pos hd]
+      exact (s.disk.eraseAll_spec (dropSet cfg s)).2.1 j hj hn
+    exact ⟨hm, (drop_disk (cfg := cfg) (s := s)).full j hm⟩
+
+omit [Fintype Validator] in
+theorem diskRises_tryBuild {s s' : State Validator BlockId Payload}
+    {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
+    DiskRises cfg s s' := by
+  obtain ⟨r, id, b, hnew, hrefs, hpred, -, -, -, -, -, hst, -, -, hlo, -⟩ := tryBuild_some h
+  exact DiskRises.of_grows ((Grows.insert s.disk).trans (Grows.of_restrips hst))
+    (by rw [tryBuild_floor h]; exact le_max_left _ _) hlo
+
+omit [Fintype Validator] in
+theorem diskRises_progress : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
+    DiskRises cfg s (Node.progress cfg fuel s).1
+  | 0, s => DiskRises.refl s
+  | fuel + 1, s => by
+    unfold Node.progress
+    split
+    · rename_i s₁ out h
+      exact (diskRises_tryBuild h).trans (diskRises_progress fuel s₁)
+    · exact DiskRises.refl s
+
+omit [Fintype Validator] in
+/-- **Deciding raises the floor to the round of the next undecided slot**,
+when the node drops, and keeps the disk from the floor up. -/
+theorem diskRises_decideStep (s : State Validator BlockId Payload) :
+    DiskRises cfg s (Node.decideStep cfg s).1 := by
+  unfold Node.decideStep
+  dsimp only
+  split
+  · have h : ∀ t : State Validator BlockId Payload, t.disk = s.disk → t.floor = s.floor →
+        DiskRises cfg s (drop cfg (release cfg t)) := by
+      intro t hd hf
+      have hrel := release_disk (cfg := cfg) t
+      refine ⟨⟨?_, fun hdr => Or.inr ?_⟩, ?_⟩
+      · rw [drop_floor, release_floor, ← hf]; exact le_max_left _ _
+      · rw [drop_lo, drop_floor, release_lo, release_floor]
+        unfold floorOf; rw [if_pos hdr]; exact le_max_right _ _
+      · rw [drop_floor, ← hd]
+        exact (KeepsFrom.of_grows (Grows.of_restrips hrel)).trans (KeepsFrom.of_drop _)
+    exact h _ rfl rfl
+  · exact DiskRises.refl s
+
+omit [Fintype Validator] in
+theorem diskRises_flushSyncs (fuel : ℕ) (s : State Validator BlockId Payload) :
+    DiskRises cfg s (Node.flushSyncs cfg fuel s) := by
+  obtain ⟨⟨L, -, hL⟩, hf, -, -, -, -, hlo, -⟩ := flushSyncs_eq (cfg := cfg) fuel s
+  exact DiskRises.of_grows (by rw [hL]; exact Grows.foldl _ _ _) hf.ge hlo
+
+omit [Fintype Validator] in
+/-- After building, the rest of a pass raises the floor and keeps the disk
+from the new floor up. -/
+theorem diskRises_advance_rest (s : State Validator BlockId Payload) :
+    DiskRises cfg (Node.progress cfg (s.disk.topRound + 2) s).1 (Node.advance cfg s).1 := by
+  set p := (Node.progress cfg (s.disk.topRound + 2) s).1
+  have h₂ := diskRises_decideStep (cfg := cfg) p
+  have h₃ := diskRises_flushSyncs (cfg := cfg)
+    ((Node.decideStep cfg p).1.syncs.length + 1) (Node.decideStep cfg p).1
+  have h₄ : DiskRises cfg (Node.pass cfg s).1 (Node.advance cfg s).1 :=
+    DiskRises.of_grows (by rw [advance_disk]; exact Grows.refl _) (by rw [advance_floor])
+      (by simp [Node.advance])
+  exact h₂.trans (h₃.trans h₄)
+
+omit [Fintype Validator] in
+theorem diskRises_advance (s : State Validator BlockId Payload) :
+    DiskRises cfg s (Node.advance cfg s).1 :=
+  (diskRises_progress _ s).trans (diskRises_advance_rest s)
+
+omit [Fintype Validator] in
+theorem diskRises_quiesce (n : ℕ) (s : State Validator BlockId Payload) :
+    DiskRises cfg s (Node.quiesce cfg n s).1 :=
+  (quiesce_rel (P := fun _ => True) (R := fun a _ b => DiskRises cfg a b) DiskRises.refl
+    (fun _ _ _ _ _ h₁ h₂ => h₁.trans h₂) (fun s _ => ⟨diskRises_advance s, trivial⟩) n s
+    trivial).1
+
+omit [Fintype Validator] in
+theorem diskRises_settle (s : State Validator BlockId Payload) :
+    DiskRises cfg s (Node.settle cfg s).1 :=
+  diskRises_quiesce _ s
+
+omit [Fintype Validator] in
+/-- **Deciding on a proof raises the floor to the round of the next
+undecided slot**, when the node drops, and keeps the disk. -/
+theorem diskRises_decideOn (s : State Validator BlockId Payload) (k : ℕ) (d : Option BlockId)
+    (L : List (BlockId × Block Validator BlockId Payload)) :
+    DiskRises cfg s (Node.decideOn cfg s k d L) := by
+  refine ⟨⟨?_, fun hdr => Or.inr ?_⟩, KeepsFrom.of_grows (Grows.decideOn s k d L)⟩
+  · unfold Node.decideOn
+    rw [(absorb_rest (cfg := cfg) _ _).1, release_floor]; exact le_max_left _ _
+  · unfold Node.decideOn
+    rw [(absorb_rest (cfg := cfg) _ _).2.2.2.2.2.1, (absorb_rest (cfg := cfg) _ _).1, release_lo,
+      release_floor]
+    unfold floorOf; rw [if_pos hdr]; exact le_max_right _ _
+
+/-- **A step raises the floor and keeps the disk from the new floor up.** -/
+theorem diskRises_step (s : State Validator BlockId Payload) (i : Input Validator BlockId Payload) :
+    DiskRises cfg s (Node.step cfg s i).1 := by
+  have hset : ∀ x : State Validator BlockId Payload, DiskRises cfg s x →
+      DiskRises cfg s (Node.settle cfg x).1 := fun x hx => hx.trans (diskRises_settle x)
+  have hab : ∀ L, DiskRises cfg s (Node.absorb cfg s L) := fun L =>
+    DiskRises.of_grows (Grows.absorb s L) (absorb_rest (cfg := cfg) s L).1.ge
+      (absorb_rest (cfg := cfg) s L).2.2.2.2.2.1
+  cases i with
+  | start =>
+    simp only [Node.step]
+    split
+    · split
+      · rename_i h₂
+        dsimp only
+        exact hset _ (DiskRises.of_grows (Grows.insert s.disk (id := cfg.idOf cfg.genesis)
+          (b := cfg.genesis) (hnew := h₂.1)
+          (hrefs := fun _ hj => absurd hj (Finset.notMem_empty _))
+          (hpred := fun j hj => absurd hj (Finset.notMem_empty j))) le_rfl rfl)
+      · exact DiskRises.refl _
+    · exact DiskRises.refl _
+  | deliver u id b =>
+    simp only [Node.step]
+    split
+    · split
+      · exact hset _ (hab [(id, b)])
+      · split
+        · exact hset _ (DiskRises.of_grows (Grows.refl _) le_rfl rfl)
+        · exact DiskRises.refl _
+    · exact DiskRises.refl _
+  | stream u L =>
+    have htk : ∀ t L', DiskRises cfg s (Node.takeIn cfg s t L') := by
+      intro t L'
+      unfold Node.takeIn
+      split
+      · exact hab _
+      · exact DiskRises.refl _
+    simp only [Node.step]
+    split
+    · exact DiskRises.refl _
+    · split
+      · exact hset _ (htk _ _)
+      · exact hset _ ((htk _ _).trans (DiskRises.of_grows (Grows.refl _) le_rfl rfl))
+  | timer r => rw [step_timer_fst]; exact hset _ (DiskRises.of_grows (Grows.refl _) le_rfl rfl)
+  | syncRequest peer t fr ids => exact DiskRises.refl _
+  | ask peer r => exact DiskRises.refl _
+  | restart =>
+    exact hset { s with recovering := true } (DiskRises.of_grows (Grows.refl _) le_rfl rfl)
+  | askProof peer k => exact DiskRises.refl _
+  | proof u k L =>
+    simp only [Node.step]
+    split
+    · split
+      · exact hset _ (diskRises_decideOn s k _ L)
+      · exact DiskRises.refl _
+    · exact DiskRises.refl _
 
 /-! ## The blocks as accepted stay closed under references -/
 

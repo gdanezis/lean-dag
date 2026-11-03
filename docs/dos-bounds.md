@@ -469,7 +469,18 @@ store closed, and needs none of this.
         within that window; (e) with (i), the sum of the reliable nodes'
         next undecided slots rises within each such window or catch-up
         delay, so every reliable node is past slot `k` within an explicit
-        bound. Item (c) is most of the work.
+        bound. Item (c) is most of the work. Items (a) and (b) are done: a
+        step raises the floor and keeps the disk's blocks from the new
+        floor up, and, at a node that drops, leaves the floor at or above
+        the round of the next undecided slot once that slot changes
+        (`DiskRises`, `diskRises_step`, along a trace
+        `Converge.diskRises_before`); so the floor is that round once the
+        node decided a slot (`floor_eq_before`), a node that decided as far
+        as another has a floor at or above the other's (`floor_le_floor`),
+        what a node makes stays on its disk while at or above its floor
+        (`Converge.persist_stored`), and a reliable node syncs a reliable
+        author's block when its floor is at or above the author's
+        (`synced_from_author`).
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase

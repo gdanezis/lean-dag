@@ -134,6 +134,21 @@ theorem same_before {a : ℕ} {v : Validator} (h : ∀ inp, tr[a]? ≠ some (v, 
     rintro rfl
     exact h inp ha
 
+/-- **Along a trace the floor rises and the disk keeps its blocks from the
+floor up.** -/
+theorem diskRises_before (v : Validator) {i j : ℕ} (hij : i ≤ j) :
+    DiskRises (cfg.at v) (stateBefore cfg tr i v) (stateBefore cfg tr j v) := by
+  induction j, hij using Nat.le_induction with
+  | base => exact DiskRises.refl _
+  | succ j _ ih =>
+    refine ih.trans ?_
+    by_cases he : ∃ inp, tr[j]? = some (v, inp)
+    · obtain ⟨inp, hj⟩ := he
+      rw [step_before hj]
+      exact diskRises_step _ inp
+    · rw [same_before fun inp h => he ⟨inp, h⟩]
+      exact DiskRises.refl _
+
 /-- **No sync's block is ever ready.** -/
 theorem noReady_before (v : Validator) : ∀ i, NoReady (cfg.at v) (stateBefore cfg tr i v)
   | 0 => fun e he => by simp [stateBefore, inputsBefore, run, State.init] at he
@@ -202,29 +217,19 @@ theorem fits_stored (hd : cfg.drops = false) {u : Validator} (hu : u ∈ H) {i :
     exact ⟨rfl, rfl, rfl⟩
 
 omit hinj in
-/-- **What an event makes is on its node's disk after it.** -/
-theorem persist_stored (hd : cfg.drops = false) {i : ℕ} {u : Validator}
-    {inp : Input Validator BlockId Payload}
+/-- **What an event makes is on its node's disk after it**, at or above
+the node's floor when it drops. -/
+theorem persist_stored {i j : ℕ} {u : Validator} {inp : Input Validator BlockId Payload}
     (hi : tr[i]? = some (u, inp)) {e : BlockId × Block Validator BlockId Payload}
-    (he : e ∈ persists (outputsAt cfg tr i)) :
-    e.1 ∈ (stateBefore cfg tr (i + 1) u).disk.ids ∧
-      (stateBefore cfg tr (i + 1) u).disk.full e.1 = e.2 := by
+    (he : e ∈ persists (outputsAt cfg tr i)) (hij : i < j)
+    (hg : cfg.drops = false ∨ (stateBefore cfg tr j u).floor ≤ e.2.round) :
+    e.1 ∈ (stateBefore cfg tr j u).disk.ids ∧ (stateBefore cfg tr j u).disk.full e.1 = e.2 := by
+  have hd := diskRises_before (cfg := cfg) (tr := tr) u (show i + 1 ≤ j by omega)
   rw [outputsAt_eq hi] at he
-  rw [step_before hi]
-  exact step_persist (cfg := cfg.at u) hd e he
-
-omit hinj in
-/-- **What an event broadcasts is on its node's disk after it.** -/
-theorem broadcast_stored (hd : cfg.drops = false) {i : ℕ} {u : Validator}
-    {inp : Input Validator BlockId Payload}
-    (hi : tr[i]? = some (u, inp)) {e : BlockId × Block Validator BlockId Payload}
-    (he : e ∈ broadcasts (outputsAt cfg tr i)) :
-    e.1 ∈ (stateBefore cfg tr (i + 1) u).disk.ids ∧
-      (stateBefore cfg tr (i + 1) u).disk.full e.1 = e.2 := by
-  obtain ⟨j, hj, inp', hj', hje⟩ := persists_of_broadcasts hi he
-  obtain ⟨h₁, h₂⟩ := persist_stored hd hj' hje
-  have hg := grows_before (cfg := cfg) (tr := tr) u hd (show j + 1 ≤ i + 1 by omega)
-  exact ⟨hg.1 h₁, by rw [hg.full h₁]; exact h₂⟩
+  have h₁ := step_persist (cfg := cfg.at u) e he (by
+    rw [← step_before hi]; exact hg.imp_right hd.1.1.trans)
+  rw [← step_before hi] at h₁
+  exact hd.2.keeps h₁.1 h₁.2 hg
 
 end Histories
 
