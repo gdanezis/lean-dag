@@ -410,7 +410,15 @@ store closed, and needs none of this.
         node's verdict (`verdictOn_reply`). Evidence is kept apart from the
         blocks it was extracted from (decided with the user), so an honest
         node never convicts an honest one with dropping on too
-        (`not_detected`, from `Inv.evidence`).
+        (`not_detected`, from `Inv.evidence`). The catch-up lemma on
+        messages (`caught_up`, `Node/Helpers/CatchUp.lean`): a reliable
+        node that asks for the proof of a slot a reliable peer has decided
+        is past that slot within `2Δ` of asking past GST. The peer keeps a
+        proof of every slot it decided (`paired_before`), and the proof
+        gives every node the peer's verdict (`verdictOn_reply`,
+        `verdictOn_at`). A node asks only for a proof at or below its next
+        undecided slot (`askProof_le_lo`). What remains is when a node
+        behind asks, then arrival-or-passed and the eventual V11.
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase

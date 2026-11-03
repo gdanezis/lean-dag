@@ -508,23 +508,24 @@ theorem ProofHolds.keep {s s' : State Validator BlockId Payload} {e : ℕ × Fin
 variable (cfg) in
 /-- **`s'` keeps what the proofs of `s` read**: the decisions and proofs of
 `s`, the blocks of those proofs as accepted, and its new proofs decide their
-slots again. -/
+slots again; and it keeps a proof of each slot it decided, if `s` does. -/
 structure KeepsProofs (s s' : State Validator BlockId Payload) : Prop where
   decided : ∀ x ∈ s.decided, x ∈ s'.decided
   sub : ∀ e ∈ s.proofs, e ∈ s'.proofs
   fresh : ∀ e ∈ s'.proofs, e ∉ s.proofs → ProofHolds cfg s' e
   disk : ∀ e ∈ s.proofs, ∀ x ∈ e.2, x ∈ s.disk.ids →
     x ∈ s'.disk.ids ∧ s'.disk.full x = s.disk.full x
+  paired : (∀ x ∈ s.decided, ∃ P, (x.1, P) ∈ s.proofs) → ∀ x ∈ s'.decided, ∃ P, (x.1, P) ∈ s'.proofs
 
 omit [Fintype Validator] in
 theorem KeepsProofs.refl (s : State Validator BlockId Payload) : KeepsProofs cfg s s :=
-  ⟨fun _ h => h, fun _ h => h, fun _ h hn => absurd h hn, fun _ _ _ _ h => ⟨h, rfl⟩⟩
+  ⟨fun _ h => h, fun _ h => h, fun _ h hn => absurd h hn, fun _ _ _ _ h => ⟨h, rfl⟩, id⟩
 
 omit [Fintype Validator] in
 theorem KeepsProofs.trans {a b c : State Validator BlockId Payload} (h₁ : KeepsProofs cfg a b)
     (h₂ : KeepsProofs cfg b c) : KeepsProofs cfg a c := by
   refine ⟨fun x hx => h₂.decided x (h₁.decided x hx), fun e he => h₂.sub e (h₁.sub e he),
-    fun e he hn => ?_, fun e he x hx hxa => ?_⟩
+    fun e he hn => ?_, fun e he x hx hxa => ?_, h₂.paired ∘ h₁.paired⟩
   · by_cases hb : e ∈ b.proofs
     · exact (h₁.fresh e hb hn).keep h₂.decided fun x hx hxb => h₂.disk e hb x hx hxb
     · exact h₂.fresh e he hb
@@ -546,7 +547,7 @@ theorem KeepsProofs.of_grows {s s' : State Validator BlockId Payload}
     (hg : Grows s.disk s'.disk) (hd : s'.decided = s.decided) (hp : s'.proofs = s.proofs) :
     KeepsProofs cfg s s' :=
   ⟨fun _ hx => hd ▸ hx, fun _ he => hp ▸ he, fun _ he hn => absurd (hp ▸ he) hn,
-    fun _ _ _ _ hx => ⟨hg.1 hx, hg.full hx⟩⟩
+    fun _ _ _ _ hx => ⟨hg.1 hx, hg.full hx⟩, fun h x hx => hp ▸ h x (hd ▸ hx)⟩
 
 omit [Fintype Validator] in
 theorem KeepsProofs.tryBuild {s s' : State Validator BlockId Payload}
@@ -619,7 +620,8 @@ omit [Fintype Validator] in
 theorem KeepsProofs.drop (s : State Validator BlockId Payload) :
     KeepsProofs cfg s (Node.drop cfg s) := by
   refine ⟨fun x hx => by rw [drop_decided]; exact hx, fun e he => by rw [drop_proofs]; exact he,
-    fun e he hn => absurd (by rw [drop_proofs] at he; exact he) hn, fun e he x hx hxs => ?_⟩
+    fun e he hn => absurd (by rw [drop_proofs] at he; exact he) hn, fun e he x hx hxs => ?_,
+    fun h x hx => by rw [drop_proofs]; rw [drop_decided] at hx; exact h x hx⟩
   unfold Node.drop
   split
   · obtain ⟨-, h₂, h₃⟩ := Store.eraseAll_spec (dropSet cfg s) s.disk
@@ -745,7 +747,13 @@ theorem KeepsProofs.decideStep (hσ : cfg.σ = boundedSel) {s : State Validator 
   · rename_i hc
     refine (KeepsProofs.trans ?_ (KeepsProofs.release _)).trans (KeepsProofs.drop _)
     refine ⟨fun x hx => List.mem_append_right _ hx, fun e he => List.mem_append_right _ he,
-      fun e he hn => ?_, fun _ _ x _ hx => ⟨hx, rfl⟩⟩
+      fun e he hn => ?_, fun _ _ x _ hx => ⟨hx, rfl⟩, fun h x hx => ?_⟩
+    swap
+    · rcases List.mem_append.mp hx with hx | hx
+      · exact ⟨_, List.mem_append_left _ (List.mem_reverse.mpr
+          (List.mem_map_of_mem (f := fun e => (e.1, _)) (List.mem_reverse.mp hx)))⟩
+      · obtain ⟨P, hP⟩ := h x hx
+        exact ⟨P, List.mem_append_right _ hP⟩
     rcases List.mem_append.mp he with he | he
     · obtain ⟨x, hx, rfl⟩ := List.mem_map.mp (List.mem_reverse.mp he)
       exact proofHolds_decide hσ hab hc.2.1 hx rfl rfl
@@ -786,6 +794,35 @@ theorem KeepsProofs.settle (hσ : cfg.σ = boundedSel) {s : State Validator Bloc
   KeepsProofs.quiesce hσ _ hab
 
 omit [Fintype Validator] in
+/-- **A proof's verdict is the decision of the store it builds**, scanning
+to the last slot of its top round. -/
+theorem decisionAt_of_verdictOn (hσ : cfg.σ = boundedSel) {k : ℕ}
+    {L : List (BlockId × Block Validator BlockId Payload)} {d : Option BlockId}
+    (hv : verdictOn cfg k L = some d) :
+    decisionAt (S := cfg.slots) cfg.p boundedSel (proofStore cfg k L).toRecord
+      (proofStore cfg k L).view (max k (decidable cfg (proofStore cfg k L).topRound - 1)) k =
+      some d := by
+  set st := proofStore cfg k L
+  set N := max k (decidable cfg st.topRound - 1)
+  have hv' : ((Scheme.tryDecide (S := cfg.slots) cfg.p boundedSel st.toRecord st.view k
+      N).head?).map Prod.snd = some d := by rw [← hσ]; exact hv
+  obtain ⟨e', he', hed⟩ := Option.map_eq_some_iff.mp hv'
+  have hmem := List.mem_of_mem_head? he'
+  have he1 : e'.1 = k := by
+    have hmap := tryDecide_fst (S := cfg.slots) (p := cfg.p) (σ := boundedSel) (U := st.toRecord)
+      (V := st.view) (N := N) ((le_max_left k _).trans (Nat.le_succ _))
+    obtain ⟨x, l, hxl⟩ := List.exists_cons_of_ne_nil (List.ne_nil_of_mem hmem)
+    rw [hxl, List.head?_cons, Option.some.injEq] at he'
+    subst he'
+    have := congrArg List.head? hmap
+    rw [hxl] at this
+    simp only [List.map_cons, List.head?_cons, List.length_cons, List.range'_succ,
+      Option.some.injEq] at this
+    exact this
+  exact (decisionAt_of_mem_tryDecide (S := cfg.slots)
+    ((Prod.ext he1.symm hed.symm : (k, d) = e') ▸ hmem)).2
+
+omit [Fintype Validator] in
 /-- **Deciding on a proof keeps the proofs**, the proof it adds deciding its
 slot again, at a node that drops, with an injective hash and its disk under
 its hash. -/
@@ -806,30 +843,20 @@ theorem KeepsProofs.decideOn (hσ : cfg.σ = boundedSel) (hdr : cfg.drops = true
     rw [e]; exact (KeepsProofs.release s₁).trans (KeepsProofs.absorb _ _)
   refine ⟨fun x hx => h₁.decided x (List.mem_cons_of_mem _ hx),
     fun e he => h₁.sub e (List.mem_cons_of_mem _ he), fun e he hn => ?_,
-    fun e he x hx hxs => h₁.disk e (List.mem_cons_of_mem _ he) x hx hxs⟩
+    fun e he x hx hxs => h₁.disk e (List.mem_cons_of_mem _ he) x hx hxs,
+    fun h => h₁.paired fun x hx => ?_⟩
+  swap
+  · rcases List.mem_cons.mp hx with rfl | hx
+    · exact ⟨_, List.mem_cons_self⟩
+    · obtain ⟨P, hP⟩ := h x hx
+      exact ⟨P, List.mem_cons_of_mem _ hP⟩
   by_cases hs : e ∈ s₁.proofs
   swap
   · exact h₁.fresh e he hs
   obtain rfl : e = (k, st.ids) := (List.mem_cons.mp hs).resolve_right hn
-  -- the decision, from the head of the loop on the proof's store
+  -- the decision of the proof's store
   set N := max k (decidable cfg st.topRound - 1) with hN
-  have hv' : ((Scheme.tryDecide (S := cfg.slots) cfg.p boundedSel st.toRecord st.view k
-      N).head?).map Prod.snd = some d := by rw [← hσ]; exact hv
-  obtain ⟨e', he', hed⟩ := Option.map_eq_some_iff.mp hv'
-  have hmem := List.mem_of_mem_head? he'
-  have he1 : e'.1 = k := by
-    have hmap := tryDecide_fst (S := cfg.slots) (p := cfg.p) (σ := boundedSel) (U := st.toRecord)
-      (V := st.view) (N := N) ((le_max_left k _).trans (Nat.le_succ _))
-    obtain ⟨x, l, hxl⟩ := List.exists_cons_of_ne_nil (List.ne_nil_of_mem hmem)
-    rw [hxl, List.head?_cons, Option.some.injEq] at he'
-    subst he'
-    have := congrArg List.head? hmap
-    rw [hxl] at this
-    simp only [List.map_cons, List.head?_cons, List.length_cons, List.range'_succ,
-      Option.some.injEq] at this
-    exact this
-  obtain ⟨-, hdec⟩ := decisionAt_of_mem_tryDecide (S := cfg.slots)
-    ((Prod.ext he1.symm hed.symm : (k, d) = e') ▸ hmem)
+  have hdec := decisionAt_of_verdictOn hσ hv
   -- the blocks of the proof, read under their hash
   obtain ⟨hspec, hkept⟩ := proofStore_spec (cfg := cfg) k L
   have hup := proofStore_upperValid (cfg := cfg) k L
@@ -1088,6 +1115,113 @@ theorem verdictOn_reply (hσ : cfg.σ = boundedSel) (hw : 2 ≤ cfg.p.waveLength
     have := (hP i hiP).2.2.1
     rw [← ((proofStore cfg k L).full_fields i).1, he, hround]
     exact this
+
+/-- **Two stores alike on what they hold**: the same identifiers, the same
+blocks there, and the same kept references. -/
+def Alike (st st' : Store Validator BlockId Payload) : Prop :=
+  st.ids = st'.ids ∧ (∀ i ∈ st.ids, st.blk i = st'.blk i) ∧
+    ∀ i : BlockId, st.kept[i]? = st'.kept[i]?
+
+omit [Fintype Validator] in
+/-- **A proof step keeps two stores alike.** -/
+theorem proofStep_alike (k : ℕ) {st st' : Store Validator BlockId Payload} (h : Alike st st')
+    (e : BlockId × Block Validator BlockId Payload) :
+    Alike (proofStep cfg k st e) (proofStep cfg k st' e) := by
+  obtain ⟨hids, hblk, hkept⟩ := h
+  -- the checks read the store only at what it holds
+  have hC : ∀ {a a' : Store Validator BlockId Payload}, a.ids = a'.ids →
+      (∀ i ∈ a.ids, a.blk i = a'.blk i) → a.Checks cfg.q cfg.xp e.1 e.2 →
+      a'.Checks cfg.q cfg.xp e.1 e.2 := by
+    intro a a' hi hb ⟨hr, hp, hv⟩
+    refine ⟨hi ▸ hr, fun j hj => (hb j (hr hj)) ▸ hp j hj, rowValid_of_eq (fun j hj => ?_) hv⟩
+    by_cases hje : j = e.1
+    · subst hje; simp
+    · rw [Function.update_of_ne hje, Function.update_of_ne hje]; exact hb j (hr hj)
+  have hCi : st.Checks cfg.q cfg.xp e.1 e.2 ↔ st'.Checks cfg.q cfg.xp e.1 e.2 :=
+    ⟨hC hids hblk, hC hids.symm fun i hi => (hblk i (hids ▸ hi)).symm⟩
+  unfold proofStep
+  by_cases hn : e.1 ∉ st.ids
+  · have hn' : e.1 ∉ st'.ids := hids ▸ hn
+    rw [dif_pos hn, dif_pos hn']
+    split
+    · refine ⟨by rw [Store.base_ids, Store.base_ids, hids], fun i hi => ?_, fun i => ?_⟩
+      · rw [Store.base_blk, Store.base_blk]
+        split
+        · rfl
+        · rename_i hie
+          rw [Store.base_ids] at hi
+          exact hblk i ((Finset.mem_insert.mp hi).resolve_left hie)
+      · change (st.kept.insert e.1 e.2.refs)[i]? = (st'.kept.insert e.1 e.2.refs)[i]?
+        rw [Std.TreeMap.getElem?_insert, Std.TreeMap.getElem?_insert, hkept i]
+    · by_cases hc : cfg.slots.slotRound k ≤ e.2.round ∧ st.Checks cfg.q cfg.xp e.1 e.2
+      · have hc' : cfg.slots.slotRound k ≤ e.2.round ∧ st'.Checks cfg.q cfg.xp e.1 e.2 :=
+          ⟨hc.1, hCi.mp hc.2⟩
+        rw [dif_pos hc, dif_pos hc']
+        refine ⟨by rw [Store.insert_ids, Store.insert_ids, hids], fun i hi => ?_, fun i => hkept i⟩
+        rw [Store.insert_blk, Store.insert_blk]
+        split
+        · rfl
+        · rename_i hie
+          rw [Store.insert_ids] at hi
+          exact hblk i ((Finset.mem_insert.mp hi).resolve_left hie)
+      · have hc' : ¬ (cfg.slots.slotRound k ≤ e.2.round ∧ st'.Checks cfg.q cfg.xp e.1 e.2) :=
+          fun h => hc ⟨h.1, hCi.mpr h.2⟩
+        rw [dif_neg hc, dif_neg hc']
+        exact ⟨hids, hblk, hkept⟩
+  · have hn' : ¬ e.1 ∉ st'.ids := hids ▸ hn
+    rw [dif_neg hn, dif_neg hn']
+    exact ⟨hids, hblk, hkept⟩
+
+omit [Fintype Validator] in
+/-- **The stores a proof builds at two nodes are alike.** -/
+theorem proofStore_alike (u v : Validator) (k : ℕ)
+    (L : List (BlockId × Block Validator BlockId Payload)) :
+    Alike (proofStore (cfg.at u) k L) (proofStore (cfg.at v) k L) := by
+  have hfold : ∀ (l : List (BlockId × Block Validator BlockId Payload))
+      (st st' : Store Validator BlockId Payload), Alike st st' →
+      Alike (l.foldl (proofStep (cfg.at v) k) st) (l.foldl (proofStep (cfg.at v) k) st') := by
+    intro l
+    induction l with
+    | nil => exact fun _ _ h => h
+    | cons e l ih => exact fun st st' h => ih _ _ (proofStep_alike k h e)
+  exact hfold (hashed (cfg.at v) L) (Store.empty (cfg.at u).genesis)
+    (Store.empty (cfg.at v).genesis)
+    ⟨rfl, fun i hi => absurd hi (Finset.notMem_empty i), fun i => rfl⟩
+
+omit [Fintype Validator] in
+/-- **A proof gives every node the same verdict.** -/
+theorem verdictOn_at (hσ : cfg.σ = boundedSel) (hw : 2 ≤ cfg.p.waveLength)
+    (hl : 1 ≤ cfg.p.linkSize) (hcm : 1 ≤ cfg.p.commitThreshold)
+    (hc : cfg.p.voteIsCert = false → 1 ≤ cfg.p.certThreshold) {u v : Validator} {k : ℕ}
+    {L : List (BlockId × Block Validator BlockId Payload)} {d : Option BlockId}
+    (hv : verdictOn (cfg.at v) k L = some d) : verdictOn (cfg.at u) k L = some d := by
+  obtain ⟨hids, hblk, hkept⟩ := proofStore_alike (cfg := cfg) u v k L
+  set a := proofStore (cfg.at u) k L
+  set b := proofStore (cfg.at v) k L
+  have hfull : ∀ i ∈ a.ids, a.full i = b.full i := fun i hi => by
+    unfold Store.full; rw [hkept i, hblk i hi]
+  have hround : ∀ i, (b.full i).round = (b.blk i).round := fun i => (b.full_fields i).1
+  have hcr : ∀ i, (b.full i).creator = (b.blk i).creator := fun i => (b.full_fields i).2.1
+  obtain ⟨-, hkb⟩ := proofStore_spec (cfg := cfg.at v) k L
+  refine verdictOn_of_decision (cfg := cfg.at u) hσ hw hl hcm hc (U := b.toRecord) (V := b.view)
+    (le_max_left _ _) (decisionAt_of_verdictOn (cfg := cfg.at v) hσ hv) (fun i hi hik => ?_)
+    (fun x hx => ?_) (fun i hi => ?_)
+  · rw [hfull i hi] at hik ⊢
+    refine ⟨show i ∈ b.ids from hids ▸ hi, (hround i).symm, (hcr i).symm, fun hlt => ?_⟩
+    change b.blk i = b.full i
+    by_cases hk : b.kept[i]? = none
+    · exact (b.full_of_kept_none hk).symm
+    · have h₁ : (b.blk i).round + 1 = cfg.slots.slotRound k := hkb i hk
+      have h₂ : cfg.slots.slotRound k < (b.blk i).round := by rw [← hround]; exact hlt
+      omega
+  · have hxb : x ∈ b.ids := witnessAt_subset (S := cfg.slots) _ k hx
+    refine ⟨hids ▸ hxb, ?_⟩
+    rw [hfull x (hids ▸ hxb), hround]
+    exact witnessAt_round (S := cfg.slots) _ k x hx
+  · rw [hblk i hi]
+    exact Nat.sub_le_sub_right (decidable_mono (by
+      rw [b.topRound_eq]; exact Finset.le_sup (f := fun i => (b.blk i).round) (hids ▸ hi))) 1
+      |>.trans (le_max_right _ _)
 
 end Node
 
