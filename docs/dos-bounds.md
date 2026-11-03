@@ -562,8 +562,17 @@ store closed, and needs none of this.
         (`run_commits`, `AllGood.storeView`), and the node decides over any
         base while the round of its next undecided slot lies at or above
         the base's round (`decides_from`), the view agreeing with its disk
-        from that round up (`AllGood.viewsAbove`). Next: (d), the steady
-        window's instance (`base_steady`, `arrival_steady`), then (e).
+        from that round up (`AllGood.viewsAbove`). (d) is proved
+        (`Live.steady_ends`): when every honest node drops and is reliable
+        and keeps its next undecided slot at `L ≥ 1` from `G` to `t₁`, the
+        honest nodes never all reach the decision round of a reliably led
+        run above round `slotRound L + voteOffset` by `t₁ − A`, given
+        arrival from some `G' ≥ G` (`arrival_steady`), the honest nodes
+        started there and at round `1` or above; read on the record padded
+        below `slotRound L − 1` (`base_steady`) each would decide the run
+        (`decides_from`) and move past `L`. Next: (e), production in the
+        window (`produces_from`) bounds how long it can last, and the
+        potential argument over the next undecided slots.
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase

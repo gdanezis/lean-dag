@@ -3,6 +3,7 @@ import LeanDag.Node.Helpers.Wave
 import LeanDag.Node.Helpers.Recover
 import LeanDag.Node.Helpers.Run
 import LeanDag.Node.Helpers.SyncTrace
+import LeanDag.Node.Helpers.Dropping
 import LeanDag.Scheme.Helpers.Reactive
 /-!
 # The reliable nodes produce rounds and decide — proof
@@ -437,6 +438,71 @@ theorem decidesBy {cfg : Config Validator BlockId Payload} {T : Finset Validator
       rw [Finset.Ico_eq_empty (by omega), Finset.sum_empty, Nat.add_zero]
       exact (show N ≤ n₁ by omega).trans (hall v hv)
   exact hd b c n₀ hc hspan hlead hn₀ hbelow _ hall' ht₁
+
+/-- **A steady window ends before the reliable nodes decide a reliably led
+run above it**: when every honest node drops and is reliable, and every one
+keeps its next undecided slot at `L ≥ 1` from `G` to `t₁`, the honest nodes
+never all reach the decision round of a reliably led run above round
+`slotRound L + voteOffset` by `t₁ − A`. Read on the record padded below
+`slotRound L − 1` (`base_steady`), each would decide the run's slots
+(`decides_from`), and so move past `L`. -/
+theorem steady_ends [Infinite BlockId] {cfg : Config Validator BlockId Payload}
+    {H : Finset Validator} {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ}
+    {G G' Δ Δₛ t₁ L : ℕ} (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : cfg.Faithful)
+    (hf : Hᶜ.card ≤ cfg.f) (hqT : cfg.q ≤ H.card)
+    (hcT : Fintype.card Validator - cfg.f - cfg.c ≤ H.card) (hq : 2 ≤ cfg.q)
+    (hqn : cfg.q ≤ Fintype.card Validator) (hid : Function.Injective cfg.idOf)
+    (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout r)
+    (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
+    (hev : Converge.EvidenceAuthentic cfg H tr) (hdr : cfg.drops = true)
+    (hst : Steady cfg H tr time G t₁ L) (hL : 1 ≤ L) (hGG : G ≤ G')
+    (hmono : TimeMono tr time) (harr : Arrival cfg H tr time G' (Δ + Δₛ) t₁)
+    (hwait : TimersAfterSet cfg H tr time) (hstart : StartedBy H tr time G')
+    {D : Finset Validator} {nE : ℕ} (hsp : Spread cfg H tr D nE)
+    (hnE : ∀ v ∈ H, nE ≤ topAt cfg tr time v G') (hT₁ : ∀ v ∈ H, 1 ≤ topAt cfg tr time v G') :
+    letI := cfg.slots
+    ∀ b c n₀, 0 < c → (Scheme.schemeAnchored cfg.p
+      (boundedSel (BlockId := BlockId) (Payload := Payload) (P := ValidAt cfg.q Clause.none)
+        (honest := H))).SpansEligible c →
+    (∀ i < c, cfg.slots.leader (b + i) ∈ H) → n₀ ≤ cfg.slots.slotRound b →
+    (∀ v ∈ H, topAt cfg tr time v G' < n₀) → cfg.slots.slotRound L + cfg.p.voteOffset < n₀ →
+    ∀ t, (∀ v ∈ H, cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1) ≤
+        topAt cfg tr time v t) → t + (Δ + Δₛ) ≤ t₁ → False := by
+  letI := cfg.slots
+  intro b c n₀ hc hspan hlead hn₀ hbelow hLn t htop ht₁
+  obtain ⟨v, hv⟩ : H.Nonempty := Finset.card_pos.mp (by omega)
+  -- the window reaches `t`
+  have hGt : G' ≤ t := by
+    by_contra hlt
+    have := (rises_before (cfg := cfg) (tr := tr) v
+      (eventsBy_mono (tr := tr) (time := time) (show t ≤ G' by omega))).1
+    change topAt cfg tr time v t ≤ topAt cfg tr time v G' at this
+    have := hbelow v hv
+    have := htop v hv
+    have := cfg.slots.mono (show b ≤ b + c - 1 by omega)
+    omega
+  have hG₀ : eventsBy tr time G ≤ eventsBy tr time G' := eventsBy_mono hGG
+  have hG₁ : eventsBy tr time G' ≤ eventsBy tr time t₁ := eventsBy_mono (by omega)
+  have hbase := base_steady hσ hadm hf htime hinj hqn hdr hst hL (by omega)
+  have hlen := decides_from hσ hadm hfa hf (Finset.Subset.refl H) hqT hcT hq hid hto htime hinj
+    hev hbase hG₀ le_rfl
+    (fun w hw => by
+      obtain ⟨-, htw⟩ := hst w hw _ hG₀ hG₁
+      have := hT₁ w hw
+      change _ ≤ (stateBefore cfg tr (eventsBy tr time G') w).top.getD 0 at this
+      exact ⟨by change _ ≤ (stateBefore cfg tr (eventsBy tr time G') w).top.getD 0; omega,
+        fun _ => by change _ ≤ (stateBefore cfg tr (eventsBy tr time G') w).top.getD 0; omega⟩)
+    (fun w hw k h₁ h₂ => by rw [(hst w hw k h₁ h₂).1]; omega)
+    hmono harr hwait hstart hsp hnE b c n₀ hc hspan hlead hn₀ hbelow (by omega) (Or.inl (by omega))
+    t htop ht₁ v hv
+  -- but the node's next undecided slot stays at `L`, below the run
+  rw [decisionsBy_length] at hlen
+  have hlo := (hst v hv (eventsBy tr time (t + (Δ + Δₛ))) (eventsBy_mono (by omega))
+    (eventsBy_mono ht₁)).1
+  change b + c ≤ (stateBefore cfg tr (eventsBy tr time (t + (Δ + Δₛ))) v).lo at hlen
+  rw [hlo] at hlen
+  have := cfg.slots.mono (show b ≤ L by omega)
+  omega
 
 /-- **The reliable nodes produce rounds and decide.** -/
 theorem progresses : Progresses := by
