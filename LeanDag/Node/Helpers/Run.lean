@@ -71,12 +71,19 @@ section Timed
 
 variable {T : Finset Validator} {time : ℕ → ℕ} {gst Δ Δₛ t₁ : ℕ}
 
-/-- **A window of rounds gives the scheme's wave facts**: from a round
-`n₀` above every reliable node's round at GST to a round `N` every
-reliable node has reached by `t`, with `t + A` within the assumptions. -/
+/-- **A window of rounds gives the scheme's wave facts on a base's record**:
+from a round `n₀` above every reliable node's round at GST, and
+`voteOffset` above the base's round at nodes that drop, to a round `N`
+every reliable node has reached by `t`, with `t + A` within the
+assumptions and the base. -/
 theorem waveFacts_of_run (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : cfg.Faithful)
     (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
-    (hinj : Converge.HashInjective cfg H tr) (hdr : cfg.drops = false)
+    (hinj : Converge.HashInjective cfg H tr)
+    {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H} {B E₀ E₁ : ℕ}
+    (hbase : Base cfg H tr R B E₀ E₁) (hE₀ : E₀ ≤ eventsBy tr time gst)
+    (hE₁ : eventsBy tr time t₁ ≤ E₁)
+    (hTB : ∀ v ∈ T, B ≤ topAt cfg tr time v gst ∧
+      (cfg.drops = true → B + 1 ≤ topAt cfg tr time v gst))
     (hev : Converge.EvidenceAuthentic cfg H tr) (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
     (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁) (hq : 2 ≤ cfg.q)
     (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) (hwait : Live.TimersAfterSet cfg H tr time)
@@ -84,30 +91,31 @@ theorem waveFacts_of_run (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf
     (hTc : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) (hqT : cfg.q ≤ T.card) {n₀ N t : ℕ}
     {D : Finset Validator} {nE : ℕ} (hsp : Live.Spread cfg H tr D nE)
     (hE : ∀ v ∈ T, nE ≤ topAt cfg tr time v gst)
-    (hbelow : ∀ v ∈ T, topAt cfg tr time v gst < n₀)
+    (hbelow : ∀ v ∈ T, topAt cfg tr time v gst < n₀) (hB₀ : B < n₀)
+    (hBV : B + 1 + cfg.p.voteOffset ≤ n₀ ∨ B = 0 ∧ cfg.drops = false)
     (hst : ∀ v ∈ T, (stateAt cfg tr time v t).top.isSome)
     (htop : ∀ v ∈ T, N ≤ topAt cfg tr time v t) (ht₁ : t + (Δ + Δₛ) ≤ t₁) :
     letI := cfg.slots
-    Scheme.WaveFacts cfg.p (boundedSel (P := ValidAt cfg.q Clause.none) (honest := H))
-      (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)) T N n₀ :=
+    Scheme.WaveFacts cfg.p (boundedSel (P := ValidAt cfg.q Clause.none) (honest := H)) R T N n₀ :=
   letI := cfg.slots
   { populated := fun n hn0 hnN w hw' => by
-      obtain ⟨i, inp, e, hi, he, her, -, -⟩ :=
+      obtain ⟨i, inp, e, hi, he, her, -, hit⟩ :=
         built_of_top hmono (hst w hw') ((htop w hw').trans' hnN)
           (harr.no_jump hmono hw' ((hbelow w hw').trans_le hn0) (by omega)
-            (fun _ _ _ => Regular.of_false hdr))
-      obtain ⟨h₁, h₂, h₃⟩ := built_mem (base_of_false hσ hadm hf htime hinj hdr 0 tr.length)
-        (hTH hw') hi he (by have := (List.getElem?_eq_some_iff.mp hi).1; omega) (Nat.zero_le _)
-        (Or.inl hdr)
+            (regular_past hbase hE₀ hE₁ (hTH hw') (by omega)))
+      have hil : i < tr.length := (List.getElem?_eq_some_iff.mp hi).1
+      have hiE : i + 1 ≤ E₁ :=
+        ((lt_eventsBy hmono hil).mpr (show time i ≤ t₁ by omega)).trans_le hE₁
+      obtain ⟨h₁, h₂, h₃⟩ := built_mem hbase (hTH hw') hi he hiE (by rw [her]; omega)
+        (hbase.keep (hTH hw') hiE (fun _ => by rw [her]; omega))
       exact ⟨e.1, h₁, h₃, h₂.trans her⟩
     reach_or_refs := fun w hw' _ hRk hNk hlk L hL _ hm _ hc hcc hcr =>
-      reach_or_refs_node hσ hadm hfa hf htime hinj hev hTH hmono harr hbelow hst htop ht₁ hdr hq hto
-          hwait
-        hid hstart hTc hqT hsp hE hw' hRk hlk hL hm (by omega) hc hcc hcr
+      reach_or_refs_node hσ hadm hfa hf htime hinj hev hTH hmono harr hbelow hst htop ht₁ hbase hE₀
+        hE₁ hB₀ hBV hTB hq hto hwait hid hstart hTc hqT hsp hE hw' hRk hlk hL hm (by omega) hc hcc
+        hcr
     cert_or_refs := fun hvc w hw' _ hRk hNk hlk L hL _ hc hcc hcr =>
-      cert_or_refs_node hσ hadm hfa hf htime hinj hev hTH hmono harr hbelow hst htop ht₁ hdr hq hto
-          hwait
-        hid hstart hTc hqT hsp hE hvc hw' hRk hlk hL hNk hc hcc hcr }
+      cert_or_refs_node hσ hadm hfa hf htime hinj hev hTH hmono harr hbelow hst htop ht₁ hbase hE₀
+        hE₁ hB₀ hBV hTB hq hto hwait hid hstart hTc hqT hsp hE hvc hw' hRk hlk hL hNk hc hcc hcr }
 
 /-- **On a reliable node's view, a reliably led run is decided**, from a
 round `n₀` above every reliable node's round at GST, `A` after every
@@ -157,8 +165,11 @@ theorem run_commits (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : c
     rcases h : (stateAt cfg tr time w t).top with _ | r
     · rw [h] at this; simp at this; omega
     · rfl
-  have wf := waveFacts_of_run hσ hadm hfa hf htime hinj hdr hev hTH hmono harr hq hto hwait hid
-    hstart hTc hqT hsp hnE hbelow hst htop ht₁
+  have hpos : 0 < n₀ := by have := hbelow v hv; omega
+  have wf := waveFacts_of_run hσ hadm hfa hf htime hinj
+    (base_of_false hσ hadm hf htime hinj hdr 0 tr.length) (Nat.zero_le _) (eventsBy_le_length _)
+    (fun _ _ => ⟨Nat.zero_le _, fun h => absurd (hdr.symm.trans h) Bool.false_ne_true⟩) hev hTH
+    hmono harr hq hto hwait hid hstart hTc hqT hsp hnE hbelow hpos (Or.inr ⟨rfl, hdr⟩) hst htop ht₁
   -- the view of the node's disk `A` later
   set E := eventsBy tr time (t + (Δ + Δₛ)) with hE
   have hcut := (cut_before hσ hadm hf htime hinj hdr E v (hTH hv)).1
@@ -183,8 +194,10 @@ theorem run_commits (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : c
       (Scheme.commit_of_certified hcm (wf.populated _ (by omega) hsN) fun C hC hCT hCr => ⟨?_, ?_⟩)⟩
     · exact wf.certifies hw hadm.2.1.2 hTH hqT hsr hsN hlj' hL _ hCT C hC rfl hCr
     · exact (hiff C).mpr (reliable_held hσ hadm hfa hf htime hinj hev hTH
-        hmono harr hbelow hst htop ht₁ hdr hCT hv (r := (U.block C).round) (by omega) (by omega)
-        hC rfl rfl)
+        hmono harr hbelow hst htop ht₁ (base_of_false hσ hadm hf htime hinj hdr 0 tr.length)
+        (Nat.zero_le _) (eventsBy_le_length _) hpos (Or.inr ⟨rfl, hdr⟩)
+        (fun _ _ => ⟨Nat.zero_le _, fun h => absurd (hdr.symm.trans h) Bool.false_ne_true⟩) hCT hv
+        (r := (U.block C).round) (by omega) (by omega) hC rfl rfl)
   refine ⟨V, hiff, fun j hj => ?_, hcommit⟩
   -- and every slot below the run is decided within it
   by_cases hb : b ≤ j

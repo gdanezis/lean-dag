@@ -528,6 +528,50 @@ theorem BuildState.tryBuild {U : BlockRecord Validator BlockId Payload P H} {G :
     exact hK z (by rw [he, persists_built, hz]; exact List.mem_singleton_self _)
 
 omit [Fintype Validator] in
+/-- **A node that drops builds from a state whose floor lies at or below
+`G + 1`.** -/
+theorem BuildState.floor_drops {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    {s x : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
+    (h : BuildState cfg U G K s inp x) (hdr : cfg.drops = true) : x.floor ≤ G + 1 := by
+  obtain ⟨Bs, hi⟩ := h.inv
+  have h₁ := hi.floor
+  unfold floorOf at h₁
+  rw [if_pos hdr] at h₁
+  exact h₁.trans (h.slot hdr)
+
+omit [Fintype Validator] in
+/-- **The floor of a state the node builds from lies `voteOffset` below a
+round**, its top or above, when the round lies `voteOffset` above `G + 1`
+at a node that drops. -/
+theorem BuildState.floor_le {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    {s x : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
+    (h : BuildState cfg U G K s inp x) {n : ℕ} (hn : x.top.getD 0 ≤ n)
+    (hd : cfg.drops = true → G + 1 + cfg.p.voteOffset ≤ n) : x.floor ≤ n - cfg.p.voteOffset := by
+  cases hdr : cfg.drops
+  · obtain ⟨Bs, hi⟩ := h.inv
+    exact hi.floor.trans ((floorOf_le_top (cfg := cfg) hdr _).trans (Nat.sub_le_sub_right hn _))
+  · have := h.floor_drops hdr
+    have := hd hdr
+    omega
+
+omit [Fintype Validator] in
+/-- **A state the node builds from keeps its blocks with their references
+from `voteOffset` below a round up**, its top or above, when the round
+lies `voteOffset` above `G + 1` at a node that drops. -/
+theorem BuildState.unkept {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    {s x : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
+    (h : BuildState cfg U G K s inp x) {n : ℕ} (hn : x.top.getD 0 ≤ n)
+    (hd : cfg.drops = true → G + 1 + cfg.p.voteOffset ≤ n) {a : BlockId}
+    (ha : n - cfg.p.voteOffset ≤ (x.disk.blk a).round) : x.disk.kept[a]? = none := by
+  by_contra hk
+  have := x.low a hk
+  have := h.floor_le hn hd
+  omega
+
+omit [Fintype Validator] in
 /-- **The exposure of a block of round `r` a state the node builds from
 holds is named by evidence**: in the block's history, which the node holds,
 when it does not drop; in the node's own evidence, at or above its floor

@@ -58,6 +58,26 @@ theorem Base.valid {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Cla
   · exact (Converge.inv_before (cfg := cfg) (tr := tr) k v).valid hd j hj
   · exact (hbase.disk v hv k hk).2.1 j hj hr
 
+/-- **Before a base's end, an honest node that drops has its floor at or
+below the round above the base's.** -/
+theorem Base.floor_drops {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H}
+    {B E₀ E₁ : ℕ} (hbase : Base cfg H tr R B E₀ E₁) {v : Validator} (hv : v ∈ H) {k : ℕ}
+    (hk : k ≤ E₁) (hdr : cfg.drops = true) : (stateBefore cfg tr k v).floor ≤ B + 1 := by
+  have h₁ := (Converge.inv_before (cfg := cfg) (tr := tr) k v).floor
+  unfold floorOf at h₁
+  rw [if_pos (show (cfg.at v).drops = true from hdr)] at h₁
+  exact h₁.trans ((hbase.disk v hv k hk).2.2 hdr)
+
+/-- **Before a base's end, an honest node keeps a round on its disk** when
+it does not drop, or the round lies above the base's. -/
+theorem Base.keep {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H}
+    {B E₀ E₁ : ℕ} (hbase : Base cfg H tr R B E₀ E₁) {v : Validator} (hv : v ∈ H) {k : ℕ}
+    (hk : k ≤ E₁) {r : ℕ} (hr : cfg.drops = true → B + 1 ≤ r) :
+    cfg.drops = false ∨ (stateBefore cfg tr k v).floor ≤ r := by
+  cases hdr : cfg.drops
+  · exact Or.inl rfl
+  · exact Or.inr ((hbase.floor_drops hv hk hdr).trans (hr hdr))
+
 /-- **Without dropping, the record of the run is a base from round `0`**,
 over every stretch: it grounds what the honest nodes knew (`ground`), every
 honest disk is a cut of it (`cut_before`), valid, and grows

@@ -48,9 +48,15 @@ theorem waves_leads {cfg : Config Validator BlockId Payload} {H T : Finset Valid
   letI := cfg.slots
   refine ⟨fun n₀ N t hbelow hgt htop ht₁ => ?_,
     fun b c n₀ hc hspan hlead hn₀ hbelow t htop ht₁ v hv j hbj hjc => ?_⟩
-  · exact waveFacts_of_run hσ hadm hfa hf htime hinj hdr hev hTH hmono harr hq hto hwait hid hstart
-      hcT hqT hsp hnE hbelow (fun w hw => started_at hadm hfa hid htime hTH hmono hstart hw hgt)
-      htop ht₁
+  · have hpos : 0 < n₀ := by
+      obtain ⟨w, hw⟩ : T.Nonempty := Finset.card_pos.mp (by omega)
+      have := hbelow w hw
+      omega
+    exact waveFacts_of_run hσ hadm hfa hf htime hinj
+      (base_of_false hσ hadm hf htime hinj hdr 0 tr.length) (Nat.zero_le _) (eventsBy_le_length _)
+      (fun _ _ => ⟨Nat.zero_le _, fun h => absurd (hdr.symm.trans h) Bool.false_ne_true⟩) hev hTH
+      hmono harr hq hto hwait hid hstart hcT hqT hsp hnE hbelow hpos (Or.inr ⟨rfl, hdr⟩)
+      (fun w hw => started_at hadm hfa hid htime hTH hmono hstart hw hgt) htop ht₁
   set U := globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime) with hU
   -- on the node's view the slot commits a leader block
   obtain ⟨V, -, -, hcm⟩ := run_commits hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hdr hev

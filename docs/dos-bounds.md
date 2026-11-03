@@ -548,9 +548,17 @@ store closed, and needs none of this.
         and catch-up (`catches_up`) hold from the round above the base, the
         floor of a steady window. Production holds over any base, within its
         stretch, at rounds above the base's round when the nodes drop
-        (`produces_from`), so in a steady window from the floor up. Next:
-        the wave facts on any `Base` from a round `voteOffset` above the
-        floor, which production reaches.
+        (`produces_from`), so in a steady window from the floor up. The
+        wave facts hold on any base's record (`waveFacts_of_run`, with
+        `waited_holds`, `held_before`, `refs_all` and the reach and
+        certificate facts at a node), from a round above every reliable
+        node's round at GST and, at nodes that drop, `voteOffset` above the
+        round above the base's; a known block with a record identifier
+        above the base is the record's block (`eq_of_known`), a reliable
+        block of the record above the base was built by its author
+        (`event_of_base`), and a node's steps past GST within the base are
+        regular (`regular_past`, `Arrival.no_jump`). Next: the decision on
+        the padded record's view of the disk (`decides`), then (d) and (e).
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase

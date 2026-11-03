@@ -320,35 +320,25 @@ section Record
 
 variable {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ}
 
-/-- **A reliable block of the run's record was built** at its author's
-first event building its round. -/
-theorem event_of_mem (hinj : Converge.HashInjective cfg H tr)
-    (htime : Converge.TimelyAuthentic cfg H tr) {v : Validator} (hv : v ∈ H) {c : BlockId}
-    (hcU : c ∈ (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).ids)
-    (hcv : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-      c).creator = v) :
+/-- **An honest block of a base's record above its round was built** at
+its author's first event building its round. -/
+theorem event_of_base (hinj : Converge.HashInjective cfg H tr)
+    (htime : Converge.TimelyAuthentic cfg H tr)
+    {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H} {B E₀ E₁ : ℕ}
+    (hbase : Base cfg H tr R B E₀ E₁) {v : Validator} (hv : v ∈ H) {c : BlockId}
+    (hcU : c ∈ R.ids) (hcv : (R.block c).creator = v) (hcB : B < (R.block c).round) :
     ∃ i inp e, tr[i]? = some (v, inp) ∧ e ∈ persists (outputsAt cfg tr i) ∧ e.1 = c ∧
-      e.2.round = ((globalRecord (hashInjective_of_trace hinj)
-        (authentic_of_timely htime)).block c).round ∧
-      builtAt cfg tr time v ((globalRecord (hashInjective_of_trace hinj)
-        (authentic_of_timely htime)).block c).round = time i := by
-  have hinjR := hashInjective_of_trace hinj
-  have hauthR := authentic_of_timely htime
-  obtain ⟨x, hxK, rfl⟩ := exists_of_mem_knownIds (mem_globalIds.mp hcU).1
-  have hcont := content_of_known hinjR hxK
-  have hxc : x.2.creator = v := by
-    have := hcv; simp only [globalRecord, hcont] at this; exact this
-  have hxr : x.2.round = ((globalRecord hinjR hauthR).block x.1).round := by
-    simp only [globalRecord, hcont]
-  have hxp := mem_persists_of_known hinjR hauthR hxK (by rw [hxc]; exact hv)
-  rw [hxc] at hxp
+      e.2.round = (R.block c).round ∧ builtAt cfg tr time v (R.block c).round = time i := by
+  have hxp : (c, R.block c) ∈ persists (runOf cfg tr v).2 :=
+    hcv ▸ mem_persists_of_known (hashInjective_of_trace hinj) (authentic_of_timely htime)
+      (hbase.real c hcU hcB) (by rw [hcv]; exact hv)
   obtain ⟨j, -, hjv, hxj⟩ := mem_persists_before (cfg := cfg) (tr := tr) v tr.length hxp
   obtain ⟨i₀, -, hbt, hi₀v, e₀, he₀, he₀r⟩ :=
-    builtAt_first (cfg := cfg) time hjv ⟨x, hxj, hxr⟩
+    builtAt_first (cfg := cfg) time hjv ⟨_, hxj, rfl⟩
   obtain ⟨inp, hi₀⟩ := Converge.event_of_map hi₀v
   have he₀p : e₀ ∈ persists (runOf cfg tr v).2 :=
     mem_persists_iff.mpr (mem_outputs_of_event hi₀ (mem_persists_iff.mp he₀))
-  have hex : e₀ = x := eq_of_persists v he₀p hxp (by rw [he₀r, hxr])
+  have hex : e₀ = (c, R.block c) := eq_of_persists v he₀p hxp he₀r
   exact ⟨i₀, inp, e₀, hi₀, he₀, by rw [hex], he₀r, hbt⟩
 
 /-- **A reliable node's block is in a base's record**, at its round and by
