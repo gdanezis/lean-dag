@@ -238,11 +238,12 @@ theorem lent_buildable {Z : Store Validator BlockId Payload} (hZ : StoreValid cf
     {n : ℕ} {z : BlockId} (hzZ : z ∈ Z.ids) (hzr : (Z.blk z).round = n + 1)
     (hkz : Z.kept[z]? = none)
     (hfa : cfg.Faithful) (hfresh : ∀ (P : Payload) R, cfg.idOf ⟨n + 1, cfg.me, R, P⟩ ∉ Z.ids)
-    (E : Finset (Validator × BlockId × BlockId)) :
+    (E : Finset (Validator × BlockId × BlockId))
+    (hbk : ∀ j ∈ Z.ids, (Z.blk j).round = n → cfg.xp.ex (Z.blk j).payload ⊆ named E) :
     lent Z z ⊆ Z.ids ∧ buildable cfg Z n (lent Z z) E = true := by
   have hv := (hZ z hzZ).2
   rw [Z.full_of_kept_none hkz] at hv
-  refine ⟨fun j hj => Z.complete z hzZ j hj, lent_buildable_of E hfa hzZ hzr
+  refine ⟨fun j hj => Z.complete z hzZ j hj, lent_buildable_of E hfa hbk hzZ hzr
     (rowValid_congr (fun j _ => ?_) hv) (hfresh _ _)⟩
   have := Z.full_fields j
   exact ⟨this.1, this.2.1, this.2.2⟩
@@ -819,7 +820,9 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
           Converge.floor_before (cfg := cfg) (tr := tr) hdr hm
         have h₃ : (Z.disk.blk z).round = m + 1 := hzr
         omega) hfa
-      (fresh_before hid htime (hTH hv) hm) _).2⟩)
+      (fresh_before hid htime (hTH hv) hm) _
+      (fun j hj _ => (Converge.kept_before hfa v E).exposed hj
+        (((Converge.inv_before (cfg := cfg) (tr := tr) E v).valid hdr) j hj).2)).2⟩)
     (fresh_before hid htime (hTH hv) hm) ((Converge.floor_before hdr hm).trans (Nat.sub_le _ _))
   rw [hSet.build] at hsome
   cases hsome

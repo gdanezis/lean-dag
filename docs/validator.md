@@ -67,7 +67,12 @@ otherwise.
 **Validity.** Every row uses `rowValid q E`: references one round below
 from `q` distinct authors, no author twice, and the exposure clause
 (`Clause.exposes`): the block exposes the authors its evidence names and
-those its references expose, and references none of them. The clause
+those its references expose, carries evidence against each author it
+exposes, and references none of them. Exposure is thus always backed by
+evidence the block carries (decided with the user): a node that drops
+holds blocks below its floor on their header alone, unchecked, and an
+exposure such a header claimed without evidence reaches no checked block.
+The clause
 reads only the references, as the quorum does, so the node checks it in
 memory as on disk. The record of the run (§4) is at `ValidAt q
 Clause.none`, which the scheme's results read. A reference to the author's own previous
@@ -361,8 +366,8 @@ answers none of its requests, and leaves it out of its references
 (§3.2). A convicted author's blocks still arrive in the streams of other
 syncs, while honest blocks still reference them. Evidence travels in
 blocks: a block exposes the authors its evidence names and those its
-references expose, and is valid only if it references none of them
-(`Clause.exposes`), so once every honest block of a round exposes an
+references expose, carries evidence against each, and is valid only if it
+references none of them (`Clause.exposes`), so once every honest block of a round exposes an
 author, no later block references it (`exposed_of_correct_exposed`). An
 honest node never convicts an honest one (`Converge.not_detected`): twins
 of an honest author do not exist, and evidence against one does not

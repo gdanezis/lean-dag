@@ -98,7 +98,7 @@ at before every reliable node held the evidence.
 ### 2.3 Ordering, bypass and certification (Stage 5)
 
 Stage 5 adds the mechanisms of `docs/dos-bounds.md` to the node. The
-decisions it raises are D10 to D16 (§3).
+decisions it raises are D10 to D17 (§3).
 
 **Ordering.** The node keeps the set `ordered` of the blocks its commits
 have ordered. When it decides that slot `k` commits the leader `L`, it
@@ -336,6 +336,16 @@ its history and in the history of no single reference of it.
   always holds what `B` needs without catch-up is lemma R6 there, which
   is optional. A node cut off for 100 ticks catches up once by proof and
   then by sync (`docs/dos-bounds.md` §6).
+* **D17. Exposure only with evidence.** *Decided with the user.* A block
+  held on its header below the floor (D10) is not checked, so the
+  authors it claims to expose need no evidence there. Under a clause that
+  let a block expose what its references expose, a Byzantine header
+  exposing honest authors would reach every honest node through one valid
+  block above it, and honest nodes would leave those authors out. The
+  exposure clause asks that a block carry evidence against every author
+  it exposes (`Clause.exposes`), and evidence is checked when accepted
+  (`EvidenceAuthentic`), so an exposure claimed without evidence reaches
+  no checked block.
 * **D5. The fast path.** A broadcast block ready on arrival is accepted
   without a sync, as now. *Recommended*: it is the common case.
 * **D6. What stays with the environment.** Rate limits on streams from a

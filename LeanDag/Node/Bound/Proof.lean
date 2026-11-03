@@ -51,7 +51,7 @@ theorem bounded : Bounded := by
     fun b hb j hj => (hval b hb).2.clause.2.2 j hj
   have hup : InheritedOn st.full st.ids fun b X => X ∈ cfg.xp.ex (st.full b).payload := by
     intro b hb j hj X hX
-    rw [(hval b hb).2.clause.2.1]
+    rw [(hval b hb).2.clause.2.1.1]
     exact Finset.mem_union_right _ (Finset.mem_biUnion.mpr ⟨j, hj, hX⟩)
   -- from round `m + 1` on, no block of a convicted author is referenced
   have hfree : ∀ X ∈ s.detected, ∀ x ∈ st.ids, (st.full x).creator = X → m + 1 ≤ (st.full x).round →

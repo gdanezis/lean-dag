@@ -490,7 +490,19 @@ store closed, and needs none of this.
         `TopTimerBy` and `timer_set` hold with dropping; each round up to
         a node's top was built when no step that may skip rounds reached it,
         a step off a regular stretch among them (`Skips`, `built_by`,
-        `built_of_top`).
+        `built_of_top`). With dropping, a header below the floor is held
+        unchecked, and under the exposure clause as it was a Byzantine
+        header could expose honest authors to every honest node through a
+        valid block above it, leaving fewer than `q` honest authors to
+        reference. Decided with the user: exposing an author is always
+        backed by evidence the block carries, so the clause asks that a
+        block's evidence name every author it exposes (`Clause.exposes`).
+        Every block at or above the floor is checked, its evidence held
+        (`Kept`, `Kept.exposed`), and evidence never names an honest author,
+        so no honest node leaves out an honest author at a round at or above
+        its floor (`Converge.not_excluded`, with dropping under a faithful
+        payload source); an honest block carries the node's evidence against
+        every author its references expose (`buildable_of`).
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase

@@ -659,14 +659,16 @@ theorem refsAt_buildable_of (st : Store Validator BlockId Payload) (r : ℕ) (o 
 
 omit [Fintype Validator] in
 /-- **References the node can build on**: held, one round below, of
-distinct authors, `q` of them, none of an author they expose, under a
-faithful payload source and a fresh identifier. -/
+distinct authors, `q` of them, none of an author they expose, each
+exposing only authors the evidence `E` names, under a faithful payload
+source and a fresh identifier. -/
 theorem buildable_of {st : Store Validator BlockId Payload} {r : ℕ} {R : Finset BlockId}
     (E : Finset (Validator × BlockId × BlockId)) (hfa : cfg.Faithful)
     (hsub : R ⊆ st.ids) (hrd : ∀ j ∈ R, (st.blk j).round = r)
     (hdis : ∀ i ∈ R, ∀ j ∈ R, (st.blk i).creator = (st.blk j).creator → i = j)
     (hq : cfg.q ≤ (creatorsOf st.blk R).card)
     (hex : ∀ j ∈ R, (st.blk j).creator ∉ R.biUnion fun k => cfg.xp.ex (st.blk k).payload)
+    (hbk : ∀ j ∈ R, cfg.xp.ex (st.blk j).payload ⊆ named E)
     (hfresh : cfg.idOf (blockOn cfg st r R E) ∉ st.ids) :
     buildable cfg st r R E = true := by
   unfold buildable
@@ -695,8 +697,15 @@ theorem buildable_of {st : Store Validator BlockId Payload} {r : ℕ} {R : Finse
     rw [hup i hi, hup j hj] at hij
     exact hdis i hi j hj hij
   · rw [hbp, hev, hexp, hbR]
-    congr 1
-    exact Finset.biUnion_congr rfl fun j hj => by rw [hup j hj]
+    refine ⟨?_, Finset.union_subset le_rfl fun a ha => ?_⟩
+    · congr 1
+      exact Finset.biUnion_congr rfl fun j hj => by rw [hup j hj]
+    · obtain ⟨j, hj, haj⟩ := Finset.mem_biUnion.mp ha
+      obtain ⟨e, he, rfl⟩ := Finset.mem_image.mp (hbk j hj haj)
+      refine Finset.mem_image_of_mem _ (Finset.mem_filter.mpr ⟨Finset.mem_filter.mpr
+        ⟨(Finset.mem_filter.mp he).1, fun hc => ?_⟩, (Finset.mem_filter.mp he).2⟩)
+      obtain ⟨i, hi, hie⟩ := Finset.mem_image.mp hc
+      exact hex i hi (by rw [hie]; exact ha)
   · rw [hbR] at hj
     rw [hbp, hexp, hup j hj]
     intro hm
@@ -711,12 +720,14 @@ omit [Fintype Validator] in
 are not left out. -/
 theorem refsFor_buildable {st : Store Validator BlockId Payload} {r : ℕ} {o : Option BlockId}
     (E : Finset (Validator × BlockId × BlockId)) (hfa : cfg.Faithful)
+    (hbk : ∀ j ∈ st.ids, (st.blk j).round = r → cfg.xp.ex (st.blk j).payload ⊆ named E)
     (ho : ∀ j, o = some j → j ∈ st.ids ∧ (st.blk j).round = r ∧ (st.blk j).creator = cfg.me)
     (hq : cfg.q ≤ (authorsIn st.toRecord st.ids r \ excluded cfg st r E).card)
     (hfresh : cfg.idOf (blockOn cfg st r (refsFor cfg st r o E) E) ∉ st.ids) :
     buildable cfg st r (refsFor cfg st r o E) E = true := by
   obtain ⟨hsub, hrd, hcr, hdis⟩ := refsFor_spec (cfg := cfg) (st := st) (r := r) (E := E) ho
-  refine buildable_of E hfa hsub hrd hdis (by rw [hcr]; exact hq) (fun j hj hm => ?_) hfresh
+  refine buildable_of E hfa hsub hrd hdis (by rw [hcr]; exact hq) (fun j hj hm => ?_)
+    (fun j hj => hbk j (hsub hj) (hrd j hj)) hfresh
   have hjA : (st.blk j).creator ∈ authorsIn st.toRecord st.ids r \ excluded cfg st r E := by
     rw [← hcr]; exact Finset.mem_image_of_mem _ hj
   refine (Finset.mem_sdiff.mp hjA).2 (Finset.mem_union_right _ ?_)
@@ -728,6 +739,7 @@ omit [Fintype Validator] in
 on.** -/
 theorem lent_buildable_of {st : Store Validator BlockId Payload} {r : ℕ} {z : BlockId}
     (E : Finset (Validator × BlockId × BlockId)) (hfa : cfg.Faithful)
+    (hbk : ∀ j ∈ st.ids, (st.blk j).round = r → cfg.xp.ex (st.blk j).payload ⊆ named E)
     (hz : z ∈ st.ids) (hzr : (st.blk z).round = r + 1)
     (hv : rowValid cfg.q cfg.xp st.blk (st.blk z))
     (hfresh : cfg.idOf (blockOn cfg st r (lent st z) E) ∉ st.ids) :
@@ -735,12 +747,16 @@ theorem lent_buildable_of {st : Store Validator BlockId Payload} {r : ℕ} {z : 
   unfold lent at hfresh ⊢
   refine buildable_of E hfa (fun j hj => st.complete z hz j hj) (fun j hj => ?_)
     (fun i hi j hj hij => hv.clause.1 i hi j hj hij)
-    (hv.quorum (by rw [hzr]; omega)) (fun j hj hm => ?_) hfresh
+    (hv.quorum (by rw [hzr]; omega)) (fun j hj hm => ?_)
+    (fun j hj => hbk j (st.complete z hz j hj) (by
+      have := st.pred z hz j hj
+      change (st.blk j).round + 1 = (st.blk z).round at this
+      omega)) hfresh
   · have := st.pred z hz j hj
     change (st.blk j).round + 1 = (st.blk z).round at this
     omega
   · refine hv.clause.2.2 j hj ?_
-    rw [hv.clause.2.1]
+    rw [hv.clause.2.1.1]
     exact Finset.mem_union_right _ hm
 
 omit [Fintype Validator] in

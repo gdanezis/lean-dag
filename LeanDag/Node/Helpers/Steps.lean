@@ -193,6 +193,20 @@ def Kept (s : State Validator BlockId Payload) : Prop :=
     e ∈ s.evidence
 
 omit [Fintype Validator] in
+/-- **The node holds evidence against every author a valid block of its disk
+exposes**: the block's evidence names each of them, and the node holds that
+evidence. -/
+theorem Kept.exposed {s : State Validator BlockId Payload} (h : Kept cfg s) {j : BlockId}
+    (hj : j ∈ s.disk.ids) (hv : rowValid cfg.q cfg.xp s.disk.full (s.disk.full j)) :
+    cfg.xp.ex (s.disk.blk j).payload ⊆ named s.evidence := by
+  intro a ha
+  rw [← (s.disk.full_fields j).2.2] at ha
+  obtain ⟨e, he, rfl⟩ := Finset.mem_image.mp (hv.clause.2.1.2 ha)
+  obtain ⟨he, hne⟩ := Finset.mem_filter.mp he
+  rw [(s.disk.full_fields j).2.2] at he
+  exact Finset.mem_image_of_mem _ (Finset.mem_filter.mpr ⟨h j hj e he hne, hne⟩)
+
+omit [Fintype Validator] in
 theorem Kept.restrips {s s' : State Validator BlockId Payload} (h : Kept cfg s) {F : ℕ}
     (hd : Store.Restrips F s.disk s'.disk) (he : s'.evidence = s.evidence) : Kept cfg s' := by
   intro c hc e he' hne
@@ -261,7 +275,7 @@ theorem ex_not_named {q : ℕ} {E : Exposure Validator BlockId Payload}
   induction h : (st.blk j).round using Nat.strong_induction_on generalizing j with
   | _ n ih =>
     obtain ⟨hr, hv⟩ := hV j hj
-    have hc := hv.clause.2.1
+    have hc := hv.clause.2.1.1
     rw [(st.full_fields j).2.2] at hc
     rw [hc] at ha
     rcases Finset.mem_union.mp ha with ha | ha

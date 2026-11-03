@@ -178,13 +178,16 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
         ((Converge.inv_before (cfg := cfg) (tr := tr) E v).unkept hdr (by rw [hZt])
           (by change _ ≤ (Z.disk.blk z).round; rw [hzr]
               exact le_trans (Nat.sub_le _ _) (Nat.le_succ n)))
-        hfa (fresh_before hid htime (hTH hv) hZt) _).2⟩
+        hfa (fresh_before hid htime (hTH hv) hZt) _
+        fun j hj _ => (Converge.kept_before hfa v E).exposed hj (hvalid j hj).2).2⟩
     · push Not at hup
       refine Or.inl (refsFor_buildable (cfg := cfg.at v) _ hfa
+        (fun j hj _ => (Converge.kept_before hfa v E).exposed hj (hvalid j hj).2)
         (fun j hj => by rw [hj₁] at hj; cases hj; exact ⟨hj₁i, hj₁r, hj₁c⟩)
         (hqT.trans (Finset.card_le_card fun w hw => ?_))
         (fresh_before hid htime (hTH hv) hZt _ _))
-      refine Finset.mem_sdiff.mpr ⟨?_, Converge.not_excluded htime hev hdr (hTH hw) (hTH hv) E n⟩
+      refine Finset.mem_sdiff.mpr
+        ⟨?_, Converge.not_excluded htime hev (hTH hw) (hTH hv) E n (Or.inl hdr)⟩
       rw [mem_authorsIn]
       by_cases hwv : w = v
       · subst hwv

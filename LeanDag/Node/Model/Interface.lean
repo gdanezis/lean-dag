@@ -13,7 +13,8 @@ blocks, and the authors its block exposes (`Exposure`). The node checks the
 row's validity `rowValid q E` on receipt: references one round below from
 `q` distinct authors, and the exposure clause (`Clause.exposes`): the
 block exposes the authors its evidence names and those its references
-expose, and references none of them. It decides on a record of its memory
+expose, carries evidence against each of them, and references none of
+them. It decides on a record of its memory
 at `stored`, references one round below, and the honest set `∅`.
 
 Definitions only.
@@ -39,10 +40,12 @@ def named [DecidableEq BlockId] (E : Finset (Validator × BlockId × BlockId)) :
   (E.filter fun e => e.2.1 ≠ e.2.2).image (·.1)
 
 /-- **The exposure clause**: a block exposes the authors its evidence names
-and those its references expose, and references none of them. -/
+and those its references expose, its evidence names each of them, and it
+references none of them. -/
 def Clause.exposes [DecidableEq BlockId] (E : Exposure Validator BlockId Payload) :
     Clause Validator BlockId Payload := fun blk b =>
-  E.ex b.payload = named (E.ev b.payload) ∪ b.refs.biUnion (fun j => E.ex (blk j).payload) ∧
+  (E.ex b.payload = named (E.ev b.payload) ∪ b.refs.biUnion (fun j => E.ex (blk j).payload) ∧
+      E.ex b.payload ⊆ named (E.ev b.payload)) ∧
     ∀ j ∈ b.refs, (blk j).creator ∉ E.ex b.payload
 
 instance [DecidableEq BlockId] (E : Exposure Validator BlockId Payload)

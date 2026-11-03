@@ -81,20 +81,29 @@ theorem not_detected (htime : TimelyAuthentic cfg H tr) (hev : EvidenceAuthentic
 /-- **An honest node leaves out no honest author**, given authentic
 evidence, when it does not drop. -/
 theorem not_excluded (htime : TimelyAuthentic cfg H tr) (hev : EvidenceAuthentic cfg H tr)
-    (hd : cfg.drops = false) {u v : Validator} (hu : u ∈ H) (hv : v ∈ H) (i r : ℕ) :
+    {u v : Validator} (hu : u ∈ H) (hv : v ∈ H) (i r : ℕ)
+    (hd : cfg.drops = false ∨ cfg.Faithful ∧ (stateBefore cfg tr i v).floor ≤ r) :
     u ∉ excluded (cfg.at v) (stateBefore cfg tr i v).disk r (stateBefore cfg tr i v).evidence := by
   wlog hi : i ≤ tr.length generalizing i
-  · rw [stateBefore_of_le (by omega) v]; exact this tr.length le_rfl
+  · rw [stateBefore_of_le (by omega) v] at hd ⊢; exact this tr.length hd le_rfl
   intro hm
   rcases Finset.mem_union.mp hm with hm | hm
   · obtain ⟨e, he, rfl⟩ := Finset.mem_image.mp hm
     exact not_extracted htime hev hv hi
       ((inv_before (cfg := cfg) (tr := tr) i v).evidence.2 e (Finset.mem_filter.mp he).1) hu
   · obtain ⟨c, hcR, hcm⟩ := Finset.mem_biUnion.mp hm
-    exact ex_not_named ((inv_before (cfg := cfg) (tr := tr) i v).valid hd)
-      (fun j hj e he hne => hev _ (stored_known hv hj) e
-        (by simp only; rw [((stateBefore cfg tr i v).disk.full_fields j).2.2]; exact he) hne) c
-      (Store.mem_atRound.mp hcR).1 u hcm hu
+    rcases hd with hd | ⟨hf, hF⟩
+    · exact ex_not_named ((inv_before (cfg := cfg) (tr := tr) i v).valid hd)
+        (fun j hj e he hne => hev _ (stored_known hv hj) e
+          (by simp only; rw [((stateBefore cfg tr i v).disk.full_fields j).2.2]; exact he) hne) c
+        (Store.mem_atRound.mp hcR).1 u hcm hu
+    · -- a block at or above the floor is valid, so its evidence names whom it exposes
+      obtain ⟨hcd, hcr⟩ := Store.mem_atRound.mp hcR
+      have hval := ((inv_before (cfg := cfg) (tr := tr) i v).above c hcd (by rw [hcr]; exact hF)).2
+      obtain ⟨e, he, rfl⟩ := Finset.mem_image.mp
+        ((kept_before hf v i).exposed hcd hval hcm)
+      exact not_extracted htime hev hv hi
+        ((inv_before (cfg := cfg) (tr := tr) i v).evidence.2 e (Finset.mem_filter.mp he).1) hu
 
 /-- **The last request of a sync**: a sync present at `τ` was asked for
 at an event `R < τ` with no later request for it before `τ`, and has been

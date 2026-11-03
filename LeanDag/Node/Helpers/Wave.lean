@@ -275,7 +275,7 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
         exact hcx (this ▸ hin)
       obtain ⟨B, hiX⟩ := hbs.inv
       obtain ⟨hlZ, hlb⟩ := lent_buildable (cfg := cfg.at h) (hiX.valid hdr) hzx hzr₁ hkz
-        hfa hfresh x.evidence
+        hfa hfresh x.evidence fun j hj _ => (hbs.holds hfa).exposed hj (hiX.valid hdr j hj).2
       have hRR : refsAt (cfg.at w') xw.disk n oww xw.evidence ⊆ lent x.disk z.1 := by
         unfold lent; rw [hZR]
       have ho : ∀ k, oww = some k → (xw.disk.blk k).creator = (cfg.at w').me := fun k hk => by
@@ -439,7 +439,9 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
         (by rw [hbs.cut.eq hin, hraw]; rfl) hcv (by rw [hbs.cut.eq hin, hraw, hcr]; rfl)
       exact hcx (this ▸ hin)
     obtain ⟨o', hoo, hoi, hor, hoc⟩ := hbs.own n hxt
+    obtain ⟨B, hiX⟩ := hbs.inv
     have hb := refsFor_buildable (cfg := cfg.at v) (st := x.disk) (o := x.own) x.evidence hfa
+      (fun j hj _ => (hbs.holds hfa).exposed hj (hiX.valid hdr j hj).2)
       (fun j hj => by rw [hoo] at hj; cases hj; exact ⟨hoi, hor, hoc⟩)
       (hqT.trans (Finset.card_le_card hTA)) hfresh
     rw [hnb] at hb
