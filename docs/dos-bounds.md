@@ -398,9 +398,16 @@ store closed, and needs none of this.
         `Node/Helpers/Replay.lean`), from the loop's indifference to slots
         past those it can decide (`decisionAt_of_quiet`) and the witness's
         place at or above its slot's round (`witnessAt_round`); a proof's
-        blocks enter the store it builds (`proofStore_holds`); and the
+        blocks enter the store it builds (`proofStore_holds`); the
         node's disk is valid at the row from its floor up whether or not
-        it drops (`Inv.above`).
+        it drops (`Inv.above`, kept by each part of a step,
+        `UpperValid.settle`); and, at an injective hash, every proof a
+        node keeps decides its slot again on the blocks it keeps
+        (`ProofsHold`, along a run `ProofsHold.run`): a proof it decided
+        on itself (`proofHolds_decide`) and a proof it took from a peer
+        (`KeepsProofs.decideOn`), whose blocks all enter its disk
+        (`acceptOn_holds`). A reply from such proofs gives the peer the
+        node's verdict (`verdictOn_reply`).
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase
