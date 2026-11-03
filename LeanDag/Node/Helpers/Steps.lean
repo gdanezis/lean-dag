@@ -415,7 +415,8 @@ theorem Received.inv {inp : Input Validator BlockId Payload}
   have hfl := foldl_accept_known (cfg := cfg) (F := s.floor) L hi.known hi.valid hLK
   have hg := hr.grows
   refine ⟨by rw [hdk]; exact hfl.1, fun e he => ?_, by rw [hr.top]; exact hi.rounds, hi.good,
-    hi.sub, by rw [hdk]; exact hfl.2, fun j hj => ?_, ?_⟩
+    hi.sub, by rw [hdk]; exact hfl.2, fun j hj => ?_, ?_,
+    by rw [hdk, hr.floor]; exact UpperValid.foldl L hi.above⟩
   · rcases hr.syncs e he with h | h
     · obtain ⟨x, hx, hxe⟩ := List.mem_map.mp h; rw [← hxe]; exact hi.pend x hx
     · exact hd _ h

@@ -79,10 +79,9 @@ input `i` in the state `s`: the new state and the outputs.
   keeps for it and of those the slot's commit ordered (`proofReply`). The
   node decides the slot by `tryDecide` on the store the proof's blocks
   under their hash build, those of the round below the slot's without
-  their references (`proofStore`, `verdictOn`); it keeps the verdict and
-  the proof, takes the blocks in, each accepted if it is ready and
-  otherwise kept without its references if it lies below the floor
-  (`decideOn`, `takeProof`), and asks for the next slot.
+  their references (`proofStore`, `verdictOn`); it keeps the verdict and,
+  as the proof, the blocks of that store, takes the blocks in as it accepts
+  any block (`decideOn`), and asks for the next slot.
 * **Syncing** (`request`, `streamOf`, `inHistory`, `absorb`): a request
   names the sync's block, the node's frontier (for each author the least
   round at which its disk holds no block of it, `0` for a detected author,
@@ -569,22 +568,25 @@ def proofStore (k : ℕ) (L : List (BlockId × Block Validator BlockId Payload))
   (hashed cfg L).foldl (proofStep cfg k) (Store.empty cfg.genesis)
 
 /-- **The verdict of slot `k` a proof gives**: the first decision `tryDecide`
-makes from slot `k` on the store the proof builds. -/
+makes from slot `k` on the store the proof builds, scanning to the last
+slot of its top round. -/
 def verdictOn (k : ℕ) (L : List (BlockId × Block Validator BlockId Payload)) :
     Option (Option BlockId) :=
   letI := cfg.slots
   let st := proofStore cfg k L
-  ((Scheme.tryDecide cfg.p cfg.σ st.toRecord st.view k (decidable cfg st.topRound - 1)).head?).map
-    Prod.snd
+  ((Scheme.tryDecide cfg.p cfg.σ st.toRecord st.view k
+    (max k (decidable cfg st.topRound - 1))).head?).map Prod.snd
 
 /-- **The reply to a request for the proof of slot `k`**: the blocks on disk,
 as accepted, of the proof the node keeps for `k` and of those its commit
-ordered, in order of round. -/
+ordered below the round under the slot's, in order of round; the proof
+holds those the commit ordered from that round up. -/
 def proofReply (s : State Validator BlockId Payload) (k : ℕ) :
     Option (List (BlockId × Block Validator BlockId Payload)) :=
   letI := cfg.slots
   (s.proofs.find? fun p => p.1 = k).map fun p =>
-    ((((p.2 ∪ (s.ordered cfg.q (k + 1) \ s.ordered cfg.q k)).filter (· ∈ s.disk.ids)).sort
+    ((((p.2 ∪ ((s.ordered cfg.q (k + 1) \ s.ordered cfg.q k).filter fun i =>
+      (s.disk.blk i).round + 1 < cfg.slots.slotRound k)).filter (· ∈ s.disk.ids)).sort
       (· ≤ ·)).map fun i => (i, s.disk.full i)).mergeSort
         fun x y => decide (x.2.round ≤ y.2.round)
 

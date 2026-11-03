@@ -745,7 +745,9 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
             by
               have := hi.floor
               simp only [floorOf, h₁.1, Option.getD_none] at this
-              simpa [floorOf, s₀, keep] using this⟩
+              simpa [floorOf, s₀, keep] using this,
+            hi.above.insert (hnew := h₂.1) (hrefs := fun _ hj => absurd hj (Finset.notMem_empty _))
+              (hpred := fun j hj => absurd hj (Finset.notMem_empty j)) h₂.2⟩
         refine hset s₀ (built cfg [(cfg.idOf cfg.genesis, cfg.genesis)])
           ⟨hcst, hh₀, ho₀, (Grows.insert s.disk : Grows s.disk st), fun r hr => Or.inl hr,
             ⟨_, hi₀⟩, hev.grow (Grows.insert s.disk : Grows s.disk st) rfl rfl, subset_rfl,

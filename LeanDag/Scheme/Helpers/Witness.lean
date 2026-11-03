@@ -194,6 +194,35 @@ theorem witnessAt_subset (N : ℕ) : ∀ k, witnessAt p σ U V N k ⊆ V.ids := 
       · exact Finset.empty_subset _
 
 omit [Fintype Validator] in
+/-- **A witness lies at or above its slot's round.** -/
+theorem witnessAt_round (N : ℕ) :
+    ∀ k, ∀ x ∈ witnessAt p σ U V N k, S.slotRound k ≤ (U.block x).round := by
+  suffices h : ∀ n k, N + 1 - k = n →
+      witnessAt p σ U V N k ⊆ U.ids.filter fun x => S.slotRound k ≤ (U.block x).round from
+    fun k x hx => (Finset.mem_filter.mp (h _ k rfl hx)).2
+  intro n
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+    intro k hn
+    rw [witnessAt]
+    split
+    · intro x hx
+      obtain ⟨hx, -⟩ := Finset.mem_inter.mp hx
+      obtain ⟨hxU, hxr⟩ := mem_blocksAt.mp (Finset.mem_filter.mp hx).1
+      exact Finset.mem_filter.mpr ⟨hxU, by omega⟩
+    · intro x hx
+      obtain ⟨hx, -⟩ := Finset.mem_inter.mp hx
+      obtain ⟨hxU, hxr⟩ := mem_blocksAt.mp (Finset.mem_filter.mp hx).1
+      exact Finset.mem_filter.mpr ⟨hxU, by omega⟩
+    · refine anchorWitness_subset (fun j => ?_) _
+      split
+      · rename_i hj
+        intro x hx
+        have := Finset.mem_filter.mp (ih (N + 1 - j) (by omega) j rfl hx)
+        exact Finset.mem_filter.mpr ⟨this.1, (S.mono hj.1.le).trans this.2⟩
+      · exact Finset.empty_subset _
+
+omit [Fintype Validator] in
 /-- **The witness decides as the view does.** A view `W ⊆ V` holding the
 witness of slot `k`'s decision on `V` decides `k` alike, at positive link,
 commit and certificate thresholds. -/
@@ -270,6 +299,77 @@ theorem mem_tryDecide_of_decisionAt {N k : ℕ} {v : Option BlockId} (hk : k ≤
   unfold tryDecide
   rw [hscan, h, List.takeWhile_cons_of_pos (by simp)]
   exact List.mem_cons_self
+
+omit [Fintype Validator] in
+/-- The walk over later slots none of which is decided stops undecided. -/
+theorem tryIndirect_of_none {k : ℕ} :
+    ∀ l : List (ℕ × Option (Option BlockId)), (∀ e ∈ l, e.2 = none) →
+      tryIndirect p σ U V k l = none
+  | [], _ => rfl
+  | (j, s) :: l, h => by
+    have hs : s = none := h (j, s) List.mem_cons_self
+    subst hs
+    unfold tryIndirect
+    split
+    · rfl
+    · exact tryIndirect_of_none l fun e he => h e (List.mem_cons_of_mem _ he)
+
+omit [Fintype Validator] in
+/-- The walk over later slots reads past undecided ones at the end alike. -/
+theorem tryIndirect_append {k : ℕ} {Z : List (ℕ × Option (Option BlockId))}
+    (hZ : ∀ e ∈ Z, e.2 = none) :
+    ∀ l : List (ℕ × Option (Option BlockId)),
+      tryIndirect p σ U V k (l ++ Z) = tryIndirect p σ U V k l
+  | [] => tryIndirect_of_none Z hZ
+  | (j, s) :: l => by
+    simp only [List.cons_append]
+    unfold tryIndirect
+    split
+    · split
+      · rfl
+      · exact tryIndirect_append hZ l
+      · rfl
+    · exact tryIndirect_append hZ l
+
+omit [Fintype Validator] in
+/-- **Past slots that no rule decides directly, the scan decides nothing.** -/
+theorem scan_none_above {N' : ℕ} (hq : ∀ j, N' < j → tryDirect p σ U V j = none) (N : ℕ) :
+    ∀ m, N' + m ≤ N → ∀ e ∈ scan p σ U V N m, e.2 = none
+  | 0, _, e, he => by simp [scan] at he
+  | m + 1, hm, e, he => by
+    rcases List.mem_cons.mp he with rfl | he
+    · simp only [decideSlot]
+      rw [hq _ (by omega)]
+      exact tryIndirect_of_none _ (scan_none_above hq N m (by omega))
+    · exact scan_none_above hq N m (by omega) e he
+
+omit [Fintype Validator] in
+/-- **Scanning past slots that no rule decides directly changes no
+decision**: the scan to `N` is the scan to `N' ≤ N`, then undecided slots. -/
+theorem scan_append {N' N : ℕ} (hq : ∀ j, N' < j → tryDirect p σ U V j = none)
+    (hN : N' ≤ N) : ∀ m, m ≤ N' →
+      scan p σ U V N (N - N' + m) = scan p σ U V N' m ++ scan p σ U V N (N - N')
+  | 0, _ => by simp [scan]
+  | m + 1, hm => by
+    rw [show N - N' + (m + 1) = (N - N' + m) + 1 by omega, scan, scan_append hq hN m (by omega),
+      scan, show N - (N - N' + m) = N' - m by omega]
+    congr 2
+    unfold decideSlot
+    split
+    · rfl
+    · exact tryIndirect_append (scan_none_above hq N _ (by omega)) _
+
+omit [Fintype Validator] in
+/-- **The loop decides a slot alike scanning to `N` or to any `N'` between
+the slot and `N`**, when no rule decides directly a slot past `N'`. -/
+theorem decisionAt_of_quiet {N' N k : ℕ} (hq : ∀ j, N' < j → tryDirect p σ U V j = none)
+    (hN : N' ≤ N) (hk : k ≤ N') : decisionAt p σ U V N k = decisionAt p σ U V N' k := by
+  unfold decisionAt
+  rw [show N - k = N - N' + (N' - k) by omega, scan_append hq hN _ (by omega)]
+  unfold decideSlot
+  split
+  · rfl
+  · exact tryIndirect_append (scan_none_above hq N _ (by omega)) _
 
 variable [P.Mechanised]
 

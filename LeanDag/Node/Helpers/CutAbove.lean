@@ -284,17 +284,13 @@ theorem verdict_proof (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     (BlockId := BlockId) (Payload := Payload) cfg.q Clause.none) (honest := H)) ht
   obtain ⟨hc, hkp⟩ := proofStore_good hinj hauth hq v hk hL
   set st := proofStore (cfg.at v) k L with hst
-  set N := decidable (cfg.at v) st.topRound - 1
+  set N := max k (decidable (cfg.at v) st.topRound - 1)
   have hv' :
       ((tryDecide cfg.p boundedSel st.toRecord st.view k N).head?).map Prod.snd = some d := by
     rw [← hσ]; exact hv
   obtain ⟨e, he, hed⟩ := Option.map_eq_some_iff.mp hv'
   have hmem := List.mem_of_mem_head? he
-  have hlo : k ≤ N + 1 := by
-    by_contra hlt
-    have : tryDecide cfg.p boundedSel st.toRecord st.view k N = [] := by
-      unfold tryDecide; rw [show N + 1 - k = 0 by omega]; rfl
-    rw [this] at hmem; exact absurd hmem List.not_mem_nil
+  have hlo : k ≤ N + 1 := (le_max_left _ _).trans (Nat.le_succ _)
   have he1 : e.1 = k := by
     obtain ⟨hmap, -⟩ := tryDecide_sound (σ := boundedSel) (U := st.toRecord) (V := st.view) hl hcv
       hlo

@@ -408,6 +408,16 @@ theorem decidable_mono {R R' : ℕ} (h : R ≤ R') : decidable cfg R ≤ decidab
   exact Nat.mul_le_mul_left _ (Nat.add_le_add_right (Nat.div_le_div_right h) 1)
 
 omit [Fintype Validator] in
+/-- Every slot at a round at most `R` is below `decidable R`. -/
+theorem lt_decidable {k R : ℕ} (hk : cfg.slots.slotRound k ≤ R) : k < decidable cfg R := by
+  change cfg.per * (k / cfg.m) ≤ R at hk
+  unfold decidable
+  have h₁ : k / cfg.m ≤ R / cfg.per :=
+    (Nat.le_div_iff_mul_le cfg.per_pos).mpr (by rw [Nat.mul_comm]; exact hk)
+  exact lt_of_lt_of_le (Nat.lt_mul_div_succ k cfg.m_pos)
+    (Nat.mul_le_mul_left _ (by omega))
+
+omit [Fintype Validator] in
 /-- Building outputs only built blocks. -/
 theorem progress_built : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
     ∃ bs, (Node.progress cfg fuel s).2 = built cfg bs

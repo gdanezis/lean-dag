@@ -348,14 +348,13 @@ store closed, and needs none of this.
         drops asks every peer for the proof of its next undecided slot
         when it resends (`askProof`), and again after each slot it decides
         on a proof. A peer answers from the proof it keeps for that slot
-        and the blocks the slot's commit ordered (`proofReply`, with
-        `State.proofs` now kept for each slot). The node decides the slot
-        by the loop on the store the proof's blocks build, those of the
-        round below the slot's without their references (`proofStore`,
-        `verdictOn`), keeps the verdict and the proof, and takes the blocks
-        in: each is accepted if it is ready, and otherwise kept without
-        its references if it lies below the floor (`decideOn`,
-        `takeProof`, `Store.base`). Safety holds: a decision on a proof of
+        and the blocks the slot's commit ordered below the round under the
+        slot's (`proofReply`, with `State.proofs` now kept for each slot).
+        The node decides the slot by the loop on the store the proof's
+        blocks build, those of the round below the slot's without their
+        references (`proofStore`, `verdictOn`), keeps the verdict and, as
+        the proof, the blocks of that store, and takes the blocks in as it
+        accepts any block (`decideOn`, `Store.base`). Safety holds: a decision on a proof of
         known blocks is a verdict on the record padded below the round
         under the slot's (`verdict_proof`). A node that takes in blocks
         without their references holds, from its cut down, blocks whose
@@ -393,7 +392,15 @@ store closed, and needs none of this.
         reaches each reliable node, or that node's floor passes it; and
         the eventual V11, from the observation that a reliable node can
         need a let-go block only while another reliable node is ahead of it
-        in deciding, which catch-up closes.
+        in deciding, which catch-up closes. Done so far: the replay of a
+        decision on a store that holds its witness and reads as the view
+        from the slot's round up (`verdictOn_of_decision`,
+        `Node/Helpers/Replay.lean`), from the loop's indifference to slots
+        past those it can decide (`decisionAt_of_quiet`) and the witness's
+        place at or above its slot's round (`witnessAt_round`); a proof's
+        blocks enter the store it builds (`proofStore_holds`); and the
+        node's disk is valid at the row from its floor up whether or not
+        it drops (`Inv.above`).
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase
