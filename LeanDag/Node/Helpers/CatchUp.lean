@@ -1,6 +1,7 @@
 import LeanDag.Node.Helpers.Replay
 import LeanDag.Node.Helpers.SyncTrace
 import LeanDag.Node.Helpers.Reliable
+import LeanDag.Node.Helpers.Recover
 import LeanDag.Node.Live.Statement
 /-!
 # Catch-up on a peer's proof
@@ -12,7 +13,10 @@ import LeanDag.Node.Live.Statement
 once a reliable peer has decided it, is past that slot two message delays
 later (`caught_up`): the peer replies with a kept proof, whose verdict is
 the same at every node (`verdictOn_at`), and a step asks only for a proof
-at or below its next undecided slot (`askProof_le_lo`).
+at or below its next undecided slot (`askProof_le_lo`). A node behind asks
+for the proof of its next undecided slot at a timer within `askDelay`
+(`asks_within`), so it moves up a slot once a reliable peer is past it
+(`moves_up`).
 -/
 
 namespace LeanDag
@@ -177,6 +181,33 @@ theorem askProof_le_lo {s : State Validator BlockId Payload} {inp : Input Valida
       · intro h; exact absurd h List.not_mem_nil
     · intro h; exact absurd h List.not_mem_nil
 
+/-- **A timer step asks for the proof of the next undecided slot**, at a
+node that drops, unless the node's top then lies within a wave of that
+slot's round and the step does not resend: its top changed, or the timer
+is of neither its top round nor the one below. -/
+theorem askProof_timer (hdr : cfg.drops = true) (s : State Validator BlockId Payload) (r : ℕ) :
+    Output.askProof (Node.step cfg s (.timer r)).1.lo ∈ (Node.step cfg s (.timer r)).2 ∨
+      ((Node.step cfg s (.timer r)).1.top.getD 0 ≤
+          cfg.slots.slotRound (Node.step cfg s (.timer r)).1.lo + cfg.p.waveLength ∧
+        ¬ ((Node.step cfg s (.timer r)).1.top = s.top ∧
+          (s.top = some r ∨ s.top = some (r + 1)))) := by
+  set res := Node.settle cfg { s with fired := fire s r, recovering := false } with hres
+  have hst : Node.step cfg s (.timer r) =
+      if res.1.top = s.top ∧ (s.top = some r ∨ s.top = some (r + 1)) then
+        (res.1, res.2 ++ Node.resend cfg res.1)
+      else (res.1, res.2 ++ Node.askBehind cfg res.1) := rfl
+  rw [hst]
+  by_cases h : res.1.top = s.top ∧ (s.top = some r ∨ s.top = some (r + 1))
+  · rw [if_pos h]
+    exact Or.inl (List.mem_append_right _ (by simp [Node.resend, hdr]))
+  · rw [if_neg h]
+    by_cases hl : cfg.slots.slotRound res.1.lo + cfg.p.waveLength < res.1.top.getD 0
+    · refine Or.inl (List.mem_append_right _ ?_)
+      unfold Node.askBehind
+      rw [if_pos ⟨hdr, hl⟩]
+      exact List.mem_singleton_self _
+    · exact Or.inr ⟨by dsimp only; omega, h⟩
+
 /-- **A reliable node catches up on a reliable peer's proof** (D16): when
 a reliable node `u` asks for the proof of a slot `k`, and a reliable peer
 `v` has decided `k` by then, `u` is past `k` within two message delays
@@ -246,6 +277,137 @@ theorem caught_up (hσ : cfg.σ = boundedSel) (hw : 2 ≤ cfg.p.waveLength)
     rw [(tidy_eq _).2.2.2.2.2.1, h₂] at h₁
     omega
   · exact lt_of_lt_of_le (lt_of_le_of_ne hlo hk') (rises_step (cfg := cfg.at u)).2.2
+
+/-! ## Asking when behind -/
+
+section Asking
+
+variable {T : Finset Validator} {time : ℕ → ℕ} {t_r t₁ : ℕ}
+
+/-- **A node's kept decisions are the slots below its next undecided
+one.** -/
+theorem ledger_before (v : Validator) (i : ℕ) : Ledger (stateBefore cfg tr i v) :=
+  (run_appends (cfg := cfg.at v) (inputsBefore tr i v) Ledger.init).2
+
+variable (cfg) in
+/-- **The delay of a request for a proof**, from round `n` with the next
+undecided slot at most `k`: twice the timeout of the round below each
+round from `n` to a wave above the round of slot `k`. -/
+def askDelay (k n : ℕ) : ℕ :=
+  ∑ r ∈ Finset.Icc n (max n (cfg.slots.slotRound k + cfg.p.waveLength)), 2 * cfg.timeout (r - 1)
+
+theorem two_timeout_le_askDelay (k n : ℕ) : 2 * cfg.timeout (n - 1) ≤ askDelay cfg k n :=
+  Finset.single_le_sum (f := fun r => 2 * cfg.timeout (r - 1)) (fun _ _ => Nat.zero_le _)
+    (Finset.mem_Icc.mpr ⟨le_rfl, le_max_left _ _⟩)
+
+theorem askDelay_step {k n n' : ℕ} (h : n < n')
+    (h' : n' ≤ cfg.slots.slotRound k + cfg.p.waveLength) :
+    2 * cfg.timeout (n - 1) + askDelay cfg k n' ≤ askDelay cfg k n := by
+  unfold askDelay
+  rw [max_eq_right h', max_eq_right (show n ≤ _ by omega),
+    Finset.Icc_eq_cons_Ioc (show n ≤ _ by omega),
+    Finset.sum_cons]
+  exact Nat.add_le_add_left (Finset.sum_le_sum_of_subset fun x hx => by
+    simp only [Finset.mem_Icc, Finset.mem_Ioc] at hx ⊢; omega) _
+
+/-- **A reliable node behind asks for a proof**, at a node that drops: from
+event `E` on, at round `n` with its next undecided slot at most `k`, a
+reliable node that does not restart asks at a timer for the proof of its
+next undecided slot, or is past `k`, within `askDelay k n` of the events
+before `E`. The retry timer of its round fires (`retry_fires`) and asks
+(`askProof_timer`), unless the node built above its round within a wave of
+its next undecided slot's round; then the retry timer of the round it
+built does, within the next term of the delay. -/
+theorem asks_within (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time t_r t₁)
+    (hfire : Live.TimersFireUp cfg T tr time t₁) (hdr : cfg.drops = true) {u : Validator}
+    (hu : u ∈ T) (k : ℕ) {E n τ : ℕ} (hts : (stateBefore cfg tr E u).top = some n)
+    (hlo : (stateBefore cfg tr E u).lo ≤ k) (hrE : ∀ j, E ≤ j → j < tr.length → t_r ≤ time j)
+    (hτ : ∀ a < E, a < tr.length → time a ≤ τ) (ht₁ : τ + askDelay cfg k n ≤ t₁) :
+    ∃ g, E ≤ g ∧ time g ≤ τ + askDelay cfg k n ∧ (tr[g]?.map Prod.fst) = some u ∧
+      (k < (stateBefore cfg tr (g + 1) u).lo ∨
+        Output.askProof (stateBefore cfg tr (g + 1) u).lo ∈ outputsAt cfg tr g) := by
+  set R := cfg.slots.slotRound k + cfg.p.waveLength with hR
+  induction hm : R + 1 - n using Nat.strong_induction_on generalizing E n τ with
+  | _ m ih =>
+  obtain ⟨a, f, haE, hEf, hf, htf⟩ := retry_fires hup hfire hu hts hrE
+    (fun a ha hal => by
+      have := hτ a ha hal; have := two_timeout_le_askDelay (cfg := cfg) k n; omega)
+  have hfl : f < tr.length := (List.getElem?_eq_some_iff.mp hf).1
+  have hal : a < tr.length := by omega
+  have hta := hτ a haE hal
+  have h2t := two_timeout_le_askDelay (cfg := cfg) k n
+  have hfu : (tr[f]?.map Prod.fst) = some u := by rw [hf]; rfl
+  have hstep := askProof_timer (cfg := cfg.at u) hdr (stateBefore cfg tr f u) (n - 1)
+  rw [← Converge.step_before hf, ← outputsAt_eq hf] at hstep
+  rcases hstep with hask | ⟨hlag, hne⟩
+  · exact ⟨f, hEf, by omega, hfu, Or.inr hask⟩
+  by_cases hk : k < (stateBefore cfg tr (f + 1) u).lo
+  · exact ⟨f, hEf, by omega, hfu, Or.inl hk⟩
+  -- the node built above `n`, within a wave of its next undecided slot's round
+  obtain ⟨h₁, h₂, -⟩ := rises_before (cfg := cfg) (tr := tr) u hEf
+  obtain ⟨h₃, h₄, -⟩ := rises_before (cfg := cfg) (tr := tr) u (Nat.le_succ f)
+  rw [hts] at h₁ h₂
+  obtain ⟨n₀, hn₀⟩ := Option.isSome_iff_exists.mp (h₂ rfl)
+  obtain ⟨n', hn'⟩ := Option.isSome_iff_exists.mp (h₄ (h₂ rfl))
+  rw [hn₀] at h₁ h₃
+  rw [hn'] at h₃ hlag
+  simp only [Option.getD_some] at h₁ h₃ hlag
+  have hnn' : n < n' := by
+    by_contra hle
+    have hfn : (stateBefore cfg tr f u).top = some n := by rw [hn₀]; congr 1; omega
+    have hf'n : (stateBefore cfg tr (f + 1) u).top = some n := by rw [hn']; congr 1; omega
+    refine hne ⟨hf'n.trans hfn.symm, ?_⟩
+    rcases Nat.eq_zero_or_pos n with h0 | hpos
+    · left; rw [hfn, h0]
+    · right; rw [hfn, Nat.sub_add_cancel hpos]
+  have hlag' : n' ≤ cfg.slots.slotRound (stateBefore cfg tr (f + 1) u).lo + cfg.p.waveLength :=
+    hlag
+  have hn'R : n' ≤ R := hlag'.trans (Nat.add_le_add_right
+    (cfg.slots.mono (show (stateBefore cfg tr (f + 1) u).lo ≤ k by omega)) _)
+  have hstepd := askDelay_step (cfg := cfg) hnn' hn'R
+  have hlo' : (stateBefore cfg tr (f + 1) u).lo ≤ k := by omega
+  obtain ⟨g, hfg, htg, hgu, hres⟩ := ih (R + 1 - n') (by omega) hn' hlo'
+    (fun j hj hjl => hrE j (by omega) hjl) (fun a' ha' _ => hmono a' f (by omega) hfl)
+    (by omega) rfl
+  exact ⟨g, by omega, by omega, hgu, hres⟩
+
+/-- **A reliable node behind moves up a slot**, at a node that drops: from
+event `E` on, at round `n` with its next undecided slot at most `k`, once
+a reliable peer is past `k`, the node's next undecided slot rises within
+`askDelay k n` of the events before `E` and two message delays past GST,
+if no reliable node restarts. The node asks for the proof of its next
+undecided slot (`asks_within`), which the peer has decided
+(`caught_up`). -/
+theorem moves_up (hσ : cfg.σ = boundedSel) (hw : 2 ≤ cfg.p.waveLength)
+    (hl : 1 ≤ cfg.p.linkSize) (hcm : 1 ≤ cfg.p.commitThreshold)
+    (hc : cfg.p.voteIsCert = false → 1 ≤ cfg.p.certThreshold)
+    (hid : Function.Injective cfg.idOf) (hdr : cfg.drops = true)
+    {H : Finset Validator} (htime : Converge.TimelyAuthentic cfg H tr)
+    (hev : Converge.EvidenceAuthentic cfg H tr) (hTH : T ⊆ H) {gst Δ : ℕ}
+    (hmono : Live.TimeMono tr time) (hdel : Live.DeliveredWithin cfg T tr time gst Δ t₁)
+    (hup : Live.UpFrom T tr time 0 t₁) (hfire : Live.TimersFireUp cfg T tr time t₁)
+    {u v : Validator} (hu : u ∈ T) (hv : v ∈ T) (hvu : v ≠ u) {E n τ k : ℕ}
+    (hts : (stateBefore cfg tr E u).top = some n) (hlo : (stateBefore cfg tr E u).lo ≤ k)
+    (hvk : k < (stateBefore cfg tr E v).lo) (hτ : ∀ a < E, a < tr.length → time a ≤ τ)
+    (ht₁ : max (τ + askDelay cfg k n) gst + 2 * Δ ≤ t₁) :
+    ∃ j, E ≤ j ∧ time j ≤ max (τ + askDelay cfg k n) gst + 2 * Δ ∧
+      (stateBefore cfg tr E u).lo < (stateBefore cfg tr (j + 1) u).lo := by
+  obtain ⟨g, hEg, htg, hgu, hres⟩ := asks_within hmono hup hfire hdr hu k hts hlo
+    (fun _ _ _ => Nat.zero_le _) hτ (by omega)
+  have hg₁ := (rises_before (cfg := cfg) (tr := tr) u (show E ≤ g + 1 by omega)).2.2
+  have hmax : max (time g) gst ≤ max (τ + askDelay cfg k n) gst := max_le_max htg le_rfl
+  by_cases hk : k < (stateBefore cfg tr (g + 1) u).lo
+  · exact ⟨g, hEg, by omega, by omega⟩
+  have hask := hres.resolve_left hk
+  obtain ⟨inp, hg⟩ := Converge.event_of_map hgu
+  have hvg := (rises_before (cfg := cfg) (tr := tr) v hEg).2.2
+  obtain ⟨d, hd⟩ := (ledger_before (cfg := cfg) (tr := tr) v g).mem
+    (k := (stateBefore cfg tr (g + 1) u).lo) (by omega)
+  obtain ⟨j, hgj, htj, hj⟩ := caught_up hσ hw hl hcm hc hid hdr htime hev hTH hdel hu hv hvu hg
+    hask hd (by omega)
+  exact ⟨j, by omega, by omega, by omega⟩
+
+end Asking
 
 end Node
 

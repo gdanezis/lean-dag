@@ -40,6 +40,14 @@ the latest first. -/
 def Ledger (s : State Validator BlockId Payload) : Prop :=
   s.decided.reverse.map Prod.fst = List.range s.lo
 
+omit [Fintype Validator] in
+/-- A slot below `lo` is decided. -/
+theorem Ledger.mem {s : State Validator BlockId Payload} (h : Ledger s) {k : ℕ} (hk : k < s.lo) :
+    ∃ d, (k, d) ∈ s.decided := by
+  have : k ∈ s.decided.reverse.map Prod.fst := by rw [h]; exact List.mem_range.mpr hk
+  obtain ⟨x, hx, rfl⟩ := List.mem_map.mp this
+  exact ⟨x.2, List.mem_reverse.mp hx⟩
+
 /-- **A transition appends its decisions**: from `s` to `s'` with outputs
 `out`, the kept decisions, read oldest first, grow by the decisions
 output. -/

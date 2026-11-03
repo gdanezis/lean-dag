@@ -417,8 +417,17 @@ store closed, and needs none of this.
         proof of every slot it decided (`paired_before`), and the proof
         gives every node the peer's verdict (`verdictOn_reply`,
         `verdictOn_at`). A node asks only for a proof at or below its next
-        undecided slot (`askProof_le_lo`). What remains is when a node
-        behind asks, then arrival-or-passed and the eventual V11.
+        undecided slot (`askProof_le_lo`). A reliable node at round `n`
+        whose next undecided slot is at most `k` asks for the proof of that
+        slot, or is past `k`, within `askDelay k n` (`asks_within`), the sum
+        of twice the timeout of the round below each round from `n` to a
+        wave above the round of slot `k`: its retry timer fires and asks
+        (`askProof_timer`), unless the node built above its round within a
+        wave of that slot's round, and then the retry timer of the round it
+        built does. So once a reliable peer is past `k`, the node's next
+        undecided slot rises within `askDelay k n` and `2Δ` past GST
+        (`moves_up`). What remains is arrival-or-passed and the eventual
+        V11.
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase

@@ -37,23 +37,36 @@ theorem broadcast_mem_resend {s : State Validator BlockId Payload} {n : ℕ} {j 
     Output.broadcast j (s.disk.full j) ∈ Node.resend cfg s := by
   simp [Node.resend, ht, ho]
 
+/-- **A timer of the node's top round, or the one below, resends when the
+top stays.** -/
+theorem resend_of_stay {v : Validator} {f n : ℕ} (hf : tr[f]? = some (v, .timer (n - 1)))
+    (h₁ : (stateBefore cfg tr f v).top = some n) (h₂ : (stateBefore cfg tr (f + 1) v).top = some n)
+    {o : Output Validator BlockId Payload}
+    (ho : o ∈ Node.resend (cfg.at v) (stateBefore cfg tr (f + 1) v)) : o ∈ outputsAt cfg tr f := by
+  rw [Converge.step_before hf, step_timer_fst] at h₂ ho
+  have hm : (stateBefore cfg tr f v).top = some (n - 1) ∨
+      (stateBefore cfg tr f v).top = some (n - 1 + 1) := by
+    rcases Nat.eq_zero_or_pos n with h0 | hpos
+    · left; rw [h₁, h0]
+    · right; rw [h₁, Nat.sub_add_cancel hpos]
+  rw [outputsAt_eq hf]
+  simp only [Node.step]
+  rw [if_pos ⟨h₂.trans h₁.symm, hm⟩]
+  exact List.mem_append_right _ ho
+
 open Classical in
-/-- **The retry timer is set past the last restart**: a reliable node at
-round `n` at `s ≥ t_r` set the timer of round `n - 1` at a last event
-before `s`, its build of round `n`, a restart or a resend, and that timer
-fires twice the round's timeout later. -/
-theorem retry_last (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time t_r t₁)
-    (hfire : Live.TimersFireUp cfg T tr time t₁) {v : Validator} (hv : v ∈ T) {s n : ℕ}
-    (hrs : t_r ≤ s) (hts : (stateAt cfg tr time v s).top = some n)
-    (ht₁ : s + 2 * cfg.timeout (n - 1) ≤ t₁) :
-    ∃ a f, a < eventsBy tr time s ∧ (tr[a]?.map Prod.fst) = some v ∧
-      Output.setTimer (n - 1) (2 * cfg.timeout (n - 1)) ∈ outputsAt cfg tr a ∧
-      (∀ a', a < a' → a' < eventsBy tr time s → (tr[a']?.map Prod.fst) = some v →
-        Output.setTimer (n - 1) (2 * cfg.timeout (n - 1)) ∉ outputsAt cfg tr a') ∧
-      (∀ k, a < k → k ≤ eventsBy tr time s → (stateBefore cfg tr k v).top = some n) ∧
-      a < f ∧ tr[f]? = some (v, .timer (n - 1)) ∧ time f = time a + 2 * cfg.timeout (n - 1) := by
-  set E := eventsBy tr time s with hE
-  change (stateBefore cfg tr E v).top = some n at hts
+/-- **The retry timer fires**: a reliable node at round `n` before event
+`E` set the timer of round `n - 1` at a last event before `E`, its build
+of round `n`, a restart or a resend, and that timer fires at `E` or after,
+twice the round's timeout after it was set, if the node does not restart
+from `E` on. -/
+theorem retry_fires (hup : Live.UpFrom T tr time t_r t₁)
+    (hfire : Live.TimersFireUp cfg T tr time t₁) {v : Validator} (hv : v ∈ T) {E n : ℕ}
+    (hts : (stateBefore cfg tr E v).top = some n)
+    (hrE : ∀ k, E ≤ k → k < tr.length → t_r ≤ time k)
+    (ht₁ : ∀ a < E, a < tr.length → time a + 2 * cfg.timeout (n - 1) ≤ t₁) :
+    ∃ a f, a < E ∧ E ≤ f ∧ tr[f]? = some (v, .timer (n - 1)) ∧
+      time f = time a + 2 * cfg.timeout (n - 1) := by
   let P : ℕ → Prop := fun a =>
     (tr[a]?.map Prod.fst) = some v ∧
       Output.setTimer (n - 1) (2 * cfg.timeout (n - 1)) ∈ outputsAt cfg tr a
@@ -71,7 +84,6 @@ theorem retry_last (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time 
     Nat.findGreatest_is_greatest h₁ (by omega)
   obtain ⟨inpa, hai⟩ := Converge.event_of_map hPa.1
   have hal : a < tr.length := (List.getElem?_eq_some_iff.mp hai).1
-  have hta : time a ≤ s := (lt_eventsBy hmono hal).mp haE
   -- the node is at round `n` from it to `E`
   obtain ⟨t₀, ht₀, hbt₀⟩ := built_le_top hb hep
   have hat : ∀ k, b < k → k ≤ E → (stateBefore cfg tr k v).top = some n := by
@@ -80,6 +92,13 @@ theorem retry_last (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time 
     refine top_between (cfg := cfg) hkE (hr.2.1 (by rw [ht₀]; rfl)) ?_ hts
     have := hr.1
     rw [ht₀] at this; simp only [Option.getD_some] at this; omega
+  -- a resend before `E` would set the timer again
+  have hres : ∀ k, a < k → k < E → (stateBefore cfg tr (k + 1) v).top = some n →
+      tr[k]? = some (v, .timer (n - 1)) → False := by
+    intro k hak hkE h₂ hk
+    obtain ⟨j, hj, -⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) (k + 1) n h₂
+    exact hmax k hak hkE ⟨by rw [hk]; rfl, resend_of_stay hk (hat k (by omega) hkE.le) h₂
+      (setTimer_mem_resend (cfg := cfg.at v) h₂ hj)⟩
   -- no restart after it
   have hnr : ∀ k, a < k → time k ≤ time a + 2 * cfg.timeout (n - 1) →
       tr[k]? ≠ some (v, .restart) := by
@@ -93,13 +112,14 @@ theorem retry_last (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time 
       rw [outputsAt_eq hk]
       exact List.mem_append_left _
         (List.mem_append_left _ (setTimer_mem_resend (cfg := cfg.at v) htk hj))
-    · have := hup k v hk hv (by omega)
-      have := (lt_eventsBy hmono hkl).not.mp hkE
+    · have := hup k v hk hv (by have := ht₁ a haE hal; omega)
+      have := hrE k (by omega) hkl
       omega
   obtain ⟨f, haf, hf, htf⟩ :=
-    hfire a v inpa hai hv (n - 1) (2 * cfg.timeout (n - 1)) hPa.2 (by omega) hnr
-  exact ⟨a, f, haE, hPa.1, hPa.2, fun a' h₁ h₂ h₃ h₄ => hmax a' h₁ h₂ ⟨h₃, h₄⟩,
-    fun k hak hkE => hat k (by omega) hkE, haf, hf, htf⟩
+    hfire a v inpa hai hv (n - 1) (2 * cfg.timeout (n - 1)) hPa.2 (ht₁ a haE hal) hnr
+  refine ⟨a, f, haE, ?_, hf, htf⟩
+  by_contra hlt
+  exact hres f haf (by omega) (hat (f + 1) (by omega) (by omega)) hf
 
 /-- **A reliable node sends one of its blocks again past the last
 restart**: at round `m` at `t₀ ≥ t_r`, it broadcasts a block of its own of
@@ -113,60 +133,25 @@ theorem sends_again (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time
     (ht₁ : t₀ + 2 * cfg.timeout (m - 1) ≤ t₁) :
     ∃ k inp y, tr[k]? = some (u, inp) ∧ t₀ < time k ∧ time k ≤ t₀ + 2 * cfg.timeout (m - 1) ∧
       y ∈ broadcasts (outputsAt cfg tr k) ∧ m ≤ y.2.round ∧ y.2.creator = u := by
-  obtain ⟨a, f, haE, -, -, hmax, hat, haf, hf, htf⟩ := retry_last hmono hup hfire hu hrt hts ht₁
   set E := eventsBy tr time t₀ with hE
+  change (stateBefore cfg tr E u).top = some m at hts
+  obtain ⟨a, f, haE, hfE, hf, htf⟩ := retry_fires hup hfire hu hts
+    (fun k hk hkl => by have := (lt_eventsBy hmono hkl).not.mp (Nat.not_lt.mpr hk); omega)
+    (fun a ha hal => by have := (lt_eventsBy hmono hal).mp ha; omega)
   have hal : a < tr.length := lt_of_lt_of_le haE (eventsBy_le_length t₀)
   have hta : time a ≤ t₀ := (lt_eventsBy hmono hal).mp haE
   have hfl : f < tr.length := (List.getElem?_eq_some_iff.mp hf).1
-  change (stateBefore cfg tr E u).top = some m at hts
-  -- the node after its timer's event
   have hsucc : stateBefore cfg tr (f + 1) u =
-      (Node.step (cfg.at u) (stateBefore cfg tr f u) (.timer (m - 1))).1 := by
-    rw [stateBefore_succ hf, if_pos rfl]
-  -- the step of the timer, when the node stays at `m`, resends
+      (Node.step (cfg.at u) (stateBefore cfg tr f u) (.timer (m - 1))).1 :=
+    Converge.step_before hf
+  -- the step of the timer, when the node stays at `m`, resends its block
   have hres : (stateBefore cfg tr f u).top = some m → (stateBefore cfg tr (f + 1) u).top = some m →
-      (∃ j, (stateBefore cfg tr (f + 1) u).own = some j ∧
-        ((stateBefore cfg tr (f + 1) u).disk.blk j).round = m ∧
+      (∃ j, ((stateBefore cfg tr (f + 1) u).disk.blk j).round = m ∧
         ((stateBefore cfg tr (f + 1) u).disk.blk j).creator = u ∧
-        Output.setTimer (m - 1) (2 * cfg.timeout (m - 1)) ∈ outputsAt cfg tr f ∧
         Output.broadcast j ((stateBefore cfg tr (f + 1) u).disk.full j) ∈ outputsAt cfg tr f) := by
     intro h₁ h₂
     obtain ⟨j, hj, -, hjr, hjc⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := u) (f + 1) m h₂
-    have h₂' := h₂
-    rw [hsucc, step_timer_fst] at h₂'
-    have hout : outputsAt cfg tr f =
-        (Node.settle (cfg.at u) { stateBefore cfg tr f u with
-          fired := fire (stateBefore cfg tr f u) (m - 1), recovering := false }).2 ++
-        Node.resend (cfg.at u) (Node.settle (cfg.at u) { stateBefore cfg tr f u with
-          fired := fire (stateBefore cfg tr f u) (m - 1), recovering := false }).1 := by
-      have hm : (stateBefore cfg tr f u).top = some (m - 1) ∨
-          (stateBefore cfg tr f u).top = some (m - 1 + 1) := by
-        rcases Nat.eq_zero_or_pos m with h0 | hpos
-        · left; rw [h₁, h0]
-        · right; rw [h₁, Nat.sub_add_cancel hpos]
-      rw [outputsAt_eq hf]
-      simp only [Node.step]
-      rw [if_pos ⟨h₂'.trans h₁.symm, hm⟩]
-    have hsame : stateBefore cfg tr (f + 1) u = (Node.settle (cfg.at u)
-        { stateBefore cfg tr f u with
-          fired := fire (stateBefore cfg tr f u) (m - 1), recovering := false }).1 := by
-      rw [hsucc, step_timer_fst]
-    refine ⟨j, hj, hjr, hjc, ?_, ?_⟩
-    · rw [hout]
-      refine List.mem_append_right _ ?_
-      rw [← hsame]
-      exact setTimer_mem_resend (cfg := cfg.at u) h₂ hj
-    · rw [hout]
-      refine List.mem_append_right _ ?_
-      rw [← hsame]
-      exact broadcast_mem_resend (cfg := cfg.at u) h₂ hj
-  -- the timer fires after `t₀`: before, the node would have set it again
-  have hfE : E ≤ f := by
-    by_contra hlt
-    have h₁ := hat f haf (by omega)
-    have h₂ := hat (f + 1) (by omega) (by omega)
-    obtain ⟨-, -, -, -, hset, -⟩ := hres h₁ h₂
-    exact hmax f haf (by omega) (by rw [hf]; rfl) hset
+    exact ⟨j, hjr, hjc, resend_of_stay hf h₁ h₂ (broadcast_mem_resend (cfg := cfg.at u) h₂ hj)⟩
   have htf₀ : t₀ < time f := by
     by_contra h
     have : f < E := (lt_eventsBy hmono hfl).mpr (by omega)
@@ -183,7 +168,7 @@ theorem sends_again (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time
   by_cases hfm : (stateBefore cfg tr f u).top = some m
   · by_cases hstay : (stateBefore cfg tr (f + 1) u).top = some m
     · -- it resends its round-`m` block
-      obtain ⟨j, -, hjr, hjc, -, hb⟩ := hres hfm hstay
+      obtain ⟨j, hjr, hjc, hb⟩ := hres hfm hstay
       have hfj := (stateBefore cfg tr (f + 1) u).disk.full_fields j
       exact ⟨f, _, (j, (stateBefore cfg tr (f + 1) u).disk.full j), hf, htf₀, hfle,
         mem_broadcasts.mpr hb, by simp [hfj.1, hjr], by simp only; rw [hfj.2.1]; exact hjc⟩
