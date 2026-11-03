@@ -570,9 +570,15 @@ store closed, and needs none of this.
         arrival from some `G' ≥ G` (`arrival_steady`), the honest nodes
         started there and at round `1` or above; read on the record padded
         below `slotRound L − 1` (`base_steady`) each would decide the run
-        (`decides_from`) and move past `L`. Next: (e), production in the
-        window (`produces_from`) bounds how long it can last, and the
-        potential argument over the next undecided slots.
+        (`decides_from`) and move past `L`. So a steady window is short
+        (`Live.steady_bounded`): with the armed top round's timer firing
+        from `G'`, once every honest node is at round `n₁ ≥ 1`, at or above
+        `slotRound L`, at `s₀ ≥ G'`, it ends before
+        `s₀ + ∑_{n₁ ≤ r < N} (timeout r + A) + A`, for `N` the decision
+        round of such a run (`produces_from`, `climbs`). Next: (e), the
+        potential argument over the next undecided slots: catch-up
+        (`decides_behind`) makes every window without a new decision a
+        steady one, entered with every honest top at or above the floor.
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase

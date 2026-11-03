@@ -399,19 +399,18 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
       (fun _ _ _ _ _ => Nat.zero_le _) hmono harr hwait hstart hsp hnE b c n₀ hc hspan hlead hn₀
       hbelow hpos (Or.inr ⟨rfl, hdr⟩) t htop ht₁ v hv
 
-/-- **Decision by a time bound**: the reliable nodes gain a round every
-timeout and `A` (`produces`), so they reach the last slot's decision round
-within the sum, and decide `A` after (`decides`). -/
-theorem decidesBy {cfg : Config Validator BlockId Payload} {T : Finset Validator}
-    {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ} {gst D t₁ : ℕ}
-    (hp : Produces cfg T tr time gst D t₁) (hd : Decides cfg T tr time gst D t₁) :
-    DecidesBy cfg T tr time gst D t₁ := by
-  letI := cfg.slots
-  intro b c n₀ n₁ s hc hspan hlead hn₀ hbelow hgs hall ht₁
-  set N := cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1) with hN
-  -- a round every timeout and `D`
+/-- **The reliable nodes climb a round every timeout and `D`**, from `s₀`
+on and from round `n₁` up, wherever they produce. -/
+theorem climbs {cfg : Config Validator BlockId Payload} {T : Finset Validator}
+    {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ} {D t₁ s₀ n₁ : ℕ}
+    (hp : ∀ s n, s₀ ≤ s → n₁ ≤ n → s + D + cfg.timeout n ≤ t₁ →
+      (∀ v ∈ T, n ≤ topAt cfg tr time v s) → ∀ v ∈ T, n + 1 ≤ topAt cfg tr time v
+        (s + D + cfg.timeout n))
+    (hall : ∀ v ∈ T, n₁ ≤ topAt cfg tr time v s₀) {N : ℕ}
+    (ht₁ : s₀ + ∑ r ∈ Finset.Ico n₁ N, (cfg.timeout r + D) ≤ t₁) :
+    ∀ v ∈ T, N ≤ topAt cfg tr time v (s₀ + ∑ r ∈ Finset.Ico n₁ N, (cfg.timeout r + D)) := by
   have key : ∀ k, n₁ + k ≤ N → ∀ v ∈ T,
-      n₁ + k ≤ topAt cfg tr time v (s + ∑ r ∈ Finset.Ico n₁ (n₁ + k), (cfg.timeout r + D)) := by
+      n₁ + k ≤ topAt cfg tr time v (s₀ + ∑ r ∈ Finset.Ico n₁ (n₁ + k), (cfg.timeout r + D)) := by
     intro k
     induction k with
     | zero => intro _ v hv; simpa using hall v hv
@@ -423,21 +422,30 @@ theorem decidesBy {cfg : Config Validator BlockId Payload} {T : Finset Validator
       have hsub : ∑ r ∈ Finset.Ico n₁ (n₁ + (k + 1)), (cfg.timeout r + D) ≤
           ∑ r ∈ Finset.Ico n₁ N, (cfg.timeout r + D) :=
         Finset.sum_le_sum_of_subset (Finset.Ico_subset_Ico_right hk)
-      have := hp (s + ∑ r ∈ Finset.Ico n₁ (n₁ + k), (cfg.timeout r + D)) (n₁ + k) (by omega)
-        (by omega) (ih (by omega)) v hv
-      rw [hsum, show s + (∑ r ∈ Finset.Ico n₁ (n₁ + k), (cfg.timeout r + D) +
-        (cfg.timeout (n₁ + k) + D)) = s + ∑ r ∈ Finset.Ico n₁ (n₁ + k), (cfg.timeout r + D) +
+      have := hp (s₀ + ∑ r ∈ Finset.Ico n₁ (n₁ + k), (cfg.timeout r + D)) (n₁ + k) (by omega)
+        (by omega) (by omega) (ih (by omega)) v hv
+      rw [hsum, show s₀ + (∑ r ∈ Finset.Ico n₁ (n₁ + k), (cfg.timeout r + D) +
+        (cfg.timeout (n₁ + k) + D)) = s₀ + ∑ r ∈ Finset.Ico n₁ (n₁ + k), (cfg.timeout r + D) +
           D + cfg.timeout (n₁ + k) by omega]
       exact this
-  have hall' : ∀ v ∈ T, N ≤ topAt cfg tr time v
-      (s + ∑ r ∈ Finset.Ico n₁ N, (cfg.timeout r + D)) := by
-    by_cases hn₁N : n₁ ≤ N
-    · have := key (N - n₁) (by omega)
-      rwa [Nat.add_sub_cancel' hn₁N] at this
-    · intro v hv
-      rw [Finset.Ico_eq_empty (by omega), Finset.sum_empty, Nat.add_zero]
-      exact (show N ≤ n₁ by omega).trans (hall v hv)
-  exact hd b c n₀ hc hspan hlead hn₀ hbelow _ hall' ht₁
+  by_cases hn₁N : n₁ ≤ N
+  · have := key (N - n₁) (by omega)
+    rwa [Nat.add_sub_cancel' hn₁N] at this
+  · intro v hv
+    rw [Finset.Ico_eq_empty (by omega), Finset.sum_empty, Nat.add_zero]
+    exact (show N ≤ n₁ by omega).trans (hall v hv)
+
+/-- **Decision by a time bound**: the reliable nodes gain a round every
+timeout and `A` (`produces`, `climbs`), so they reach the last slot's
+decision round within the sum, and decide `A` after (`decides`). -/
+theorem decidesBy {cfg : Config Validator BlockId Payload} {T : Finset Validator}
+    {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ} {gst D t₁ : ℕ}
+    (hp : Produces cfg T tr time gst D t₁) (hd : Decides cfg T tr time gst D t₁) :
+    DecidesBy cfg T tr time gst D t₁ := by
+  letI := cfg.slots
+  intro b c n₀ n₁ s hc hspan hlead hn₀ hbelow hgs hall ht₁
+  exact hd b c n₀ hc hspan hlead hn₀ hbelow _
+    (climbs (fun s' n hs _ ht hn => hp s' n (hgs.trans hs) ht hn) hall (by omega)) ht₁
 
 /-- **A steady window ends before the reliable nodes decide a reliably led
 run above it**: when every honest node drops and is reliable, and every one
@@ -503,6 +511,47 @@ theorem steady_ends [Infinite BlockId] {cfg : Config Validator BlockId Payload}
   rw [hlo] at hlen
   have := cfg.slots.mono (show b ≤ L by omega)
   omega
+
+/-- **A steady window is short**: under the premises of `steady_ends`, with
+the armed top round's timer firing from `G'`, once every honest node is at
+round `n₁ ≥ 1`, at or above `slotRound L`, at `s₀ ≥ G'`, the window ends
+before `s₀ + ∑_{n₁ ≤ r < N} (timeout r + A) + A`, for `N` the decision
+round of a reliably led run above round `slotRound L + voteOffset` and the
+honest nodes' rounds at `G'`: they produce on the padded record
+(`produces_from`, `climbs`) and then decide (`steady_ends`). -/
+theorem steady_bounded [Infinite BlockId] {cfg : Config Validator BlockId Payload}
+    {H : Finset Validator} {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ}
+    {G G' Δ Δₛ t₁ L : ℕ} (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : cfg.Faithful)
+    (hf : Hᶜ.card ≤ cfg.f) (hqT : cfg.q ≤ H.card)
+    (hcT : Fintype.card Validator - cfg.f - cfg.c ≤ H.card) (hq : 2 ≤ cfg.q)
+    (hqn : cfg.q ≤ Fintype.card Validator) (hid : Function.Injective cfg.idOf)
+    (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout r)
+    (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
+    (hev : Converge.EvidenceAuthentic cfg H tr) (hdr : cfg.drops = true)
+    (hst : Steady cfg H tr time G t₁ L) (hL : 1 ≤ L) (hGG : G ≤ G')
+    (hmono : TimeMono tr time) (harr : Arrival cfg H tr time G' (Δ + Δₛ) t₁)
+    (htop : TopTimerBy cfg H tr time G' t₁)
+    (hwait : TimersAfterSet cfg H tr time) (hstart : StartedBy H tr time G')
+    {D : Finset Validator} {nE : ℕ} (hsp : Spread cfg H tr D nE)
+    (hnE : ∀ v ∈ H, nE ≤ topAt cfg tr time v G') (hT₁ : ∀ v ∈ H, 1 ≤ topAt cfg tr time v G') :
+    letI := cfg.slots
+    ∀ b c n₀ n₁ s₀, 0 < c → (Scheme.schemeAnchored cfg.p
+      (boundedSel (BlockId := BlockId) (Payload := Payload) (P := ValidAt cfg.q Clause.none)
+        (honest := H))).SpansEligible c →
+    (∀ i < c, cfg.slots.leader (b + i) ∈ H) → n₀ ≤ cfg.slots.slotRound b →
+    (∀ v ∈ H, topAt cfg tr time v G' < n₀) → cfg.slots.slotRound L + cfg.p.voteOffset < n₀ →
+    G' ≤ s₀ → cfg.slots.slotRound L ≤ n₁ → 1 ≤ n₁ → (∀ v ∈ H, n₁ ≤ topAt cfg tr time v s₀) →
+    s₀ + (∑ r ∈ Finset.Ico n₁ (cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1)),
+      (cfg.timeout r + (Δ + Δₛ))) + (Δ + Δₛ) ≤ t₁ → False := by
+  letI := cfg.slots
+  intro b c n₀ n₁ s₀ hc hspan hlead hn₀ hbelow hLn hs₀ hLn₁ h1n₁ hall ht₁
+  have hbase := base_steady hσ hadm hf htime hinj hqn hdr hst hL (by omega)
+  exact steady_ends hσ hadm hfa hf hqT hcT hq hqn hid hto htime hinj hev hdr hst hL hGG hmono
+    harr hwait hstart hsp hnE hT₁ b c n₀ hc hspan hlead hn₀ hbelow hLn _
+    (climbs (fun s n hs hn ht hall' => produces_from hadm hfa hf (Finset.Subset.refl H) hqT hq
+      hid htime hinj hev hbase hmono harr htop hstart hsp hnE (by omega) ht
+      (eventsBy_mono (by omega)) (eventsBy_mono ht) (by omega) (fun _ => by omega) hall')
+      hall (by omega)) ht₁
 
 /-- **The reliable nodes produce rounds and decide.** -/
 theorem progresses : Progresses := by
