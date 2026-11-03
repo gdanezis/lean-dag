@@ -876,18 +876,26 @@ theorem TopRises.of_eq {s s' : State Validator BlockId Payload} (h : s'.top = s.
     TopRises s s' := fun t ht => ⟨t, h ▸ ht, le_rfl⟩
 
 variable (cfg) in
+/-- **A round below the floor**, at a node that drops. -/
+def UnderFloor (s : State Validator BlockId Payload) (r : ℕ) : Prop :=
+  cfg.drops = true ∧ r < s.floor
+
+variable (cfg) in
 /-- **The timers a node sets, read on the state after**: each at a round
 at or below the top, and one of the top round above `0` for its timeout,
-only once the disk holds a quorum of it. -/
+only once the disk holds a quorum of it, unless the round lies below the
+floor. -/
 def TimersSet (s : State Validator BlockId Payload)
     (out : List (Output Validator BlockId Payload)) : Prop :=
   ∀ r a, Output.setTimer r a ∈ out → ∃ t, s.top = some t ∧ r ≤ t ∧
-    (r = t → 1 ≤ r → a = cfg.timeout r ∧ cfg.q ≤ (s.disk.authorsAt r).card)
+    (r = t → 1 ≤ r → a = cfg.timeout r ∧
+      (UnderFloor cfg s r ∨ cfg.q ≤ (s.disk.authorsAt r).card))
 
 variable (cfg) in
-/-- **An armed round has a quorum** on the disk. -/
+/-- **An armed round has a quorum** on the disk, unless it lies below the
+floor. -/
 def ArmedQuorum (s : State Validator BlockId Payload) : Prop :=
-  ∀ r, s.armed = some r → cfg.q ≤ (s.disk.authorsAt r).card
+  ∀ r, s.armed = some r → UnderFloor cfg s r ∨ cfg.q ≤ (s.disk.authorsAt r).card
 
 omit [Fintype Validator] in
 /-- A grown store has the authors of each round it had. -/
@@ -897,15 +905,46 @@ theorem Grows.authorsAt {st st' : Store Validator BlockId Payload} (hg : Grows s
   exact hg.authorsIn r
 
 omit [Fintype Validator] in
+/-- A store that keeps the blocks of a round has the authors of it. -/
+theorem KeepsFrom.authorsAt {d : Bool} {F : ℕ} {st st' : Store Validator BlockId Payload}
+    (h : KeepsFrom d F st st') {r : ℕ} (hr : d = false ∨ F ≤ r) :
+    st.authorsAt r ⊆ st'.authorsAt r := by
+  rw [Store.authorsAt_eq, Store.authorsAt_eq]
+  intro a ha
+  obtain ⟨b, hb, hbr, hc⟩ := mem_authorsIn.mp ha
+  have hbr' : (st.blk b).round = r := hbr
+  obtain ⟨hb', hf⟩ := h b hb (by rw [hbr']; exact hr)
+  refine mem_authorsIn.mpr ⟨b, hb', ?_, ?_⟩
+  · change (st'.blk b).round = r
+    rw [← (st'.full_fields b).1, hf, (st.full_fields b).1]; exact hbr'
+  · change (st'.blk b).creator = a
+    rw [← (st'.full_fields b).2.1, hf, (st.full_fields b).2.1]; exact hc
+
+omit [Fintype Validator] in
+/-- **A quorum of a round stays**, as the floor rises and the disk keeps its
+blocks from the floor up, unless the round falls below the floor. -/
+theorem quorum_rise {s s' : State Validator BlockId Payload} (h : DiskRises cfg s s') {r : ℕ}
+    (hq : UnderFloor cfg s r ∨ cfg.q ≤ (s.disk.authorsAt r).card) :
+    UnderFloor cfg s' r ∨ cfg.q ≤ (s'.disk.authorsAt r).card := by
+  rcases hq with ⟨hd, hr⟩ | hq
+  · exact Or.inl ⟨hd, lt_of_lt_of_le hr h.1.1⟩
+  · by_cases hb : cfg.drops = true ∧ r < s'.floor
+    · exact Or.inl hb
+    · refine Or.inr (hq.trans (Finset.card_le_card (h.2.authorsAt ?_)))
+      cases hd : cfg.drops
+      · exact Or.inl rfl
+      · exact Or.inr (Nat.le_of_not_lt fun hlt => hb ⟨hd, hlt⟩)
+
+omit [Fintype Validator] in
 theorem TimersSet.mono {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : TimersSet cfg s out)
-    (hg : Grows s.disk s'.disk) (ht : TopRises s s') : TimersSet cfg s' out := by
+    (hg : DiskRises cfg s s') (ht : TopRises s s') : TimersSet cfg s' out := by
   intro r a hm
   obtain ⟨t, hst, hrt, hq⟩ := h r a hm
   obtain ⟨t', hst', htt'⟩ := ht t hst
   refine ⟨t', hst', by omega, fun hr h1 => ?_⟩
   have hrt' : r = t := by omega
-  exact ⟨(hq hrt' h1).1, (hq hrt' h1).2.trans (Finset.card_le_card (hg.authorsAt r))⟩
+  exact ⟨(hq hrt' h1).1, quorum_rise hg (hq hrt' h1).2⟩
 
 omit [Fintype Validator] in
 theorem TimersSet.append {s : State Validator BlockId Payload}
@@ -916,15 +955,16 @@ theorem TimersSet.append {s : State Validator BlockId Payload}
   · exact hy r a hm
 
 omit [Fintype Validator] in
-/-- Timers set on a state stay set as its top rises and its disk grows. -/
+/-- Timers set on a state stay set as its top rises and its disk keeps
+its blocks from the floor up. -/
 theorem TimersSet.rise {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : TimersSet cfg s out)
-    (ht : TopRises s s') (hg : Grows s.disk s'.disk) : TimersSet cfg s' out := fun r a hm => by
+    (ht : TopRises s s') (hg : DiskRises cfg s s') : TimersSet cfg s' out := fun r a hm => by
   obtain ⟨t, hts, hrt, hq⟩ := h r a hm
   obtain ⟨t', ht', htt'⟩ := ht t hts
   refine ⟨t', ht', hrt.trans htt', fun hr h1 => ?_⟩
   obtain ⟨ha, hq'⟩ := hq (by omega) h1
-  exact ⟨ha, hq'.trans (Finset.card_le_card (hg.authorsAt r))⟩
+  exact ⟨ha, quorum_rise hg hq'⟩
 
 omit [Fintype Validator] in
 theorem TimersSet.of_none {s : State Validator BlockId Payload}
@@ -935,8 +975,8 @@ omit [Fintype Validator] in
 /-- **Building sets the timer of the round below** the new top. -/
 theorem timersSet_progress : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
     TimersSet cfg (Node.progress cfg fuel s).1 (Node.progress cfg fuel s).2 ∧
-      Grows s.disk (Node.progress cfg fuel s).1.disk ∧ TopRises s (Node.progress cfg fuel s).1
-  | 0, s => ⟨TimersSet.of_none fun _ _ h => by simp [Node.progress] at h, Grows.refl _,
+      DiskRises cfg s (Node.progress cfg fuel s).1 ∧ TopRises s (Node.progress cfg fuel s).1
+  | 0, s => ⟨TimersSet.of_none fun _ _ h => by simp [Node.progress] at h, DiskRises.refl _,
       TopRises.refl _⟩
   | fuel + 1, s => by
     unfold Node.progress
@@ -945,7 +985,7 @@ theorem timersSet_progress : ∀ (fuel : ℕ) (s : State Validator BlockId Paylo
       obtain ⟨r, id, b, hnew, hrefs, hpred, hr, hbr, -, -, -, hst, htop, -, -, hout⟩ :=
         tryBuild_some hb
       obtain ⟨h₁, h₂, h₃⟩ := timersSet_progress fuel s₁
-      have hg : Grows s.disk s₁.disk := (Grows.insert s.disk).trans (Grows.of_restrips hst)
+      have hg : DiskRises cfg s s₁ := diskRises_tryBuild hb
       have ht : TopRises s s₁ := fun t ht => ⟨r + 1, htop, by
         have := hr.2.1; rw [ht] at this; simp only [Option.getD_some] at this; omega⟩
       refine ⟨TimersSet.append ?_ h₁, hg.trans h₂, ht.trans h₃⟩
@@ -956,7 +996,7 @@ theorem timersSet_progress : ∀ (fuel : ℕ) (s : State Validator BlockId Paylo
       obtain ⟨rfl, rfl⟩ := hm
       obtain ⟨t', ht', htt'⟩ := h₃ (r + 1) htop
       exact ⟨t', ht', by rw [hbr]; omega, fun h _ => by rw [hbr] at h; omega⟩
-    · exact ⟨TimersSet.of_none fun _ _ h => by simp at h, Grows.refl _, TopRises.refl _⟩
+    · exact ⟨TimersSet.of_none fun _ _ h => by simp at h, DiskRises.refl _, TopRises.refl _⟩
 
 omit [Fintype Validator] in
 /-- **Arming sets the top round's timer** once the disk holds a quorum of
@@ -967,49 +1007,57 @@ theorem timersSet_arm (s : State Validator BlockId Payload) :
   obtain ⟨t, ht, hq, -, ho⟩ := mem_arm hm
   rw [Output.setTimer.injEq] at ho
   obtain ⟨rfl, rfl⟩ := ho
-  exact ⟨r, by rw [arm_top]; exact ht, le_rfl, fun _ _ => ⟨rfl, by rw [arm_disk]; exact hq⟩⟩
+  exact ⟨r, by rw [arm_top]; exact ht, le_rfl,
+    fun _ _ => ⟨rfl, Or.inr (by rw [arm_disk]; exact hq)⟩⟩
 
 omit [Fintype Validator] in
 theorem ArmedQuorum.arm {s : State Validator BlockId Payload} (h : ArmedQuorum cfg s) :
     ArmedQuorum cfg (Node.arm cfg s).1 := by
   intro r hr
-  rw [arm_disk]
+  unfold UnderFloor
+  rw [arm_disk, arm_floor]
   unfold Node.arm at hr
   split at hr
   · rename_i t ht
     split at hr
     · rename_i hc
       cases hr
-      exact hc.2.trans (Finset.card_le_card (s.mirrors.authorsAt_sub _))
+      exact Or.inr (hc.2.trans (Finset.card_le_card (s.mirrors.authorsAt_sub _)))
     · exact h r hr
   · exact h r hr
 
 omit [Fintype Validator] in
-theorem ArmedQuorum.grow {s s' : State Validator BlockId Payload} (h : ArmedQuorum cfg s)
-    (hg : Grows s.disk s'.disk) (ha : s'.armed = s.armed) : ArmedQuorum cfg s' := fun r hr =>
-  (h r (ha ▸ hr)).trans (Finset.card_le_card (hg.authorsAt r))
+theorem ArmedQuorum.rise {s s' : State Validator BlockId Payload} (h : ArmedQuorum cfg s)
+    (hg : DiskRises cfg s s') (ha : s'.armed = s.armed) : ArmedQuorum cfg s' := fun r hr =>
+  quorum_rise hg (h r (ha ▸ hr))
 
 omit [Fintype Validator] in
-theorem timersSet_advance (s : State Validator BlockId Payload) (hd : cfg.drops = false) :
+/-- After building, the rest of a pass but arming raises the floor and keeps
+the disk from the new floor up. -/
+theorem diskRises_pass_rest (s : State Validator BlockId Payload) :
+    DiskRises cfg (Node.progress cfg (s.disk.topRound + 2) s).1 (Node.pass cfg s).1 :=
+  (diskRises_decideStep _).trans (diskRises_flushSyncs _ _)
+
+omit [Fintype Validator] in
+theorem diskRises_pass_advance (s : State Validator BlockId Payload) :
+    DiskRises cfg (Node.pass cfg s).1 (Node.advance cfg s).1 :=
+  DiskRises.of_grows (by rw [advance_disk]; exact Grows.refl _) (by rw [advance_floor])
+    (by simp [Node.advance])
+
+omit [Fintype Validator] in
+theorem timersSet_advance (s : State Validator BlockId Payload) :
     TimersSet cfg (Node.advance cfg s).1 (Node.advance cfg s).2 ∧
-      Grows s.disk (Node.advance cfg s).1.disk ∧ TopRises s (Node.advance cfg s).1 := by
+      DiskRises cfg s (Node.advance cfg s).1 ∧ TopRises s (Node.advance cfg s).1 := by
   obtain ⟨h₁, h₂, h₃⟩ := timersSet_progress (cfg := cfg) (s.disk.topRound + 2) s
-  have hgp : Grows (Node.progress cfg (s.disk.topRound + 2) s).1.disk
-      (Node.pass cfg s).1.disk := by
-    simp only [Node.pass]
-    exact (Grows.of_restrips (decideStep_disk (cfg := cfg)
-      (Node.progress cfg (s.disk.topRound + 2) s).1 hd)).trans (Grows.flushSyncs _ _)
+  have hgp := diskRises_pass_rest (cfg := cfg) s
   have htp : TopRises (Node.progress cfg (s.disk.topRound + 2) s).1 (Node.pass cfg s).1 :=
     TopRises.of_eq (by simp only [Node.pass, flushSyncs_top]; exact decideStep_top _)
-  have hga : Grows (Node.pass cfg s).1.disk (Node.advance cfg s).1.disk := by
-    rw [advance_disk]; exact Grows.refl _
+  have hga := diskRises_pass_advance (cfg := cfg) s
   have hta : TopRises (Node.pass cfg s).1 (Node.advance cfg s).1 :=
     TopRises.of_eq (advance_top s)
   refine ⟨?_, h₂.trans (hgp.trans hga), h₃.trans (htp.trans hta)⟩
   rw [advance_snd]
-  refine TimersSet.append ?_ ((timersSet_arm _).mono (by
-    simp only [Node.advance, release_disk]; exact Grows.refl _)
-    (TopRises.of_eq (by simp only [Node.advance, release_top])))
+  refine TimersSet.append ?_ ((timersSet_arm _).mono (DiskRises.refl _) (TopRises.refl _))
   simp only [Node.pass]
   refine TimersSet.append ((h₁.mono hgp htp).mono hga hta) (TimersSet.of_none fun r a h => ?_)
   unfold Node.decideStep at h
@@ -1020,30 +1068,29 @@ theorem timersSet_advance (s : State Validator BlockId Payload) (hd : cfg.drops 
   · simp at h
 
 omit [Fintype Validator] in
-theorem ArmedQuorum.advance {s : State Validator BlockId Payload} (h : ArmedQuorum cfg s)
-    (hd : cfg.drops = false) : ArmedQuorum cfg (Node.advance cfg s).1 := by
+theorem ArmedQuorum.advance {s : State Validator BlockId Payload} (h : ArmedQuorum cfg s) :
+    ArmedQuorum cfg (Node.advance cfg s).1 := by
   have hp : ArmedQuorum cfg (Node.pass cfg s).1 :=
-    h.grow (by rw [← advance_disk]; exact (timersSet_advance (cfg := cfg) s hd).2.1)
+    h.rise ((diskRises_progress _ s).trans (diskRises_pass_rest s))
       (by simp only [Node.pass, flushSyncs_armed]; rw [decideStep_armed, progress_armed])
-  exact hp.arm.grow (by simp only [Node.advance, release_disk]; exact Grows.refl _)
-    (by simp only [Node.advance, release_armed])
+  exact hp.arm.rise (DiskRises.refl _) rfl
 
 omit [Fintype Validator] in
-theorem timersSet_quiesce (hd : cfg.drops = false) (n : ℕ) (s : State Validator BlockId Payload) :
+theorem timersSet_quiesce (n : ℕ) (s : State Validator BlockId Payload) :
     TimersSet cfg (Node.quiesce cfg n s).1 (Node.quiesce cfg n s).2 ∧
-      Grows s.disk (Node.quiesce cfg n s).1.disk ∧ TopRises s (Node.quiesce cfg n s).1 :=
+      DiskRises cfg s (Node.quiesce cfg n s).1 ∧ TopRises s (Node.quiesce cfg n s).1 :=
   (quiesce_rel (P := fun _ => True)
-    (R := fun a o b => TimersSet cfg b o ∧ Grows a.disk b.disk ∧ TopRises a b)
-    (fun s => ⟨TimersSet.of_none fun _ _ h => absurd h List.not_mem_nil, Grows.refl _,
+    (R := fun a o b => TimersSet cfg b o ∧ DiskRises cfg a b ∧ TopRises a b)
+    (fun s => ⟨TimersSet.of_none fun _ _ h => absurd h List.not_mem_nil, DiskRises.refl _,
       TopRises.refl _⟩)
     (fun _ _ _ _ _ h₁ h₂ => ⟨TimersSet.append (h₁.1.mono h₂.2.1 h₂.2.2) h₂.1,
       h₁.2.1.trans h₂.2.1, h₁.2.2.trans h₂.2.2⟩)
-    (fun s _ => ⟨timersSet_advance s hd, trivial⟩) n s trivial).1
+    (fun s _ => ⟨timersSet_advance s, trivial⟩) n s trivial).1
 
 omit [Fintype Validator] in
-theorem ArmedQuorum.settle {s : State Validator BlockId Payload} (h : ArmedQuorum cfg s)
-    (hd : cfg.drops = false) : ArmedQuorum cfg (Node.settle cfg s).1 :=
-  quiesce_ind (fun _ h => h.advance hd) _ _ h
+theorem ArmedQuorum.settle {s : State Validator BlockId Payload} (h : ArmedQuorum cfg s) :
+    ArmedQuorum cfg (Node.settle cfg s).1 :=
+  quiesce_ind (fun _ h => h.advance) _ _ h
 
 omit [Fintype Validator] in
 /-- **Resending sets the timer of the round below the top.** -/
@@ -1065,7 +1112,7 @@ theorem timersSet_rearm {s : State Validator BlockId Payload} (h : ArmedQuorum c
 /-- **A step sets timers at or below the top**, and one of the top round
 above `0` only with a quorum of it. -/
 theorem timersSet_step {s : State Validator BlockId Payload} (hA : ArmedQuorum cfg s)
-    (hd : cfg.drops = false) (inp : Input Validator BlockId Payload) :
+    (inp : Input Validator BlockId Payload) :
     TimersSet cfg (Node.step cfg s inp).1 (Node.step cfg s inp).2 ∧
       ArmedQuorum cfg (Node.step cfg s inp).1 := by
   cases inp with
@@ -1081,11 +1128,11 @@ theorem timersSet_step {s : State Validator BlockId Payload} (hA : ArmedQuorum c
             top := some 0
             own := some g
             recovering := false }
-        have hA₀ : ArmedQuorum cfg s₀ := hA.grow (Grows.insert s.disk (hnew := h₂.1)
-          (hrefs := fun _ hj => absurd hj (Finset.notMem_empty _))
-          (hpred := fun j hj => absurd hj (Finset.notMem_empty j))) rfl
-        obtain ⟨h₁', h₂', h₃'⟩ := timersSet_quiesce (cfg := cfg) hd (passes cfg s₀) s₀
-        refine ⟨TimersSet.append ?_ h₁', hA₀.settle hd⟩
+        have hA₀ : ArmedQuorum cfg s₀ := hA.rise (DiskRises.of_grows (Grows.insert s.disk
+          (hnew := h₂.1) (hrefs := fun _ hj => absurd hj (Finset.notMem_empty _))
+          (hpred := fun j hj => absurd hj (Finset.notMem_empty j))) le_rfl rfl) rfl
+        obtain ⟨h₁', h₂', h₃'⟩ := timersSet_quiesce (cfg := cfg) (passes cfg s₀) s₀
+        refine ⟨TimersSet.append ?_ h₁', hA₀.settle⟩
         intro r a hm
         simp only [List.mem_cons, reduceCtorEq, Output.setTimer.injEq, List.not_mem_nil,
           or_false, false_or] at hm
@@ -1099,27 +1146,28 @@ theorem timersSet_step {s : State Validator BlockId Payload} (hA : ArmedQuorum c
       he | ⟨s₁, pre, hr, hpre, he⟩
     · rw [he]; exact ⟨TimersSet.of_none fun _ _ h => absurd h List.not_mem_nil, hA⟩
     · rw [he]
-      refine ⟨TimersSet.append (TimersSet.of_none fun r a h => ?_) (timersSet_quiesce hd _ _).1,
-        ArmedQuorum.settle (hA.grow hr.grows hr.armed) hd⟩
+      refine ⟨TimersSet.append (TimersSet.of_none fun r a h => ?_) (timersSet_quiesce _ _).1,
+        ArmedQuorum.settle (hA.rise (DiskRises.of_grows hr.grows hr.floor.ge hr.lo) hr.armed)⟩
       obtain ⟨_, _, _, _, h⟩ := hpre _ h; cases h
   | stream u L =>
     rcases step_receipt (cfg := cfg) (s := s) (Or.inr ⟨u, L, rfl⟩) with he | ⟨s₁, pre, hr, hpre, he⟩
     · rw [he]; exact ⟨TimersSet.of_none fun _ _ h => absurd h List.not_mem_nil, hA⟩
     · rw [he]
-      refine ⟨TimersSet.append (TimersSet.of_none fun r a h => ?_) (timersSet_quiesce hd _ _).1,
-        ArmedQuorum.settle (hA.grow hr.grows hr.armed) hd⟩
+      refine ⟨TimersSet.append (TimersSet.of_none fun r a h => ?_) (timersSet_quiesce _ _).1,
+        ArmedQuorum.settle (hA.rise (DiskRises.of_grows hr.grows hr.floor.ge hr.lo) hr.armed)⟩
       obtain ⟨_, _, _, _, h⟩ := hpre _ h; cases h
   | timer r =>
     have hAs :
         ArmedQuorum cfg (Node.settle cfg { s with fired := fire s r, recovering := false }).1 :=
-      ArmedQuorum.settle (s := { s with fired := fire s r, recovering := false }) hA hd
-    have hts := (timersSet_quiesce (cfg := cfg) hd
+      ArmedQuorum.settle (s := { s with fired := fire s r, recovering := false }) hA
+    have hts := (timersSet_quiesce (cfg := cfg)
       (passes cfg { s with fired := fire s r, recovering := false })
       { s with fired := fire s r, recovering := false }).1
     simp only [Node.step]
     split
     · exact ⟨TimersSet.append hts (timersSet_resend _), hAs⟩
-    · rw [askBehind_of_false hd, List.append_nil]; exact ⟨hts, hAs⟩
+    · exact ⟨TimersSet.append hts (TimersSet.of_none fun r a h => by cases mem_askBehind h),
+        hAs⟩
   | syncRequest peer t fr ids =>
     refine ⟨TimersSet.of_none fun r a h => ?_, hA⟩
     simp only [Node.step] at h
@@ -1133,13 +1181,26 @@ theorem timersSet_step {s : State Validator BlockId Payload} (hA : ArmedQuorum c
     simp only [Node.step] at h
     split at h <;> (try split at h) <;> simp at h
   | proof u k L =>
-    rw [step_proof_of_false hd]
-    exact ⟨TimersSet.of_none fun r a h => absurd h List.not_mem_nil, hA⟩
+    simp only [Node.step]
+    split
+    · split
+      · rename_i d hv
+        have hAd : ArmedQuorum cfg (Node.tidy (Node.decideOn cfg s k d L)) :=
+          hA.rise (diskRises_decideOn s k d L)
+            (decideOn_rest (cfg := cfg) s k d L).2.2.2.2.2.2.1
+        refine ⟨fun r a hm => ?_, hAd.settle⟩
+        rcases List.mem_append.mp hm with hm | hm
+        · rcases List.mem_cons.mp hm with hm | hm
+          · cases hm
+          · exact (timersSet_quiesce _ _).1 r a hm
+        · cases List.mem_singleton.mp hm
+      · exact ⟨TimersSet.of_none fun r a h => absurd h List.not_mem_nil, hA⟩
+    · exact ⟨TimersSet.of_none fun r a h => absurd h List.not_mem_nil, hA⟩
   | restart =>
     have hAs : ArmedQuorum cfg (Node.settle cfg { s with recovering := true }).1 :=
-      ArmedQuorum.settle (s := { s with recovering := true }) hA hd
+      ArmedQuorum.settle (s := { s with recovering := true }) hA
     obtain ⟨hts, hg, hr⟩ :=
-      timersSet_quiesce (cfg := cfg) hd (passes cfg { s with recovering := true })
+      timersSet_quiesce (cfg := cfg) (passes cfg { s with recovering := true })
         { s with recovering := true }
     refine ⟨TimersSet.append (TimersSet.append ((timersSet_resend s).rise hr hg)
       ((timersSet_rearm hA).rise hr hg)) hts, hAs⟩

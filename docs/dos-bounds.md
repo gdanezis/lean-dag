@@ -484,7 +484,10 @@ store closed, and needs none of this.
         up to its top over a regular stretch (`Regular`, `Helpers/Shape.lean`:
         at a node that drops, the floor at or below the top and at the round
         of the next undecided slot, neither changing), in place of
-        `drops = false`.
+        `drops = false`; the timers a node sets, and its armed round, have
+        a quorum on its disk unless the round lies below its floor
+        (`TimersSet`, `ArmedQuorum`, `UnderFloor`), so `armed_last`,
+        `TopTimerBy` and `timer_set` hold with dropping.
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase

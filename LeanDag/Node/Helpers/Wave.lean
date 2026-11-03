@@ -209,7 +209,7 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
         exact ⟨k, hk.le, hkt⟩
       · exact ⟨j, le_rfl, by rw [hj₀, h']⟩
     obtain ⟨k, hk, hkt⟩ := hj
-    obtain ⟨i, hik, hiv, t', ht', hnt, hq'⟩ := timer_set hwait hdr hh hkt
+    obtain ⟨i, hik, hiv, t', ht', hnt, hq'⟩ := timer_set hwait hh hkt
     obtain ⟨inpi, hi⟩ := Converge.event_of_map hiv
     -- the node was not above round `n` when it set the timer: from then on it
     -- would build above `n + 1` only
@@ -224,6 +224,7 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
       · simp only at h0; rw [hcr] at h0; omega
     subst htn
     obtain ⟨hti, hqn⟩ := hq' rfl (by omega)
+    replace hqn := hqn.resolve_left fun h => absurd (hdr.symm.trans h.1) Bool.false_ne_true
     have hkl : k < tr.length := (List.getElem?_eq_some_iff.mp hkt).1
     have htk := hmono k j hk hj₀l
     have hτ := hto t'

@@ -349,7 +349,7 @@ theorem progresses : Progresses := by
     hcT hq hid hto htime hinj hev hdr hmono hsp hnE hdel hfire hwait hsync hstart hup
   have harr := arrival_of_delivered (H := H) hTH hmono hdel hsync hup
   have hp := produces hσ hadm hfa hf hTH hqT hq hid htime hinj hev hdr hmono harr
-    (TopTimerBy.of_fire hmono hdr hfire) hstart hsp hnE
+    (TopTimerBy.of_fire hmono hfire) hstart hsp hnE
   have hd := decides hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hev hdr hmono harr hwait
     hstart hsp hnE
   exact ⟨hp, hd, decidesBy hp hd⟩
@@ -375,7 +375,7 @@ theorem recovers : Recovers := by
     change topAt cfg tr time v (max t_r gst) ≤ topAt cfg tr time v G at this
     exact (hnE v hv).trans this
   have hp := produces hσ hadm hfa hf hTH hqT hq hid htime hinj hev hdr hmono harr
-    (topTimerBy_of_up hmono hdr hup hfire hrG) hstart' hsp hnE'
+    (topTimerBy_of_up hmono hup hfire hrG) hstart' hsp hnE'
   have hd := decides hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hev hdr hmono harr hwait
     hstart' hsp hnE'
   exact ⟨hp, hd, decidesBy hp hd⟩
