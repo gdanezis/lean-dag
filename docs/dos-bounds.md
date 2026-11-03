@@ -452,7 +452,24 @@ store closed, and needs none of this.
         one to `k` and `D` the retry delays of the rounds up to a bound `M`
         on its round, `M` at least a wave above the round of slot `k`; the
         node's round enters only through `M`, since rounds have no least
-        duration. What remains is (ii) and (iii).
+        duration. What remains is (ii) and (iii). The plan for (ii):
+        (a) floors along a trace with dropping: a floor only rises, and
+        once a node has built or decided it is the round of its next
+        undecided slot, so equal next undecided slots give equal floors;
+        (b) a reliable node keeps its own blocks from its floor up, so
+        with floors met `synced_held` applies with the author as holder;
+        (c) a window in which a node's next undecided slot does not change
+        neither strips nor lets go of a block, so the V11 argument holds on
+        such a window: its `drops = false` premises (in `Shape`, `Armed`,
+        `Wait`, `Catch`, `Wave`, `Live`, about seventy) become a window
+        premise; (d) if every reliable node's next undecided slot stays at
+        `L` through a window as long as V11's `Decides` needs for a
+        reliably led run above the rounds at its start, the run is decided,
+        past `L`, a contradiction, so some reliable node decides past `L`
+        within that window; (e) with (i), the sum of the reliable nodes'
+        next undecided slots rises within each such window or catch-up
+        delay, so every reliable node is past slot `k` within an explicit
+        bound. Item (c) is most of the work.
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase
