@@ -502,7 +502,17 @@ store closed, and needs none of this.
         so no honest node leaves out an honest author at a round at or above
         its floor (`Converge.not_excluded`, with dropping under a faithful
         payload source); an honest block carries the node's evidence against
-        every author its references expose (`buildable_of`).
+        every author its references expose (`buildable_of`). For (d), every honest node is
+        taken reliable (decided with the user, to be relaxed if the argument
+        allows). A steady window (`Live.Steady`) is a stretch over which no
+        reliable node decides and each is at the round of its next undecided
+        slot `L ≥ 1` or above. In it the disk only grows, the next undecided
+        slot staying (`GrowsUnless`, `Converge.grows_of_lo`), every step is
+        regular, and a reliable block delivered in it is synced
+        (`syncedFrom_steady`); with the retry timer's resend taking the
+        place of a recovery's (`sends_again`, now on regular steps rather
+        than no dropping), reliable blocks arrive (`arrival_steady`), the
+        `Arrival` the argument of V11 reads.
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase

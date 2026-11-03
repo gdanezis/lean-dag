@@ -14,6 +14,12 @@ decided as far as another has a floor at or above the other's
 (`floor_le_floor`); and it keeps its own blocks from its floor up
 (`Converge.persist_stored`), so a reliable node syncs a reliable author's
 block when its floor is at or above the author's (`synced_from_author`).
+
+In a steady window (`Live.Steady`: no reliable node decides, each at the
+round of its next undecided slot `L ≥ 1` or above) the floors are the round
+of slot `L` (`Steady.floor`), every step is regular (`Steady.regular`), a
+reliable block delivered in it is synced (`syncedFrom_steady`), and so, as
+past a recovery, reliable blocks arrive (`arrival_steady`).
 -/
 
 namespace LeanDag
@@ -124,6 +130,109 @@ theorem synced_from_author (hid : Function.Injective cfg.idOf) {T : Finset Valid
     exact synced_held hid hsync hj hv hu hidb hr hu (hidb ▸ hin) hF hτ hτ₁
   · exact hsync j v w id b hj hv hu hidb hr
       (fun x hx => absurd (Needs.le_round hx) hbr) τ hτ hτ₁
+
+/-! ## A steady window -/
+
+section Steady
+
+variable {T : Finset Validator} {time : ℕ → ℕ} {G t₁ L : ℕ}
+
+/-- **In a steady window a node's floor is the round of its slot**, at a
+node that drops, past the first slot. -/
+theorem Steady.floor (hdr : cfg.drops = true) (hst : Live.Steady cfg T tr time G t₁ L)
+    (hL : 1 ≤ L) {v : Validator} (hv : v ∈ T) {k : ℕ} (h₁ : eventsBy tr time G ≤ k)
+    (h₂ : k ≤ eventsBy tr time t₁) :
+    (stateBefore cfg tr k v).floor = cfg.slots.slotRound L := by
+  obtain ⟨hlo, -⟩ := hst v hv k h₁ h₂
+  rw [floor_eq_before hdr v k (by omega), hlo]
+
+/-- **In a steady window every step is regular** (`Regular`). -/
+theorem Steady.regular (hdr : cfg.drops = true) (hst : Live.Steady cfg T tr time G t₁ L)
+    (hL : 1 ≤ L) {v : Validator} (hv : v ∈ T) {k : ℕ} (h₁ : eventsBy tr time G ≤ k)
+    (h₂ : k + 1 ≤ eventsBy tr time t₁) :
+    Regular (cfg.at v) (stateBefore cfg tr k v) (stateBefore cfg tr (k + 1) v) := by
+  intro _
+  obtain ⟨hlo, htop⟩ := hst v hv k h₁ (by omega)
+  obtain ⟨hlo', -⟩ := hst v hv (k + 1) (by omega) h₂
+  have hf := Steady.floor hdr hst hL hv h₁ (by omega)
+  have hf' := Steady.floor hdr hst hL hv (by omega) h₂
+  refine ⟨by rw [hf]; exact htop, ?_, by rw [hlo, hlo'], by rw [hf, hf']⟩
+  change cfg.slots.slotRound (stateBefore cfg tr k v).lo ≤ _
+  rw [hlo, hf]
+
+/-- **In a steady window past GST a reliable author's block is synced**,
+once delivered after the window opens, at a node that drops: the floors
+meet at the round of the window's slot, at or below the block's round, and
+the author holds the block (`synced_from_author`). -/
+theorem syncedFrom_steady {H : Finset Validator} (hid : Function.Injective cfg.idOf)
+    (hdr : cfg.drops = true) (htime : Converge.TimelyAuthentic cfg H tr) (hTH : T ⊆ H)
+    (hmono : Live.TimeMono tr time) {gst Δₛ : ℕ}
+    (hsync : Live.SyncedHeld cfg T tr time gst Δₛ t₁) (hst : Live.Steady cfg T tr time G t₁ L)
+    (hL : 1 ≤ L) (hgG : gst ≤ G) : Live.SyncedFrom cfg T tr time gst Δₛ (G + 1) t₁ := by
+  intro j v u id b hj hv hc hidb hr hGj τ hτ hτ₁
+  have hjl : j < tr.length := (List.getElem?_eq_some_iff.mp hj).1
+  -- its author built it before
+  obtain ⟨i, hij, hiu, hxb⟩ := htime j v (.deliver u id b) hj (hTH hv) (id, b)
+    (by simp [delivered, hidb]; rfl) (hTH hc)
+  obtain ⟨inpi, hi⟩ := Converge.event_of_map hiu
+  obtain ⟨a, hai, inpa, ha, hpa⟩ := Converge.persists_of_broadcasts hi hxb
+  -- the window holds at the delivery and at `τ`
+  have hEj : eventsBy tr time G ≤ j := by
+    by_contra h
+    have := (lt_eventsBy (t := G) hmono hjl).mp (by omega)
+    omega
+  have hjE : j ≤ eventsBy tr time t₁ := ((lt_eventsBy hmono hjl).mpr (by omega)).le
+  have hEτ : eventsBy tr time G ≤ eventsBy tr time τ := eventsBy_mono (by omega)
+  have hτE : eventsBy tr time τ ≤ eventsBy tr time t₁ := eventsBy_mono hτ₁
+  have hF : (stateBefore cfg tr j b.creator).floor ≤ (stateBefore cfg tr j v).floor := by
+    rw [Steady.floor hdr hst hL hc hEj hjE, Steady.floor hdr hst hL hv hEj hjE]
+  have hrg : topAt cfg tr time b.creator gst ≤ b.round :=
+    ((rises_before (cfg := cfg) (tr := tr) b.creator
+      (eventsBy_mono (tr := tr) (time := time) (le_max_right (G + 1) gst))).1).trans hr
+  rcases synced_from_author hid hsync ha hpa (by omega) hj hc hv hrg hF hτ hτ₁ with h | h
+  · exact h
+  · -- the block lies at the author's round at `G` or above, so at the floor or above
+    exfalso
+    have hfτ : (stateAt cfg tr time v τ).floor = cfg.slots.slotRound L :=
+      Steady.floor hdr hst hL hv hEτ hτE
+    have htG := (hst b.creator hc (eventsBy tr time G) le_rfl (eventsBy_mono (by omega))).2
+    have hGm : topAt cfg tr time b.creator G ≤ topAt cfg tr time b.creator (max (G + 1) gst) :=
+      (rises_before (cfg := cfg) (tr := tr) b.creator
+        (eventsBy_mono (tr := tr) (time := time) (by omega))).1
+    change cfg.slots.slotRound L ≤ topAt cfg tr time b.creator G at htG
+    omega
+
+/-- **Reliable blocks arrive in a steady window**, at a node that drops: as
+past a recovery (`arrival_of_recovered`), the window's start in the place
+of the recovery's, since a block delivered after it is synced
+(`syncedFrom_steady`) and every step in it is regular (`Steady.regular`),
+so a reliable author sends its blocks again. -/
+theorem arrival_steady {H : Finset Validator} (hσ : cfg.σ = boundedSel)
+    (hadm : cfg.Admissible) (hfa : cfg.Faithful) (hf : Hᶜ.card ≤ cfg.f)
+    (hid : Function.Injective cfg.idOf) (htime : Converge.TimelyAuthentic cfg H tr)
+    (hinj : Converge.HashInjective cfg H tr) (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
+    (hdr : cfg.drops = true) {gst Δ Δₛ : ℕ} (hdel : Live.DeliveredWithin cfg T tr time gst Δ t₁)
+    (hsync : Live.SyncedHeld cfg T tr time gst Δₛ t₁) (hup : Live.UpFrom T tr time 0 t₁)
+    (hfire : Live.TimersFireUp cfg T tr time t₁) (hstart : Live.StartedBy T tr time gst)
+    (hst : Live.Steady cfg T tr time G t₁ L) (hL : 1 ≤ L) (hgG : gst ≤ G)
+    (hW : max (G + 1) gst +
+      (T.sup fun u => 2 * cfg.timeout (topAt cfg tr time u (max (G + 1) gst) - 1)) ≤ t₁) :
+    Arrival cfg T tr time
+      (max (G + 1) gst +
+        T.sup fun u => 2 * cfg.timeout (topAt cfg tr time u (max (G + 1) gst) - 1))
+      (Δ + Δₛ) t₁ := by
+  refine arrival_of_recovered hσ hadm hfa hf hid htime hinj hTH hmono
+    (fun i u inp hi hu _ m hm hmT ht => hdel i u inp hi hu m hm hmT ht)
+    (syncedFrom_steady hid hdr htime hTH hmono hsync hst hL hgG)
+    (fun k v hk hv h => absurd (hup k v hk hv h) (Nat.not_lt_zero _)) hfire hstart
+    fun u hu k inp hk h₁ h₂ => ?_
+  have hkl : k < tr.length := (List.getElem?_eq_some_iff.mp hk).1
+  refine Steady.regular hdr hst hL hu ?_ ((lt_eventsBy hmono hkl).mpr (by omega))
+  by_contra h
+  have := (lt_eventsBy (t := G) hmono hkl).mp (by omega)
+  omega
+
+end Steady
 
 end Node
 

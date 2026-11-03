@@ -367,7 +367,7 @@ theorem recovers : Recovers := by
   have hrG : t_r ≤ G := (le_max_left _ _).trans (Nat.le_add_right _ _)
   have hgG : gst ≤ G := (le_max_right _ _).trans (Nat.le_add_right _ _)
   have harr := arrival_of_recovered hσ hadm hfa hf hid htime hinj hTH hmono hdel hsync hup hfire
-      hstart hdr
+      hstart fun _ _ _ _ _ _ _ => Regular.of_false hdr
   have hstart' : StartedBy T tr time G := fun v hv => by
     obtain ⟨i, hi, hit⟩ := hstart v hv
     exact ⟨i, hi, hit.trans hgG⟩

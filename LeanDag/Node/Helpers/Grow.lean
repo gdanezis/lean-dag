@@ -421,6 +421,138 @@ theorem diskRises_step (s : State Validator BlockId Payload) (i : Input Validato
       · exact DiskRises.refl _
     · exact DiskRises.refl _
 
+/-! ## The disk grows while the next undecided slot stays -/
+
+/-- **The disk grows unless the node decides**: the next undecided slot
+rises, or stays and the disk grows. -/
+def GrowsUnless (s s' : State Validator BlockId Payload) : Prop :=
+  s.lo ≤ s'.lo ∧ (s.lo < s'.lo ∨ Grows s.disk s'.disk)
+
+omit [Fintype Validator] [DecidableEq Validator] in
+theorem GrowsUnless.refl (s : State Validator BlockId Payload) : GrowsUnless s s :=
+  ⟨le_rfl, Or.inr (Grows.refl _)⟩
+
+omit [Fintype Validator] [DecidableEq Validator] in
+theorem GrowsUnless.trans {a b c : State Validator BlockId Payload} (h₁ : GrowsUnless a b)
+    (h₂ : GrowsUnless b c) : GrowsUnless a c := by
+  refine ⟨h₁.1.trans h₂.1, ?_⟩
+  rcases h₁.2 with h | h
+  · exact Or.inl (lt_of_lt_of_le h h₂.1)
+  · rcases h₂.2 with h' | h'
+    · exact Or.inl (lt_of_le_of_lt h₁.1 h')
+    · exact Or.inr (h.trans h')
+
+omit [Fintype Validator] [DecidableEq Validator] in
+theorem GrowsUnless.of_grows {s s' : State Validator BlockId Payload} (hg : Grows s.disk s'.disk)
+    (hlo : s'.lo = s.lo) : GrowsUnless s s' :=
+  ⟨hlo.ge, Or.inr hg⟩
+
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- With the next undecided slot the same at both ends, the disk grows. -/
+theorem GrowsUnless.grows {s s' : State Validator BlockId Payload} (h : GrowsUnless s s')
+    (hlo : s'.lo = s.lo) : Grows s.disk s'.disk :=
+  h.2.resolve_left (by omega)
+
+omit [Fintype Validator] in
+theorem growsUnless_progress : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
+    GrowsUnless s (Node.progress cfg fuel s).1 := fun fuel s =>
+  GrowsUnless.of_grows (Grows.progress fuel s).1 (Grows.progress fuel s).2
+
+omit [Fintype Validator] in
+/-- **Deciding nothing leaves the state**, and deciding raises the next
+undecided slot. -/
+theorem growsUnless_decideStep (s : State Validator BlockId Payload) :
+    GrowsUnless s (Node.decideStep cfg s).1 := by
+  unfold Node.decideStep
+  dsimp only
+  split
+  · rename_i h
+    refine ⟨?_, Or.inl ?_⟩ <;> rw [drop_lo, release_lo] <;> dsimp only
+    · omega
+    · have := List.length_pos_of_ne_nil h.2.2; omega
+  · exact GrowsUnless.refl s
+
+omit [Fintype Validator] in
+theorem growsUnless_advance (s : State Validator BlockId Payload) :
+    GrowsUnless s (Node.advance cfg s).1 := by
+  set p := (Node.progress cfg (s.disk.topRound + 2) s).1
+  have h₁ : GrowsUnless s p := growsUnless_progress _ s
+  have h₂ := growsUnless_decideStep (cfg := cfg) p
+  have h₃ : GrowsUnless (Node.decideStep cfg p).1 (Node.pass cfg s).1 := by
+    obtain ⟨⟨L, -, hL⟩, -, -, -, -, -, hlo, -⟩ := flushSyncs_eq (cfg := cfg)
+      ((Node.decideStep cfg p).1.syncs.length + 1) (Node.decideStep cfg p).1
+    exact GrowsUnless.of_grows (by simp only [Node.pass]; rw [hL]; exact Grows.foldl _ _ _) hlo
+  have h₄ : GrowsUnless (Node.pass cfg s).1 (Node.advance cfg s).1 :=
+    GrowsUnless.of_grows (by rw [advance_disk]; exact Grows.refl _) (by simp [Node.advance])
+  exact h₁.trans (h₂.trans (h₃.trans h₄))
+
+omit [Fintype Validator] in
+theorem growsUnless_settle (s : State Validator BlockId Payload) :
+    GrowsUnless s (Node.settle cfg s).1 :=
+  (quiesce_rel (P := fun _ => True) (R := fun a _ b => GrowsUnless a b) GrowsUnless.refl
+    (fun _ _ _ _ _ h₁ h₂ => h₁.trans h₂) (fun s _ => ⟨growsUnless_advance s, trivial⟩) _ s
+    trivial).1
+
+/-- **A step grows the disk unless the node decides.** -/
+theorem growsUnless_step (s : State Validator BlockId Payload)
+    (i : Input Validator BlockId Payload) : GrowsUnless s (Node.step cfg s i).1 := by
+  have hset : ∀ x : State Validator BlockId Payload, GrowsUnless s x →
+      GrowsUnless s (Node.settle cfg x).1 := fun x hx => hx.trans (growsUnless_settle x)
+  have hab : ∀ L, GrowsUnless s (Node.absorb cfg s L) := fun L =>
+    GrowsUnless.of_grows (Grows.absorb s L) (absorb_rest (cfg := cfg) s L).2.2.2.2.2.1
+  cases i with
+  | start =>
+    simp only [Node.step]
+    split
+    · split
+      · rename_i h₂
+        dsimp only
+        exact hset _ (GrowsUnless.of_grows (Grows.insert s.disk (id := cfg.idOf cfg.genesis)
+          (b := cfg.genesis) (hnew := h₂.1)
+          (hrefs := fun _ hj => absurd hj (Finset.notMem_empty _))
+          (hpred := fun j hj => absurd hj (Finset.notMem_empty j))) rfl)
+      · exact GrowsUnless.refl _
+    · exact GrowsUnless.refl _
+  | deliver u id b =>
+    simp only [Node.step]
+    split
+    · split
+      · exact hset _ (hab [(id, b)])
+      · split
+        · exact hset _ (GrowsUnless.of_grows (Grows.refl _) rfl)
+        · exact GrowsUnless.refl _
+    · exact GrowsUnless.refl _
+  | stream u L =>
+    have htk : ∀ t L', GrowsUnless s (Node.takeIn cfg s t L') := by
+      intro t L'
+      unfold Node.takeIn
+      split
+      · exact hab _
+      · exact GrowsUnless.refl _
+    simp only [Node.step]
+    split
+    · exact GrowsUnless.refl _
+    · split
+      · exact hset _ (htk _ _)
+      · exact hset _ ((htk _ _).trans (GrowsUnless.of_grows (Grows.refl _) rfl))
+  | timer r =>
+    rw [step_timer_fst]; exact hset _ (GrowsUnless.of_grows (Grows.refl _) rfl)
+  | syncRequest peer t fr ids => exact GrowsUnless.refl _
+  | ask peer r => exact GrowsUnless.refl _
+  | restart =>
+    exact hset { s with recovering := true } (GrowsUnless.of_grows (Grows.refl _) rfl)
+  | askProof peer k => exact GrowsUnless.refl _
+  | proof u k L =>
+    simp only [Node.step]
+    split
+    · rename_i hc
+      split
+      · rename_i d _
+        have hlo := (decideOn_rest (cfg := cfg) s k d L).2.2.2.2.1
+        exact hset _ ⟨by simp only [Node.tidy]; omega, Or.inl (by simp only [Node.tidy]; omega)⟩
+      · exact GrowsUnless.refl _
+    · exact GrowsUnless.refl _
+
 /-! ## The blocks as accepted stay closed under references -/
 
 omit [Fintype Validator] in

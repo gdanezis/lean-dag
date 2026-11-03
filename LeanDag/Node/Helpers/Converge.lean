@@ -149,6 +149,26 @@ theorem diskRises_before (v : Validator) {i j : ℕ} (hij : i ≤ j) :
     · rw [same_before fun inp h => he ⟨inp, h⟩]
       exact DiskRises.refl _
 
+/-- **Along a trace the disk grows while the next undecided slot stays**:
+between two events at which a node's next undecided slot is the same, its
+disk only gains blocks, at a node that drops too. -/
+theorem grows_of_lo (v : Validator) {i j : ℕ} (hij : i ≤ j)
+    (hlo : (stateBefore cfg tr j v).lo = (stateBefore cfg tr i v).lo) :
+    Grows (stateBefore cfg tr i v).disk (stateBefore cfg tr j v).disk := by
+  have key : ∀ j, i ≤ j → GrowsUnless (stateBefore cfg tr i v) (stateBefore cfg tr j v) := by
+    intro j hij
+    induction j, hij using Nat.le_induction with
+    | base => exact GrowsUnless.refl _
+    | succ j _ ih =>
+      refine ih.trans ?_
+      by_cases he : ∃ inp, tr[j]? = some (v, inp)
+      · obtain ⟨inp, hj⟩ := he
+        rw [step_before hj]
+        exact growsUnless_step (cfg := cfg.at v) _ inp
+      · rw [same_before fun inp h => he ⟨inp, h⟩]
+        exact GrowsUnless.refl _
+  exact (key j hij).grows hlo
+
 /-- **No sync's block is ever ready.** -/
 theorem noReady_before (v : Validator) : ∀ i, NoReady (cfg.at v) (stateBefore cfg tr i v)
   | 0 => fun e he => by simp [stateBefore, inputsBefore, run, State.init] at he
