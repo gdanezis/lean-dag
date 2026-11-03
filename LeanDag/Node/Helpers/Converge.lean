@@ -71,16 +71,18 @@ theorem inv_before (i : ℕ) (v : Validator) :
   simp only [knownBefore, Set.mem_setOf_eq, List.mem_append]
   exact hx
 
-/-- **The memory reaches `voteOffset` below the top**, before every event. -/
-theorem floor_before {i : ℕ} {v : Validator} {r : ℕ} (ht : (stateBefore cfg tr i v).top = some r) :
+/-- **The memory reaches `voteOffset` below the top**, before every event,
+when the node does not drop. -/
+theorem floor_before (hdr : cfg.drops = false) {i : ℕ} {v : Validator} {r : ℕ}
+    (ht : (stateBefore cfg tr i v).top = some r) :
     (stateBefore cfg tr i v).floor ≤ r - cfg.p.voteOffset :=
-  (inv_before i v).floor.trans ((min_le_right _ _).trans (by rw [ht]; rfl))
+  (inv_before i v).floor.trans ((floorOf_le_top (cfg := cfg.at v) hdr _).trans (by rw [ht]; rfl))
 
 /-- **The memory reaches the round of the next undecided slot**, before
 every event. -/
 theorem floor_lo_before (i : ℕ) (v : Validator) :
     (stateBefore cfg tr i v).floor ≤ cfg.slots.slotRound (stateBefore cfg tr i v).lo :=
-  (inv_before i v).floor.trans (min_le_left _ _)
+  (inv_before i v).floor.trans (floorOf_le _)
 
 theorem knownBefore_sub {v : Validator} (hv : v ∈ H) (i : ℕ) :
     knownBefore cfg tr i v ⊆ knownIn cfg H tr := by

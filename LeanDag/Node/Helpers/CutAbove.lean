@@ -399,12 +399,12 @@ theorem cutAbove_before (G t : ℕ) : ∀ v ∈ H,
         obtain ⟨hd, hb⟩ := event_knownOf (cfg := cfg) hj
         obtain ⟨hc', hv'⟩ := AllGood.step (cfg := cfg.at w)
           (C := fun n => cfg.slots.slotRound n ≤ G + 1)
-          (fun _ _ h h' => (cfg.slots.mono h).trans h') (grounds_padded hinj hauth hq G w)
-          (decidesWell_padded hinj hauth hq hσ hadm hf G w)
+          (fun _ _ h h' => (cfg.slots.mono h).trans h')
           (fun _ n hn x hx hr => cutAbove_known hinj hauth hq hx
             (by change x.2.round < cfg.slots.slotRound n at hr; omega))
+          (grounds_padded hinj hauth hq G w) (decidesWell_padded hinj hauth hq hσ hadm hf G w)
           (fun _ k L d hvd hL hk hGk => verdict_proof hinj hauth hq hσ hadm hf G w hvd hL hk hGk)
-          inp hc hi.floor
+          inp hc (hi.floor.trans (floorOf_le _))
           (fun e he => hK w hv _ (knownBefore_knownOf (hi.pend e he)))
           (fun e he => hK w hv e (hd e he))
           (fun e he => hK w hv e (hb e he))

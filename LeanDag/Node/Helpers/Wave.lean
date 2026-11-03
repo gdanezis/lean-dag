@@ -98,7 +98,7 @@ theorem waited_holds (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel) (hadm : cfg.
   rw [hcr] at her hbt
   have hicl : ic < tr.length := (List.getElem?_eq_some_iff.mp hic).1
   have hws := started_at hadm hfa hid htime hTH hmono hstart hcT (τ := time i + (Δ + Δₛ)) (by omega)
-  have hbw := builtAt_le_of_top hmono hws (hall _ hcT)
+  have hbw := builtAt_le_of_top hmono hdr hws (hall _ hcT)
     (harr.no_jump hmono hcT ((hbelow _ hcT).trans_le hn₀) (by omega))
   by_cases hvw : ((globalRecord (hashInjective_of_trace hinj)
       (authentic_of_timely htime)).block e.1).creator = v
@@ -141,7 +141,7 @@ theorem reliable_held {u v : Validator} (hu : u ∈ T) (hv : v ∈ T) {r : ℕ} 
     have h₂ := hN v hv
     change topAt cfg tr time v t ≤ topAt cfg tr time v gst at this
     omega
-  have hit : time i ≤ t := hbt ▸ builtAt_le_of_top hmono (hst u hu) ((hN u hu).trans' hrN)
+  have hit : time i ≤ t := hbt ▸ builtAt_le_of_top hmono hdr (hst u hu) ((hN u hu).trans' hrN)
     (harr.no_jump hmono hu ((hbelow u hu).trans_le hr₀) (by omega))
   by_cases huv : u = v
   · subst huv
@@ -255,7 +255,7 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
       have hxn : x.top.getD 0 ≤ n := by rw [hxt]; rfl
       have hzr₁ : (x.disk.blk z.1).round = n + 1 := by
         rw [← (x.disk.full_fields z.1).1, hzb, hzr]
-      have hkz : x.disk.kept[z.1]? = none := hiXx.unkept hxn (by omega)
+      have hkz : x.disk.kept[z.1]? = none := hiXx.unkept hdr hxn (by omega)
       have hZR : (x.disk.blk z.1).refs = refsAt (cfg.at w') xw.disk n oww xw.evidence := by
         rw [← x.disk.full_of_kept_none hkz, ← hbs.cut.eq hzx, hzrefs]
       -- no block on disk has the identifier of a next block of the node's own
@@ -287,8 +287,8 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
           excluded (cfg.at h) x.disk n x.evidence :=
         excluded_lent hfa hdr hbsw hbs ho hzx hzrefs hzpay
       have hready := ready_transfer (cfg := cfg.at h) hσ (fun h => certThreshold_pos hadm h)
-        hbsw.cut hbs.cut hzsub hRR hlZ (fun a _ ha => hiXw.unkept hshw.2.1 ha)
-        (fun a _ ha => hiXx.unkept hxn ha) (fun b hb => by
+        hbsw.cut hbs.cut hzsub hRR hlZ (fun a _ ha => hiXw.unkept hdr hshw.2.1 ha)
+        (fun a _ ha => hiXx.unkept hdr hxn ha) (fun b hb => by
           rw [← hbsw.cut.round (hzsub hb)]
           change (U.block b).round = n
           have h₁ := (U.valid z.1 hzU).predecessor b (by rw [hzrefs]; exact hb)
@@ -369,7 +369,7 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
     b hbU hbT hbr
   have hi₀l : i₀ < tr.length := (List.getElem?_eq_some_iff.mp hi₀).1
   have hi₀t : time i₀ ≤ t :=
-    hbt ▸ builtAt_le_of_top hmono (hst v hv) ((hN v hv).trans' hnN)
+    hbt ▸ builtAt_le_of_top hmono hdr (hst v hv) ((hN v hv).trans' hnN)
       (harr.no_jump hmono hv ((hbelow v hv).trans_le (by omega)) (by
         have h₁ := hbelow v hv
         have h₂ := hN v hv
@@ -405,7 +405,7 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
     have hTA : T ⊆ authorsIn x.disk.toRecord x.disk.ids n \ excluded (cfg.at v) x.disk n
         x.evidence := by
       intro w hw
-      obtain ⟨i, inpi, e, hi, he, her, -, -⟩ := built_of_top (cfg := cfg) hmono (hst w hw)
+      obtain ⟨i, inpi, e, hi, he, her, -, -⟩ := built_of_top (cfg := cfg) hmono hdr (hst w hw)
         ((hN w hw).trans' (by omega)) (harr.no_jump hmono hw ((hbelow w hw).trans_le hn₀)
           (by
             have h₁ := hbelow w hw
@@ -571,7 +571,7 @@ theorem cert_or_refs_node (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cf
           x.evidence) = true
   · obtain ⟨Bx, hiXx⟩ := hbs.inv
     refine Or.inl (isCert_of_certReady (cfg := cfg.at v) hσ hbs.cut hready.2 hsub hvc rfl
-      (hTH hlead) hlX (fun i _ hi => hiXx.unkept hsh.2.1
+      (hTH hlead) hlX (fun i _ hi => hiXx.unkept hdr hsh.2.1
         (show cfg.slots.slotRound k + cfg.p.voteOffset - cfg.p.voteOffset ≤ _ by
           rw [Nat.add_sub_cancel]; exact hi))
       (fun b hb => ?_) hL hcrefs)

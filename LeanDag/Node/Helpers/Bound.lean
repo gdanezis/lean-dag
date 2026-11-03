@@ -102,15 +102,14 @@ omit [Fintype Validator] in
 /-- **Accepting a block keeps twins convicting.** -/
 theorem Caught.accept {s : State Validator BlockId Payload} (h : Caught cfg s) (id : BlockId)
     (b : Block Validator BlockId Payload) : Caught cfg (Node.accept cfg s id b) := by
-  unfold Node.accept
-  split
-  · rename_i hc
-    dsimp only
-    simp only [keep_disk]
-    have hd := s.mirrors.checks_pick.mp hc.2
-    set st' := s.disk.insert id b hc.1 hd.1 hd.2.1 with hst'
-    have hg : Grows s.disk st' := Grows.insert s.disk
-    have hk : st'.full id = b := by rw [hst', Store.full_insert, if_pos rfl]
+  -- a disk grown by `id`, holding `b` there as accepted
+  have key : ∀ st' : Store Validator BlockId Payload, id ∉ s.disk.ids →
+      st'.ids = Insert.insert id s.disk.ids → st'.full id = b →
+      (∀ j ∈ s.disk.ids, st'.full j = s.disk.full j) → ∀ s' : State Validator BlockId Payload,
+      s'.disk = st' → s'.detected = s.detected ∪ named (evidenceOf cfg s.disk id b) →
+      Caught cfg s' := by
+    intro st' hnin hids hk hfull s' hsd hsdet
+    rw [Caught, hsd, hsdet]
     -- a new block with an old twin is convicted by the twin
     have hnew : ∀ j ∈ s.disk.ids, (s.disk.full j).creator = b.creator →
         (s.disk.full j).round = b.round → b.creator ∈ named (evidenceOf cfg s.disk id b) := by
@@ -128,7 +127,7 @@ theorem Caught.accept {s : State Validator BlockId Payload} (h : Caught cfg s) (
         have hi := Finset.mem_filter.mp (mem_of_leastOf ht)
         rw [Store.mem_atRound] at hi
         refine Finset.mem_image.mpr ⟨(b.creator, i, id), Finset.mem_filter.mpr
-          ⟨Finset.mem_union_left _ ?_, fun e => hc.1 (by simp only at e; exact e ▸ hi.1.1)⟩, rfl⟩
+          ⟨Finset.mem_union_left _ ?_, fun e => hnin (by simp only at e; exact e ▸ hi.1.1)⟩, rfl⟩
         simp [ht]
     intro i hi j hj hij hcr hrd hme
     change i ∈ st'.ids at hi
@@ -137,23 +136,33 @@ theorem Caught.accept {s : State Validator BlockId Payload} (h : Caught cfg s) (
     change (st'.full i).round = (st'.full j).round at hrd
     change (st'.full i).creator ≠ cfg.me at hme
     change (st'.full i).creator ∈ s.detected ∪ named (evidenceOf cfg s.disk id b)
-    rw [hst', Store.insert_ids] at hi hj
+    rw [hids] at hi hj
     by_cases hi' : i = id
     · have hj' : j ∈ s.disk.ids :=
         (Finset.mem_insert.mp hj).resolve_left fun e => hij (hi'.trans e.symm)
-      rw [hi', hk, hg.2.2 j hj'] at hcr hrd
+      rw [hi', hk, hfull j hj'] at hcr hrd
       rw [hi', hk]
       exact Finset.mem_union_right _ (hnew j hj' hcr.symm hrd.symm)
     · have hi'' : i ∈ s.disk.ids := (Finset.mem_insert.mp hi).resolve_left hi'
       by_cases hj' : j = id
-      · rw [hj', hk, hg.2.2 i hi''] at hcr hrd
-        rw [hg.2.2 i hi'', hcr]
+      · rw [hj', hk, hfull i hi''] at hcr hrd
+        rw [hfull i hi'', hcr]
         exact Finset.mem_union_right _ (hnew i hi'' hcr hrd)
       · have hj'' : j ∈ s.disk.ids := (Finset.mem_insert.mp hj).resolve_left hj'
-        rw [hg.2.2 i hi'', hg.2.2 j hj''] at hcr hrd
-        rw [hg.2.2 i hi''] at hme ⊢
+        rw [hfull i hi'', hfull j hj''] at hcr hrd
+        rw [hfull i hi''] at hme ⊢
         exact Finset.mem_union_left _ (h i hi'' j hj'' hij hcr hrd hme)
-  · exact h
+  unfold Node.accept
+  split
+  · rename_i hc
+    have hd := s.mirrors.checks_pick.mp hc.2
+    exact key (s.disk.insert id b hc.1 hd.1 hd.2.1) hc.1 Store.insert_ids
+      (by rw [Store.full_insert, if_pos rfl]) (fun j hj => (Grows.insert s.disk).2.2 j hj) _ rfl rfl
+  · split
+    · rename_i hc
+      exact key _ hc.2.1 Store.base_ids (by rw [Store.full_base, if_pos rfl])
+        (fun j hj => (Grows.base s.disk).2.2 j hj) _ rfl rfl
+    · exact h
 
 omit [Fintype Validator] in
 theorem Caught.absorb {s : State Validator BlockId Payload} (h : Caught cfg s) :
@@ -186,15 +195,15 @@ theorem Tame.of_same {s s' : State Validator BlockId Payload} (h : Tame cfg s) {
 
 omit [Fintype Validator] in
 /-- **A block new after taking blocks in** is one of them, as taken. -/
-theorem foldl_new {i : BlockId} : ∀ (L : List (BlockId × Block Validator BlockId Payload))
+theorem foldl_new {i : BlockId} {F : ℕ} : ∀ (L : List (BlockId × Block Validator BlockId Payload))
     (st : Store Validator BlockId Payload),
-    i ∈ (L.foldl (fun s e => acceptOn cfg s e.1 e.2) st).ids → i ∉ st.ids →
-    ∃ e ∈ L, e.1 = i ∧ (L.foldl (fun s e => acceptOn cfg s e.1 e.2) st).full i = e.2
+    i ∈ (L.foldl (fun s e => acceptOn cfg F s e.1 e.2) st).ids → i ∉ st.ids →
+    ∃ e ∈ L, e.1 = i ∧ (L.foldl (fun s e => acceptOn cfg F s e.1 e.2) st).full i = e.2
   | [], _, h, hn => absurd h hn
   | x :: L, st, h, hn => by
     rw [List.foldl_cons] at h ⊢
-    by_cases h₁ : i ∈ (acceptOn cfg st x.1 x.2).ids
-    · have hx : i = x.1 ∧ (acceptOn cfg st x.1 x.2).full i = x.2 := by
+    by_cases h₁ : i ∈ (acceptOn cfg F st x.1 x.2).ids
+    · have hx : i = x.1 ∧ (acceptOn cfg F st x.1 x.2).full i = x.2 := by
         unfold acceptOn at h₁ ⊢
         split at h₁
         · rename_i hc
@@ -202,9 +211,17 @@ theorem foldl_new {i : BlockId} : ∀ (L : List (BlockId × Block Validator Bloc
           rw [Store.insert_ids] at h₁
           have : i = x.1 := (Finset.mem_insert.mp h₁).resolve_right hn
           exact ⟨this, if_pos this⟩
-        · exact absurd h₁ hn
+        · rename_i hc
+          rw [dif_neg hc]
+          split at h₁
+          · rename_i hb
+            rw [dif_pos hb, Store.full_base]
+            rw [Store.base_ids] at h₁
+            have : i = x.1 := (Finset.mem_insert.mp h₁).resolve_right hn
+            exact ⟨this, if_pos this⟩
+          · exact absurd h₁ hn
       refine ⟨x, List.mem_cons_self, hx.1.symm, ?_⟩
-      rw [(Grows.foldl (cfg := cfg) L _).2.2 i h₁, hx.2]
+      rw [(Grows.foldl (cfg := cfg) F L _).2.2 i h₁, hx.2]
     · obtain ⟨e, he, h₂⟩ := foldl_new L _ h h₁
       exact ⟨e, List.mem_cons_of_mem _ he, h₂⟩
 
@@ -238,8 +255,8 @@ theorem Tame.absorb {s : State Validator BlockId Payload} (h : Tame cfg s)
     (hone : ∀ e ∈ L, ∀ e' ∈ L, e.2.creator = e'.2.creator → e.2.creator ≠ cfg.me → e.1 = e'.1)
     (hdet : ∀ e ∈ L, e.2.creator ≠ cfg.me → e.2.creator ∉ s.detected) :
     Tame cfg (Node.absorb cfg s L) := by
-  have hd : (Node.absorb cfg s L).disk = L.foldl (fun st e => acceptOn cfg st e.1 e.2) s.disk :=
-    absorb_disk _ _
+  have hd : (Node.absorb cfg s L).disk =
+      L.foldl (fun st e => acceptOn cfg s.floor st e.1 e.2) s.disk := absorb_disk _ _
   refine h.grow (Grows.absorb s L) (h.1.absorb L) fun i hi hin _ hme => ?_
   rw [hd] at hi hme ⊢
   obtain ⟨e, he, rfl, hb⟩ := foldl_new L s.disk hi hin
@@ -440,7 +457,7 @@ theorem takeIn_referenced {g : BlockId → Block Validator BlockId Payload}
     ∃ z ∈ (Node.absorb cfg s (inHistory cfg t L)).disk.ids,
       i ∈ ((Node.absorb cfg s (inHistory cfg t L)).disk.full z).refs := by
   set st := (Node.absorb cfg s (inHistory cfg t L)).disk
-  have hd : st = (inHistory cfg t L).foldl (fun st e => acceptOn cfg st e.1 e.2) s.disk :=
+  have hd : st = (inHistory cfg t L).foldl (fun st e => acceptOn cfg s.floor st e.1 e.2) s.disk :=
     absorb_disk _ _
   rw [hd] at hi
   obtain ⟨e, he, rfl, -⟩ := foldl_new _ s.disk hi hin
@@ -465,7 +482,8 @@ omit [Fintype Validator] in
 /-- **A piece taken in header first keeps the state steady**, on a store
 reading as a block map that the piece and the sync's block agree with. -/
 theorem Steady.takeIn {g : BlockId → Block Validator BlockId Payload}
-    {s : State Validator BlockId Payload} (h : Steady cfg s) (hcl : s.disk.FullClosed)
+    {s : State Validator BlockId Payload} (h : Steady cfg s) (hd : cfg.drops = false)
+    (hcl : s.disk.FullClosed)
     {u : Validator}
     {t : BlockId × Block Validator BlockId Payload} {A : List BlockId} (he : (u, t, A) ∈ s.syncs)
     {L : List (BlockId × Block Validator BlockId Payload)}
@@ -485,7 +503,7 @@ theorem Steady.takeIn {g : BlockId → Block Validator BlockId Payload}
           i ∉ ((Node.absorb cfg s (inHistory cfg t L)).disk.full j).refs) → i = t.1 := by
       intro i hi hin hiu
       by_contra hit
-      obtain ⟨z, hz, hiz⟩ := takeIn_referenced hst' (closed_absorb s _ hcl) hL hc hi hin hit
+      obtain ⟨z, hz, hiz⟩ := takeIn_referenced hst' (closed_absorb hd s _ hcl) hL hc hi hin hit
       exact hiu z hz hiz
     obtain rfl := hone i hi hin hiu
     have hb : (Node.absorb cfg s (inHistory cfg t L)).disk.full t.1 = t.2 := by
@@ -546,7 +564,7 @@ theorem Steady.step {g : BlockId → Block Validator BlockId Payload}
       have ht := hS _ he
       rcases step_stream_cases (cfg := cfg) h.2.2 he L with ⟨-, hs⟩ | ⟨-, hs⟩
       · rw [hs] at hR ⊢
-        exact Steady.settle hd (h.takeIn hcl he (hR.of_grows (Grows.settle _ hd)) hL ht)
+        exact Steady.settle hd (h.takeIn hd hcl he (hR.of_grows (Grows.settle _ hd)) hL ht)
       · set s₁ := Node.takeIn cfg s t (inHistory cfg t L) with hs₁
         set s₂ : State Validator BlockId Payload := { s₁ with
           syncs := s₁.syncs.map fun x =>
@@ -555,7 +573,7 @@ theorem Steady.step {g : BlockId → Block Validator BlockId Payload}
         have hs' : (Node.step cfg s (.stream w L)).1 = (Node.settle cfg s₂).1 := by rw [hs]
         rw [hs'] at hR ⊢
         have hg : Grows s₁.disk (Node.settle cfg s₂).1.disk := Grows.settle s₂ hd
-        have h₁ := h.takeIn hcl he (hR.of_grows hg) hL ht
+        have h₁ := h.takeIn hd hcl he (hR.of_grows hg) hL ht
         refine Steady.settle hd ⟨h₁.1.of_same (Store.Restrips.refl _ 0) subset_rfl, fun x hx => ?_,
           h.2.2.extend (Thins.takeIn (cfg := cfg) s t _).sub he⟩
         obtain ⟨x', hx', hxe⟩ := List.mem_map.mp hx

@@ -99,7 +99,8 @@ theorem holds : Statement := by
       obtain ⟨i, hi, hit⟩ := hstart v hv
       exact ⟨i, hi, hit.trans hgG⟩
     exact waves_leads hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hdr hev hmono
-      (arrival_of_recovered hσ hadm hfa hf hid htime hinj hTH hmono hdel hsync hup hfire hstart)
+      (arrival_of_recovered hσ hadm hfa hf hid htime hinj hTH hmono hdel hsync hup hfire hstart
+        hdr)
       hwait hstart' hsp fun v hv => (hnE v hv).trans (by
         have := (rises_before (cfg := cfg) (tr := tr) v (eventsBy_mono (tr := tr) (time := time)
           (show max t_r gst ≤ G from Nat.le_add_right _ _))).1

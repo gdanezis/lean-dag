@@ -539,8 +539,13 @@ without their references (`proofStore`), and decides the slot by
 `tryDecide` on it (`verdictOn`). It then keeps the verdict and the proof,
 takes the blocks in, keeping those below its floor that are not ready
 without their references (`decideOn`, `takeProof`), and asks for the next
-slot. V3 holds with dropping and catch-up: a decision on a proof is a
-verdict on the record of the slot's cut (`Cut.Cuts`). V3′, V11, V11′,
+slot. A node that drops keeps its floor at or above its cut, the round
+below its next undecided slot's (`floorOf`); it accepts a new block below
+its floor on its header alone, keeping it without its references (D10,
+`accept`, `Store.base`); and a node whose top lies below its floor builds
+above the highest round its memory holds a quorum of, as a restarted node
+does (`tryBuild`). V3 holds with dropping and catch-up: a decision on a
+proof is a verdict on the record of the slot's cut (`Cut.Cuts`). V3′, V11, V11′,
 V12, V13 and the order of `docs/dos-bounds.md` (`Order.Agrees`,
 `Order.Held`) assume that no node drops (`cfg.drops = false`); a node
 that does not drop neither asks for proofs nor decides on them.

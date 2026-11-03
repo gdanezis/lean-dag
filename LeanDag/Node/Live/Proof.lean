@@ -121,7 +121,7 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
         exact ⟨j, hj, hjr.trans (le_antisymm (hup w hw hwv) (hall w hw)), hjc⟩
   have harm := armed_before (cfg := cfg) (tr := tr) v (eventsBy tr time τ) n hτt (by
     rw [(stateBefore cfg tr (eventsBy tr time τ) v).mirrors.authorsAt_eq
-      ((Converge.floor_before hτt).trans (Nat.sub_le _ _))]
+      ((Converge.floor_before hdr hτt).trans (Nat.sub_le _ _))]
     exact hcard)
   obtain ⟨f, hfe, htf⟩ := htop v hv τ n (by omega) (by omega) hτt harm
   have hfl : f < tr.length := (List.getElem?_eq_some_iff.mp hfe).1
@@ -175,7 +175,7 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
       exact Or.inr ⟨_, lent_mem_lents hz hzr hzm
         (lent_avoids_before hσ hadm hf htime hinj hdr time hsp (hTH hv) E hz hzr hzH hnE'),
         (lent_buildable (cfg := cfg.at v) hvalid hz hzr
-        ((Converge.inv_before (cfg := cfg) (tr := tr) E v).unkept (by rw [hZt])
+        ((Converge.inv_before (cfg := cfg) (tr := tr) E v).unkept hdr (by rw [hZt])
           (by change _ ≤ (Z.disk.blk z).round; rw [hzr]
               exact le_trans (Nat.sub_le _ _) (Nat.le_succ n)))
         hfa (fresh_before hid htime (hTH hv) hZt) _).2⟩
@@ -204,7 +204,7 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
     (Or.inl hfired) hcardE
     (fun j hj => by rw [hj₁] at hj; cases hj; exact ⟨hj₁i, hj₁r, hj₁c⟩) hB
     (fresh_before hid htime (hTH hv) hZt)
-    ((Converge.floor_before hZt).trans (Nat.sub_le _ _))
+    ((Converge.floor_before hdr hZt).trans (Nat.sub_le _ _))
   rcases settled_before (cfg := cfg) hq v E with h | h
   · rw [hZt] at h; cases h
   · rw [h.build] at hsome; cases hsome
@@ -364,7 +364,7 @@ theorem recovers : Recovers := by
   have hrG : t_r ≤ G := (le_max_left _ _).trans (Nat.le_add_right _ _)
   have hgG : gst ≤ G := (le_max_right _ _).trans (Nat.le_add_right _ _)
   have harr := arrival_of_recovered hσ hadm hfa hf hid htime hinj hTH hmono hdel hsync hup hfire
-      hstart
+      hstart hdr
   have hstart' : StartedBy T tr time G := fun v hv => by
     obtain ⟨i, hi, hit⟩ := hstart v hv
     exact ⟨i, hi, hit.trans hgG⟩

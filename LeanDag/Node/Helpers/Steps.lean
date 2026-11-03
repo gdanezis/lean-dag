@@ -126,16 +126,13 @@ omit [Fintype Validator] in
 theorem EvidenceOn.accept {s : State Validator BlockId Payload} (h : EvidenceOn cfg s)
     (id : BlockId) (b : Block Validator BlockId Payload) :
     EvidenceOn cfg (Node.accept cfg s id b) := by
-  unfold Node.accept
-  split
-  · rename_i hc
-    dsimp only
-    simp only [keep_disk]
-    have hd := s.mirrors.checks_pick.mp hc.2
-    set st' := s.disk.insert id b hc.1 hd.1 hd.2.1 with hst'
-    have hg : Grows s.disk st' := Grows.insert s.disk
-    have hk : st'.blk id = b := by rw [hst', Store.insert_blk, if_pos rfl]
-    have hidm : id ∈ st'.ids := Store.mem_insert_self
+  -- a disk grown by `id`, read with the round, author and payload of `b`
+  have key : ∀ st' : Store Validator BlockId Payload, Grows s.disk st' → id ∉ s.disk.ids →
+      id ∈ st'.ids → (st'.blk id).creator = b.creator → (st'.blk id).round = b.round →
+      (st'.blk id).payload = b.payload → ∀ s' : State Validator BlockId Payload,
+      s'.disk = st' → s'.detected = s.detected ∪ named (evidenceOf cfg s.disk id b) →
+      s'.evidence = s.evidence ∪ evidenceOf cfg s.disk id b → EvidenceOn cfg s' := by
+    intro st' hg hnew hidm hkc hkr hkp s' hsd hsdet hsev
     have hE : ∀ e ∈ evidenceOf cfg s.disk id b, e.2.1 ≠ e.2.2 ∧
         (TwinPair st' e ∨ ∃ i ∈ st'.ids, e ∈ cfg.xp.ev (st'.blk i).payload) := by
       intro e he
@@ -148,13 +145,14 @@ theorem EvidenceOn.accept {s : State Validator BlockId Payload} (h : EvidenceOn 
           subst he
           have hi := Finset.mem_filter.mp (mem_of_leastOf ht)
           rw [Store.mem_atRound] at hi
-          refine ⟨fun e => hc.1 (by simp only at e; exact e ▸ hi.1.1),
+          refine ⟨fun e => hnew (by simp only at e; exact e ▸ hi.1.1),
             Or.inl ⟨hg.1 hi.1.1, hidm, ?_, ?_, ?_⟩⟩
           · simp only; rw [hg.creator hi.1.1]; exact hi.2
-          · simp only; rw [hk]
-          · simp only; rw [hg.round hi.1.1, hk]; exact hi.1.2
+          · simp only; rw [hkc]
+          · simp only; rw [hg.round hi.1.1, hkr]; exact hi.1.2
       · obtain ⟨he, hne⟩ := Finset.mem_filter.mp he
-        exact ⟨hne, Or.inr ⟨id, hidm, by rw [hk]; exact he⟩⟩
+        exact ⟨hne, Or.inr ⟨id, hidm, by rw [hkp]; exact he⟩⟩
+    rw [EvidenceOn, hsd, hsdet, hsev]
     refine ⟨fun a ha => ?_, fun e he => ?_⟩
     · rcases Finset.mem_union.mp ha with ha | ha
       · obtain ⟨e, he, h₁, h₂⟩ := h.1 a ha
@@ -170,7 +168,22 @@ theorem EvidenceOn.accept {s : State Validator BlockId Payload} (h : EvidenceOn 
             by rw [hg.creator h₂]; exact h₄, by rw [hg.round h₁, hg.round h₂]; exact h₅⟩
         · exact Or.inr ⟨i, hg.1 hi, by rw [hg.payload hi]; exact hie⟩
       · exact hE e he
-  · exact h
+  unfold Node.accept
+  split
+  · rename_i hc
+    have hd := s.mirrors.checks_pick.mp hc.2
+    have hk : (s.disk.insert id b hc.1 hd.1 hd.2.1).blk id = b := by
+      rw [Store.insert_blk, if_pos rfl]
+    exact key _ (Grows.insert s.disk) hc.1 Store.mem_insert_self (by rw [hk]) (by rw [hk])
+      (by rw [hk]) _ rfl rfl rfl
+  · split
+    · rename_i hc
+      have hk : (s.disk.base id b hc.2.1).blk id = { b with refs := ∅ } := by
+        rw [Store.base_blk, if_pos rfl]
+      exact key _ (Grows.base s.disk) hc.2.1
+        (by rw [Store.base_ids]; exact Finset.mem_insert_self _ _) (by rw [hk]) (by rw [hk])
+        (by rw [hk]) _ rfl rfl rfl
+    · exact h
 
 variable (cfg) in
 /-- **The node holds the evidence of its disk**: every item a block on the
@@ -224,7 +237,17 @@ theorem Kept.accept {s : State Validator BlockId Payload} (h : Kept cfg s)
     exact h.insert (id := id) (hnew := hc.1) (hrefs := hd.1) (hpred := hd.2.1)
       (Store.Restrips.refl _ 0) Finset.subset_union_left fun e he hne =>
         Finset.mem_union_right _ (Finset.mem_union_right _ (Finset.mem_filter.mpr ⟨he, hne⟩))
-  · exact h
+  · split
+    · intro c hc x hx hne
+      change c ∈ (s.disk.base _ _ _).ids at hc
+      change x ∈ cfg.xp.ev ((s.disk.base _ _ _).blk c).payload at hx
+      rw [Store.base_ids] at hc
+      rw [Store.base_blk] at hx
+      split at hx
+      · exact Finset.mem_union_right _ (Finset.mem_union_right _ (Finset.mem_filter.mpr ⟨hx, hne⟩))
+      · rename_i hce
+        exact Finset.mem_union_left _ (h c ((Finset.mem_insert.mp hc).resolve_left hce) x hx hne)
+    · exact h
 
 omit [Fintype Validator] in
 theorem tryBuild_detected {s s' : State Validator BlockId Payload}
@@ -291,7 +314,7 @@ structure Received (inp : Input Validator BlockId Payload)
     (s s₁ : State Validator BlockId Payload) : Prop where
   disk : ∃ L : List (BlockId × Block Validator BlockId Payload),
     (∀ e ∈ L, e ∈ s.syncs.map (·.2.1) ∨ e ∈ delivered cfg [inp]) ∧
-      s₁.disk = L.foldl (fun st e => acceptOn cfg st e.1 e.2) s.disk
+      s₁.disk = L.foldl (fun st e => acceptOn cfg s.floor st e.1 e.2) s.disk
   syncs : ∀ e ∈ s₁.syncs, e.2.1 ∈ s.syncs.map (·.2.1) ∨ e.2.1 ∈ delivered cfg [inp]
   floor : s₁.floor = s.floor
   top : s₁.top = s.top
@@ -315,38 +338,15 @@ theorem Kept.absorb {s : State Validator BlockId Payload} (h : Kept cfg s) :
     exact Kept.absorb (h.accept x.1 x.2) L
 
 omit [Fintype Validator] in
-theorem Kept.takeProof {s : State Validator BlockId Payload} (h : Kept cfg s)
-    (e : BlockId × Block Validator BlockId Payload) : Kept cfg (Node.takeProof cfg s e) := by
-  unfold Node.takeProof
-  split
-  · intro c hc x hx hne
-    change c ∈ (s.disk.base _ _ _).ids at hc
-    change x ∈ cfg.xp.ev ((s.disk.base _ _ _).blk c).payload at hx
-    rw [Store.base_ids] at hc
-    rw [Store.base_blk] at hx
-    split at hx
-    · exact Finset.mem_union_right _ (Finset.mem_union_right _ (Finset.mem_filter.mpr ⟨hx, hne⟩))
-    · rename_i hce
-      exact Finset.mem_union_left _ (h c ((Finset.mem_insert.mp hc).resolve_left hce) x hx hne)
-  · exact h.accept e.1 e.2
-
-omit [Fintype Validator] in
 theorem Kept.decideOn {s : State Validator BlockId Payload} (h : Kept cfg s) (k : ℕ)
     (d : Option BlockId) (L : List (BlockId × Block Validator BlockId Payload)) :
     Kept cfg (Node.decideOn cfg s k d L) := by
-  have h₀ : ∀ (l : List (BlockId × Block Validator BlockId Payload))
-      (s' : State Validator BlockId Payload), Kept cfg s' →
-        Kept cfg (l.foldl (Node.takeProof cfg) s') := by
-    intro l
-    induction l with
-    | nil => exact fun _ h => h
-    | cons e l ih => exact fun s' h => ih _ (h.takeProof e)
   unfold Node.decideOn
-  refine h₀ _ _ (Kept.restrips (s := { s with
+  refine Kept.absorb (Kept.restrips (s := { s with
       lo := k + 1
       decided := (k, d) :: s.decided
       proofs := (k, ((hashed cfg L).map Prod.fst).toFinset) :: s.proofs }) h
-    (release_disk _) (release_evidence _))
+    (release_disk _) (release_evidence _)) _
 
 omit [Fintype Validator] in
 theorem EvidenceOn.absorb {s : State Validator BlockId Payload} (h : EvidenceOn cfg s) :
@@ -391,14 +391,14 @@ theorem Received.grows {inp : Input Validator BlockId Payload}
     {s s₁ : State Validator BlockId Payload} (h : Received cfg inp s s₁) :
     Grows s.disk s₁.disk := by
   obtain ⟨L, -, hL⟩ := h.disk
-  rw [hL]; exact Grows.foldl _ _
+  rw [hL]; exact Grows.foldl _ _ _
 
 omit [Fintype Validator] in
 /-- **Accepting the syncs' blocks grows the disk.** -/
 theorem Grows.flushSyncs (fuel : ℕ) (s : State Validator BlockId Payload) :
     Grows s.disk (Node.flushSyncs cfg fuel s).disk := by
   obtain ⟨L, -, hL⟩ := (flushSyncs_eq (cfg := cfg) fuel s).1
-  rw [hL]; exact Grows.foldl _ _
+  rw [hL]; exact Grows.foldl _ _ _
 
 omit [Fintype Validator] in
 /-- **A receipt of known blocks keeps the invariant.** -/
@@ -412,7 +412,7 @@ theorem Received.inv {inp : Input Validator BlockId Payload}
     rcases hL e he with h | h
     · obtain ⟨x, hx, rfl⟩ := List.mem_map.mp h; exact hi.pend x hx
     · exact hd e h
-  have hfl := foldl_accept_known (cfg := cfg) L hi.known hi.valid hLK
+  have hfl := foldl_accept_known (cfg := cfg) (F := s.floor) L hi.known hi.valid hLK
   have hg := hr.grows
   refine ⟨by rw [hdk]; exact hfl.1, fun e he => ?_, by rw [hr.top]; exact hi.rounds, hi.good,
     hi.sub, by rw [hdk]; exact hfl.2, fun j hj => ?_, ?_⟩
@@ -430,7 +430,7 @@ theorem Received.trans {inp : Input Validator BlockId Payload}
     (h₂ : Received cfg inp s₁ s₂) : Received cfg inp s s₂ := by
   obtain ⟨L₁, hL₁, hd₁⟩ := h₁.disk
   obtain ⟨L₂, hL₂, hd₂⟩ := h₂.disk
-  refine ⟨⟨L₁ ++ L₂, fun e he => ?_, by rw [hd₂, hd₁, List.foldl_append]⟩, fun e he => ?_,
+  refine ⟨⟨L₁ ++ L₂, fun e he => ?_, by rw [hd₂, hd₁, List.foldl_append, h₁.floor]⟩, fun e he => ?_,
     h₂.floor.trans h₁.floor, h₂.top.trans h₁.top, h₂.own.trans h₁.own, h₂.fired.trans h₁.fired,
     h₂.lo.trans h₁.lo, h₂.decided.trans h₁.decided, h₂.armed.trans h₁.armed,
     h₂.recovering.trans h₁.recovering, h₂.ev ∘ h₁.ev, h₁.det.trans h₂.det,
@@ -659,7 +659,7 @@ theorem advance_persist (s : State Validator BlockId Payload) (hdr : cfg.drops =
   rw [← hd.ids] at hin
   rw [← hd.full] at hval
   obtain ⟨L, -, hL⟩ := (flushSyncs_eq (cfg := cfg) (d.1.syncs.length + 1) d.1).1
-  have hgf := Grows.foldl (cfg := cfg) L d.1.disk
+  have hgf := Grows.foldl (cfg := cfg) d.1.floor L d.1.disk
   rw [hL]
   exact ⟨hgf.1 hin, by rw [hgf.full hin]; exact hval⟩
 
@@ -783,25 +783,32 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
 variable (cfg) in
 /-- No sync's block is ready. -/
 def NoReady (s : State Validator BlockId Payload) : Prop :=
-  ∀ e ∈ s.syncs, readyOn cfg s.disk e.2.1 = false
+  ∀ e ∈ s.syncs, readyOn cfg s.floor s.disk e.2.1 = false
 
 omit [Fintype Validator] in
 /-- **A ready block of a list is held after accepting the list.** -/
-theorem foldl_holds : ∀ (l : List (BlockId × Block Validator BlockId Payload))
+theorem foldl_holds {F : ℕ} : ∀ (l : List (BlockId × Block Validator BlockId Payload))
     {st : Store Validator BlockId Payload} {e : BlockId × Block Validator BlockId Payload},
-    e ∈ l → readyOn cfg st e = true → e.1 ∈ (l.foldl (fun s e => acceptOn cfg s e.1 e.2) st).ids
+    e ∈ l → readyOn cfg F st e = true →
+      e.1 ∈ (l.foldl (fun s e => acceptOn cfg F s e.1 e.2) st).ids
   | [], _, _, he, _ => absurd he List.not_mem_nil
   | x :: l, st, e, he, hr => by
     rw [List.foldl_cons]
     rcases List.mem_cons.mp he with rfl | he
-    · refine (Grows.foldl (cfg := cfg) l _).1 ?_
+    · refine (Grows.foldl (cfg := cfg) F l _).1 ?_
       unfold acceptOn
       split
       · exact Store.mem_insert_self
       · rename_i hc
-        by_contra hin
-        exact hc ⟨hin, by simpa [readyOn] using hr⟩
-    · exact foldl_holds l he (ready_mono (Grows.accept (cfg := cfg) st x.1 x.2) hr)
+        split
+        · rw [Store.base_ids]; exact Finset.mem_insert_self _ _
+        · rename_i hb
+          by_contra hin
+          simp only [readyOn, Bool.or_eq_true, decide_eq_true_eq, Bool.and_eq_true] at hr
+          rcases hr with hr | hr
+          · exact hc ⟨hin, hr⟩
+          · exact hb ⟨hr.1, hin, hr.2⟩
+    · exact foldl_holds l he (ready_mono (Grows.accept (cfg := cfg) F st x.1 x.2) hr)
 
 omit [Fintype Validator] in
 /-- **No sync's block is left ready** by more passes than syncs. -/
@@ -876,11 +883,11 @@ theorem noReady_quiesce : ∀ (n : ℕ) (s : State Validator BlockId Payload),
     NoReady cfg (quiesce cfg (n + 1) s).1
   | n, s => by
     rcases quiesce_succ_cases (cfg := cfg) n s with he | he <;> rw [he]
-    · simp only [NoReady, advance_syncs, advance_disk, Node.pass]
+    · simp only [NoReady, advance_syncs, advance_disk, advance_floor, Node.pass]
       exact flushSyncs_no_ready _ _ (Nat.lt_succ_self _)
     · cases n with
       | zero =>
-        simp only [NoReady, Node.quiesce, advance_syncs, advance_disk, Node.pass]
+        simp only [NoReady, Node.quiesce, advance_syncs, advance_disk, advance_floor, Node.pass]
         exact flushSyncs_no_ready _ _ (Nat.lt_succ_self _)
       | succ n => exact noReady_quiesce n _
 

@@ -174,7 +174,8 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
   -- the build read in memory as on disk
   have hF : x'.floor ≤ r' - (cfg.at v).p.voteOffset := by
     obtain ⟨B, hi⟩ := hbs.inv
-    exact hi.floor.trans ((min_le_right _ _).trans (Nat.sub_le_sub_right hle _))
+    exact hi.floor.trans ((floorOf_le_top (cfg := cfg.at v) hdr _).trans
+      (Nat.sub_le_sub_right hle _))
   have ho : ∀ j, ow = some j → j ∈ x'.disk.ids ∧ (x'.disk.blk j).round = r' := fun j hj => by
     rcases hro with ⟨hr', rfl⟩ | ⟨-, hnone, -⟩
     · obtain ⟨j', hj', hjd, hjr, -⟩ := hbs.own r' hr'
@@ -232,7 +233,9 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     simp only [blockOn] at this
     rw [← e₆]; exact this.symm
   have hce : (e₀.1, U.block e₀.1) = e₀ := by rw [hUb, heo']
-  refine ⟨i₀, inp, x', ow, hi₀, hbt, hbs, ⟨hsome, hle, hro⟩, by rw [heo']; exact hnew,
+  refine ⟨i₀, inp, x', ow, hi₀, hbt, hbs, ⟨hsome, hle,
+    hro.imp_right fun h => ⟨h.1.resolve_right (by simp [Config.at, hdr]), h.2⟩⟩,
+    by rw [heo']; exact hnew,
     ⟨y, o, hb, by rw [hce, hout, persists_built, List.mem_singleton]; exact heo,
       by rw [hce]; exact he₀⟩, by rw [hUb, hbrefs], ?_, hgx, hexit, by rw [hUb, hbpay]⟩
   rw [← hbrefs]

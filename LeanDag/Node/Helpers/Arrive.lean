@@ -67,9 +67,10 @@ theorem built_top : ∀ (i : ℕ), (stateBefore cfg tr i v).top.isSome →
           by rw [het]; rfl⟩
 
 /-- **Each round up to a node's top was built** at one of its earlier
-events, if no step it took recovering, or restarting, reached the
-round. -/
-theorem built_by : ∀ (i : ℕ) {n : ℕ}, (stateBefore cfg tr i v).top.isSome →
+events, if the node does not drop and no step it took recovering, or
+restarting, reached the round. -/
+theorem built_by (hdr : cfg.drops = false) : ∀ (i : ℕ) {n : ℕ},
+    (stateBefore cfg tr i v).top.isSome →
     n ≤ (stateBefore cfg tr i v).top.getD 0 →
     (∀ k < i, ∀ inp, tr[k]? = some (v, inp) →
       ((stateBefore cfg tr k v).recovering = true ∨ inp = .restart) →
@@ -82,11 +83,11 @@ theorem built_by : ∀ (i : ℕ) {n : ℕ}, (stateBefore cfg tr i v).top.isSome 
         (stateBefore cfg tr (k + 1) v).top.getD 0 < n := fun k hk => hj k (by omega)
     rcases before_succ_cases (cfg := cfg) (tr := tr) v i with heq | ⟨inp, he, heq⟩
     · rw [heq] at hs hn
-      obtain ⟨b, hb, h⟩ := built_by i hs hn hj'
+      obtain ⟨b, hb, h⟩ := built_by hdr i hs hn hj'
       exact ⟨b, by omega, h⟩
     · by_cases hold : (stateBefore cfg tr i v).top.isSome ∧
           n ≤ (stateBefore cfg tr i v).top.getD 0
-      · obtain ⟨b, hb, h⟩ := built_by i hold.1 hold.2 hj'
+      · obtain ⟨b, hb, h⟩ := built_by hdr i hold.1 hold.2 hj'
         exact ⟨b, by omega, h⟩
       · have hnot : ¬ ((stateBefore cfg tr i v).recovering = true ∨ inp = .restart) :=
           fun hr => by have := hj i (by omega) inp he hr; omega
@@ -97,7 +98,7 @@ theorem built_by : ∀ (i : ℕ) {n : ℕ}, (stateBefore cfg tr i v).top.isSome 
           rcases h : (stateBefore cfg tr i v).top with _ | t
           · exact Or.inl rfl
           · right; rw [h] at hold; simp at hold; simp; omega
-        obtain ⟨e, hep, her⟩ := step_every (cfg := cfg.at v) hnot.2
+        obtain ⟨e, hep, her⟩ := step_every (cfg := cfg.at v) hdr hnot.2
           (Or.inl (by simpa using hnot.1)) hs n hρ hn
         exact ⟨i, by omega, by rw [he]; rfl, e, by rw [outputsAt_eq he]; exact hep, her⟩
 

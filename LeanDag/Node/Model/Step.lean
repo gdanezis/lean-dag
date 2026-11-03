@@ -14,7 +14,8 @@ input `i` in the state `s`: the new state and the outputs.
   decides and arms its timers on the memory, and answers requests and
   resends from the disk. When it builds or decides, it releases the
   memory below the lowest round it reads, the round of its next
-  undecided slot and `voteOffset` below its top (`floorOf`), and keeps the
+  undecided slot and `voteOffset` below its top, and, when it drops, not
+  below its cut (`floorOf`), and keeps the
   disk's blocks below that round without their references, holding them
   apart (`Store.strip`); it sends, streams and orders the blocks as accepted
   (`Store.full`).
@@ -22,7 +23,9 @@ input `i` in the state `s`: the new state and the outputs.
   name, under its hash, not on disk, from a peer not detected, is
   accepted if its references are accepted and it satisfies `rowValid q E`,
   checked in memory if its round is above the floor and on disk otherwise
-  (`ready`, `accept`). Otherwise, if it names `q` references unless it is
+  (`ready`, `accept`); when the node drops, a block below the floor is
+  accepted on its header and kept without its references (D10). Otherwise,
+  if it names `q` references unless it is
   at round `0`, it becomes the block of the sync with that peer if it lies
   above the sync's block, and the node asks the peer for its history
   (`syncs`, `request`).
@@ -53,7 +56,8 @@ input `i` in the state `s`: the new state and the outputs.
   persisted, then broadcast, and the retry timer is set: the timer of the
   round below it, for twice that round's timeout.
 * **The jump** (`jumpRound`): a node that restarted, until it builds or
-  a timer fires (`State.recovering`), builds above the highest round `r`
+  a timer fires (`State.recovering`), or that drops and whose top lies
+  below its floor, builds above the highest round `r`
   above its top at which the memory holds `q` authors and is behind,
   with no block of its own among the references, once no sync's block
   lies above round `r + 1` and the references pass the reach and
@@ -181,10 +185,12 @@ def keep (s : State Validator BlockId Payload) (id : BlockId) (b : Block Validat
 
 /-- **A block is ready** when its references are accepted, one round below
 it, and it is valid at the row: checked in memory if its round is above
-the floor, on disk otherwise. -/
+the floor, on disk otherwise; or, when the node drops, when it lies below
+the floor (D10). -/
 def ready (s : State Validator BlockId Payload) (e : BlockId × Block Validator BlockId Payload) :
     Bool :=
-  decide ((Store.pick s.memory s.disk s.floor e.2.round).Checks cfg.q cfg.xp e.1 e.2)
+  decide ((Store.pick s.memory s.disk s.floor e.2.round).Checks cfg.q cfg.xp e.1 e.2) ||
+    (cfg.drops && decide (e.2.round < s.floor))
 
 /-- **The twin of a block on a store**: the least block of its author at its
 round. -/
@@ -200,7 +206,8 @@ def evidenceOf (st : Store Validator BlockId Payload) (id : BlockId)
   ((twinOf st b).map fun i => (b.creator, i, id)).toFinset ∪
     (cfg.xp.ev b.payload).filter fun e => e.2.1 ≠ e.2.2
 
-/-- **Accept a block**: it is kept if it is new and ready; the node keeps
+/-- **Accept a block**: it is kept if it is new and ready, without its
+references if it is ready only by lying below the floor; the node keeps
 the evidence it gives and convicts the authors that evidence names. -/
 def accept (s : State Validator BlockId Payload) (id : BlockId)
     (b : Block Validator BlockId Payload) : State Validator BlockId Payload :=
@@ -209,6 +216,14 @@ def accept (s : State Validator BlockId Payload) (id : BlockId)
     let s' := keep s id b h.1 (s.mirrors.checks_pick.mp h.2).1 (s.mirrors.checks_pick.mp h.2).2.1
     let E := evidenceOf cfg s.disk id b
     { s' with detected := s'.detected ∪ named E, evidence := s'.evidence ∪ E }
+  else if h : cfg.drops = true ∧ id ∉ s.disk.ids ∧ b.round < s.floor then
+    let E := evidenceOf cfg s.disk id b
+    { s with
+      disk := s.disk.base id b h.2.1
+      mirrors := s.mirrors.base h.2.1 h.2.2
+      low := Store.low_base s.low h.2.2
+      detected := s.detected ∪ named E
+      evidence := s.evidence ∪ E }
   else s
 
 /-- **Drop the syncs done**: those whose block is held, and those with a
@@ -322,9 +337,13 @@ instance (st : Store Validator BlockId Payload) (r : ℕ) : Decidable (behind cf
   inferInstanceAs (Decidable (_ ≤ _))
 
 /-- **The lowest round the node reads**: the round of its next undecided
-slot, and `voteOffset` below its top. -/
+slot, and `voteOffset` below its top; when the node drops, not below its
+cut, the round below its next undecided slot's. -/
 def floorOf (s : State Validator BlockId Payload) : ℕ :=
-  min (cfg.slots.slotRound s.lo) (s.top.getD 0 - cfg.p.voteOffset)
+  if cfg.drops then
+    max (cfg.slots.slotRound s.lo - 1)
+      (min (cfg.slots.slotRound s.lo) (s.top.getD 0 - cfg.p.voteOffset))
+  else min (cfg.slots.slotRound s.lo) (s.top.getD 0 - cfg.p.voteOffset)
 
 /-- **Release the memory below the lowest round the node reads**, and keep
 the disk's blocks below that round without their references. -/
@@ -369,14 +388,15 @@ def buildAbove (s : State Validator BlockId Payload) (r : ℕ) (o : Option Block
   else none
 
 /-- **Build the next round**: above the node's top, referencing its own
-block there; while recovering, above `jumpRound` with no own reference if
+block there; while recovering, or dropping with its top below its floor,
+above `jumpRound` with no own reference if
 that round is above the top, and in either case only once no sync's block
 lies above the round built. -/
 def tryBuild (s : State Validator BlockId Payload) :
     Option (State Validator BlockId Payload × List (Output Validator BlockId Payload)) :=
   match s.top with
   | some t =>
-    if s.recovering then
+    if s.recovering || (cfg.drops && decide (t < s.floor)) then
       let r := jumpRound cfg s.memory t
       if t < r then
         if syncTop s ≤ r + 1 ∧
@@ -568,34 +588,6 @@ def proofReply (s : State Validator BlockId Payload) (k : ℕ) :
       (· ≤ ·)).map fun i => (i, s.disk.full i)).mergeSort
         fun x y => decide (x.2.round ≤ y.2.round)
 
-/-- **Take in a block of a proof**: accept it if it is ready, and otherwise,
-if it is new and below the floor, keep it without its references, with the
-evidence it gives. -/
-def takeProof (s : State Validator BlockId Payload)
-    (e : BlockId × Block Validator BlockId Payload) : State Validator BlockId Payload :=
-  if h : e.1 ∉ s.disk.ids ∧ e.2.round < s.floor ∧ ready cfg s e = false then
-    let E := evidenceOf cfg s.disk e.1 e.2
-    { s with
-      disk := s.disk.base e.1 e.2 h.1
-      mirrors := s.mirrors.base h.1 h.2.1
-      low := Store.low_base s.low h.2.1
-      detected := s.detected ∪ named E
-      evidence := s.evidence ∪ E }
-  else accept cfg s e.1 e.2
-
-/-- **Decide slot `k` on a proof** (D16): keep the verdict, and the proof
-under `k`, release the memory below the lowest round the node then reads,
-and take in the proof's blocks under their hash, in order of round. -/
-def decideOn (s : State Validator BlockId Payload) (k : ℕ) (d : Option BlockId)
-    (L : List (BlockId × Block Validator BlockId Payload)) : State Validator BlockId Payload :=
-  let s₁ : State Validator BlockId Payload :=
-    { s with
-      lo := k + 1
-      decided := (k, d) :: s.decided
-      proofs := (k, ((hashed cfg L).map Prod.fst).toFinset) :: s.proofs }
-  ((hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round)).foldl (takeProof cfg)
-    (release cfg s₁)
-
 /-- **The identifiers to ask for by name** after a stream piece: the
 references of its blocks that neither the disk nor the piece holds. -/
 def missingIn (s : State Validator BlockId Payload)
@@ -608,6 +600,18 @@ is new and ready. -/
 def absorb (s : State Validator BlockId Payload)
     (L : List (BlockId × Block Validator BlockId Payload)) : State Validator BlockId Payload :=
   L.foldl (fun s e => accept cfg s e.1 e.2) s
+
+/-- **Decide slot `k` on a proof** (D16): keep the verdict, and the proof
+under `k`, release the memory below the lowest round the node then reads,
+and take in the proof's blocks under their hash, in order of round. -/
+def decideOn (s : State Validator BlockId Payload) (k : ℕ) (d : Option BlockId)
+    (L : List (BlockId × Block Validator BlockId Payload)) : State Validator BlockId Payload :=
+  let s₁ : State Validator BlockId Payload :=
+    { s with
+      lo := k + 1
+      decided := (k, d) :: s.decided
+      proofs := (k, ((hashed cfg L).map Prod.fst).toFinset) :: s.proofs }
+  absorb cfg (release cfg s₁) ((hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round))
 
 /-- **Take a stream piece in, header first**: its part `L` in the history
 of the sync's block `t`, if taking it in makes `t` held; otherwise

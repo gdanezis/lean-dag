@@ -76,36 +76,22 @@ theorem decideStep_disk (s : State Validator BlockId Payload) (hd : cfg.drops = 
   · exact Store.Restrips.refl _ _
 
 omit [Fintype Validator] in
+theorem Grows.absorb (s : State Validator BlockId Payload)
+    (L : List (BlockId × Block Validator BlockId Payload)) :
+    Grows s.disk (Node.absorb cfg s L).disk := by
+  rw [absorb_disk]; exact Grows.foldl _ _ _
+
+omit [Fintype Validator] in
 /-- **Deciding on a proof keeps the disk's blocks**, as accepted. -/
 theorem Grows.decideOn (s : State Validator BlockId Payload) (k : ℕ) (d : Option BlockId)
     (L : List (BlockId × Block Validator BlockId Payload)) :
     Grows s.disk (Node.decideOn cfg s k d L).disk := by
-  have h₀ : ∀ (l : List (BlockId × Block Validator BlockId Payload))
-      (s' : State Validator BlockId Payload),
-      Grows s'.disk (l.foldl (Node.takeProof cfg) s').disk := by
-    intro l
-    induction l with
-    | nil => exact fun s' => Grows.refl _
-    | cons e l ih =>
-      intro s'
-      refine Grows.trans ?_ (ih (Node.takeProof cfg s' e))
-      rw [takeProof_disk]
-      exact Grows.takeOn _ _ e
   let s₁ : State Validator BlockId Payload :=
     { s with
       lo := k + 1
       decided := (k, d) :: s.decided
       proofs := (k, ((hashed cfg L).map Prod.fst).toFinset) :: s.proofs }
-  have e : Node.decideOn cfg s k d L = ((hashed cfg L).mergeSort fun x y =>
-      decide (x.2.round ≤ y.2.round)).foldl (Node.takeProof cfg) (release cfg s₁) := rfl
-  rw [e]
-  exact (Grows.of_restrips (release_disk (cfg := cfg) s₁)).trans (h₀ _ _)
-
-omit [Fintype Validator] in
-theorem Grows.absorb (s : State Validator BlockId Payload)
-    (L : List (BlockId × Block Validator BlockId Payload)) :
-    Grows s.disk (Node.absorb cfg s L).disk := by
-  rw [absorb_disk]; exact Grows.foldl _ _
+  exact (Grows.of_restrips (release_disk (cfg := cfg) s₁)).trans (Grows.absorb (release cfg s₁) _)
 
 omit [Fintype Validator] in
 theorem Grows.advance (s : State Validator BlockId Payload) (hd : cfg.drops = false) :
@@ -117,7 +103,7 @@ theorem Grows.advance (s : State Validator BlockId Payload) (hd : cfg.drops = fa
     (decideStep_disk (cfg := cfg) (Node.progress cfg (s.disk.topRound + 2) s).1 hd)).trans ?_
   obtain ⟨L, -, hL⟩ := (flushSyncs_eq (cfg := cfg) _ _).1
   rw [hL]
-  exact Grows.foldl _ _
+  exact Grows.foldl _ _ _
 
 omit [Fintype Validator] in
 theorem Grows.quiesce (n : ℕ) (s : State Validator BlockId Payload) (hd : cfg.drops = false) :
@@ -188,19 +174,23 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
 /-! ## The blocks as accepted stay closed under references -/
 
 omit [Fintype Validator] in
-theorem closed_accept {st : Store Validator BlockId Payload} (h : st.FullClosed) (id : BlockId)
-    (b : Block Validator BlockId Payload) : (acceptOn cfg st id b).FullClosed := by
+theorem closed_accept (hd : cfg.drops = false) {F : ℕ} {st : Store Validator BlockId Payload}
+    (h : st.FullClosed) (id : BlockId) (b : Block Validator BlockId Payload) :
+    (acceptOn cfg F st id b).FullClosed := by
   unfold acceptOn
   split
   · exact h.insert
-  · exact h
+  · split
+    · rename_i h'; rw [hd] at h'; cases h'.1
+    · exact h
 
 omit [Fintype Validator] in
-theorem closed_foldl : ∀ (l : List (BlockId × Block Validator BlockId Payload))
+theorem closed_foldl (hd : cfg.drops = false) {F : ℕ} :
+    ∀ (l : List (BlockId × Block Validator BlockId Payload))
     (st : Store Validator BlockId Payload), st.FullClosed →
-    (l.foldl (fun s e => acceptOn cfg s e.1 e.2) st).FullClosed
+    (l.foldl (fun s e => acceptOn cfg F s e.1 e.2) st).FullClosed
   | [], _, h => h
-  | e :: l, _, h => closed_foldl l _ (closed_accept h e.1 e.2)
+  | e :: l, _, h => closed_foldl hd l _ (closed_accept hd h e.1 e.2)
 
 omit [Fintype Validator] in
 theorem closed_progress : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
@@ -215,10 +205,10 @@ theorem closed_progress : ∀ (fuel : ℕ) (s : State Validator BlockId Payload)
     · exact h
 
 omit [Fintype Validator] in
-theorem closed_absorb (s : State Validator BlockId Payload)
+theorem closed_absorb (hd : cfg.drops = false) (s : State Validator BlockId Payload)
     (L : List (BlockId × Block Validator BlockId Payload)) (h : s.disk.FullClosed) :
     (Node.absorb cfg s L).disk.FullClosed := by
-  rw [absorb_disk]; exact closed_foldl _ _ h
+  rw [absorb_disk]; exact closed_foldl hd _ _ h
 
 omit [Fintype Validator] in
 theorem closed_advance (s : State Validator BlockId Payload) (hd : cfg.drops = false)
@@ -231,7 +221,7 @@ theorem closed_advance (s : State Validator BlockId Payload) (hd : cfg.drops = f
     (Node.progress cfg (s.disk.topRound + 2) s).1 hd).fullClosed h₁
   obtain ⟨L, -, hL⟩ := (flushSyncs_eq (cfg := cfg) _ _).1
   rw [hL]
-  exact closed_foldl _ _ h₂
+  exact closed_foldl hd _ _ h₂
 
 omit [Fintype Validator] in
 theorem closed_settle (s : State Validator BlockId Payload) (hd : cfg.drops = false)
@@ -239,13 +229,13 @@ theorem closed_settle (s : State Validator BlockId Payload) (hd : cfg.drops = fa
   quiesce_ind (fun s h => closed_advance s hd h) _ s h
 
 omit [Fintype Validator] in
-theorem closed_takeIn (s : State Validator BlockId Payload)
+theorem closed_takeIn (hd : cfg.drops = false) (s : State Validator BlockId Payload)
     (t : BlockId × Block Validator BlockId Payload)
     (L : List (BlockId × Block Validator BlockId Payload)) (h : s.disk.FullClosed) :
     (Node.takeIn cfg s t L).disk.FullClosed := by
   unfold Node.takeIn
   split
-  · exact closed_absorb s L h
+  · exact closed_absorb hd s L h
   · exact h
 
 /-- **Across a step the blocks as accepted stay closed under references**,
@@ -267,7 +257,7 @@ theorem closed_step (s : State Validator BlockId Payload) (i : Input Validator B
     simp only [Node.step]
     split
     · split
-      · exact closed_settle _ hd (closed_absorb (cfg := cfg) s [(id, b)] h)
+      · exact closed_settle _ hd (closed_absorb (cfg := cfg) hd s [(id, b)] h)
       · split
         · exact closed_settle _ hd h
         · exact h
@@ -277,8 +267,8 @@ theorem closed_step (s : State Validator BlockId Payload) (i : Input Validator B
     split
     · exact h
     · split
-      · exact closed_settle _ hd (closed_takeIn (cfg := cfg) s _ _ h)
-      · exact closed_settle _ hd (closed_takeIn (cfg := cfg) s _ _ h)
+      · exact closed_settle _ hd (closed_takeIn (cfg := cfg) hd s _ _ h)
+      · exact closed_settle _ hd (closed_takeIn (cfg := cfg) hd s _ _ h)
   | timer r => rw [step_timer_fst]; exact closed_settle _ hd h
   | syncRequest peer t fr ids => exact h
   | ask peer r => exact h

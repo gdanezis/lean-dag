@@ -302,14 +302,14 @@ theorem ready_of_refs {g : BlockId → Block Validator BlockId Payload}
     {y : BlockId × Block Validator BlockId Payload}
     (hv : (∀ j ∈ y.2.refs, (g j).round + 1 = y.2.round) ∧ rowValid cfg.q cfg.xp g y.2)
     {st : Store Validator BlockId Payload} (hst : ReadsAs g st) (hrefs : y.2.refs ⊆ st.ids)
-    (hnin : y.1 ∉ st.ids) : readyOn cfg st y = true := by
+    (hnin : y.1 ∉ st.ids) {F : ℕ} : readyOn cfg F st y = true := by
   have hag : ∀ j ∈ y.2.refs, (st.blk j).round = (g j).round ∧
       (st.blk j).creator = (g j).creator ∧ (st.blk j).payload = (g j).payload := fun j hj => by
     rw [← hst j (hrefs hj)]
     have := st.full_fields j
     exact ⟨this.1.symm, this.2.1.symm, this.2.2.symm⟩
-  simp only [readyOn, Store.Checks, decide_eq_true_eq]
-  refine ⟨hrefs, fun j hj => by rw [(hag j hj).1]; exact hv.1 j hj,
+  simp only [readyOn, Store.Checks, Bool.or_eq_true, decide_eq_true_eq]
+  refine Or.inl ⟨hrefs, fun j hj => by rw [(hag j hj).1]; exact hv.1 j hj,
     rowValid_congr (fun j hj => ?_) hv.2⟩
   have hj' : j ≠ y.1 := fun e => hnin (e ▸ hrefs hj)
   rw [Function.update_of_ne hj']
@@ -319,18 +319,18 @@ omit [Fintype Validator] in
 /-- **Blocks taken in whole**: blocks in order of round, valid under a
 block map they agree with, each of whose references the store or the
 blocks hold, are all held after they are taken in. -/
-theorem foldl_all {g : BlockId → Block Validator BlockId Payload} :
+theorem foldl_all {g : BlockId → Block Validator BlockId Payload} {F : ℕ} :
     ∀ (l : List (BlockId × Block Validator BlockId Payload)) (st : Store Validator BlockId Payload),
     l.Pairwise (fun x y => x.2.round ≤ y.2.round) → ReadsAs g st → (∀ e ∈ l, g e.1 = e.2) →
     (∀ e ∈ l, (∀ j ∈ e.2.refs, (g j).round + 1 = e.2.round) ∧ rowValid cfg.q cfg.xp g e.2) →
     (∀ e ∈ l, ∀ y ∈ e.2.refs, y ∈ st.ids ∨ y ∈ l.map Prod.fst) →
-    ∀ e ∈ l, e.1 ∈ (l.foldl (fun s e => acceptOn cfg s e.1 e.2) st).ids
+    ∀ e ∈ l, e.1 ∈ (l.foldl (fun s e => acceptOn cfg F s e.1 e.2) st).ids
   | [], _, _, _, _, _, _, _, he => absurd he List.not_mem_nil
   | x :: l, st, hp, hst, hg, hv, hcl, e, he => by
     rw [List.foldl_cons]
-    have hx : x.1 ∈ (acceptOn cfg st x.1 x.2).ids := by
+    have hx : x.1 ∈ (acceptOn cfg F st x.1 x.2).ids := by
       by_cases hin : x.1 ∈ st.ids
-      · exact (Grows.accept (cfg := cfg) st x.1 x.2).1 hin
+      · exact (Grows.accept (cfg := cfg) F st x.1 x.2).1 hin
       · have hrefs : x.2.refs ⊆ st.ids := fun y hy => by
           rcases hcl x List.mem_cons_self y hy with h | h
           · exact h
@@ -342,19 +342,19 @@ theorem foldl_all {g : BlockId → Block Validator BlockId Payload} :
             · omega
             · have := List.rel_of_pairwise_cons hp he'
               omega
-        have hr := ready_of_refs (hv x List.mem_cons_self) hst hrefs hin
+        have hr := ready_of_refs (F := 0) (hv x List.mem_cons_self) hst hrefs hin
         have hc : x.1 ∉ st.ids ∧ st.Checks cfg.q cfg.xp x.1 x.2 :=
           ⟨hin, by simpa [readyOn] using hr⟩
         unfold acceptOn
         rw [dif_pos hc, Store.insert_ids]
         exact Finset.mem_insert_self _ _
     rcases List.mem_cons.mp he with rfl | he
-    · exact (Grows.foldl (cfg := cfg) l _).1 hx
+    · exact (Grows.foldl (cfg := cfg) F l _).1 hx
     · refine foldl_all l _ (List.Pairwise.of_cons hp) (hst.accept (hg x List.mem_cons_self))
         (fun e he => hg e (List.mem_cons_of_mem _ he))
         (fun e he => hv e (List.mem_cons_of_mem _ he)) (fun e' he' y hy => ?_) e he
       rcases hcl e' (List.mem_cons_of_mem _ he') y hy with h | h
-      · exact Or.inl ((Grows.accept (cfg := cfg) st x.1 x.2).1 h)
+      · exact Or.inl ((Grows.accept (cfg := cfg) F st x.1 x.2).1 h)
       · rcases List.mem_cons.mp h with h | h
         · exact Or.inl (h ▸ hx)
         · exact Or.inr h

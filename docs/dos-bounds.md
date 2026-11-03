@@ -363,14 +363,22 @@ store closed, and needs none of this.
         disks whose cut is at most `G` (`cutAbove_before`); `Cut.Agrees`
         and V3 are unchanged. V12 on one record (`cut_before`) assumes
         that no node drops.
-     2. *The jump, and liveness with dropping on.* A node whose top lies
-        below its cut builds above it, and a node behind takes in the
-        commit's blocks at and above its floor once that floor is raised
-        to its cut. With it convergence, V11 and V13 are to be proved with
-        dropping on, and their premise `cfg.drops = false` removed. The
-        synchronisation premise of V11 (`SyncedWithin`) does not hold of a
-        node far behind when its peers drop, and is to be restated for
-        blocks above the node's cut.
+     2. *The floor at the cut, and the jump.* Done, behind the switch. A
+        node that drops keeps its floor at or above its cut (`floorOf`),
+        accepts a new block below its floor on its header alone, keeping
+        it without its references (D10; `accept`, `acceptOn`,
+        `Store.base`), and, while its top lies below its floor, builds as a
+        restarted node does, above the highest round its memory holds a
+        quorum of (`tryBuild`). Taking in a proof is accepting its blocks
+        (`decideOn`). Safety holds as in item 4.1: a block accepted on its
+        header lies below the cut (`cutAbove_known`).
+     3. *Liveness with dropping on.* Convergence, V11 and V13 are to be
+        proved with dropping on, on the record of each cut, and their
+        premise `cfg.drops = false` removed. The synchronisation premise
+        of V11 (`SyncedWithin`) does not hold of a node far behind when
+        its peers drop, and is to be restated for receivers whose cut is at
+        least every reliable node's floor; catch-up is to bring a node
+        behind there.
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase

@@ -285,14 +285,15 @@ theorem top_of_built {b : ℕ} {inp : Input Validator BlockId Payload}
 
 /-- **A node at a round built it**, at its first event building it, by
 then. -/
-theorem built_of_top {τ n : ℕ} (hs : (stateAt cfg tr time v τ).top.isSome)
+theorem built_of_top (hdr : cfg.drops = false) {τ n : ℕ}
+    (hs : (stateAt cfg tr time v τ).top.isSome)
     (hn : n ≤ topAt cfg tr time v τ)
     (hj : ∀ k < eventsBy tr time τ, ∀ inp, tr[k]? = some (v, inp) →
       ((stateBefore cfg tr k v).recovering = true ∨ inp = .restart) →
       (stateBefore cfg tr (k + 1) v).top.getD 0 < n) :
     ∃ i inp e, tr[i]? = some (v, inp) ∧ e ∈ persists (outputsAt cfg tr i) ∧ e.2.round = n ∧
       builtAt cfg tr time v n = time i ∧ time i ≤ τ := by
-  obtain ⟨b, hbE, hbv, e, he, her⟩ := built_by (eventsBy tr time τ) hs hn hj
+  obtain ⟨b, hbE, hbv, e, he, her⟩ := built_by hdr (eventsBy tr time τ) hs hn hj
   obtain ⟨i₀, hi₀b, hbt, hi₀v, e₀, he₀, he₀r⟩ := builtAt_first (cfg := cfg) time hbv ⟨e, he, her⟩
   obtain ⟨inp, hi₀⟩ := Converge.event_of_map hi₀v
   obtain ⟨inpb, hb⟩ := Converge.event_of_map hbv
@@ -830,11 +831,11 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
         by_contra hk
         have h₁ := Z.low z hk
         have h₂ : Z.floor ≤ m - (cfg.at v).p.voteOffset :=
-          Converge.floor_before (cfg := cfg) (tr := tr) hm
+          Converge.floor_before (cfg := cfg) (tr := tr) hdr hm
         have h₃ : (Z.disk.blk z).round = m + 1 := hzr
         omega) hfa
       (fresh_before hid htime (hTH hv) hm) _).2⟩)
-    (fresh_before hid htime (hTH hv) hm) ((Converge.floor_before hm).trans (Nat.sub_le _ _))
+    (fresh_before hid htime (hTH hv) hm) ((Converge.floor_before hdr hm).trans (Nat.sub_le _ _))
   rw [hSet.build] at hsome
   cases hsome
 
@@ -848,12 +849,13 @@ variable {T : Finset Validator} {tr : Trace Validator BlockId Payload} {time : �
 
 /-- A node at a round built it by then. -/
 theorem builtAt_le_of_top {v : Validator}
-    (hmono : Live.TimeMono tr time) {τ n : ℕ} (hs : (stateAt cfg tr time v τ).top.isSome)
+    (hmono : Live.TimeMono tr time) (hdr : cfg.drops = false) {τ n : ℕ}
+    (hs : (stateAt cfg tr time v τ).top.isSome)
     (hn : n ≤ topAt cfg tr time v τ)
     (hj : ∀ k < eventsBy tr time τ, ∀ inp, tr[k]? = some (v, inp) →
       ((stateBefore cfg tr k v).recovering = true ∨ inp = .restart) →
       (stateBefore cfg tr (k + 1) v).top.getD 0 < n) : builtAt cfg tr time v n ≤ τ := by
-  obtain ⟨i, -, -, -, -, -, hbt, hiτ⟩ := built_of_top hmono hs hn hj
+  obtain ⟨i, -, -, -, -, -, hbt, hiτ⟩ := built_of_top hmono hdr hs hn hj
   omega
 
 end Built

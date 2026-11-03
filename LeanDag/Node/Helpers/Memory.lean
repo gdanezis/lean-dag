@@ -8,11 +8,11 @@ ready in the state exactly when it is ready on the disk (`ready_eq`), and
 accepting a block, a stream piece and the syncs' blocks change the disk
 as `acceptOn` changes it read alone (`accept_disk`, `absorb_disk`,
 `flushSyncs_eq`), and leave the rest of the state but the memory, the
-detected authors and the syncs (`accept_rest`, `absorb_rest`). Taking in a
-block of a proof changes the disk as `takeOn` changes it read alone
-(`takeProof_disk`), and deciding on a proof changes the slot, the
-decisions, the proofs, the disk, the memory, the floor and the detected
-authors only (`decideOn_rest`). Keeping a
+detected authors and the syncs (`accept_rest`, `absorb_rest`); when the
+node drops, a block below the floor is accepted on its header
+(`acceptOn`). Deciding on a proof changes the slot, the decisions, the
+proofs, the disk, the memory, the floor and the detected authors only
+(`decideOn_rest`). Keeping a
 block inserts it on disk (`keep_disk`), and releasing the memory keeps the
 disk's blocks as accepted, those below the new floor perhaps without their
 references, and changes nothing else (`release_disk`, …).
@@ -26,25 +26,29 @@ variable {Validator BlockId Payload : Type} [Fintype Validator] [DecidableEq Val
 variable [LinearOrder BlockId]
 variable (cfg : Config Validator BlockId Payload)
 
-/-- **A block is ready on the store `st`**: its references are accepted,
-one round below it, and it is valid at the row. -/
-def readyOn (st : Store Validator BlockId Payload) (e : BlockId × Block Validator BlockId Payload) :
-    Bool :=
-  decide (st.Checks cfg.q cfg.xp e.1 e.2)
+/-- **A block is ready on the store `st` with floor `F`**: its references
+are accepted, one round below it, and it is valid at the row; or, when the
+node drops, it lies below `F`. -/
+def readyOn (F : ℕ) (st : Store Validator BlockId Payload)
+    (e : BlockId × Block Validator BlockId Payload) : Bool :=
+  decide (st.Checks cfg.q cfg.xp e.1 e.2) || (cfg.drops && decide (e.2.round < F))
 
-/-- **Accept a block on the store `st`**: it is kept if it is new and
-ready. -/
-def acceptOn (st : Store Validator BlockId Payload) (id : BlockId)
+/-- **Accept a block on the store `st` with floor `F`**: it is kept if it is
+new and ready, without its references if it is ready only by lying below
+`F`. -/
+def acceptOn (F : ℕ) (st : Store Validator BlockId Payload) (id : BlockId)
     (b : Block Validator BlockId Payload) : Store Validator BlockId Payload :=
-  if h : id ∉ st.ids ∧ st.Checks cfg.q cfg.xp id b then st.insert id b h.1 h.2.1 h.2.2.1 else st
+  if h : id ∉ st.ids ∧ st.Checks cfg.q cfg.xp id b then st.insert id b h.1 h.2.1 h.2.2.1
+  else if h : cfg.drops = true ∧ id ∉ st.ids ∧ b.round < F then st.base id b h.2.1 else st
 
 variable {cfg}
 
 omit [Fintype Validator] in
 theorem ready_eq (s : State Validator BlockId Payload)
-    (e : BlockId × Block Validator BlockId Payload) : ready cfg s e = readyOn cfg s.disk e := by
+    (e : BlockId × Block Validator BlockId Payload) :
+    ready cfg s e = readyOn cfg s.floor s.disk e := by
   unfold ready readyOn
-  exact decide_eq_decide.mpr s.mirrors.checks_pick
+  rw [decide_eq_decide.mpr s.mirrors.checks_pick]
 
 section Keep
 
@@ -75,13 +79,14 @@ theorem mem_of_mem_inHistory {t : BlockId × Block Validator BlockId Payload}
 
 omit [Fintype Validator] in
 /-- **Accepting a block changes the disk as accepting on the disk alone.** -/
-theorem accept_disk : (accept cfg s id b).disk = acceptOn cfg s.disk id b := by
+theorem accept_disk : (accept cfg s id b).disk = acceptOn cfg s.floor s.disk id b := by
   unfold accept acceptOn
   by_cases h : id ∉ s.disk.ids ∧ s.disk.Checks cfg.q cfg.xp id b
   · rw [dif_pos (show id ∉ s.disk.ids ∧ (Store.pick s.memory s.disk s.floor b.round).Checks
       cfg.q cfg.xp id b from ⟨h.1, s.mirrors.checks_pick.mpr h.2⟩), dif_pos h]
     rfl
   · rw [dif_neg (fun h' => h ⟨h'.1, s.mirrors.checks_pick.mp h'.2⟩), dif_neg h]
+    split <;> rfl
 
 omit [Fintype Validator] in
 /-- **Accepting a block changes only the disk, the memory and the
@@ -96,7 +101,9 @@ theorem accept_rest :
   unfold accept
   split
   · exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, Finset.subset_union_left⟩
-  · exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, subset_rfl⟩
+  · split
+    · exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, Finset.subset_union_left⟩
+    · exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, subset_rfl⟩
 
 end Accept
 
@@ -104,7 +111,7 @@ omit [Fintype Validator] in
 theorem foldl_accept (l : List (BlockId × Block Validator BlockId Payload)) :
     ∀ s : State Validator BlockId Payload,
       (l.foldl (fun s e => accept cfg s e.1 e.2) s).disk =
-        l.foldl (fun st e => acceptOn cfg st e.1 e.2) s.disk ∧
+        l.foldl (fun st e => acceptOn cfg s.floor st e.1 e.2) s.disk ∧
       (l.foldl (fun s e => accept cfg s e.1 e.2) s).floor = s.floor ∧
       (l.foldl (fun s e => accept cfg s e.1 e.2) s).syncs = s.syncs ∧
       (l.foldl (fun s e => accept cfg s e.1 e.2) s).top = s.top ∧
@@ -122,7 +129,7 @@ theorem foldl_accept (l : List (BlockId × Block Validator BlockId Payload)) :
     obtain ⟨h₁, h₂, h₃, h₄, h₅, h₆, h₇, h₈, h₉, h₁₀, h₁₁⟩ := ih (accept cfg s e.1 e.2)
     obtain ⟨a₂, a₃, a₄, a₅, a₆, a₇, a₈, a₉, a₁₀, a₁₁⟩ := accept_rest (cfg := cfg) s e.1 e.2
     simp only [List.foldl_cons]
-    exact ⟨h₁.trans (by rw [accept_disk]), h₂.trans a₂, h₃.trans a₃, h₄.trans a₄, h₅.trans a₅,
+    exact ⟨h₁.trans (by rw [accept_disk, a₂]), h₂.trans a₂, h₃.trans a₃, h₄.trans a₄, h₅.trans a₅,
       h₆.trans a₆, h₇.trans a₇, h₈.trans a₈, h₉.trans a₉, h₁₀.trans a₁₀, a₁₁.trans h₁₁⟩
 
 section Absorb
@@ -134,7 +141,7 @@ omit [Fintype Validator] in
 /-- **Taking a stream piece in changes the disk as accepting its blocks on
 the disk alone.** -/
 @[simp] theorem absorb_disk :
-    (absorb cfg s L).disk = L.foldl (fun st e => acceptOn cfg st e.1 e.2) s.disk :=
+    (absorb cfg s L).disk = L.foldl (fun st e => acceptOn cfg s.floor st e.1 e.2) s.disk :=
   (foldl_accept L s).1
 
 omit [Fintype Validator] in
@@ -164,7 +171,7 @@ them on the disk alone, and only the disk, the memory, the detected
 authors and the syncs, to a part of them.** -/
 theorem flushSyncs_eq : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
     (∃ L : List (BlockId × Block Validator BlockId Payload), (∀ e ∈ L, e ∈ s.syncs.map (·.2.1)) ∧
-      (flushSyncs cfg fuel s).disk = L.foldl (fun st e => acceptOn cfg st e.1 e.2) s.disk) ∧
+      (flushSyncs cfg fuel s).disk = L.foldl (fun st e => acceptOn cfg s.floor st e.1 e.2) s.disk) ∧
     (flushSyncs cfg fuel s).floor = s.floor ∧ (flushSyncs cfg fuel s).syncs ⊆ s.syncs ∧
     (flushSyncs cfg fuel s).top = s.top ∧ (flushSyncs cfg fuel s).own = s.own ∧
     (flushSyncs cfg fuel s).fired = s.fired ∧ (flushSyncs cfg fuel s).lo = s.lo ∧
@@ -198,7 +205,7 @@ theorem flushSyncs_eq : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
           have := ht.2.2.2.2.2.2.2.2.2.2 hx
           rw [a₃] at this
           exact List.mem_map_of_mem this
-      · rw [hd, List.foldl_append, ht.1, absorb_disk]
+      · rw [hd, List.foldl_append, ht.1, absorb_disk, ht.2.1, a₂]
       · have := ht.2.2.2.2.2.2.2.2.2.2 (h₃ hx)
         rwa [a₃] at this
 
@@ -377,73 +384,6 @@ omit [Fintype Validator] in
 
 end Drop
 
-variable (cfg) in
-/-- **Take in a block of a proof on the store `st` with floor `F`**: accept it
-if it is ready, and otherwise, if it is new and below `F`, keep it without its
-references. -/
-def takeOn (F : ℕ) (st : Store Validator BlockId Payload)
-    (e : BlockId × Block Validator BlockId Payload) : Store Validator BlockId Payload :=
-  if h : e.1 ∉ st.ids ∧ e.2.round < F ∧ readyOn cfg st e = false then st.base e.1 e.2 h.1
-  else acceptOn cfg st e.1 e.2
-
-section Proof
-
-variable (s : State Validator BlockId Payload) (e : BlockId × Block Validator BlockId Payload)
-
-omit [Fintype Validator] in
-/-- **Taking in a block of a proof changes the disk as on the disk alone.** -/
-theorem takeProof_disk : (takeProof cfg s e).disk = takeOn cfg s.floor s.disk e := by
-  unfold takeProof takeOn
-  by_cases h : e.1 ∉ s.disk.ids ∧ e.2.round < s.floor ∧ readyOn cfg s.disk e = false
-  · rw [dif_pos h, dif_pos (by rw [ready_eq]; exact h)]
-  · rw [dif_neg h, dif_neg (by rw [ready_eq]; exact h)]
-    exact accept_disk s e.1 e.2
-
-omit [Fintype Validator] in
-/-- **Taking in a block of a proof changes only the disk, the memory and the
-detected authors**, which only grow. -/
-theorem takeProof_rest :
-    (takeProof cfg s e).floor = s.floor ∧ (takeProof cfg s e).syncs = s.syncs ∧
-    (takeProof cfg s e).top = s.top ∧ (takeProof cfg s e).own = s.own ∧
-    (takeProof cfg s e).fired = s.fired ∧ (takeProof cfg s e).lo = s.lo ∧
-    (takeProof cfg s e).decided = s.decided ∧ (takeProof cfg s e).armed = s.armed ∧
-    (takeProof cfg s e).recovering = s.recovering ∧
-    (takeProof cfg s e).proofs = s.proofs ∧ s.detected ⊆ (takeProof cfg s e).detected := by
-  unfold takeProof
-  split
-  · exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, Finset.subset_union_left⟩
-  · obtain ⟨h₁, h₂, h₃, h₄, h₅, h₆, h₇, h₈, h₉, h₁₀⟩ := accept_rest (cfg := cfg) s e.1 e.2
-    refine ⟨h₁, h₂, h₃, h₄, h₅, h₆, h₇, h₈, h₉, ?_, h₁₀⟩
-    unfold accept; split <;> rfl
-
-end Proof
-
-omit [Fintype Validator] in
-theorem foldl_takeProof (l : List (BlockId × Block Validator BlockId Payload)) :
-    ∀ s : State Validator BlockId Payload,
-      (l.foldl (takeProof cfg) s).disk = l.foldl (takeOn cfg s.floor) s.disk ∧
-      (l.foldl (takeProof cfg) s).floor = s.floor ∧
-      (l.foldl (takeProof cfg) s).syncs = s.syncs ∧
-      (l.foldl (takeProof cfg) s).top = s.top ∧
-      (l.foldl (takeProof cfg) s).own = s.own ∧
-      (l.foldl (takeProof cfg) s).fired = s.fired ∧
-      (l.foldl (takeProof cfg) s).lo = s.lo ∧
-      (l.foldl (takeProof cfg) s).decided = s.decided ∧
-      (l.foldl (takeProof cfg) s).armed = s.armed ∧
-      (l.foldl (takeProof cfg) s).recovering = s.recovering ∧
-      (l.foldl (takeProof cfg) s).proofs = s.proofs ∧
-      s.detected ⊆ (l.foldl (takeProof cfg) s).detected := by
-  induction l with
-  | nil => intro s; exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, subset_rfl⟩
-  | cons e l ih =>
-    intro s
-    obtain ⟨h₁, h₂, h₃, h₄, h₅, h₆, h₇, h₈, h₉, h₁₀, h₁₁, h₁₂⟩ := ih (takeProof cfg s e)
-    obtain ⟨a₂, a₃, a₄, a₅, a₆, a₇, a₈, a₉, a₁₀, a₁₁, a₁₂⟩ := takeProof_rest (cfg := cfg) s e
-    simp only [List.foldl_cons]
-    refine ⟨h₁.trans (by rw [takeProof_disk, a₂]), h₂.trans a₂, h₃.trans a₃, h₄.trans a₄,
-      h₅.trans a₅, h₆.trans a₆, h₇.trans a₇, h₈.trans a₈, h₉.trans a₉, h₁₀.trans a₁₀,
-      h₁₁.trans a₁₁, a₁₂.trans h₁₂⟩
-
 omit [Fintype Validator] in
 /-- **Deciding on a proof changes the next undecided slot, the decisions,
 the proofs, the disk, the memory, the floor and the detected authors**,
@@ -458,12 +398,12 @@ theorem decideOn_rest (s : State Validator BlockId Payload) (k : ℕ) (d : Optio
     s.detected ⊆ (decideOn cfg s k d L).detected := by
   unfold decideOn
   dsimp only
-  obtain ⟨-, -, h₃, h₄, h₅, h₆, h₇, h₈, h₉, h₁₀, -, h₁₂⟩ := foldl_takeProof (cfg := cfg)
-    ((hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round))
+  obtain ⟨-, h₃, h₄, h₅, h₆, h₇, h₈, h₉, h₁₀, h₁₂⟩ := absorb_rest (cfg := cfg)
     (release cfg { s with
       lo := k + 1
       decided := (k, d) :: s.decided
       proofs := (k, ((hashed cfg L).map Prod.fst).toFinset) :: s.proofs })
+    ((hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round))
   simp only [release_syncs, release_top, release_own, release_fired, release_lo, release_decided,
     release_armed, release_recovering, release_detected] at h₃ h₄ h₅ h₆ h₇ h₈ h₉ h₁₀ h₁₂
   exact ⟨h₃, h₄, h₅, h₆, h₇, h₈, h₉, h₁₀, h₁₂⟩

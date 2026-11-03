@@ -107,7 +107,8 @@ round `m` or above after `t₀` and within twice the timeout of round
 `m - 1`. When the retry timer fires, it builds above `m`, or resends its round-`m`
 block, or it built above `m` before. -/
 theorem sends_again (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time t_r t₁)
-    (hfire : Live.TimersFireUp cfg T tr time t₁) {u : Validator} (hu : u ∈ T) {t₀ m : ℕ}
+    (hfire : Live.TimersFireUp cfg T tr time t₁) (hdr : cfg.drops = false) {u : Validator}
+    (hu : u ∈ T) {t₀ m : ℕ}
     (hrt : t_r ≤ t₀) (hts : (stateAt cfg tr time u t₀).top = some m)
     (ht₁ : t₀ + 2 * cfg.timeout (m - 1) ≤ t₁) :
     ∃ k inp y, tr[k]? = some (u, inp) ∧ t₀ < time k ∧ time k ≤ t₀ + 2 * cfg.timeout (m - 1) ∧
@@ -195,7 +196,7 @@ theorem sends_again (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time
         have : t ≠ m := fun h => hstay (by rw [ht, h])
         omega
       rw [hsucc] at ht
-      obtain ⟨e, hep, her⟩ := step_every (cfg := cfg.at u) (s := stateBefore cfg tr f u)
+      obtain ⟨e, hep, her⟩ := step_every (cfg := cfg.at u) hdr (s := stateBefore cfg tr f u)
         (inp := .timer (m - 1)) (by simp) (Or.inr ⟨_, rfl⟩) (by rw [ht]; rfl) (m + 1)
         (Or.inr (by rw [hfm]; simp))
         (by rw [ht]; simpa using hmt)
@@ -250,7 +251,8 @@ theorem arrives_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (h
     (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
     (hdel : Live.DeliveredFrom cfg T tr time gst Δ t_r t₁)
     (hsync : Live.SyncedFrom cfg T tr time gst Δₛ t_r t₁) (hup : Live.UpFrom T tr time t_r t₁)
-    (hfire : Live.TimersFireUp cfg T tr time t₁) (hstart : Live.StartedBy T tr time gst) :
+    (hfire : Live.TimersFireUp cfg T tr time t₁) (hstart : Live.StartedBy T tr time gst)
+    (hdr : cfg.drops = false) :
     ∀ u ∈ T, ∀ v ∈ T, u ≠ v → ∀ b inp, tr[b]? = some (u, inp) →
       ∀ e ∈ persists (outputsAt cfg tr b),
         topAt cfg tr time u
@@ -304,7 +306,7 @@ theorem arrives_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (h
       rw [← htm]
       exact Finset.le_sup (f := fun u => 2 * cfg.timeout (topAt cfg tr time u t₀ - 1)) hu
     obtain ⟨k, inpk, y, hk, htk, hkle, hyb, hym, -⟩ :=
-      sends_again hmono hup hfire hu (le_max_left _ _) hm (by omega)
+      sends_again hmono hup hfire hdr hu (le_max_left _ _) hm (by omega)
     obtain ⟨q, hqk, inpq, hq, hyq⟩ := Converge.persists_of_broadcasts hk hyb
     have hql : q < tr.length := (List.getElem?_eq_some_iff.mp hq).1
     have hkl : k < tr.length := (List.getElem?_eq_some_iff.mp hk).1
@@ -395,11 +397,11 @@ theorem arrival_of_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     (hdel : Live.DeliveredFrom cfg T tr time gst Δ t_r t₁)
     (hsync : Live.SyncedFrom cfg T tr time gst Δₛ t_r t₁)
     (hup : Live.UpFrom T tr time t_r t₁) (hfire : Live.TimersFireUp cfg T tr time t₁)
-    (hstart : Live.StartedBy T tr time gst) :
+    (hstart : Live.StartedBy T tr time gst) (hdr : cfg.drops = false) :
     Arrival cfg T tr time
       (max t_r gst + T.sup fun u => 2 * cfg.timeout (topAt cfg tr time u (max t_r gst) - 1))
       (Δ + Δₛ) t₁ :=
-  ⟨arrives_recovered hσ hadm hfa hf hid htime hinj hTH hmono hdel hsync hup hfire hstart,
+  ⟨arrives_recovered hσ hadm hfa hf hid htime hinj hTH hmono hdel hsync hup hfire hstart hdr,
     fun hG _ hv _ hk hk₁ => recovered_by hadm hfa hid htime hTH hmono hup hfire hstart hG hv hk hk₁,
     fun v hv k inp hk hGk hk₁ h => by
       subst h

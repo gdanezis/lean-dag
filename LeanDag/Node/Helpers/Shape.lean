@@ -69,13 +69,13 @@ theorem progress_shape : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
     let p := Node.progress cfg fuel s
     p.1.fired = s.fired ∧ (s.top = none → p.1.top = none) ∧
       (∀ e ∈ persists p.2, s.top.getD 0 < e.2.round) ∧
-      (s.top.isSome → s.recovering = false → ∀ ρ, s.top.getD 0 < ρ → ρ ≤ p.1.top.getD 0 →
-        ∃ e ∈ persists p.2, e.2.round = ρ) ∧
+      (cfg.drops = false → s.top.isSome → s.recovering = false → ∀ ρ, s.top.getD 0 < ρ →
+        ρ ≤ p.1.top.getD 0 → ∃ e ∈ persists p.2, e.2.round = ρ) ∧
       (s.recovering = false → p.1.recovering = false) ∧
       (p.1.top ≠ s.top → ∃ e ∈ persists p.2, p.1.top = some e.2.round) ∧
       (p.1.top ≠ s.top → p.1.recovering = false)
   | 0, s => ⟨rfl, id, fun e he => absurd he (by simp [Node.progress, persists]),
-      fun _ _ ρ h₁ h₂ => absurd h₂ (by simp [Node.progress]; omega), id,
+      fun _ _ _ ρ h₁ h₂ => absurd h₂ (by simp [Node.progress]; omega), id,
       fun h => absurd rfl h, fun h => absurd rfl h⟩
   | fuel + 1, s => by
     intro p
@@ -91,7 +91,7 @@ theorem progress_shape : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
         rw [persists_append, hout, persists_built]; rfl
       have hsr : s.top.getD 0 ≤ r := hr.2.1
       refine ⟨ih₂.trans hf, (fun h => by rw [h] at hr; exact absurd hr.1 (by simp)),
-        fun e he => ?_, fun _ hrec ρ h₁ h₂ => ?_, fun _ => ih₅ hrec₁, fun _ => ?_,
+        fun e he => ?_, fun hd _ hrec ρ h₁ h₂ => ?_, fun _ => ih₅ hrec₁, fun _ => ?_,
         fun _ => ih₅ hrec₁⟩
       · rw [hp] at he
         rcases List.mem_cons.mp he with rfl | he
@@ -99,12 +99,13 @@ theorem progress_shape : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
         · have := ih₃ e he
           rw [ht₁] at this; simp only [Option.getD_some] at this; omega
       · rw [hp]
-        have hrt : s.top = some r := hr.2.2 hrec
+        have hrt : s.top = some r :=
+          hr.2.2 hrec fun h => absurd (hd.symm.trans h) Bool.false_ne_true
         rw [hrt] at h₁
         simp only [Option.getD_some] at h₁
         by_cases hρ : ρ = r + 1
         · exact ⟨(id, b), List.mem_cons_self .., by rw [hbr, hρ]⟩
-        · obtain ⟨e, he, her⟩ := ih₄ (by rw [ht₁]; rfl) hrec₁ ρ (by rw [ht₁]; simp; omega) h₂
+        · obtain ⟨e, he, her⟩ := ih₄ hd (by rw [ht₁]; rfl) hrec₁ ρ (by rw [ht₁]; simp; omega) h₂
           exact ⟨e, List.mem_cons_of_mem _ he, her⟩
       · rw [hp]
         by_cases hpt : (Node.progress cfg fuel s₁).1.top = s₁.top
@@ -112,7 +113,7 @@ theorem progress_shape : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
         · obtain ⟨e, he, het⟩ := ih₆ hpt
           exact ⟨e, List.mem_cons_of_mem _ he, het⟩
     · exact ⟨rfl, id, fun e he => absurd he (by simp [persists]),
-        fun _ _ ρ h₁ h₂ => absurd h₂ (by simp only; omega), id, fun h => absurd rfl h,
+        fun _ _ _ ρ h₁ h₂ => absurd h₂ (by simp only; omega), id, fun h => absurd rfl h,
         fun h => absurd rfl h⟩
 
 omit [Fintype Validator] in
@@ -145,8 +146,8 @@ structure PassShape (s : State Validator BlockId Payload)
     (out : List (Output Validator BlockId Payload)) (s' : State Validator BlockId Payload) :
     Prop where
   above : ∀ e ∈ persists out, s.top.getD 0 < e.2.round
-  every : s.top.isSome → s.recovering = false → ∀ ρ, s.top.getD 0 < ρ → ρ ≤ s'.top.getD 0 →
-    ∃ e ∈ persists out, e.2.round = ρ
+  every : cfg.drops = false → s.top.isSome → s.recovering = false → ∀ ρ, s.top.getD 0 < ρ →
+    ρ ≤ s'.top.getD 0 → ∃ e ∈ persists out, e.2.round = ρ
   timer : ∀ e ∈ persists out,
     Output.setTimer (e.2.round - 1) (2 * cfg.timeout (e.2.round - 1)) ∈ out
   fired : s.fired ⊆ s'.fired
@@ -158,7 +159,7 @@ structure PassShape (s : State Validator BlockId Payload)
 
 theorem PassShape.refl (s : State Validator BlockId Payload) : PassShape cfg s [] s :=
   ⟨fun e he => absurd he (by simp [persists]),
-    fun _ _ ρ h₁ h₂ => absurd h₂ (by omega), fun e he => absurd he (by simp [persists]),
+    fun _ _ _ ρ h₁ h₂ => absurd h₂ (by omega), fun e he => absurd he (by simp [persists]),
     subset_rfl, Rises.refl s, id, id, fun h => absurd rfl h, fun h => absurd rfl h⟩
 
 theorem PassShape.trans {a b c : State Validator BlockId Payload}
@@ -166,7 +167,7 @@ theorem PassShape.trans {a b c : State Validator BlockId Payload}
     (h₂ : PassShape cfg b o₂ c) : PassShape cfg a (o₁ ++ o₂) c := by
   have hab := h₁.rises
   have hbc := h₂.rises
-  refine ⟨fun e he => ?_, fun hs hrec ρ hρ₁ hρ₂ => ?_, fun e he => ?_,
+  refine ⟨fun e he => ?_, fun hd hs hrec ρ hρ₁ hρ₂ => ?_, fun e he => ?_,
     h₁.fired.trans h₂.fired, hab.trans hbc, fun h => h₂.none (h₁.none h),
     fun h => h₂.stays (h₁.stays h), fun hne => ?_, fun hne => ?_⟩
   · rw [persists_append] at he
@@ -175,9 +176,9 @@ theorem PassShape.trans {a b c : State Validator BlockId Payload}
     · exact lt_of_le_of_lt hab.1 (h₂.above e he)
   · rw [persists_append]
     by_cases hρ : ρ ≤ b.top.getD 0
-    · obtain ⟨e, he, her⟩ := h₁.every hs hrec ρ hρ₁ hρ
+    · obtain ⟨e, he, her⟩ := h₁.every hd hs hrec ρ hρ₁ hρ
       exact ⟨e, List.mem_append_left _ he, her⟩
-    · obtain ⟨e, he, her⟩ := h₂.every (hab.2.1 hs) (h₁.stays hrec) ρ (by omega) hρ₂
+    · obtain ⟨e, he, her⟩ := h₂.every hd (hab.2.1 hs) (h₁.stays hrec) ρ (by omega) hρ₂
       exact ⟨e, List.mem_append_right _ he, her⟩
   · rw [persists_append] at he
     rcases List.mem_append.mp he with he | he
@@ -212,13 +213,13 @@ theorem advance_shape (s : State Validator BlockId Payload) :
     rw [advance_recovering, hadv]
     change (flushSyncs cfg (D.1.syncs.length + 1) D.1).recovering = _
     rw [flushSyncs_recovering, ← hD, decideStep_recovering]
-  refine ⟨fun e he => ?_, fun hs hr ρ h₁ h₂ => ?_, fun e he => ?_, ?_, hra, fun h => ?_,
+  refine ⟨fun e he => ?_, fun hd hs hr ρ h₁ h₂ => ?_, fun e he => ?_, ?_, hra, fun h => ?_,
     fun h => by rw [hrec]; exact p₅ h, fun hne => ?_, fun hne => by
       rw [hrec]; rw [htop, d₃] at hne; exact p₇ hne⟩
   · rw [hpers] at he
     exact p₃ e (by rw [hbs, persists_built]; exact he)
   · rw [hpers]
-    obtain ⟨e, he, her⟩ := p₄ hs hr ρ h₁ (by rw [htop, d₃] at h₂; exact h₂)
+    obtain ⟨e, he, her⟩ := p₄ hd hs hr ρ h₁ (by rw [htop, d₃] at h₂; exact h₂)
     rw [hbs, persists_built] at he
     exact ⟨e, he, her⟩
   · rw [hpers] at he
@@ -368,8 +369,10 @@ section StepFacts
 variable {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
 
 /-- **A step builds every round above the top before up to the top it
-reaches**, when it is no restart, and a timer or starts not recovering. -/
-theorem step_every (hinp : inp ≠ .restart) (hrec : s.recovering = false ∨ ∃ r, inp = .timer r)
+reaches**, when the node does not drop, the step is no restart, and a timer
+or starts not recovering. -/
+theorem step_every (hd : cfg.drops = false) (hinp : inp ≠ .restart)
+    (hrec : s.recovering = false ∨ ∃ r, inp = .timer r)
     (hsome : (Node.step cfg s inp).1.top.isSome) :
     ∀ ρ, (s.top = none ∨ s.top.getD 0 < ρ) → ρ ≤ (Node.step cfg s inp).1.top.getD 0 →
       ∃ e ∈ persists (Node.step cfg s inp).2, e.2.round = ρ := by
@@ -396,13 +399,13 @@ theorem step_every (hinp : inp ≠ .restart) (hrec : s.recovering = false ∨ �
       · have := hS.none (by rw [hxt, hn])
         rw [this] at hsome; cases hsome
       · have hρ' : s.top.getD 0 < ρ := hρ.resolve_left hn
-        obtain ⟨e, he', her⟩ := hS.every (by
+        obtain ⟨e, he', her⟩ := hS.every hd (by
           rw [hxt]; exact Option.ne_none_iff_isSome.mp hn) hx ρ
           (by rw [ht]; exact hρ') hρt
         exact ⟨e, List.mem_append_right _ he', her⟩
     · by_cases h0 : ρ = 0
       · exact ⟨g, List.mem_append_left _ (by simp [persists]), by rw [hg, h0]⟩
-      · obtain ⟨e, he', her⟩ := hS.every (by rw [hx0]; rfl) hx ρ
+      · obtain ⟨e, he', her⟩ := hS.every hd (by rw [hx0]; rfl) hx ρ
           (by rw [hx0]; simp; omega) hρt
         exact ⟨e, List.mem_append_right _ he', her⟩
 
@@ -702,7 +705,7 @@ theorem tryBuild_isSome {s : State Validator BlockId Payload} {r : ℕ} (ht : s.
   unfold tryBuild
   rw [ht]
   dsimp only
-  rw [if_neg (by simp [hrec])]
+  rw [if_neg (by simp [hrec, not_lt.mpr hF])]
   unfold buildAbove
   dsimp only
   rw [if_pos ⟨by rw [s.mirrors.authorsAt_eq hF, Store.authorsAt_eq]; exact hq,

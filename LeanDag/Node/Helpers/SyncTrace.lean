@@ -171,10 +171,15 @@ theorem mem_accept {s : State Validator BlockId Payload} {id : BlockId}
     (hn : id ∉ s.disk.ids) : id ∈ (Node.accept cfg s id b).disk.ids := by
   rw [accept_disk]
   rw [ready_eq] at hr
-  simp only [readyOn, decide_eq_true_eq] at hr
+  simp only [readyOn, Bool.or_eq_true, decide_eq_true_eq, Bool.and_eq_true] at hr
   unfold acceptOn
-  rw [dif_pos ⟨hn, hr⟩]
-  exact Store.mem_insert_self
+  rcases hr with hr | hr
+  · rw [dif_pos ⟨hn, hr⟩]
+    exact Store.mem_insert_self
+  · split
+    · exact Store.mem_insert_self
+    · rw [dif_pos ⟨hr.1, hn, hr.2⟩, Store.base_ids]
+      exact Finset.mem_insert_self _ _
 
 section Top
 

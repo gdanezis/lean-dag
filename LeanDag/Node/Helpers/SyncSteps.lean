@@ -102,7 +102,7 @@ theorem Thins.accept (s : State Validator BlockId Payload) (id : BlockId)
   have hr := accept_rest (cfg := cfg) (s := s) (id := id) (b := b)
   refine ⟨hr.2.1 ▸ List.Sublist.refl _, fun _ e he => Or.inl (hr.2.1 ▸ he), fun _ => ?_,
     hr.2.2.2.2.2.2.2.2.2, fun _ h => h.accept id b, fun _ h => h.accept id b⟩
-  rw [accept_disk]; exact Grows.accept _ _ _
+  rw [accept_disk]; exact Grows.accept _ _ _ _
 
 omit [Fintype Validator] in
 theorem Thins.absorb (s : State Validator BlockId Payload) :

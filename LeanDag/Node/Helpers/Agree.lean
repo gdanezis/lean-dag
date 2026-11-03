@@ -185,9 +185,10 @@ theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
           have hi := Converge.inv_before (cfg := cfg) (tr := tr) t w
           obtain ⟨hd, hb⟩ := event_knownOf (cfg := cfg) hj
           obtain ⟨hc', hv'⟩ := AllGood.step (cfg := cfg.at w) (C := fun _ => True)
-            (fun _ _ _ h => h) hg.grounds (fun _ hc => verdict_decideStep hσ ht (hc trivial))
-            (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true)
-            (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true) inp (fun _ => hc) hi.floor
+            (fun _ _ _ h => h) (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true)
+            hg.grounds (fun _ hc => verdict_decideStep hσ ht (hc trivial))
+            (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true) inp (fun _ => hc)
+            (hi.floor.trans (floorOf_le _))
             (fun e he => hK w hv _ (knownBefore_knownOf (hi.pend e he)))
             (fun e he => hK w hv e (hd e he))
             (fun e he => hK w hv e (hb e he))

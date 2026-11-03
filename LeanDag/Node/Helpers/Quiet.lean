@@ -368,18 +368,19 @@ theorem progress_none {n : ℕ} {s : State Validator BlockId Payload}
     omega
 
 omit [Fintype Validator] in
-/-- Whether the node can build reads only its disk, memory, top, own
+/-- Whether the node can build reads only its disk, memory, floor, top, own
 block, fired timers, syncs and whether it recovers. -/
 theorem tryBuild_none_of {s s' : State Validator BlockId Payload}
     (h : Node.tryBuild cfg s = none) (hst : s'.disk = s.disk) (hm : s'.memory = s.memory)
+    (hfl : s'.floor = s.floor)
     (ht : s'.top = s.top) (ho : s'.own = s.own) (hf : s'.fired = s.fired)
     (hrc : s'.recovering = s.recovering) (hp : s'.syncs = s.syncs)
     (he : s'.evidence = s.evidence) :
     Node.tryBuild cfg s' = none := by
   obtain ⟨st, mem, fl, mir, lw, pd, dt, ev, top, own, fired, lo, dc, ar, rc⟩ := s
   obtain ⟨st', mem', fl', mir', lw', pd', dt', ev', top', own', fired', lo', dc', ar', rc'⟩ := s'
-  simp only at hst hm ht ho hf hrc hp he
-  subst hst hm ht ho hf hrc hp he
+  simp only at hst hm hfl ht ho hf hrc hp he
+  subst hst hm hfl ht ho hf hrc hp he
   unfold Node.tryBuild Node.buildAbove Node.syncTop at h ⊢
   cases top' with
   | none => rfl
@@ -403,10 +404,11 @@ omit [Fintype Validator] in
 theorem Stops.settled {s : State Validator BlockId Payload} (h : Stops cfg s) :
     Settled cfg (Node.advance cfg s).1 := by
   suffices hp : Settled cfg (Node.pass cfg s).1 from
-    ⟨tryBuild_none_of hp.build (advance_disk s) (advance_memory s) (advance_top s)
+    ⟨tryBuild_none_of hp.build (advance_disk s) (advance_memory s) (advance_floor s)
+        (advance_top s)
         (advance_own s) (advance_fired s) (advance_recovering s) (advance_syncs s)
         (advance_evidence s),
-      by unfold NoReady; rw [advance_syncs, advance_disk]; exact hp.ready,
+      by unfold NoReady; rw [advance_syncs, advance_disk, advance_floor]; exact hp.ready,
       by rw [advance_lo, advance_disk, advance_floor, advance_memory]; exact hp.decided⟩
   obtain ⟨htop, hpend, hlo⟩ := (stops_iff s).1 h
   have hadv : (Node.pass cfg s).1 = flushSyncs cfg ((Node.decideStep cfg

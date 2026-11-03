@@ -138,7 +138,10 @@ reference `x` come from at least `q` authors (`Bypassed U ordered q x`).
   the node resends, so `T_c` is its retry timer, and again after each
   slot it decides on a proof; the answer is `proof`, and the node checks
   it by the loop on the proof's own blocks (`verdictOn`) and takes the
-  blocks in (`decideOn`), behind the switch `Config.drops`.
+  blocks in (`decideOn`), behind the switch `Config.drops`. Behind the
+  same switch the node's floor is at least its cut, a block below the
+  floor is accepted on its header (D10), and a node whose top lies below
+  its floor jumps as a restarted node does.
 * **Decisions** read a proof: the disk at or above `G`, a view of the
   record cut at `G` (`BypassView.chop`), as the memory already does from
   its floor, or a proof received in catch-up.

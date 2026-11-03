@@ -67,7 +67,7 @@ or `refsFor`'s cannot be built on. -/
 theorem tryBuild_exit {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
     ∃ r o, s.top.isSome ∧ s.top.getD 0 ≤ r ∧
-      ((s.top = some r ∧ o = s.own) ∨ (s.recovering = true ∧ o = none ∧
+      ((s.top = some r ∧ o = s.own) ∨ ((s.recovering = true ∨ cfg.drops = true) ∧ o = none ∧
         reachReady cfg s.memory (refsAt cfg s.memory r o s.evidence) r
           (excluded cfg s.memory r s.evidence) = true ∧
         certReady cfg s.memory (refsAt cfg s.memory r o s.evidence) r
@@ -85,7 +85,7 @@ theorem tryBuild_exit {s s' : State Validator BlockId Payload}
               by
   obtain ⟨t, r, o, ht, hb, hro⟩ := tryBuild_cases h
   have hshape : s.top.isSome ∧ s.top.getD 0 ≤ r ∧
-      ((s.top = some r ∧ o = s.own) ∨ (s.recovering = true ∧ o = none ∧
+      ((s.top = some r ∧ o = s.own) ∨ ((s.recovering = true ∨ cfg.drops = true) ∧ o = none ∧
         reachReady cfg s.memory (refsAt cfg s.memory r o s.evidence) r
           (excluded cfg s.memory r s.evidence) = true ∧
         certReady cfg s.memory (refsAt cfg s.memory r o s.evidence) r
@@ -93,7 +93,7 @@ theorem tryBuild_exit {s s' : State Validator BlockId Payload}
     rw [ht]
     rcases hro with ⟨rfl, rfl⟩ | ⟨hrec, hlt, rfl, -, -, ht₁, ht₂⟩
     · exact ⟨rfl, le_rfl, Or.inl ⟨rfl, rfl⟩⟩
-    · exact ⟨rfl, hlt.le, Or.inr ⟨hrec, rfl, ht₁, ht₂⟩⟩
+    · exact ⟨rfl, hlt.le, Or.inr ⟨hrec.imp_right (·.1), rfl, ht₁, ht₂⟩⟩
   unfold buildAbove at hb
   dsimp only at hb
   split at hb
@@ -572,7 +572,8 @@ theorem BuildState.advance {U : BlockRecord Validator BlockId Payload P H}
     (h : BuildState cfg U K s inp x) (hdr : cfg.drops = false) (hp : ∀ e ∈ x.syncs, e.2.1 ∈ K)
     (hK : ∀ e ∈ persists (Node.advance cfg x).2, e ∈ K) :
     BuildState cfg U K s inp (Node.advance cfg x).1 := by
-  refine ⟨AllGood.advanceStore hg.grounds h.cut hp hK, h.held.advance hdr, h.own.advance,
+  refine ⟨AllGood.advanceStore hg.grounds (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true)
+    h.cut hp hK, h.held.advance hdr, h.own.advance,
     h.grows.trans (Grows.advance x hdr), fun r hr => h.fired r (calm_advance x hr), ?_,
     (Thins.advance x).twins hdr h.ev, h.det.trans (Thins.advance x).det,
     fun hf => (Thins.advance x).holds hf (h.holds hf)⟩
@@ -767,7 +768,8 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
     rcases step_receipt (cfg := cfg) (s := s) (Or.inl ⟨u, id, b, rfl⟩) with
       he | ⟨s₁, pre, hr, hpre, he⟩
     · exact hsame he
-    · obtain ⟨hc₁, hp₁⟩ := hr.good hg.grounds hc hp hd
+    · obtain ⟨hc₁, hp₁⟩ :=
+        hr.good hg.grounds (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true) hc hp hd
       refine hset s₁ pre
         ⟨hc₁, hh.grow hr.grows hr.top, hown.grow hr.grows hr.top hr.own, hr.grows,
           fun r hr' => Or.inl (by rwa [hr.fired] at hr'), ⟨B₀, hr.inv hi hd⟩, hr.ev hev,
@@ -778,7 +780,8 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
   | stream u L =>
     rcases step_receipt (cfg := cfg) (s := s) (Or.inr ⟨u, L, rfl⟩) with he | ⟨s₁, pre, hr, hpre, he⟩
     · exact hsame he
-    · obtain ⟨hc₁, hp₁⟩ := hr.good hg.grounds hc hp hd
+    · obtain ⟨hc₁, hp₁⟩ :=
+        hr.good hg.grounds (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true) hc hp hd
       refine hset s₁ pre
         ⟨hc₁, hh.grow hr.grows hr.top, hown.grow hr.grows hr.top hr.own, hr.grows,
           fun r hr' => Or.inl (by rwa [hr.fired] at hr'), ⟨B₀, hr.inv hi hd⟩, hr.ev hev,
