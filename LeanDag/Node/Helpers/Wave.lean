@@ -98,12 +98,13 @@ theorem waited_holds (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel) (hadm : cfg.
   rw [hcr] at her hbt
   have hicl : ic < tr.length := (List.getElem?_eq_some_iff.mp hic).1
   have hws := started_at hadm hfa hid htime hTH hmono hstart hcT (τ := time i + (Δ + Δₛ)) (by omega)
-  have hbw := builtAt_le_of_top hmono hdr hws (hall _ hcT)
-    (harr.no_jump hmono hcT ((hbelow _ hcT).trans_le hn₀) (by omega))
+  have hbw := builtAt_le_of_top hmono hws (hall _ hcT)
+    (harr.no_jump hdr hmono hcT ((hbelow _ hcT).trans_le hn₀) (by omega))
   by_cases hvw : ((globalRecord (hashInjective_of_trace hinj)
       (authentic_of_timely htime)).block e.1).creator = v
   · rw [hvw] at hic
-    exact own_held hdr hic he ((lt_eventsBy hmono hicl).mpr (by omega))
+    exact (Converge.persist_stored hic he ((lt_eventsBy hmono hicl).mpr (by omega))
+      (Or.inl hdr)).1
   · exact harr.arrives _ hcT v hv hvw ic inpc hic e he
       (by rw [her]; exact ((hbelow _ hcT).trans_le hn₀).le) (time i + (Δ + Δₛ)) τ (by omega)
       (by rw [max_eq_left (by omega)]; omega) hτ₁
@@ -141,11 +142,12 @@ theorem reliable_held {u v : Validator} (hu : u ∈ T) (hv : v ∈ T) {r : ℕ} 
     have h₂ := hN v hv
     change topAt cfg tr time v t ≤ topAt cfg tr time v gst at this
     omega
-  have hit : time i ≤ t := hbt ▸ builtAt_le_of_top hmono hdr (hst u hu) ((hN u hu).trans' hrN)
-    (harr.no_jump hmono hu ((hbelow u hu).trans_le hr₀) (by omega))
+  have hit : time i ≤ t := hbt ▸ builtAt_le_of_top hmono (hst u hu) ((hN u hu).trans' hrN)
+    (harr.no_jump hdr hmono hu ((hbelow u hu).trans_le hr₀) (by omega))
   by_cases huv : u = v
   · subst huv
-    exact own_held hdr hi he ((lt_eventsBy hmono hil).mpr (by omega))
+    exact (Converge.persist_stored hi he ((lt_eventsBy hmono hil).mpr (by omega))
+      (Or.inl hdr)).1
   exact harr.arrives u hu v hv huv i inp hi e he
     (by rw [her]; exact ((hbelow u hu).trans_le hr₀).le) t (t + (Δ + Δₛ)) hit
     (by rw [max_eq_left hgt]) ht₁
@@ -370,8 +372,8 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
     b hbU hbT hbr
   have hi₀l : i₀ < tr.length := (List.getElem?_eq_some_iff.mp hi₀).1
   have hi₀t : time i₀ ≤ t :=
-    hbt ▸ builtAt_le_of_top hmono hdr (hst v hv) ((hN v hv).trans' hnN)
-      (harr.no_jump hmono hv ((hbelow v hv).trans_le (by omega)) (by
+    hbt ▸ builtAt_le_of_top hmono (hst v hv) ((hN v hv).trans' hnN)
+      (harr.no_jump hdr hmono hv ((hbelow v hv).trans_le (by omega)) (by
         have h₁ := hbelow v hv
         have h₂ := hN v hv
         by_contra hlt
@@ -406,8 +408,8 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
     have hTA : T ⊆ authorsIn x.disk.toRecord x.disk.ids n \ excluded (cfg.at v) x.disk n
         x.evidence := by
       intro w hw
-      obtain ⟨i, inpi, e, hi, he, her, -, -⟩ := built_of_top (cfg := cfg) hmono hdr (hst w hw)
-        ((hN w hw).trans' (by omega)) (harr.no_jump hmono hw ((hbelow w hw).trans_le hn₀)
+      obtain ⟨i, inpi, e, hi, he, her, -, -⟩ := built_of_top (cfg := cfg) hmono (hst w hw)
+        ((hN w hw).trans' (by omega)) (harr.no_jump hdr hmono hw ((hbelow w hw).trans_le hn₀)
           (by
             have h₁ := hbelow w hw
             have h₂ := hN w hw

@@ -253,21 +253,6 @@ section Trace
 
 variable {tr : Trace Validator BlockId Payload} {v : Validator}
 
-/-- **A node's own block stays on its disk** at every later event, when it
-does not drop. -/
-theorem own_held (hd : cfg.drops = false) {p : ℕ} {inp : Input Validator BlockId Payload}
-    (hp : tr[p]? = some (v, inp))
-    {e : BlockId × Block Validator BlockId Payload} (he : e ∈ persists (outputsAt cfg tr p))
-    {E : ℕ} (hpE : p < E) :
-    e.1 ∈ (stateBefore cfg tr E v).disk.ids := by
-  rw [outputsAt_eq hp] at he
-  have hin := (step_persist (cfg := cfg.at v) e he (Or.inl hd)).1
-  have hs : stateBefore cfg tr (p + 1) v =
-      (Node.step (cfg.at v) (stateBefore cfg tr p v) inp).1 := by
-    rw [stateBefore_succ hp, if_pos rfl]
-  rw [← hs] at hin
-  exact (grows_before (cfg := cfg) (tr := tr) v hd (show p + 1 ≤ E by omega)).1 hin
-
 variable {time : ℕ → ℕ} (hmono : Live.TimeMono tr time)
 include hmono
 
@@ -285,15 +270,15 @@ theorem top_of_built {b : ℕ} {inp : Input Validator BlockId Payload}
 
 /-- **A node at a round built it**, at its first event building it, by
 then. -/
-theorem built_of_top (hdr : cfg.drops = false) {τ n : ℕ}
+theorem built_of_top {τ n : ℕ}
     (hs : (stateAt cfg tr time v τ).top.isSome)
     (hn : n ≤ topAt cfg tr time v τ)
     (hj : ∀ k < eventsBy tr time τ, ∀ inp, tr[k]? = some (v, inp) →
-      ((stateBefore cfg tr k v).recovering = true ∨ inp = .restart) →
+      Skips (cfg.at v) (stateBefore cfg tr k v) inp (stateBefore cfg tr (k + 1) v) →
       (stateBefore cfg tr (k + 1) v).top.getD 0 < n) :
     ∃ i inp e, tr[i]? = some (v, inp) ∧ e ∈ persists (outputsAt cfg tr i) ∧ e.2.round = n ∧
       builtAt cfg tr time v n = time i ∧ time i ≤ τ := by
-  obtain ⟨b, hbE, hbv, e, he, her⟩ := built_by hdr (eventsBy tr time τ) hs hn hj
+  obtain ⟨b, hbE, hbv, e, he, her⟩ := built_by (eventsBy tr time τ) hs hn hj
   obtain ⟨i₀, hi₀b, hbt, hi₀v, e₀, he₀, he₀r⟩ := builtAt_first (cfg := cfg) time hbv ⟨e, he, her⟩
   obtain ⟨inp, hi₀⟩ := Converge.event_of_map hi₀v
   obtain ⟨inpb, hb⟩ := Converge.event_of_map hbv
@@ -849,13 +834,13 @@ variable {T : Finset Validator} {tr : Trace Validator BlockId Payload} {time : �
 
 /-- A node at a round built it by then. -/
 theorem builtAt_le_of_top {v : Validator}
-    (hmono : Live.TimeMono tr time) (hdr : cfg.drops = false) {τ n : ℕ}
+    (hmono : Live.TimeMono tr time) {τ n : ℕ}
     (hs : (stateAt cfg tr time v τ).top.isSome)
     (hn : n ≤ topAt cfg tr time v τ)
     (hj : ∀ k < eventsBy tr time τ, ∀ inp, tr[k]? = some (v, inp) →
-      ((stateBefore cfg tr k v).recovering = true ∨ inp = .restart) →
+      Skips (cfg.at v) (stateBefore cfg tr k v) inp (stateBefore cfg tr (k + 1) v) →
       (stateBefore cfg tr (k + 1) v).top.getD 0 < n) : builtAt cfg tr time v n ≤ τ := by
-  obtain ⟨i, -, -, -, -, -, hbt, hiτ⟩ := built_of_top hmono hdr hs hn hj
+  obtain ⟨i, -, -, -, -, -, hbt, hiτ⟩ := built_of_top hmono hs hn hj
   omega
 
 end Built

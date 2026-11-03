@@ -5,9 +5,10 @@ import LeanDag.Node.Helpers.Live
 
 `docs/validator.md` §5.2. Along a trace, a node's state changes only at
 its own events (`before_succ_cases`). Each of its rounds up to its top was
-built at one of its events, with the retry timer, when it did not jump
-(`built_by`, `timer_of_persist`), and past `G` no reliable node jumps
-(`Arrival.no_jump`). A round's timer, once fired, stays fired while
+built at one of its events, with the retry timer, when no step that may
+skip rounds reached it (`Skips`: recovering, restarting, or off a regular
+stretch; `built_by`, `timer_of_persist`), and past `G` no reliable node
+that does not drop jumps (`Arrival.no_jump`). A round's timer, once fired, stays fired while
 the node's top is not above the round (`fired_stays`). A reliable block
 that a reliable node `v` is given is held by `v` once its history has
 been synchronised (`arrives`,
@@ -66,39 +67,55 @@ theorem built_top : ∀ (i : ℕ), (stateBefore cfg tr i v).top.isSome →
         exact ⟨i, by omega, by rw [he]; rfl, e, by rw [outputsAt_eq he]; exact hep,
           by rw [het]; rfl⟩
 
+variable (cfg) in
+/-- **A step that may skip rounds**: one taken recovering, a restart, or one
+off a regular stretch (`Regular`). -/
+def Skips (s : State Validator BlockId Payload) (inp : Input Validator BlockId Payload)
+    (s' : State Validator BlockId Payload) : Prop :=
+  s.recovering = true ∨ inp = .restart ∨ ¬ Regular cfg s s'
+
+omit [Fintype Validator] in
+/-- Without dropping, a step skips rounds only recovering or restarting. -/
+theorem Skips.of_false (hd : cfg.drops = false) {s s' : State Validator BlockId Payload}
+    {inp : Input Validator BlockId Payload} (h : Skips cfg s inp s') :
+    s.recovering = true ∨ inp = .restart :=
+  h.imp_right fun h => h.resolve_right fun hn => hn (Regular.of_false hd)
+
 /-- **Each round up to a node's top was built** at one of its earlier
-events, if the node does not drop and no step it took recovering, or
-restarting, reached the round. -/
-theorem built_by (hdr : cfg.drops = false) : ∀ (i : ℕ) {n : ℕ},
+events, if no step it took that may skip rounds (`Skips`) reached the
+round. -/
+theorem built_by : ∀ (i : ℕ) {n : ℕ},
     (stateBefore cfg tr i v).top.isSome →
     n ≤ (stateBefore cfg tr i v).top.getD 0 →
     (∀ k < i, ∀ inp, tr[k]? = some (v, inp) →
-      ((stateBefore cfg tr k v).recovering = true ∨ inp = .restart) →
+      Skips (cfg.at v) (stateBefore cfg tr k v) inp (stateBefore cfg tr (k + 1) v) →
       (stateBefore cfg tr (k + 1) v).top.getD 0 < n) →
     ∃ b < i, (tr[b]?.map Prod.fst) = some v ∧ ∃ e ∈ persists (outputsAt cfg tr b), e.2.round = n
   | 0, n, hs, _, _ => by simp [stateBefore, inputsBefore, run, State.init] at hs
   | i + 1, n, hs, hn, hj => by
     have hj' : ∀ k < i, ∀ inp, tr[k]? = some (v, inp) →
-        ((stateBefore cfg tr k v).recovering = true ∨ inp = .restart) →
+        Skips (cfg.at v) (stateBefore cfg tr k v) inp (stateBefore cfg tr (k + 1) v) →
         (stateBefore cfg tr (k + 1) v).top.getD 0 < n := fun k hk => hj k (by omega)
     rcases before_succ_cases (cfg := cfg) (tr := tr) v i with heq | ⟨inp, he, heq⟩
     · rw [heq] at hs hn
-      obtain ⟨b, hb, h⟩ := built_by hdr i hs hn hj'
+      obtain ⟨b, hb, h⟩ := built_by i hs hn hj'
       exact ⟨b, by omega, h⟩
     · by_cases hold : (stateBefore cfg tr i v).top.isSome ∧
           n ≤ (stateBefore cfg tr i v).top.getD 0
-      · obtain ⟨b, hb, h⟩ := built_by hdr i hold.1 hold.2 hj'
+      · obtain ⟨b, hb, h⟩ := built_by i hold.1 hold.2 hj'
         exact ⟨b, by omega, h⟩
-      · have hnot : ¬ ((stateBefore cfg tr i v).recovering = true ∨ inp = .restart) :=
+      · have hnot : ¬ Skips (cfg.at v) (stateBefore cfg tr i v) inp
+            (stateBefore cfg tr (i + 1) v) :=
           fun hr => by have := hj i (by omega) inp he hr; omega
+        unfold Skips at hnot
         push Not at hnot
-        rw [heq] at hs hn
+        rw [heq] at hs hn hnot
         have hρ : (stateBefore cfg tr i v).top = none ∨
             (stateBefore cfg tr i v).top.getD 0 < n := by
           rcases h : (stateBefore cfg tr i v).top with _ | t
           · exact Or.inl rfl
           · right; rw [h] at hold; simp at hold; simp; omega
-        obtain ⟨e, hep, her⟩ := step_every (cfg := cfg.at v) (Regular.of_false hdr) hnot.2
+        obtain ⟨e, hep, her⟩ := step_every (cfg := cfg.at v) hnot.2.2 hnot.2.1
           (Or.inl (by simpa using hnot.1)) hs n hρ hn
         exact ⟨i, by omega, by rw [he]; rfl, e, by rw [outputsAt_eq he]; exact hep, her⟩
 
@@ -373,12 +390,13 @@ structure Arrival (T : Finset Validator) (tr : Trace Validator BlockId Payload) 
 /-- **No reliable node jumps past `G`**: a step it takes recovering, or
 restarting, by `τ ≤ t₁` leaves it below a round above its round at `G`. -/
 theorem Arrival.no_jump {G A : ℕ} (harr : Arrival cfg T tr time G A t₁)
-    (hmono : Live.TimeMono tr time) {v : Validator} (hv : v ∈ T) {n τ : ℕ}
-    (hn : topAt cfg tr time v G < n) (hτ : τ ≤ t₁) :
+    (hdr : cfg.drops = false) (hmono : Live.TimeMono tr time) {v : Validator} (hv : v ∈ T)
+    {n τ : ℕ} (hn : topAt cfg tr time v G < n) (hτ : τ ≤ t₁) :
     ∀ k < eventsBy tr time τ, ∀ inp, tr[k]? = some (v, inp) →
-      ((stateBefore cfg tr k v).recovering = true ∨ inp = .restart) →
+      Skips (cfg.at v) (stateBefore cfg tr k v) inp (stateBefore cfg tr (k + 1) v) →
       (stateBefore cfg tr (k + 1) v).top.getD 0 < n := by
   intro k hkτ inp hki hrec
+  replace hrec := Skips.of_false (cfg := cfg.at v) hdr hrec
   have hkl : k < tr.length := (List.getElem?_eq_some_iff.mp hki).1
   have hkt : time k ≤ τ := (lt_eventsBy hmono hkl).mp hkτ
   have hkG : time k ≤ G := by

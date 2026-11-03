@@ -487,7 +487,10 @@ store closed, and needs none of this.
         `drops = false`; the timers a node sets, and its armed round, have
         a quorum on its disk unless the round lies below its floor
         (`TimersSet`, `ArmedQuorum`, `UnderFloor`), so `armed_last`,
-        `TopTimerBy` and `timer_set` hold with dropping.
+        `TopTimerBy` and `timer_set` hold with dropping; each round up to
+        a node's top was built when no step that may skip rounds reached it,
+        a step off a regular stretch among them (`Skips`, `built_by`,
+        `built_of_top`).
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase

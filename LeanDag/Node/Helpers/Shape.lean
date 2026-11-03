@@ -504,7 +504,8 @@ theorem step_recovering (h : (Node.step cfg s inp).1.recovering = true) :
     rw [(settle_shape (cfg := cfg)
       { s with fired := fire s r, recovering := false }).stays rfl] at h
     cases h
-  rcases step_shape (cfg := cfg) s inp with ⟨he, -⟩ | ⟨x, pre, post, hs, -, -, -, -, hpre, hxr, -, -⟩
+  rcases step_shape (cfg := cfg) s inp with ⟨he, -⟩ |
+    ⟨x, pre, post, hs, -, -, -, -, hpre, hxr, -, -⟩
   · rw [he] at h ⊢
     exact ⟨rfl, htimer, Or.inr h⟩
   · rw [hs] at h ⊢

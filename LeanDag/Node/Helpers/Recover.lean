@@ -181,7 +181,8 @@ theorem sends_again (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time
         have : t ≠ m := fun h => hstay (by rw [ht, h])
         omega
       rw [hsucc] at ht
-      obtain ⟨e, hep, her⟩ := step_every (cfg := cfg.at u) (Regular.of_false hdr) (s := stateBefore cfg tr f u)
+      obtain ⟨e, hep, her⟩ := step_every (cfg := cfg.at u) (Regular.of_false hdr)
+        (s := stateBefore cfg tr f u)
         (inp := .timer (m - 1)) (by simp) (Or.inr ⟨_, rfl⟩) (by rw [ht]; rfl) (m + 1)
         (Or.inr (by rw [hfm]; simp))
         (by rw [ht]; simpa using hmt)
