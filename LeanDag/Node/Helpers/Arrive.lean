@@ -98,7 +98,7 @@ theorem built_by (hdr : cfg.drops = false) : ∀ (i : ℕ) {n : ℕ},
           rcases h : (stateBefore cfg tr i v).top with _ | t
           · exact Or.inl rfl
           · right; rw [h] at hold; simp at hold; simp; omega
-        obtain ⟨e, hep, her⟩ := step_every (cfg := cfg.at v) hdr hnot.2
+        obtain ⟨e, hep, her⟩ := step_every (cfg := cfg.at v) (Regular.of_false hdr) hnot.2
           (Or.inl (by simpa using hnot.1)) hs n hρ hn
         exact ⟨i, by omega, by rw [he]; rfl, e, by rw [outputsAt_eq he]; exact hep, her⟩
 

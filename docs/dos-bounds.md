@@ -480,7 +480,11 @@ store closed, and needs none of this.
         what a node makes stays on its disk while at or above its floor
         (`Converge.persist_stored`), and a reliable node syncs a reliable
         author's block when its floor is at or above the author's
-        (`synced_from_author`).
+        (`synced_from_author`). Item (c) under way: a pass builds every round
+        up to its top over a regular stretch (`Regular`, `Helpers/Shape.lean`:
+        at a node that drops, the floor at or below the top and at the round
+        of the next undecided slot, neither changing), in place of
+        `drops = false`.
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase
