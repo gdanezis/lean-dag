@@ -74,13 +74,6 @@ def Skips (s : State Validator BlockId Payload) (inp : Input Validator BlockId P
     (s' : State Validator BlockId Payload) : Prop :=
   s.recovering = true ∨ inp = .restart ∨ ¬ Regular cfg s s'
 
-omit [Fintype Validator] in
-/-- Without dropping, a step skips rounds only recovering or restarting. -/
-theorem Skips.of_false (hd : cfg.drops = false) {s s' : State Validator BlockId Payload}
-    {inp : Input Validator BlockId Payload} (h : Skips cfg s inp s') :
-    s.recovering = true ∨ inp = .restart :=
-  h.imp_right fun h => h.resolve_right fun hn => hn (Regular.of_false hd)
-
 /-- **Each round up to a node's top was built** at one of its earlier
 events, if no step it took that may skip rounds (`Skips`) reached the
 round. -/
@@ -387,27 +380,30 @@ structure Arrival (T : Finset Validator) (tr : Trace Validator BlockId Payload) 
   /-- The reliable nodes do not restart past `G` and by `t₁`. -/
   up : ∀ v ∈ T, ∀ k inp, tr[k]? = some (v, inp) → G < time k → time k ≤ t₁ → inp ≠ .restart
 
-/-- **No reliable node jumps past `G`**: a step it takes recovering, or
-restarting, by `τ ≤ t₁` leaves it below a round above its round at `G`. -/
+/-- **No reliable node jumps past `G`**: a step it takes recovering,
+restarting, or off a regular stretch, by `τ ≤ t₁`, leaves it below a round
+above its round at `G`, when its steps past `G` are regular. -/
 theorem Arrival.no_jump {G A : ℕ} (harr : Arrival cfg T tr time G A t₁)
-    (hdr : cfg.drops = false) (hmono : Live.TimeMono tr time) {v : Validator} (hv : v ∈ T)
-    {n τ : ℕ} (hn : topAt cfg tr time v G < n) (hτ : τ ≤ t₁) :
+    (hmono : Live.TimeMono tr time) {v : Validator} (hv : v ∈ T) {n τ : ℕ}
+    (hn : topAt cfg tr time v G < n) (hτ : τ ≤ t₁)
+    (hreg : ∀ k, eventsBy tr time G ≤ k → k < eventsBy tr time τ →
+      Regular (cfg.at v) (stateBefore cfg tr k v) (stateBefore cfg tr (k + 1) v)) :
     ∀ k < eventsBy tr time τ, ∀ inp, tr[k]? = some (v, inp) →
       Skips (cfg.at v) (stateBefore cfg tr k v) inp (stateBefore cfg tr (k + 1) v) →
       (stateBefore cfg tr (k + 1) v).top.getD 0 < n := by
   intro k hkτ inp hki hrec
-  replace hrec := Skips.of_false (cfg := cfg.at v) hdr hrec
   have hkl : k < tr.length := (List.getElem?_eq_some_iff.mp hki).1
   have hkt : time k ≤ τ := (lt_eventsBy hmono hkl).mp hkτ
   have hkG : time k ≤ G := by
     by_contra hlt
-    rcases hrec with h | h
-    · have hkE : eventsBy tr time G ≤ k := by
-        by_contra hk
-        exact hlt ((lt_eventsBy hmono hkl).mp (by omega))
-      rw [harr.recovered (by omega) v hv k hkE
+    have hkE : eventsBy tr time G ≤ k := by
+      by_contra hk
+      exact hlt ((lt_eventsBy hmono hkl).mp (by omega))
+    rcases hrec with h | h | h
+    · rw [harr.recovered (by omega) v hv k hkE
         (hkτ.le.trans (eventsBy_mono hτ))] at h; cases h
     · exact harr.up v hv k inp hki (by omega) (by omega) h
+    · exact h (hreg k hkE hkτ)
   have hkE : k + 1 ≤ eventsBy tr time G := (lt_eventsBy hmono hkl).mpr hkG
   have := (rises_before (cfg := cfg) (tr := tr) v hkE).1
   change _ ≤ topAt cfg tr time v G at this

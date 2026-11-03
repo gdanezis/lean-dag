@@ -101,7 +101,8 @@ theorem waited_holds (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel) (hadm : cfg.
   have hicl : ic < tr.length := (List.getElem?_eq_some_iff.mp hic).1
   have hws := started_at hadm hfa hid htime hTH hmono hstart hcT (τ := time i + (Δ + Δₛ)) (by omega)
   have hbw := builtAt_le_of_top hmono hws (hall _ hcT)
-    (harr.no_jump hdr hmono hcT ((hbelow _ hcT).trans_le hn₀) (by omega))
+    (harr.no_jump hmono hcT ((hbelow _ hcT).trans_le hn₀) (by omega)
+      (fun _ _ _ => Regular.of_false hdr))
   by_cases hvw : ((globalRecord (hashInjective_of_trace hinj)
       (authentic_of_timely htime)).block e.1).creator = v
   · rw [hvw] at hic
@@ -156,7 +157,8 @@ theorem reliable_held {u v : Validator} (hu : u ∈ T) (hv : v ∈ T) {r : ℕ} 
     change topAt cfg tr time v t ≤ topAt cfg tr time v gst at this
     omega
   have hit : time i ≤ t := hbt ▸ builtAt_le_of_top hmono (hst u hu) ((hN u hu).trans' hrN)
-    (harr.no_jump hdr hmono hu ((hbelow u hu).trans_le hr₀) (by omega))
+    (harr.no_jump hmono hu ((hbelow u hu).trans_le hr₀) (by omega)
+      (fun _ _ _ => Regular.of_false hdr))
   by_cases huv : u = v
   · subst huv
     exact (Converge.persist_stored hi he ((lt_eventsBy hmono hil).mpr (by omega))
@@ -398,14 +400,14 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
   have hi₀l : i₀ < tr.length := (List.getElem?_eq_some_iff.mp hi₀).1
   have hi₀t : time i₀ ≤ t :=
     hbt ▸ builtAt_le_of_top hmono (hst v hv) ((hN v hv).trans' hnN)
-      (harr.no_jump hdr hmono hv ((hbelow v hv).trans_le (by omega)) (by
+      (harr.no_jump hmono hv ((hbelow v hv).trans_le (by omega)) (by
         have h₁ := hbelow v hv
         have h₂ := hN v hv
         by_contra hlt
         have h₃ := (rises_before (cfg := cfg) (tr := tr) v
           (eventsBy_mono (tr := tr) (time := time) (show t ≤ gst by omega))).1
         change topAt cfg tr time v t ≤ topAt cfg tr time v gst at h₃
-        omega))
+        omega) (fun _ _ _ => Regular.of_false hdr))
   have hn₁ : 1 ≤ n₀ := by have := hbelow v hv; omega
   obtain ⟨τ, hτ, hall⟩ := held_before hσ hadm hfa hf htime hinj hev hTH hmono harr hbelow hst hN
       ht₁ hdr hq hto
@@ -437,7 +439,7 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
         x.evidence := by
       intro w hw
       obtain ⟨i, inpi, e, hi, he, her, -, -⟩ := built_of_top (cfg := cfg) hmono (hst w hw)
-        ((hN w hw).trans' (by omega)) (harr.no_jump hdr hmono hw ((hbelow w hw).trans_le hn₀)
+        ((hN w hw).trans' (by omega)) (harr.no_jump hmono hw ((hbelow w hw).trans_le hn₀)
           (by
             have h₁ := hbelow w hw
             have h₂ := hN w hw
@@ -445,7 +447,7 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
             have h₃ := (rises_before (cfg := cfg) (tr := tr) w
               (eventsBy_mono (tr := tr) (time := time) (show t ≤ gst by omega))).1
             change topAt cfg tr time w t ≤ topAt cfg tr time w gst at h₃
-            omega))
+            omega) (fun _ _ _ => Regular.of_false hdr))
       obtain ⟨heU, heR, heC⟩ := built_mem (base_of_false hσ hadm hf htime hinj hdr 0 tr.length)
         (hTH hw) hi he (by have := (List.getElem?_eq_some_iff.mp hi).1; omega) (Nat.zero_le _)
         (Or.inl hdr)
