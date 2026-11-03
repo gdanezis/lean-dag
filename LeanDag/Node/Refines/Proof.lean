@@ -59,8 +59,12 @@ theorem waves_leads {cfg : Config Validator BlockId Payload} {H T : Finset Valid
       (fun w hw => started_at hadm hfa hid htime hTH hmono hstart hw hgt) htop ht₁
   set U := globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime) with hU
   -- on the node's view the slot commits a leader block
-  obtain ⟨V, -, -, hcm⟩ := run_commits hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hdr hev
-    hmono harr hwait hstart hsp hnE hc hspan hlead hn₀ hbelow htop ht₁ hv
+  have hpos : 0 < n₀ := by have := hbelow v hv; omega
+  obtain ⟨-, hcm⟩ := run_commits hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj
+    (base_of_false hσ hadm hf htime hinj hdr 0 tr.length) (Nat.zero_le _) (eventsBy_le_length _)
+    (fun _ _ => ⟨Nat.zero_le _, fun h => absurd (hdr.symm.trans h) Bool.false_ne_true⟩) hev
+    hmono harr hwait hstart hsp hnE hc hspan hlead hn₀ hbelow hpos (Or.inr ⟨rfl, hdr⟩) htop ht₁ hv
+    ((cut_before hσ hadm hf htime hinj hdr _ v (hTH hv)).1.cutAbove 0)
   obtain ⟨L, hL, hLd⟩ := hcm j hbj (by omega)
   -- the node has output a decision for the slot
   have hlen := Live.decides hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hev hdr hmono harr

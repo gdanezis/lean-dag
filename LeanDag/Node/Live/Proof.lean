@@ -252,27 +252,44 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
     (Nat.zero_le _) (eventsBy_le_length _) (Nat.zero_le _)
     (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true) hall
 
-/-- **Decision**: from a round `n₀` above every reliable node's round
-at GST, once every reliable node is at the decision round of the last of
-`c` reliably led slots spanning the rule's eligibility, `A` later every
-reliable node has output the decisions of every slot below them. -/
-theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator}
+/-- **Decision over a base**: read on a base's record, from a round `n₀`
+above every reliable node's round at GST, and `voteOffset` above the base's
+round at nodes that drop, once every reliable node is at the decision
+round of the last of `c` reliably led slots spanning the rule's
+eligibility, `A` later every reliable node has output the decisions of
+every slot below them, while the round of its next undecided slot lies at
+or above the base's round. -/
+theorem decides_from {cfg : Config Validator BlockId Payload} {H T : Finset Validator}
     {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ} {gst Δ Δₛ t₁ : ℕ}
     (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : cfg.Faithful)
     (hf : Hᶜ.card ≤ cfg.f) (hTH : T ⊆ H) (hqT : cfg.q ≤ T.card)
     (hcT : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) (hq : 2 ≤ cfg.q)
     (hid : Function.Injective cfg.idOf) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout r)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    (hev : Converge.EvidenceAuthentic cfg H tr) (hdr : cfg.drops = false)
+    (hev : Converge.EvidenceAuthentic cfg H tr)
+    {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H} {B E₀ E₁ : ℕ}
+    (hbase : Base cfg H tr R B E₀ E₁) (hE₀ : E₀ ≤ eventsBy tr time gst)
+    (hE₁ : eventsBy tr time t₁ ≤ E₁)
+    (hTB : ∀ v ∈ T, B ≤ topAt cfg tr time v gst ∧
+      (cfg.drops = true → B + 1 ≤ topAt cfg tr time v gst))
+    (hBlo : ∀ v ∈ T, ∀ k, E₀ ≤ k → k ≤ E₁ → B ≤ cfg.slots.slotRound (stateBefore cfg tr k v).lo)
     (hmono : TimeMono tr time) (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁)
     (hwait : TimersAfterSet cfg H tr time) (hstart : StartedBy T tr time gst)
     {D : Finset Validator} {nE : ℕ} (hsp : Spread cfg H tr D nE)
     (hnE : ∀ v ∈ T, nE ≤ topAt cfg tr time v gst) :
-    Decides cfg T tr time gst (Δ + Δₛ) t₁ := by
+    letI := cfg.slots
+    ∀ b c n₀, 0 < c → (Scheme.schemeAnchored cfg.p
+      (boundedSel (BlockId := BlockId) (Payload := Payload) (P := ValidAt cfg.q Clause.none)
+        (honest := T))).SpansEligible c →
+    (∀ i < c, cfg.slots.leader (b + i) ∈ T) → n₀ ≤ cfg.slots.slotRound b →
+    (∀ v ∈ T, topAt cfg tr time v gst < n₀) → B < n₀ →
+    (B + 1 + cfg.p.voteOffset ≤ n₀ ∨ B = 0 ∧ cfg.drops = false) →
+    ∀ t, (∀ v ∈ T, cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1) ≤
+        topAt cfg tr time v t) → t + (Δ + Δₛ) ≤ t₁ →
+      ∀ v ∈ T, b + c ≤ (decisionsBy cfg tr time v (t + (Δ + Δₛ))).length := by
   letI := cfg.slots
-  intro b c n₀ hc hspan hlead hn₀ hbelow t htop ht₁ v hv
+  intro b c n₀ hc hspan hlead hn₀ hbelow hB₀ hBV t htop ht₁ v hv
   haveI : Nonempty Validator := ⟨v⟩
-  set U := globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime) with hU
   set N := cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1) with hNdef
   have hw : 2 ≤ cfg.p.waveLength := hadm.2.1.1
   -- every reliable node has started by `t`
@@ -283,10 +300,21 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
     · rw [h] at this; simp at this; omega
     · rfl
   -- on its view the run is decided
-  obtain ⟨V, hiff, hdw, -⟩ := run_commits hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hdr
-      hev hmono harr hwait hstart hsp hnE hc hspan hlead hn₀ hbelow htop ht₁ hv
-  -- `v` at `t + A`, settled
   set E := eventsBy tr time (t + (Δ + Δₛ)) with hE
+  have hE₁' : E ≤ E₁ := (eventsBy_mono (tr := tr) (time := time) ht₁).trans hE₁
+  have hgE : E₀ ≤ E := hE₀.trans (eventsBy_mono (by
+    have := hbelow v hv
+    have := htop v hv
+    by_contra hlt
+    have := (rises_before (cfg := cfg) (tr := tr) v
+      (eventsBy_mono (tr := tr) (time := time) (show t ≤ gst by omega))).1
+    change topAt cfg tr time v t ≤ topAt cfg tr time v gst at this
+    have := cfg.slots.mono (show b ≤ b + c - 1 by omega)
+    omega))
+  have hcut := (hbase.disk v (hTH hv) E hE₁').1
+  obtain ⟨hdw, -⟩ := run_commits hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hbase hE₀ hE₁
+    hTB hev hmono harr hwait hstart hsp hnE hc hspan hlead hn₀ hbelow hB₀ hBV htop ht₁ hv hcut
+  -- `v` at `t + A`, settled
   obtain ⟨h₁, h₂, -⟩ := rises_before (cfg := cfg) v
     (eventsBy_mono (tr := tr) (time := time) (show t ≤ t + (Δ + Δₛ) by omega))
   obtain ⟨t', ht'⟩ := Option.isSome_iff_exists.mp (h₂ (hst v hv))
@@ -304,16 +332,13 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
     rcases settled_before (cfg := cfg) hq v E with h | h
     · rw [ht'] at h; cases h
     · exact h
-  have hcut := (cut_before hσ hadm hf htime hinj hdr E v (hTH hv)).1
   have hfZ : Z.floor ≤ cfg.slots.slotRound Z.lo := Converge.floor_lo_before (cfg := cfg) E v
-  have hva := ViewsAbove.of_storeAbove (cfg.slots.slotRound Z.lo) hiff
-    (fun i hi => ⟨hcut.round hi, hcut.creator hi⟩)
-    (fun i hi hR => hcut.eq_blk hi (by
+  have hva := hcut.viewsAbove (R := cfg.slots.slotRound Z.lo) (hBlo v hv E hgE hE₁')
+    fun i hi hR => by
       by_contra hk
       have := Z.low i hk
       change (Z.disk.blk i).round < Z.floor at this
-      change cfg.slots.slotRound Z.lo < (Z.disk.blk i).round at hR
-      omega))
+      omega
   have hlow := hdw Z.lo (by omega)
   -- and the scan reaches it
   obtain ⟨o, -, hoi, hor, -⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) E t' ht'
@@ -337,14 +362,41 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
   have hempty := hSet.decided (show Z.lo < decidable cfg Z.disk.topRound by omega) hfZ
   have heq : Scheme.tryDecide (S := cfg.slots) cfg.p boundedSel Z.disk.toRecord Z.disk.view Z.lo
       (decidable cfg Z.disk.topRound - 1) =
-      Scheme.tryDecide cfg.p boundedSel U V Z.lo (decidable cfg Z.disk.topRound - 1) :=
+      Scheme.tryDecide cfg.p boundedSel R hcut.storeView Z.lo
+        (decidable cfg Z.disk.topRound - 1) :=
     hva.tryDecide_eq cfg.p hw _ le_rfl
   change Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ (Z.memory.window (cfg.slots.slotRound Z.lo))
     (Z.memory.windowView (cfg.slots.slotRound Z.lo)) Z.lo
     (decidable cfg Z.disk.topRound - 1) = [] at hempty
   rw [tryDecide_memory (cfg := cfg) hσ hw Z hfZ, heq] at hempty
-  rw [hempty] at hmem
-  simp at hmem
+  have hnil : (Z.lo, w) ∈ ([] : List (ℕ × Option BlockId)) := by
+    rw [← hempty]; exact hmem
+  simp at hnil
+
+/-- **Decision**: from a round `n₀` above every reliable node's round
+at GST, once every reliable node is at the decision round of the last of
+`c` reliably led slots spanning the rule's eligibility, `A` later every
+reliable node has output the decisions of every slot below them. -/
+theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator}
+    {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ} {gst Δ Δₛ t₁ : ℕ}
+    (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : cfg.Faithful)
+    (hf : Hᶜ.card ≤ cfg.f) (hTH : T ⊆ H) (hqT : cfg.q ≤ T.card)
+    (hcT : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) (hq : 2 ≤ cfg.q)
+    (hid : Function.Injective cfg.idOf) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout r)
+    (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
+    (hev : Converge.EvidenceAuthentic cfg H tr) (hdr : cfg.drops = false)
+    (hmono : TimeMono tr time) (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁)
+    (hwait : TimersAfterSet cfg H tr time) (hstart : StartedBy T tr time gst)
+    {D : Finset Validator} {nE : ℕ} (hsp : Spread cfg H tr D nE)
+    (hnE : ∀ v ∈ T, nE ≤ topAt cfg tr time v gst) :
+    Decides cfg T tr time gst (Δ + Δₛ) t₁ :=
+  fun b c n₀ hc hspan hlead hn₀ hbelow t htop ht₁ v hv => by
+    have hpos : 0 < n₀ := by have := hbelow v hv; omega
+    exact decides_from hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hev
+      (base_of_false hσ hadm hf htime hinj hdr 0 tr.length) (Nat.zero_le _) (eventsBy_le_length _)
+      (fun _ _ => ⟨Nat.zero_le _, fun h => absurd (hdr.symm.trans h) Bool.false_ne_true⟩)
+      (fun _ _ _ _ _ => Nat.zero_le _) hmono harr hwait hstart hsp hnE b c n₀ hc hspan hlead hn₀
+      hbelow hpos (Or.inr ⟨rfl, hdr⟩) t htop ht₁ v hv
 
 /-- **Decision by a time bound**: the reliable nodes gain a round every
 timeout and `A` (`produces`), so they reach the last slot's decision round

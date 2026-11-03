@@ -117,19 +117,26 @@ theorem waveFacts_of_run (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf
       cert_or_refs_node hσ hadm hfa hf htime hinj hev hTH hmono harr hbelow hst htop ht₁ hbase hE₀
         hE₁ hB₀ hBV hTB hq hto hwait hid hstart hTc hqT hsp hE hvc hw' hRk hlk hL hNk hc hcc hcr }
 
-/-- **On a reliable node's view, a reliably led run is decided**, from a
-round `n₀` above every reliable node's round at GST, `A` after every
-reliable node reached the last slot's decision round: each slot of the
-run commits a leader block, certified by the wave facts
+/-- **On the view of a reliable node's disk, a reliably led run is
+decided**, read on a base's record from a round `n₀` above every reliable
+node's round at GST, and `voteOffset` above the base's round at nodes that
+drop, `A` after every reliable node reached the last slot's decision round:
+each slot of the run commits a leader block, certified by the wave facts
 (`WaveFacts.certifies`, `reliable_held`), and every slot below the run is
-decided within it (`decidedWithin_below_of_committed_run`). The view
-holds the node's disk. -/
+decided within it (`decidedWithin_below_of_committed_run`). The view holds
+the histories of the disk's blocks from the base's round up
+(`AllGood.storeView`). -/
 theorem run_commits (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : cfg.Faithful)
     (hf : Hᶜ.card ≤ cfg.f) (hTH : T ⊆ H) (hqT : cfg.q ≤ T.card)
     (hTc : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) (hq : 2 ≤ cfg.q)
     (hid : Function.Injective cfg.idOf) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout r)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    (hdr : cfg.drops = false) (hev : Converge.EvidenceAuthentic cfg H tr)
+    {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H} {B E₀ E₁ : ℕ}
+    (hbase : Base cfg H tr R B E₀ E₁) (hE₀ : E₀ ≤ eventsBy tr time gst)
+    (hE₁ : eventsBy tr time t₁ ≤ E₁)
+    (hTB : ∀ v ∈ T, B ≤ topAt cfg tr time v gst ∧
+      (cfg.drops = true → B + 1 ≤ topAt cfg tr time v gst))
+    (hev : Converge.EvidenceAuthentic cfg H tr)
     (hmono : Live.TimeMono tr time) (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁)
     (hwait : Live.TimersAfterSet cfg H tr time) (hstart : Live.StartedBy T tr time gst)
     {D : Finset Validator} {nE : ℕ} (hsp : Live.Spread cfg H tr D nE)
@@ -139,23 +146,19 @@ theorem run_commits (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : c
       (boundedSel (BlockId := BlockId) (Payload := Payload) (P := ValidAt cfg.q Clause.none)
         (honest := T))).SpansEligible c →
     (∀ i < c, cfg.slots.leader (b + i) ∈ T) → n₀ ≤ cfg.slots.slotRound b →
-    (∀ v ∈ T, topAt cfg tr time v gst < n₀) → ∀ {t : ℕ},
+    (∀ v ∈ T, topAt cfg tr time v gst < n₀) → B < n₀ →
+    (B + 1 + cfg.p.voteOffset ≤ n₀ ∨ B = 0 ∧ cfg.drops = false) → ∀ {t : ℕ},
     (∀ v ∈ T, cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1) ≤
       topAt cfg tr time v t) → t + (Δ + Δₛ) ≤ t₁ → ∀ {v : Validator}, v ∈ T →
-    ∃ V : (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).View,
-      (∀ i, i ∈ V.ids ↔ i ∈ (stateAt cfg tr time v (t + (Δ + Δₛ))).disk.ids) ∧
+    ∀ hc : AllGood (CutAbove R B) (stateAt cfg tr time v (t + (Δ + Δₛ))).disk,
       (∀ j, j ≤ b + c - 1 → ∃ w, (Scheme.schemeAnchored cfg.p boundedSel).DecidedWithin
-        (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)) V (b + c) j w) ∧
-      ∀ j, b ≤ j → j ≤ b + c - 1 → ∃ L,
-        IsLeaderBlock (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime))
-          j L ∧
-        (Scheme.schemeAnchored cfg.p boundedSel).DecidedWithin
-          (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)) V (b + c) j
+        R hc.storeView (b + c) j w) ∧
+      ∀ j, b ≤ j → j ≤ b + c - 1 → ∃ L, IsLeaderBlock R j L ∧
+        (Scheme.schemeAnchored cfg.p boundedSel).DecidedWithin R hc.storeView (b + c) j
           (some L) := by
-  intro b c n₀ hc hspan hlead hn₀ hbelow t htop ht₁ v hv
+  intro b c n₀ hc hspan hlead hn₀ hbelow hB₀ hBV t htop ht₁ v hv hcut
   letI := cfg.slots
   haveI : Nonempty Validator := ⟨v⟩
-  set U := globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime) with hU
   set N := cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1) with hNdef
   have hw : 2 ≤ cfg.p.waveLength := hadm.2.1.1
   -- every reliable node has started by `t`
@@ -165,23 +168,22 @@ theorem run_commits (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : c
     rcases h : (stateAt cfg tr time w t).top with _ | r
     · rw [h] at this; simp at this; omega
     · rfl
-  have hpos : 0 < n₀ := by have := hbelow v hv; omega
-  have wf := waveFacts_of_run hσ hadm hfa hf htime hinj
-    (base_of_false hσ hadm hf htime hinj hdr 0 tr.length) (Nat.zero_le _) (eventsBy_le_length _)
-    (fun _ _ => ⟨Nat.zero_le _, fun h => absurd (hdr.symm.trans h) Bool.false_ne_true⟩) hev hTH
-    hmono harr hq hto hwait hid hstart hTc hqT hsp hnE hbelow hpos (Or.inr ⟨rfl, hdr⟩) hst htop ht₁
-  -- the view of the node's disk `A` later
-  set E := eventsBy tr time (t + (Δ + Δₛ)) with hE
-  have hcut := (cut_before hσ hadm hf htime hinj hdr E v (hTH hv)).1
-  obtain ⟨V, -, hiff⟩ := hcut.extend
-    ((Converge.inv_before (cfg := cfg) (tr := tr) E v).valid hdr).fullClosed
-    ⟨∅, Finset.empty_subset _, fun i hi => absurd hi (Finset.notMem_empty _)⟩
-    (fun i hi => absurd hi (Finset.notMem_empty _))
+  have wf := waveFacts_of_run hσ hadm hfa hf htime hinj hbase hE₀ hE₁ hTB hev hTH
+    hmono harr hq hto hwait hid hstart hTc hqT hsp hnE hbelow hB₀ hBV hst htop ht₁
+  -- the node's disk `A` later holds a reliable block above the base in the view
+  have hview : ∀ C ∈ (stateAt cfg tr time v (t + (Δ + Δₛ))).disk.ids, C ∈ R.ids →
+      B < (R.block C).round → C ∈ hcut.storeView.ids := fun C hC hCU hCB => by
+    have hfull := eq_of_known hid hbase (Converge.knownBefore_sub (hTH hv) _
+      ((Converge.inv_before (cfg := cfg) (tr := tr) _ v).known C hC)) hCU hCB
+    exact Finset.mem_biUnion.mpr ⟨C, Finset.mem_filter.mpr ⟨hC, by
+      change B ≤ ((stateBefore cfg tr (eventsBy tr time (t + (Δ + Δₛ))) v).disk.full C).round
+      rw [hfull]; omega⟩, mem_history_self⟩
   -- each run slot commits on the view
   have hcm : cfg.p.commitThreshold ≤ T.card := hadm.2.2.1.trans hTc
   have hcommit : ∀ j, b ≤ j → j ≤ b + c - 1 →
-      ∃ L, IsLeaderBlock U j L ∧
-        (Scheme.schemeAnchored cfg.p boundedSel).DecidedWithin U V (b + c) j (some L) := by
+      ∃ L, IsLeaderBlock R j L ∧
+        (Scheme.schemeAnchored cfg.p boundedSel).DecidedWithin R hcut.storeView (b + c) j
+          (some L) := by
     intro j hbj hjc
     have hlj' : cfg.slots.leader j ∈ T := by
       have := hlead (j - b) (by omega); rwa [Nat.add_sub_cancel' hbj] at this
@@ -189,16 +191,14 @@ theorem run_commits (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : c
     have hsN : cfg.slots.slotRound j + (cfg.p.waveLength - 1) ≤ N := by
       have := cfg.slots.mono hjc; omega
     obtain ⟨L, hLU, hLc, hLr⟩ := wf.populated _ hsr (by omega) _ hlj'
-    have hL : IsLeaderBlock U j L := ⟨hLU, hLr, hLc⟩
+    have hL : IsLeaderBlock R j L := ⟨hLU, hLr, hLc⟩
     refine ⟨L, hL, AnchoredRule.DecidedWithin.directCommit (by omega) hL
       (Scheme.commit_of_certified hcm (wf.populated _ (by omega) hsN) fun C hC hCT hCr => ⟨?_, ?_⟩)⟩
     · exact wf.certifies hw hadm.2.1.2 hTH hqT hsr hsN hlj' hL _ hCT C hC rfl hCr
-    · exact (hiff C).mpr (reliable_held hσ hadm hfa hf htime hinj hev hTH
-        hmono harr hbelow hst htop ht₁ (base_of_false hσ hadm hf htime hinj hdr 0 tr.length)
-        (Nat.zero_le _) (eventsBy_le_length _) hpos (Or.inr ⟨rfl, hdr⟩)
-        (fun _ _ => ⟨Nat.zero_le _, fun h => absurd (hdr.symm.trans h) Bool.false_ne_true⟩) hCT hv
-        (r := (U.block C).round) (by omega) (by omega) hC rfl rfl)
-  refine ⟨V, hiff, fun j hj => ?_, hcommit⟩
+    · exact hview C (reliable_held hσ hadm hfa hf htime hinj hev hTH hmono harr hbelow hst htop
+        ht₁ hbase hE₀ hE₁ hB₀ hBV hTB hCT hv (r := (R.block C).round) (by omega) (by omega) hC
+        rfl rfl) hC (by omega)
+  refine ⟨fun j hj => ?_, hcommit⟩
   -- and every slot below the run is decided within it
   by_cases hb : b ≤ j
   · obtain ⟨L, -, hL⟩ := hcommit j hb hj
