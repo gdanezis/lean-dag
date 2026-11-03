@@ -2,8 +2,9 @@ import LeanDag.Node.Helpers.Steps
 /-!
 # The node's own top
 
-Along a run the node's disk holds a block at or above its top round, and
-an identifier outside the disk denotes the genesis block (`Held`):
+Along a run of a node that does not drop, its disk holds a block at or
+above its top round, and an identifier outside the disk denotes the genesis
+block (`Held`):
 building adds the block of the new top, and every other change only adds
 blocks to the disk and leaves the top alone. Across a step the disk
 holds the blocks it held, read alike, and its top round does not fall
@@ -91,7 +92,7 @@ theorem decideStep_lo (s : State Validator BlockId Payload) :
   unfold Node.decideStep
   dsimp only
   split
-  · rw [release_lo]; exact Nat.le_add_right _ _
+  · rw [drop_lo, release_lo]; exact Nat.le_add_right _ _
   · exact le_rfl
 
 omit [Fintype Validator] in
@@ -99,12 +100,12 @@ theorem decideStep_top (s : State Validator BlockId Payload) :
     (Node.decideStep cfg s).1.top = s.top := by
   unfold Node.decideStep
   dsimp only
-  split <;> simp only [release_top]
+  split <;> simp only [drop_top, release_top]
 
 omit [Fintype Validator] in
-theorem Held.decideStep {s : State Validator BlockId Payload} (h : Held cfg s) :
-    Held cfg (Node.decideStep cfg s).1 :=
-  h.grow (Grows.of_restrips (decideStep_disk s)) (decideStep_top s)
+theorem Held.decideStep {s : State Validator BlockId Payload} (h : Held cfg s)
+    (hd : cfg.drops = false) : Held cfg (Node.decideStep cfg s).1 :=
+  h.grow (Grows.of_restrips (decideStep_disk s hd)) (decideStep_top s)
 
 omit [Fintype Validator] in
 theorem Held.flushSyncs {s : State Validator BlockId Payload} (h : Held cfg s) (fuel : ℕ) :
@@ -112,20 +113,21 @@ theorem Held.flushSyncs {s : State Validator BlockId Payload} (h : Held cfg s) (
   h.grow (Grows.flushSyncs fuel s) (flushSyncs_top _ _)
 
 omit [Fintype Validator] in
-theorem Held.advance {s : State Validator BlockId Payload} (h : Held cfg s) :
-    Held cfg (Node.advance cfg s).1 :=
-  ((Held.progress (s.disk.topRound + 2) h).decideStep.flushSyncs _).grow
+theorem Held.advance {s : State Validator BlockId Payload} (h : Held cfg s)
+    (hd : cfg.drops = false) : Held cfg (Node.advance cfg s).1 :=
+  (((Held.progress (s.disk.topRound + 2) h).decideStep hd).flushSyncs _).grow
     (by rw [advance_disk]; exact Grows.refl _) (advance_top s)
 
 omit [Fintype Validator] in
 /-- **Settling keeps `Held`.** -/
-theorem Held.settle {s : State Validator BlockId Payload} (h : Held cfg s) :
-    Held cfg (Node.settle cfg s).1 :=
-  quiesce_ind (fun _ h => h.advance) _ _ h
+theorem Held.settle {s : State Validator BlockId Payload} (h : Held cfg s)
+    (hd : cfg.drops = false) : Held cfg (Node.settle cfg s).1 :=
+  quiesce_ind (fun _ h => h.advance hd) _ _ h
 
-/-- **A step keeps `Held`.** -/
+/-- **A step keeps `Held`**, when the node does not drop. -/
 theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
-    (i : Input Validator BlockId Payload) : Held cfg (Node.step cfg s i).1 := by
+    (i : Input Validator BlockId Payload) (hd : cfg.drops = false) :
+    Held cfg (Node.step cfg s i).1 := by
   cases i with
   | start =>
     simp only [Node.step]
@@ -134,7 +136,7 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
       · refine Held.settle
           ⟨fun t ht => ⟨_, Store.mem_insert_self (hrefs := fun _ hj => absurd hj
             (Finset.notMem_empty _)) (hpred := fun j hj => absurd hj (Finset.notMem_empty j)),
-            ?_⟩, h.junk⟩
+            ?_⟩, h.junk⟩ hd
         simp only [Option.some.injEq] at ht
         subst ht
         exact Nat.zero_le _
@@ -144,22 +146,22 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
     rcases step_receipt (cfg := cfg) (s := s) (Or.inl ⟨u, id, b, rfl⟩) with
       he | ⟨s₁, pre, hr, -, he⟩
     · rw [he]; exact h
-    · rw [he]; exact Held.settle (h.grow hr.grows hr.top)
+    · rw [he]; exact Held.settle (h.grow hr.grows hr.top) hd
   | stream u L =>
     rcases step_receipt (cfg := cfg) (s := s) (Or.inr ⟨u, L, rfl⟩) with he | ⟨s₁, pre, hr, -, he⟩
     · rw [he]; exact h
-    · rw [he]; exact Held.settle (h.grow hr.grows hr.top)
-  | timer r => rw [step_timer_fst]; exact Held.settle (h.grow (Grows.refl _) rfl)
+    · rw [he]; exact Held.settle (h.grow hr.grows hr.top) hd
+  | timer r => rw [step_timer_fst]; exact Held.settle (h.grow (Grows.refl _) rfl) hd
   | syncRequest peer t fr ids => simp only [Node.step]; exact h
   | ask peer r => simp only [Node.step]; exact h
   | restart =>
-    exact Held.settle (h.grow (s' := { s with recovering := true }) (Grows.refl _) rfl)
+    exact Held.settle (h.grow (s' := { s with recovering := true }) (Grows.refl _) rfl) hd
 
-/-- **A run keeps `Held`.** -/
-theorem Held.run : ∀ (is : List (Input Validator BlockId Payload))
+/-- **A run keeps `Held`**, when the node does not drop. -/
+theorem Held.run (hd : cfg.drops = false) : ∀ (is : List (Input Validator BlockId Payload))
     {s : State Validator BlockId Payload}, Held cfg s → Held cfg (Node.run cfg s is).1
   | [], _, h => h
-  | i :: is, _, h => Held.run is (h.step i)
+  | i :: is, _, h => Held.run hd is (h.step i hd)
 
 omit [Fintype Validator] in
 theorem Held.init : Held cfg (State.init cfg) :=
@@ -235,30 +237,31 @@ theorem Quorate.progress : ∀ (fuel : ℕ) {s : State Validator BlockId Payload
     · exact h
 
 omit [Fintype Validator] in
-theorem Quorate.advance {s : State Validator BlockId Payload} (h : Quorate cfg s) :
-    Quorate cfg (Node.advance cfg s).1 := by
+theorem Quorate.advance {s : State Validator BlockId Payload} (h : Quorate cfg s)
+    (hd : cfg.drops = false) : Quorate cfg (Node.advance cfg s).1 := by
   have hp := Quorate.progress (s.disk.topRound + 2) h
-  have hd : Quorate cfg (Node.decideStep cfg (Node.progress cfg (s.disk.topRound + 2) s).1).1 :=
-    hp.grow (Grows.of_restrips (decideStep_disk _)) (decideStep_top _)
-  exact (hd.grow (by simp only [Node.pass]; exact Grows.flushSyncs _ _)
+  have hq : Quorate cfg (Node.decideStep cfg (Node.progress cfg (s.disk.topRound + 2) s).1).1 :=
+    hp.grow (Grows.of_restrips (decideStep_disk _ hd)) (decideStep_top _)
+  exact (hq.grow (by simp only [Node.pass]; exact Grows.flushSyncs _ _)
     (by simp only [Node.pass, flushSyncs_top]) : Quorate cfg (Node.pass cfg s).1).grow
     (by rw [advance_disk]; exact Grows.refl _) (advance_top s)
 
 omit [Fintype Validator] in
 /-- **Settling keeps `Quorate`.** -/
-theorem Quorate.settle {s : State Validator BlockId Payload} (h : Quorate cfg s) :
-    Quorate cfg (Node.settle cfg s).1 :=
-  quiesce_ind (fun _ h => h.advance) _ _ h
+theorem Quorate.settle {s : State Validator BlockId Payload} (h : Quorate cfg s)
+    (hd : cfg.drops = false) : Quorate cfg (Node.settle cfg s).1 :=
+  quiesce_ind (fun _ h => h.advance hd) _ _ h
 
-/-- **A step keeps `Quorate`.** -/
+/-- **A step keeps `Quorate`**, when the node does not drop. -/
 theorem Quorate.step {s : State Validator BlockId Payload} (h : Quorate cfg s)
-    (i : Input Validator BlockId Payload) : Quorate cfg (Node.step cfg s i).1 := by
+    (i : Input Validator BlockId Payload) (hd : cfg.drops = false) :
+    Quorate cfg (Node.step cfg s i).1 := by
   cases i with
   | start =>
     simp only [Node.step]
     split
     · split
-      · refine Quorate.settle fun t ht h1 => ?_
+      · refine Quorate.settle (fun t ht h1 => ?_) hd
         simp only [Option.some.injEq] at ht
         omega
       · exact h
@@ -267,22 +270,22 @@ theorem Quorate.step {s : State Validator BlockId Payload} (h : Quorate cfg s)
     rcases step_receipt (cfg := cfg) (s := s) (Or.inl ⟨u, id, b, rfl⟩) with
       he | ⟨s₁, pre, hr, -, he⟩
     · rw [he]; exact h
-    · rw [he]; exact Quorate.settle (h.grow hr.grows hr.top)
+    · rw [he]; exact Quorate.settle (h.grow hr.grows hr.top) hd
   | stream u L =>
     rcases step_receipt (cfg := cfg) (s := s) (Or.inr ⟨u, L, rfl⟩) with he | ⟨s₁, pre, hr, -, he⟩
     · rw [he]; exact h
-    · rw [he]; exact Quorate.settle (h.grow hr.grows hr.top)
-  | timer r => rw [step_timer_fst]; exact Quorate.settle (h.grow (Grows.refl _) rfl)
+    · rw [he]; exact Quorate.settle (h.grow hr.grows hr.top) hd
+  | timer r => rw [step_timer_fst]; exact Quorate.settle (h.grow (Grows.refl _) rfl) hd
   | syncRequest peer t fr ids => simp only [Node.step]; exact h
   | ask peer r => simp only [Node.step]; exact h
   | restart =>
-    exact Quorate.settle (h.grow (s' := { s with recovering := true }) (Grows.refl _) rfl)
+    exact Quorate.settle (h.grow (s' := { s with recovering := true }) (Grows.refl _) rfl) hd
 
-/-- **A run keeps `Quorate`.** -/
-theorem Quorate.run : ∀ (is : List (Input Validator BlockId Payload))
+/-- **A run keeps `Quorate`**, when the node does not drop. -/
+theorem Quorate.run (hd : cfg.drops = false) : ∀ (is : List (Input Validator BlockId Payload))
     {s : State Validator BlockId Payload}, Quorate cfg s → Quorate cfg (Node.run cfg s is).1
   | [], _, h => h
-  | i :: is, _, h => Quorate.run is (h.step i)
+  | i :: is, _, h => Quorate.run hd is (h.step i hd)
 
 omit [Fintype Validator] in
 theorem Quorate.init : Quorate cfg (State.init cfg) :=

@@ -151,7 +151,7 @@ theorem decideStep_appends {s : State Validator BlockId Payload} (hL : Ledger s)
     have hD₁ : (ds.reverse ++ s.decided).reverse = s.decided.reverse ++ ds := by
       simp [List.reverse_append]
     unfold Appends Ledger
-    simp only [release_decided, release_lo]
+    simp only [drop_decided, drop_lo, release_decided, release_lo]
     refine ⟨?_, ?_⟩
     · change (ds.reverse ++ s.decided).reverse = s.decided.reverse ++ commitsOf (ds.map _)
       rw [hD₁, commitsOf_map]

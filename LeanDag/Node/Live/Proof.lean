@@ -67,7 +67,7 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
         (hTH : T ⊆ H)
     (hqT : cfg.q ≤ T.card) (hq : 2 ≤ cfg.q) (hid : Function.Injective cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    (hev : Converge.EvidenceAuthentic cfg H tr)
+    (hev : Converge.EvidenceAuthentic cfg H tr) (hdr : cfg.drops = false)
     (hmono : TimeMono tr time) (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁)
     (htop : TopTimerBy cfg T tr time gst t₁)
     (hstart : StartedBy T tr time gst) {D : Finset Validator} {nE : ℕ}
@@ -108,7 +108,7 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
       obtain ⟨j, hj, hjr, -⟩ :=
         top_arrives htime hinj hTH hmono harr hw hv hwv hgs (hstarted w hw) (τ := τ) le_rfl
           (by omega)
-      exact quorum_below hσ hadm hf htime hinj (hTH hv) _ _ hj hjr n hwn
+      exact quorum_below hσ hadm hf htime hinj hdr (hTH hv) _ _ hj hjr n hwn
     · push Not at hup
       refine hqT.trans (Finset.card_le_card fun w hw => ?_)
       rw [mem_authorsIn]
@@ -132,12 +132,12 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
   have hcardE : cfg.q ≤ (authorsIn (stateBefore cfg tr E v).disk.toRecord
       (stateBefore cfg tr E v).disk.ids n).card := by
     rw [← Store.authorsAt_eq]
-    exact hcard.trans (Finset.card_le_card (Grows.authorsAt (grows_before v hτE) n))
+    exact hcard.trans (Finset.card_le_card (Grows.authorsAt (grows_before v hdr hτE) n))
   obtain ⟨j₁, hj₁, hj₁i, hj₁r, hj₁c⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) E n hZt
   set Z := stateBefore cfg tr E v with hZ
   have hvalid : StoreValid (cfg.at v).q (cfg.at v).xp Z.disk :=
-    (Converge.inv_before (cfg := cfg) (tr := tr) E v).valid
-  have hgτ := grows_before (cfg := cfg) (tr := tr) v hτE
+    (Converge.inv_before (cfg := cfg) (tr := tr) E v).valid hdr
+  have hgτ := grows_before (cfg := cfg) (tr := tr) v hdr hτE
   -- references it can build on: a peer's round-`n + 1` block lends its own, or
   -- every reliable author's round-`n` block is held, none of them left out
   have hB : buildable (cfg.at v) Z.disk n (refsFor (cfg.at v) Z.disk n Z.own Z.evidence)
@@ -157,7 +157,7 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
           (Z.disk.blk z).creator ∈ H := by
         by_cases hnt : n + 1 = topAt cfg tr time w s
         · exact ⟨j, hjE, hjr'.trans hnt.symm, hjc' ▸ hTH hw⟩
-        · have h₁ := quorum_below hσ hadm hf htime hinj (hTH hv) E _ hjE hjr' (n + 1) (by omega)
+        · have h₁ := quorum_below hσ hadm hf htime hinj hdr (hTH hv) E _ hjE hjr' (n + 1) (by omega)
           have h₂ := two_f_c_lt_q hadm
           exact exists_honest_at hf (by
             rw [Store.authorsAt_eq]; exact (show cfg.f + 1 ≤ cfg.q by omega).trans h₁)
@@ -173,7 +173,7 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
         simp only [Option.getD_some] at h₁
         exact (hnE v hv).trans h₁
       exact Or.inr ⟨_, lent_mem_lents hz hzr hzm
-        (lent_avoids_before hσ hadm hf htime hinj time hsp (hTH hv) E hz hzr hzH hnE'),
+        (lent_avoids_before hσ hadm hf htime hinj hdr time hsp (hTH hv) E hz hzr hzH hnE'),
         (lent_buildable (cfg := cfg.at v) hvalid hz hzr
         ((Converge.inv_before (cfg := cfg) (tr := tr) E v).unkept (by rw [hZt])
           (by change _ ≤ (Z.disk.blk z).round; rw [hzr]
@@ -184,7 +184,7 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
         (fun j hj => by rw [hj₁] at hj; cases hj; exact ⟨hj₁i, hj₁r, hj₁c⟩)
         (hqT.trans (Finset.card_le_card fun w hw => ?_))
         (fresh_before hid htime (hTH hv) hZt _ _))
-      refine Finset.mem_sdiff.mpr ⟨?_, Converge.not_excluded htime hev (hTH hw) (hTH hv) E n⟩
+      refine Finset.mem_sdiff.mpr ⟨?_, Converge.not_excluded htime hev hdr (hTH hw) (hTH hv) E n⟩
       rw [mem_authorsIn]
       by_cases hwv : w = v
       · subst hwv
@@ -219,8 +219,8 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
     (hf : Hᶜ.card ≤ cfg.f) (hTH : T ⊆ H) (hqT : cfg.q ≤ T.card)
     (hcT : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) (hq : 2 ≤ cfg.q)
     (hid : Function.Injective cfg.idOf) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout r)
-    (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr) (hev :
-        Converge.EvidenceAuthentic cfg H tr)
+    (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
+    (hev : Converge.EvidenceAuthentic cfg H tr) (hdr : cfg.drops = false)
     (hmono : TimeMono tr time) (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁)
     (hwait : TimersAfterSet cfg H tr time) (hstart : StartedBy T tr time gst)
     {D : Finset Validator} {nE : ℕ} (hsp : Spread cfg H tr D nE)
@@ -240,9 +240,8 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
     · rw [h] at this; simp at this; omega
     · rfl
   -- on its view the run is decided
-  obtain ⟨V, hiff, hdw, -⟩ := run_commits hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hev
-      hmono harr
-    hwait hstart hsp hnE hc hspan hlead hn₀ hbelow htop ht₁ hv
+  obtain ⟨V, hiff, hdw, -⟩ := run_commits hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hdr
+      hev hmono harr hwait hstart hsp hnE hc hspan hlead hn₀ hbelow htop ht₁ hv
   -- `v` at `t + A`, settled
   set E := eventsBy tr time (t + (Δ + Δₛ)) with hE
   obtain ⟨h₁, h₂, -⟩ := rises_before (cfg := cfg) v
@@ -347,12 +346,12 @@ theorem decidesBy {cfg : Config Validator BlockId Payload} {T : Finset Validator
 /-- **The reliable nodes produce rounds and decide.** -/
 theorem progresses : Progresses := by
   intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t₁ D nE hσ hadm hfa hf hTH hqT
-    hcT hq hid hto htime hinj hev hmono hsp hnE hdel hfire hwait hsync hstart hup
+    hcT hq hid hto htime hinj hev hdr hmono hsp hnE hdel hfire hwait hsync hstart hup
   have harr := arrival_of_delivered (H := H) hTH hmono hdel hsync hup
-  have hp := produces hσ hadm hfa hf hTH hqT hq hid htime hinj hev hmono harr
-    (TopTimerBy.of_fire hmono hfire) hstart hsp hnE
-  have hd := decides hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hev hmono harr hwait hstart
-    hsp hnE
+  have hp := produces hσ hadm hfa hf hTH hqT hq hid htime hinj hev hdr hmono harr
+    (TopTimerBy.of_fire hmono hdr hfire) hstart hsp hnE
+  have hd := decides hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hev hdr hmono harr hwait
+    hstart hsp hnE
   exact ⟨hp, hd, decidesBy hp hd⟩
 
 /-- **The reliable nodes recover from crashes**: past `G = max t_r gst + W`
@@ -361,7 +360,7 @@ round's timer fires within its timeout (`topTimerBy_of_up`), so
 production and decision hold from `G`. -/
 theorem recovers : Recovers := by
   intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t_r t₁ D nE hσ hadm hfa hf hTH
-    hqT hcT hq hid hto htime hinj hev hmono hsp hnE hdel hfire hwait hsync hup hstart G
+    hqT hcT hq hid hto htime hinj hev hdr hmono hsp hnE hdel hfire hwait hsync hup hstart G
   have hrG : t_r ≤ G := (le_max_left _ _).trans (Nat.le_add_right _ _)
   have hgG : gst ≤ G := (le_max_right _ _).trans (Nat.le_add_right _ _)
   have harr := arrival_of_recovered hσ hadm hfa hf hid htime hinj hTH hmono hdel hsync hup hfire
@@ -375,10 +374,10 @@ theorem recovers : Recovers := by
       (show max t_r gst ≤ G from Nat.le_add_right _ _))).1
     change topAt cfg tr time v (max t_r gst) ≤ topAt cfg tr time v G at this
     exact (hnE v hv).trans this
-  have hp := produces hσ hadm hfa hf hTH hqT hq hid htime hinj hev hmono harr
-    (topTimerBy_of_up hmono hup hfire hrG) hstart' hsp hnE'
-  have hd := decides hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hev hmono harr hwait hstart'
-    hsp hnE'
+  have hp := produces hσ hadm hfa hf hTH hqT hq hid htime hinj hev hdr hmono harr
+    (topTimerBy_of_up hmono hdr hup hfire hrG) hstart' hsp hnE'
+  have hd := decides hσ hadm hfa hf hTH hqT hcT hq hid hto htime hinj hev hdr hmono harr hwait
+    hstart' hsp hnE'
   exact ⟨hp, hd, decidesBy hp hd⟩
 
 /-- **The reliable nodes' liveness**, without crashes and with them. -/

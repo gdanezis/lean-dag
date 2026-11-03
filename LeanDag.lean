@@ -592,7 +592,6 @@ import LeanDag.Node.Helpers.Decided
 import LeanDag.Node.Runs.Statement
 import LeanDag.Node.Runs.Proof
 import LeanDag.Node.Model.Trace
-import LeanDag.Node.Model.Order
 import LeanDag.Node.Model.Timed
 import LeanDag.Node.Converge.Statement
 import LeanDag.Node.Helpers.Flush

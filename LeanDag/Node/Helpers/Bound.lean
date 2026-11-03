@@ -313,9 +313,9 @@ theorem Steady.progress : ∀ (fuel : ℕ) {s : State Validator BlockId Payload}
     · exact h
 
 omit [Fintype Validator] in
-theorem Steady.decideStep {s : State Validator BlockId Payload} (h : Steady cfg s) :
-    Steady cfg (Node.decideStep cfg s).1 := by
-  refine h.of_same (decideStep_disk s) ?_ (decideStep_syncs s)
+theorem Steady.decideStep {s : State Validator BlockId Payload} (h : Steady cfg s)
+    (hd : cfg.drops = false) : Steady cfg (Node.decideStep cfg s).1 := by
+  refine h.of_same (decideStep_disk s hd) ?_ (decideStep_syncs s)
   unfold Node.decideStep
   dsimp only
   split
@@ -358,21 +358,21 @@ theorem Steady.flushSyncs : ∀ (fuel : ℕ) {s : State Validator BlockId Payloa
         exact h.2.1 x hx
 
 omit [Fintype Validator] in
-theorem Steady.advance {s : State Validator BlockId Payload} (h : Steady cfg s) :
-    Steady cfg (Node.advance cfg s).1 := by
+theorem Steady.advance {s : State Validator BlockId Payload} (h : Steady cfg s)
+    (hd : cfg.drops = false) : Steady cfg (Node.advance cfg s).1 := by
   obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) (Node.pass cfg s).1
   have hp : Steady cfg (Node.pass cfg s).1 :=
-    Steady.flushSyncs _ (Steady.decideStep (Steady.progress _ h))
+    Steady.flushSyncs _ (Steady.decideStep (Steady.progress _ h) hd)
   unfold Node.advance
   dsimp only
   rw [ha]
   exact hp.of_same (Store.Restrips.refl _ 0) rfl rfl
 
 omit [Fintype Validator] in
-theorem Steady.settle {s : State Validator BlockId Payload} (h : Steady cfg s) :
-    Steady cfg (Node.settle cfg s).1 :=
+theorem Steady.settle {s : State Validator BlockId Payload} (hd : cfg.drops = false)
+    (h : Steady cfg s) : Steady cfg (Node.settle cfg s).1 :=
   (quiesce_rel (P := Steady cfg) (R := fun _ _ _ => True) (fun _ => trivial)
-    (fun _ _ _ _ _ _ _ => trivial) (fun _ hs => ⟨trivial, hs.advance⟩) _ s h).2
+    (fun _ _ _ _ _ _ _ => trivial) (fun _ hs => ⟨trivial, hs.advance hd⟩) _ s h).2
 
 /-! ## A step -/
 
@@ -382,13 +382,13 @@ block map the piece agrees with: what it met is held, and is the block or
 a reference the piece gives a block it met. -/
 theorem pieceAt_held {g : BlockId → Block Validator BlockId Payload}
     {L : List (BlockId × Block Validator BlockId Payload)} {t : BlockId}
-    {st : Store Validator BlockId Payload} (hst : ReadsAs g st) (hL : ∀ e ∈ L, e.2 = g e.1)
-    (ht : t ∈ st.ids) : ∀ k,
+    {st : Store Validator BlockId Payload} (hst : ReadsAs g st) (hcl : st.FullClosed)
+    (hL : ∀ e ∈ L, e.2 = g e.1) (ht : t ∈ st.ids) : ∀ k,
     (∀ y ∈ (pieceAt L t k).1, y = t ∨ ∃ z ∈ (pieceAt L t k).2, y ∈ pieceRefs L z) ∧
     (∀ x ∈ (pieceAt L t k).2, x ∈ st.ids ∧ (x = t ∨ ∃ z ∈ (pieceAt L t k).2, x ∈ pieceRefs L z))
   | 0 => ⟨fun y hy => Or.inl (List.mem_singleton.mp hy), fun _ h => absurd h List.not_mem_nil⟩
   | k + 1 => by
-    obtain ⟨h₁, h₂⟩ := pieceAt_held hst hL ht k
+    obtain ⟨h₁, h₂⟩ := pieceAt_held hst hcl hL ht k
     rw [pieceAt_succ]
     set w := pieceAt L t k
     unfold pieceLevel
@@ -413,7 +413,7 @@ theorem pieceAt_held {g : BlockId → Block Validator BlockId Payload}
       have hzs := (h₂ z hz).1
       have hy' := (pieceRefs_of_map L hL hzL).mp hy
       rw [← hst z hzs] at hy'
-      exact (st.full_refs z hzs y hy').1
+      exact (hcl z hzs y hy').1
     refine ⟨fun y hy => ?_, fun x hx => ?_⟩
     · obtain ⟨z, hz, hyz⟩ := List.mem_flatMap.mp hy
       exact Or.inr ⟨z, List.mem_append_right _ hz, hyz⟩
@@ -432,6 +432,7 @@ theorem takeIn_referenced {g : BlockId → Block Validator BlockId Payload}
     {s : State Validator BlockId Payload} {t : BlockId × Block Validator BlockId Payload}
     {L : List (BlockId × Block Validator BlockId Payload)}
     (hst : ReadsAs g (Node.absorb cfg s (inHistory cfg t L)).disk)
+    (hcl : (Node.absorb cfg s (inHistory cfg t L)).disk.FullClosed)
     (hL : ∀ e ∈ hashed cfg L, g e.1 = e.2)
     (ht : t.1 ∈ (Node.absorb cfg s (inHistory cfg t L)).disk.ids)
     {i : BlockId} (hi : i ∈ (Node.absorb cfg s (inHistory cfg t L)).disk.ids)
@@ -445,9 +446,9 @@ theorem takeIn_referenced {g : BlockId → Block Validator BlockId Payload}
   obtain ⟨e, he, rfl, -⟩ := foldl_new _ s.disk hi hin
   have hf := ((mem_inHistory L).mp he).2.2
   have hL' : ∀ e ∈ hashed cfg L, e.2 = g e.1 := fun e he => (hL e he).symm
-  rcases (pieceAt_held hst hL' ht _).2 e.1 hf with ⟨-, het | ⟨z, hz, hez⟩⟩
+  rcases (pieceAt_held hst hcl hL' ht _).2 e.1 hf with ⟨-, het | ⟨z, hz, hez⟩⟩
   · exact absurd het hit
-  · have hzs := ((pieceAt_held hst hL' ht _).2 z hz).1
+  · have hzs := ((pieceAt_held hst hcl hL' ht _).2 z hz).1
     have hzL : z ∈ (hashed cfg L).map Prod.fst := by
       unfold pieceRefs at hez
       cases hf : (hashed cfg L).find? (fun e => decide (e.1 = z)) with
@@ -464,7 +465,8 @@ omit [Fintype Validator] in
 /-- **A piece taken in header first keeps the state steady**, on a store
 reading as a block map that the piece and the sync's block agree with. -/
 theorem Steady.takeIn {g : BlockId → Block Validator BlockId Payload}
-    {s : State Validator BlockId Payload} (h : Steady cfg s) {u : Validator}
+    {s : State Validator BlockId Payload} (h : Steady cfg s) (hcl : s.disk.FullClosed)
+    {u : Validator}
     {t : BlockId × Block Validator BlockId Payload} {A : List BlockId} (he : (u, t, A) ∈ s.syncs)
     {L : List (BlockId × Block Validator BlockId Payload)}
     (hst : ReadsAs g (Node.takeIn cfg s t (inHistory cfg t L)).disk)
@@ -483,7 +485,7 @@ theorem Steady.takeIn {g : BlockId → Block Validator BlockId Payload}
           i ∉ ((Node.absorb cfg s (inHistory cfg t L)).disk.full j).refs) → i = t.1 := by
       intro i hi hin hiu
       by_contra hit
-      obtain ⟨z, hz, hiz⟩ := takeIn_referenced hst' hL hc hi hin hit
+      obtain ⟨z, hz, hiz⟩ := takeIn_referenced hst' (closed_absorb s _ hcl) hL hc hi hin hit
       exact hiu z hz hiz
     obtain rfl := hone i hi hin hiu
     have hb : (Node.absorb cfg s (inHistory cfg t L)).disk.full t.1 = t.2 := by
@@ -495,7 +497,8 @@ theorem Steady.takeIn {g : BlockId → Block Validator BlockId Payload}
 /-- **A step keeps the state steady**, on a disk after it reading as a block
 map that what the step is given and the syncs' blocks agree with. -/
 theorem Steady.step {g : BlockId → Block Validator BlockId Payload}
-    {s : State Validator BlockId Payload} (h : Steady cfg s) (inp : Input Validator BlockId Payload)
+    {s : State Validator BlockId Payload} (h : Steady cfg s) (hcl : s.disk.FullClosed)
+    (hd : cfg.drops = false) (inp : Input Validator BlockId Payload)
     (hR : ReadsAs g (Node.step cfg s inp).1.disk)
     (hP : ∀ e ∈ delivered cfg [inp], g e.1 = e.2)
     (hS : ∀ e ∈ s.syncs, g e.2.1.1 = e.2.1.2) : Steady cfg (Node.step cfg s inp).1 := by
@@ -503,7 +506,7 @@ theorem Steady.step {g : BlockId → Block Validator BlockId Payload}
   | start =>
     rw [step_start_eq]
     split_ifs with h₁ h₂
-    · exact Steady.settle (h.own (hrefs := fun _ hj => absurd hj (Finset.notMem_empty _))
+    · exact Steady.settle hd (h.own (hrefs := fun _ hj => absurd hj (Finset.notMem_empty _))
         (hpred := fun j hj => absurd hj (Finset.notMem_empty j)) (Store.Restrips.refl _ 0) rfl rfl
         rfl)
     · exact h
@@ -511,14 +514,15 @@ theorem Steady.step {g : BlockId → Block Validator BlockId Payload}
   | deliver u id b =>
     rw [step_deliver_eq]
     split_ifs with hg hr hc
-    · refine Steady.settle (Steady.tidy ?_ (h.2.2.sublist (Thins.accept (cfg := cfg) s id b).sub))
+    · refine Steady.settle hd
+        (Steady.tidy ?_ (h.2.2.sublist (Thins.accept (cfg := cfg) s id b).sub))
       have hT := h.1.absorb (L := [(id, b)])
         (fun e he e' he' _ _ => by
           rw [List.mem_singleton] at he he'; rw [he, he'])
         (fun e he _ => by
           rw [List.mem_singleton] at he; rw [he, hg.2.1]; exact hg.2.2.2.1)
       exact hT
-    · refine Steady.settle ⟨h.1.of_same (Store.Restrips.refl _ 0) subset_rfl, fun e he => ?_,
+    · refine Steady.settle hd ⟨h.1.of_same (Store.Restrips.refl _ 0) subset_rfl, fun e he => ?_,
         h.2.2.fresh hg.2.1⟩
       rcases List.mem_cons.mp he with rfl | he
       · exact hg.2.2.2.1
@@ -542,7 +546,7 @@ theorem Steady.step {g : BlockId → Block Validator BlockId Payload}
       have ht := hS _ he
       rcases step_stream_cases (cfg := cfg) h.2.2 he L with ⟨-, hs⟩ | ⟨-, hs⟩
       · rw [hs] at hR ⊢
-        exact Steady.settle (h.takeIn he (hR.of_grows (Grows.settle _)) hL ht)
+        exact Steady.settle hd (h.takeIn hcl he (hR.of_grows (Grows.settle _ hd)) hL ht)
       · set s₁ := Node.takeIn cfg s t (inHistory cfg t L) with hs₁
         set s₂ : State Validator BlockId Payload := { s₁ with
           syncs := s₁.syncs.map fun x =>
@@ -550,9 +554,9 @@ theorem Steady.step {g : BlockId → Block Validator BlockId Payload}
           with hs₂
         have hs' : (Node.step cfg s (.stream w L)).1 = (Node.settle cfg s₂).1 := by rw [hs]
         rw [hs'] at hR ⊢
-        have hg : Grows s₁.disk (Node.settle cfg s₂).1.disk := Grows.settle s₂
-        have h₁ := h.takeIn he (hR.of_grows hg) hL ht
-        refine Steady.settle ⟨h₁.1.of_same (Store.Restrips.refl _ 0) subset_rfl, fun x hx => ?_,
+        have hg : Grows s₁.disk (Node.settle cfg s₂).1.disk := Grows.settle s₂ hd
+        have h₁ := h.takeIn hcl he (hR.of_grows hg) hL ht
+        refine Steady.settle hd ⟨h₁.1.of_same (Store.Restrips.refl _ 0) subset_rfl, fun x hx => ?_,
           h.2.2.extend (Thins.takeIn (cfg := cfg) s t _).sub he⟩
         obtain ⟨x', hx', hxe⟩ := List.mem_map.mp hx
         rw [← hxe]
@@ -562,12 +566,12 @@ theorem Steady.step {g : BlockId → Block Validator BlockId Payload}
         · exact h₁.2.1 x' hx'
   | timer r =>
     rw [step_timer_fst]
-    exact Steady.settle (h.of_same (Store.Restrips.refl _ 0) rfl rfl)
+    exact Steady.settle hd (h.of_same (Store.Restrips.refl _ 0) rfl rfl)
   | syncRequest peer t fr ids => exact h
   | ask peer r => exact h
   | restart =>
     rw [step_restart_fst]
-    exact Steady.settle (h.of_same (Store.Restrips.refl _ 0) rfl rfl)
+    exact Steady.settle hd (h.of_same (Store.Restrips.refl _ 0) rfl rfl)
 
 /-! ## Along a trace -/
 
@@ -577,9 +581,9 @@ variable {cfg : Config Validator BlockId Payload} {H : Finset Validator}
 variable {tr : Trace Validator BlockId Payload}
 
 /-- **An honest node is steady** before every event, with an injective
-hash. -/
-theorem steady_before (hinj : Converge.HashInjective cfg H tr) {v : Validator} (hv : v ∈ H) :
-    ∀ i, Steady (cfg.at v) (stateBefore cfg tr i v)
+hash, when it does not drop. -/
+theorem steady_before (hinj : Converge.HashInjective cfg H tr) (hd : cfg.drops = false)
+    {v : Validator} (hv : v ∈ H) : ∀ i, Steady (cfg.at v) (stateBefore cfg tr i v)
   | 0 => by
     have hd : (stateBefore cfg tr 0 v).disk.ids = ∅ := by
       simp [stateBefore, inputsBefore, run, State.init, Store.empty]
@@ -596,10 +600,11 @@ theorem steady_before (hinj : Converge.HashInjective cfg H tr) {v : Validator} (
     · obtain ⟨inp, hi⟩ := he
       have hR := Converge.reads_before hinj hv (i + 1)
       rw [Converge.step_before hi] at hR ⊢
-      exact (steady_before hinj hv i).step inp hR
+      exact (steady_before hinj hd hv i).step
+        ((Converge.inv_before (cfg := cfg) (tr := tr) i v).valid hd).fullClosed hd inp hR
         (fun x hx => Converge.gT_of_known hinj (Or.inl ⟨i, v, inp, hi, hv, hx⟩))
         (Converge.pend_before hinj hv i)
-    · rw [Converge.same_before fun inp h => he ⟨inp, h⟩]; exact steady_before hinj hv i
+    · rw [Converge.same_before fun inp h => he ⟨inp, h⟩]; exact steady_before hinj hd hv i
 
 end Trace
 

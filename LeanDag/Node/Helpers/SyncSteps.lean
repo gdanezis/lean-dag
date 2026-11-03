@@ -7,11 +7,12 @@ A detected author has two blocks at one round on the disk (`TwinsOn`,
 `TwinsOn.step`). The syncs name distinct peers, none the node itself,
 ask for distinct names and hold blocks of their peers (`SyncsOn`,
 `SyncsOn.step`, `step_peer_ne`, `syncsOn_run`), so there are at most
-`n − 1` (`syncs_length_le`). A settle only drops syncs whose block is held
-or whose peer is detected, and asks for nothing (`Thins.settle`,
-`noAsk_settle`). For one sync `(u, t, A)`, a step keeps it unless its
-block is held, its peer detected, or a delivery from its peer is above
-its block (`step_keeps`); a sync after a step was asked for there or
+`n − 1` (`syncs_length_le`). A settle asks for nothing, and at a node
+that does not drop blocks only drops syncs whose block is held or whose
+peer is detected (`Thins.settle`, `noAsk_settle`). For one sync
+`(u, t, A)` at such a node, a step keeps it unless its block is held, its
+peer detected, or a delivery from its peer is above its block
+(`step_keeps`); a sync after a step was asked for there or
 held before (`step_origin`); its names after a step are those of every
 request for it there (`step_ask`), and with no such request among the
 old names (`step_same`). A stream piece that leads to no request for a
@@ -47,31 +48,34 @@ theorem Kept.tryBuild (hf : cfg.Faithful) {s s' : State Validator BlockId Payloa
 /-! ## Thinning the syncs -/
 
 variable (cfg) in
-/-- **`s'` thins the syncs of `s`**: it keeps a part of them, dropping only
-those whose block it holds or whose peer it detected, grows the disk and
-the detected authors, and keeps `EvidenceOn`, and `Kept` under a faithful
-payload source. -/
+/-- **`s'` thins the syncs of `s`**: it keeps a part of them, grows the
+detected authors, and keeps `Kept` under a faithful payload source; when
+the node does not drop, it drops only syncs whose block it holds or whose
+peer it detected, grows the disk, and keeps `EvidenceOn`. -/
 structure Thins (s s' : State Validator BlockId Payload) : Prop where
   sub : s'.syncs.Sublist s.syncs
-  kept : ∀ e ∈ s.syncs, e ∈ s'.syncs ∨ e.2.1.1 ∈ s'.disk.ids ∨ e.1 ∈ s'.detected
-  grows : Grows s.disk s'.disk
+  kept : cfg.drops = false →
+    ∀ e ∈ s.syncs, e ∈ s'.syncs ∨ e.2.1.1 ∈ s'.disk.ids ∨ e.1 ∈ s'.detected
+  grows : cfg.drops = false → Grows s.disk s'.disk
   det : s.detected ⊆ s'.detected
-  twins : EvidenceOn cfg s → EvidenceOn cfg s'
+  twins : cfg.drops = false → EvidenceOn cfg s → EvidenceOn cfg s'
   holds : cfg.Faithful → Kept cfg s → Kept cfg s'
 
 omit [Fintype Validator] in
 theorem Thins.refl (s : State Validator BlockId Payload) : Thins cfg s s :=
-  ⟨List.Sublist.refl _, fun _ h => Or.inl h, Grows.refl _, subset_rfl, id, fun _ h => h⟩
+  ⟨List.Sublist.refl _, fun _ _ h => Or.inl h, fun _ => Grows.refl _, subset_rfl, fun _ => id,
+    fun _ h => h⟩
 
 omit [Fintype Validator] in
 theorem Thins.trans {a b c : State Validator BlockId Payload} (h₁ : Thins cfg a b) (h₂ : Thins cfg
     b c) :
     Thins cfg a c := by
-  refine ⟨h₂.sub.trans h₁.sub, fun e he => ?_, h₁.grows.trans h₂.grows, h₁.det.trans h₂.det,
-    h₂.twins ∘ h₁.twins, fun hf h => h₂.holds hf (h₁.holds hf h)⟩
-  rcases h₁.kept e he with h | h | h
-  · exact h₂.kept e h
-  · exact Or.inr (Or.inl (h₂.grows.1 h))
+  refine ⟨h₂.sub.trans h₁.sub, fun hd e he => ?_, fun hd => (h₁.grows hd).trans (h₂.grows hd),
+    h₁.det.trans h₂.det, fun hd => h₂.twins hd ∘ h₁.twins hd,
+    fun hf h => h₂.holds hf (h₁.holds hf h)⟩
+  rcases h₁.kept hd e he with h | h | h
+  · exact h₂.kept hd e h
+  · exact Or.inr (Or.inl ((h₂.grows hd).1 h))
   · exact Or.inr (Or.inr (h₂.det h))
 
 omit [Fintype Validator] in
@@ -81,8 +85,8 @@ theorem Thins.of_grows {s s' : State Validator BlockId Payload} (hg : Grows s.di
     (hs : s'.syncs = s.syncs) (hd : s'.detected = s.detected)
     (he : s'.evidence = s.evidence) (hk : cfg.Faithful → Kept cfg s → Kept cfg s') :
     Thins cfg s s' :=
-  ⟨hs ▸ List.Sublist.refl _, fun _ he => Or.inl (hs ▸ he), hg, hd ▸ subset_rfl,
-    fun h => h.grow hg hd he, hk⟩
+  ⟨hs ▸ List.Sublist.refl _, fun _ _ he => Or.inl (hs ▸ he), fun _ => hg, hd ▸ subset_rfl,
+    fun _ h => h.grow hg hd he, hk⟩
 
 omit [Fintype Validator] in
 /-- A state with the disk, the syncs, the detected authors and the evidence
@@ -96,8 +100,8 @@ omit [Fintype Validator] in
 theorem Thins.accept (s : State Validator BlockId Payload) (id : BlockId)
     (b : Block Validator BlockId Payload) : Thins cfg s (Node.accept cfg s id b) := by
   have hr := accept_rest (cfg := cfg) (s := s) (id := id) (b := b)
-  refine ⟨hr.2.1 ▸ List.Sublist.refl _, fun e he => Or.inl (hr.2.1 ▸ he), ?_, hr.2.2.2.2.2.2.2.2.2,
-    fun h => h.accept id b, fun _ h => h.accept id b⟩
+  refine ⟨hr.2.1 ▸ List.Sublist.refl _, fun _ e he => Or.inl (hr.2.1 ▸ he), fun _ => ?_,
+    hr.2.2.2.2.2.2.2.2.2, fun _ h => h.accept id b, fun _ h => h.accept id b⟩
   rw [accept_disk]; exact Grows.accept _ _ _
 
 omit [Fintype Validator] in
@@ -111,7 +115,8 @@ theorem Thins.absorb (s : State Validator BlockId Payload) :
 
 omit [Fintype Validator] in
 theorem Thins.tidy (s : State Validator BlockId Payload) : Thins cfg s (Node.tidy s) := by
-  refine ⟨List.filter_sublist, fun e he => ?_, Grows.refl _, subset_rfl, id, fun _ h => h⟩
+  refine ⟨List.filter_sublist, fun _ e he => ?_, fun _ => Grows.refl _, subset_rfl, fun _ => id,
+    fun _ h => h⟩
   by_cases hk : e.2.1.1 ∉ s.disk.ids ∧ e.1 ∉ s.detected
   · exact Or.inl (List.mem_filter.mpr ⟨he, by simp only [decide_eq_true_eq]; exact hk⟩)
   · right
@@ -166,11 +171,15 @@ theorem Thins.decideStep (s : State Validator BlockId Payload) :
     split
     · simp
     · exact ⟨rfl, rfl⟩
-  exact Thins.of_same (decideStep_disk s) (decideStep_syncs s) hd.1 hd.2
+  have ho : cfg.drops = false → Thins cfg s (Node.decideStep cfg s).1 := fun hdr =>
+    Thins.of_same (decideStep_disk s hdr) (decideStep_syncs s) hd.1 hd.2
+  refine ⟨by rw [decideStep_syncs], fun hdr => (ho hdr).kept hdr, fun hdr => (ho hdr).grows hdr,
+    fun a ha => by rw [hd.1]; exact ha, fun hdr => (ho hdr).twins hdr,
+    fun _ h => h.shrinks (decideStep_shrinks s) hd.2⟩
 
 omit [Fintype Validator] in
-theorem Thins.advance (s : State Validator BlockId Payload) : Thins cfg s (Node.advance cfg s).1 :=
-    by
+theorem Thins.advance (s : State Validator BlockId Payload) :
+    Thins cfg s (Node.advance cfg s).1 := by
   obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) (Node.pass cfg s).1
   have hp : Thins cfg s (Node.pass cfg s).1 :=
     ((Thins.progress _ s).trans (Thins.decideStep _)).trans (Thins.flushSyncs _ _)
@@ -621,13 +630,14 @@ theorem SyncsOn.step {s : State Validator BlockId Payload} (h : SyncsOn s)
 
 /-- **Only evidence convicts an author.** -/
 theorem EvidenceOn.step {s : State Validator BlockId Payload} (hs : SyncsOn s)
+    (hd : cfg.drops = false)
     (h : EvidenceOn cfg s) (inp : Input Validator BlockId Payload) :
     EvidenceOn cfg (Node.step cfg s inp).1 := by
   rcases step_form (cfg := cfg) hs inp with hp | ⟨u, id, b, rfl, -, -, -, -, ht, -, -⟩ |
       ⟨u, L, t, A, rfl, -, -, ht, -, -⟩
-  · exact hp.thins.twins h
-  · exact ht.twins h
-  · exact ht.twins ((Thins.takeIn s _ _).twins h)
+  · exact hp.thins.twins hd h
+  · exact ht.twins hd h
+  · exact ht.twins hd ((Thins.takeIn s _ _).twins hd h)
 
 /-- **A step keeps `Kept`** under a faithful payload source. -/
 theorem Kept.step (hf : cfg.Faithful) {s : State Validator BlockId Payload} (hs : SyncsOn s)
@@ -641,7 +651,8 @@ theorem Kept.step (hf : cfg.Faithful) {s : State Validator BlockId Payload} (hs 
 
 /-- **A sync is kept by a step** unless its block is then held, its peer
 detected, or the step delivers from its peer a block above its block. -/
-theorem step_keeps {s : State Validator BlockId Payload} (hs : SyncsOn s) {w : Validator}
+theorem step_keeps {s : State Validator BlockId Payload} (hs : SyncsOn s)
+    (hd : cfg.drops = false) {w : Validator}
     {t : BlockId × Block Validator BlockId Payload} {A : List BlockId} (he : (w, t, A) ∈ s.syncs)
     (inp : Input Validator BlockId Payload) :
     t.1 ∈ (Node.step cfg s inp).1.disk.ids ∨ w ∈ (Node.step cfg s inp).1.detected ∨
@@ -649,7 +660,7 @@ theorem step_keeps {s : State Validator BlockId Payload} (hs : SyncsOn s) {w : V
       ∃ A', (w, t, A') ∈ (Node.step cfg s inp).1.syncs := by
   rcases step_form (cfg := cfg) hs inp with hp | ⟨u, id, b, rfl, hid, hc, -, hr, ht, -, -⟩ |
       ⟨u, L, t₀, A₀, rfl, he₀, hin, ht, -, -⟩
-  · rcases hp.thins.kept _ he with h | h | h
+  · rcases hp.thins.kept hd _ he with h | h | h
     · exact Or.inr (Or.inr (Or.inr ⟨A, h⟩))
     · exact Or.inl h
     · exact Or.inr (Or.inl h)
@@ -659,24 +670,24 @@ theorem step_keeps {s : State Validator BlockId Payload} (hs : SyncsOn s) {w : V
     · have h₁ : (w, t, A) ∈ (u, (id, b), ([] : List BlockId)) ::
           (s.syncs.filter fun e => decide (e.1 ≠ u)) :=
         List.mem_cons_of_mem _ (List.mem_filter.mpr ⟨he, by simpa using hwu⟩)
-      rcases ht.kept _ h₁ with h | h | h
+      rcases ht.kept hd _ h₁ with h | h | h
       · exact Or.inr (Or.inr (Or.inr ⟨A, h⟩))
       · exact Or.inl h
       · exact Or.inr (Or.inl h)
   · have h₁ := Thins.takeIn (cfg := cfg) s t₀ (inHistory cfg t₀ L)
-    rcases h₁.kept _ he with h | h | h
+    rcases h₁.kept hd _ he with h | h | h
     · by_cases hwu : w = u
       · subst hwu
         obtain ⟨-, rfl, -⟩ := Prod.mk.inj (hs.eq he he₀ rfl)
-        rcases ht.kept _ (List.mem_map.mpr ⟨_, hin, if_pos rfl⟩) with h | h | h
+        rcases ht.kept hd _ (List.mem_map.mpr ⟨_, hin, if_pos rfl⟩) with h | h | h
         · exact Or.inr (Or.inr (Or.inr ⟨_, h⟩))
         · exact Or.inl h
         · exact Or.inr (Or.inl h)
-      · rcases ht.kept _ (List.mem_map.mpr ⟨_, h, if_neg hwu⟩) with h | h | h
+      · rcases ht.kept hd _ (List.mem_map.mpr ⟨_, h, if_neg hwu⟩) with h | h | h
         · exact Or.inr (Or.inr (Or.inr ⟨A, h⟩))
         · exact Or.inl h
         · exact Or.inr (Or.inl h)
-    · exact Or.inl (ht.grows.1 h)
+    · exact Or.inl ((ht.grows hd).1 h)
     · exact Or.inr (Or.inl (ht.det h))
 
 /-- **A sync after a step was asked for there, or was there before.** -/
@@ -751,7 +762,8 @@ theorem step_same {s : State Validator BlockId Payload} (hs : SyncsOn s) {w : Va
 it, is not taken in, and each reference of the sync's block or of the
 piece's part in its history that neither the disk nor that part holds was
 asked for by name. -/
-theorem step_stream_stuck {s : State Validator BlockId Payload} (hs : SyncsOn s) {u : Validator}
+theorem step_stream_stuck {s : State Validator BlockId Payload} (hs : SyncsOn s)
+    (hd : cfg.drops = false) {u : Validator}
     {t : BlockId × Block Validator BlockId Payload} {A : List BlockId} (he : (u, t, A) ∈ s.syncs)
     {L : List (BlockId × Block Validator BlockId Payload)}
     (hno : ∀ fr ids, Output.sync u t.1 fr ids ∉ (Node.step cfg s (.stream u L)).2)
@@ -763,9 +775,9 @@ theorem step_stream_stuck {s : State Validator BlockId Payload} (hs : SyncsOn s)
   have h₁ := Thins.takeIn (cfg := cfg) s t (inHistory cfg t L)
   rcases step_stream_cases (cfg := cfg) hs he L with ⟨hnin, h⟩ | ⟨hin, h⟩
   · rw [h] at hheld hdet
-    rcases h₁.kept _ he with h' | h' | h'
+    rcases h₁.kept hd _ he with h' | h' | h'
     · exact absurd h' hnin
-    · exact absurd ((Thins.settle _).grows.1 h') hheld
+    · exact absurd (((Thins.settle _).grows hd).1 h') hheld
     · exact absurd ((Thins.settle _).det h') hdet
   · have hadm : t.1 ∉ (absorb cfg s (inHistory cfg t L)).disk.ids := by
       intro hc

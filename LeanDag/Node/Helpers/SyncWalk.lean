@@ -39,8 +39,9 @@ theorem streamAt_succ (k : ℕ) :
 
 omit [Fintype Validator] [DecidableEq Validator] in
 /-- **The walk's front**, past the first level, is the references of
-blocks it met, and what it met is on the store and carried. -/
-theorem streamAt_spec : ∀ k : ℕ,
+blocks it met, and what it met is on the store and carried, when the store's
+blocks as accepted are closed under references. -/
+theorem streamAt_spec (hcl : st.FullClosed) : ∀ k : ℕ,
     (∀ x ∈ (streamAt st carries t k).2, x ∈ st.ids ∧ carries x = true) ∧
     (∀ x ∈ (streamAt st carries t k).2, ∀ y ∈ (st.full x).refs, y ∈ st.ids → carries y = true →
       y ∈ (streamAt st carries t k).2 ∨ y ∈ (streamAt st carries t k).1) ∧
@@ -51,7 +52,7 @@ theorem streamAt_spec : ∀ k : ℕ,
         simp only [streamAt, Function.iterate_zero, id, List.mem_singleton] at hx
         subst hx; rfl⟩
   | k + 1 => by
-    obtain ⟨h₁, h₂, h₃⟩ := streamAt_spec k
+    obtain ⟨h₁, h₂, h₃⟩ := streamAt_spec hcl k
     rw [streamAt_succ]
     set w := streamAt st carries t k
     unfold streamLevel
@@ -79,7 +80,7 @@ theorem streamAt_spec : ∀ k : ℕ,
       rw [Finset.mem_sort] at hxp
       obtain ⟨hpw, hpst, -, -⟩ := hfront p hp
       have hr : (st.blk p).round + k = (st.blk t).round := h₃ p hpw hpst
-      have hpr : (st.blk x).round + 1 = (st.blk p).round := (st.full_refs p hpst x hxp).2
+      have hpr : (st.blk x).round + 1 = (st.blk p).round := (hcl p hpst x hxp).2
       omega
 
 omit [Fintype Validator] [DecidableEq Validator] in
@@ -100,16 +101,31 @@ theorem mem_streamOf_iff {fr : Validator → ℕ} {ids : List BlockId} {x : Bloc
 
 omit [Fintype Validator] [DecidableEq Validator] in
 /-- **The stream is closed under carried references on the store.** -/
-theorem streamOf_closed {fr : Validator → ℕ} {ids : List BlockId} {x y : BlockId}
+theorem streamOf_closed (hcl : st.FullClosed) {fr : Validator → ℕ} {ids : List BlockId}
+    {x y : BlockId}
     (hx : x ∈ (streamOf st t fr ids).map Prod.fst) (hy : y ∈ (st.full x).refs) (hyst : y ∈ st.ids)
     (hyc : y = t ∨ y ∈ ids ∨ fr (st.blk y).creator ≤ (st.blk y).round) :
     y ∈ (streamOf st t fr ids).map Prod.fst := by
   rw [mem_streamOf_iff] at hx ⊢
   obtain ⟨-, h₂, h₃⟩ := streamAt_spec st (fun i =>
-    decide (i = t ∨ i ∈ ids ∨ fr (st.blk i).creator ≤ (st.blk i).round)) t ((st.blk t).round + 1)
+    decide (i = t ∨ i ∈ ids ∨ fr (st.blk i).creator ≤ (st.blk i).round)) t hcl
+    ((st.blk t).round + 1)
   rcases h₂ x hx y hy hyst (by simpa using hyc) with h | h
   · exact h
   · have := h₃ y h hyst; omega
+
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- What the walk met is on the store and carried. -/
+theorem streamAt_met : ∀ k : ℕ, ∀ x ∈ (streamAt st carries t k).2, x ∈ st.ids ∧ carries x = true
+  | 0 => fun _ h => absurd h List.not_mem_nil
+  | k + 1 => fun x hx => by
+    rw [streamAt_succ] at hx
+    unfold streamLevel at hx
+    rcases List.mem_append.mp hx with hx | hx
+    · exact streamAt_met k x hx
+    · have := List.mem_filter.mp (List.mem_dedup.mp hx)
+      simp only [Bool.and_eq_true, decide_eq_true_eq] at this
+      exact ⟨this.2.1.1, this.2.1.2⟩
 
 omit [Fintype Validator] [DecidableEq Validator] in
 /-- What the walk met it keeps. -/
@@ -138,7 +154,7 @@ theorem mem_streamOf {fr : Validator → ℕ} {ids : List BlockId}
     e.1 ∈ st.ids ∧ e.2 = st.full e.1 := by
   unfold streamOf at he
   obtain ⟨i, hi, rfl⟩ := List.mem_map.mp (List.mem_mergeSort.mp he)
-  exact ⟨((streamAt_spec st _ t _).1 i hi).1, rfl⟩
+  exact ⟨(streamAt_met st _ t _ i hi).1, rfl⟩
 
 end Stream
 

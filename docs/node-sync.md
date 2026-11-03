@@ -127,7 +127,8 @@ reference `x` come from at least `q` authors (`Bypassed U ordered q x`).
 * **Keeping.** The node keeps its ordered blocks and, for each slot it
   has decided, a proof of the verdict. It drops every other bypassed
   block (D13). Its disk stays a bypass view of `ordered` at `H`
-  (`BypassRun.inv`, with `BypassRun.drop`).
+  (`BypassRun.inv`, with `BypassRun.drop`). On the node this is `drop`
+  (`Node/Model/Step.lean`), behind the switch `Config.drops`.
 * **Catch-up.** A node whose top has not moved for a time `T_c` asks
   each peer for the proof of the verdict of its next undecided slot
   and, for a commit, the blocks the commit orders. It decides on the

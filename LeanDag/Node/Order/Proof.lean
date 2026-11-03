@@ -48,7 +48,8 @@ variable {tr : Trace Validator BlockId Payload}
 held on its disk, and each of its verdicts is a verdict on the record. -/
 theorem ordered_eq (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    {v : Validator} (hv : v ∈ H) (i n : ℕ) (hn : n ≤ (stateBefore cfg tr i v).lo) :
+    (hdr : cfg.drops = false) {v : Validator} (hv : v ∈ H) (i n : ℕ)
+    (hn : n ≤ (stateBefore cfg tr i v).lo) :
     let U := globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)
     let s := stateBefore cfg tr i v
     s.ordered (S := cfg.slots) cfg.q n =
@@ -75,7 +76,7 @@ theorem ordered_eq (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     exact he
   have hcut := cut_before hσ hadm hf htime hinj i v hv
   have hn' : n ≤ s.lo := hn
-  rcases commitInv_before hσ hadm hf htime hinj hv i with h0 | ⟨V, N, hV, heq⟩
+  rcases commitInv_before hσ hadm hf htime hinj hdr hv i with h0 | ⟨V, N, hV, heq⟩
   · have hlo : s.lo = 0 := by
       have h := congrArg List.length hmap
       rw [h0] at h
@@ -98,9 +99,10 @@ theorem ordered_eq (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     exact hcut.2 e he
 
 theorem agrees : Agrees := by
-  intro Validator BlockId Payload _ _ _ cfg H tr v w i j n hσ hadm hf htime hinj hv hw hnv hnw
-  obtain ⟨h1, -, hv'⟩ := ordered_eq hσ hadm hf htime hinj hv i n hnv
-  obtain ⟨h2, -, hw'⟩ := ordered_eq hσ hadm hf htime hinj hw j n hnw
+  intro Validator BlockId Payload _ _ _ cfg H tr v w i j n hσ hadm hf htime hinj hdr hv hw hnv
+    hnw
+  obtain ⟨h1, -, hv'⟩ := ordered_eq hσ hadm hf htime hinj hdr hv i n hnv
+  obtain ⟨h2, -, hw'⟩ := ordered_eq hσ hadm hf htime hinj hdr hw j n hnw
   rw [h1, h2]
   haveI : Validity.Quorate (ValidAt (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) cfg.q Clause.none) cfg.q :=
@@ -116,8 +118,8 @@ theorem agrees : Agrees := by
   exact AnchoredRule.decided_agree hlaws trivial d₁ d₂
 
 theorem held : Held := by
-  intro Validator BlockId Payload _ _ _ cfg H tr v i n hσ hadm hf htime hinj hv hn
-  obtain ⟨h1, h2, -⟩ := ordered_eq hσ hadm hf htime hinj hv i n hn
+  intro Validator BlockId Payload _ _ _ cfg H tr v i n hσ hadm hf htime hinj hdr hv hn
+  obtain ⟨h1, h2, -⟩ := ordered_eq hσ hadm hf htime hinj hdr hv i n hn
   rw [h1]
   exact h2
 

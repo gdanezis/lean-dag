@@ -1,12 +1,13 @@
 import LeanDag.Node.Converge.Statement
 import LeanDag.Node.Live.Statement
-import LeanDag.Node.Model.Order
+import LeanDag.Node.Model.Step
 /-!
 # The blocks a node orders — statement
 
 `docs/dos-bounds.md` §5, Phase 3.1. Over a trace with timely authentication
-and an injective hash, at the bounded vote of an admissible configuration
-with at most `f` nodes outside the honest set `H`, before any events:
+and an injective hash, of nodes that do not drop (`cfg.drops = false`), at
+the bounded vote of an admissible configuration with at most `f` nodes
+outside the honest set `H`, before any events:
 
 * **two honest nodes order the same blocks** after any number of slots both
   have decided (`Agrees`);
@@ -28,7 +29,8 @@ def Agrees : Prop :=
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload) (v w : Validator) (i j n : ℕ),
     cfg.σ = boundedSel → cfg.Admissible → Hᶜ.card ≤ cfg.f →
-    Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr → v ∈ H → w ∈ H →
+    Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr → cfg.drops = false →
+    v ∈ H → w ∈ H →
     n ≤ (stateBefore cfg tr i v).lo → n ≤ (stateBefore cfg tr j w).lo →
     (stateBefore cfg tr i v).ordered (S := cfg.slots) cfg.q n =
       (stateBefore cfg tr j w).ordered (S := cfg.slots) cfg.q n
@@ -39,8 +41,8 @@ def Held : Prop :=
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload) (v : Validator) (i n : ℕ),
     cfg.σ = boundedSel → cfg.Admissible → Hᶜ.card ≤ cfg.f →
-    Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr → v ∈ H →
-    n ≤ (stateBefore cfg tr i v).lo →
+    Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr → cfg.drops = false →
+    v ∈ H → n ≤ (stateBefore cfg tr i v).lo →
     (stateBefore cfg tr i v).ordered (S := cfg.slots) cfg.q n ⊆
       (stateBefore cfg tr i v).disk.ids
 

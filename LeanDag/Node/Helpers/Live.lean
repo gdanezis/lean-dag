@@ -27,7 +27,7 @@ build**, at a state whose disk is a cut of the run's record grown from
 the disk before the event. -/
 theorem build_witness (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    {v : Validator} (hv : v ∈ H) {i : ℕ}
+    (hdr : cfg.drops = false) {v : Validator} (hv : v ∈ H) {i : ℕ}
     {inp : Input Validator BlockId Payload} (hi : tr[i]? = some (v, inp))
     {e : BlockId × Block Validator BlockId Payload} (he : e ∈ persists (outputsAt cfg tr i))
     (hr : e.2.round ≠ 0) :
@@ -42,9 +42,9 @@ theorem build_witness (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : 
   rw [outputsAt_eq hi] at he
   rcases step_witness (cfg := cfg.at v) hg
       (hinv.mono fun x hx => hK x (knownBefore_knownOf hx))
-      (cut_before hσ hadm hf htime hinj i v hv).1 (Held.run _ Held.init)
-      (ownTop_before (cfg := cfg) i) (Converge.evidenceOn_before (cfg := cfg) (tr := tr) v i)
-      (fun hfa => Converge.kept_before (cfg := cfg) (tr := tr) hfa v i)
+      (cut_before hσ hadm hf htime hinj i v hv).1 (Held.run (cfg := cfg.at v) hdr _ Held.init)
+      (ownTop_before (cfg := cfg) i) (Converge.evidenceOn_before (cfg := cfg) (tr := tr) v hdr i)
+      (fun hfa => Converge.kept_before (cfg := cfg) (tr := tr) hfa v i) hdr
       (fun x hx => hK _ (knownBefore_knownOf (hinv.pend x hx)))
       (fun x hx => hK x (hd x hx)) (fun x hx => hK x (hb x hx)) e he with h | h
   · exact absurd h hr
@@ -107,7 +107,7 @@ the reach and certificate tests, or follow the round's timer with
 `refsFor`'s, or follow the node's being behind with `refsFor`'s. -/
 theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    {v : Validator} (hv : v ∈ H) {c : BlockId} {r : ℕ}
+    (hdr : cfg.drops = false) {v : Validator} (hv : v ∈ H) {c : BlockId} {r : ℕ}
     (hcU : c ∈ (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).ids)
     (hcv : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
       c).creator = v)
@@ -168,7 +168,7 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     mem_persists_iff.mpr (mem_outputs_of_event hi₀ (mem_persists_iff.mp he₀))
   have hex : e₀ = x := eq_of_persists v he₀p hxp (by rw [he₀r, hxr])
   subst hex
-  obtain ⟨x', y, o, hbs, hb, heo, hgx⟩ := build_witness hσ hadm hf htime hinj hv hi₀ he₀
+  obtain ⟨x', y, o, hbs, hb, heo, hgx⟩ := build_witness hσ hadm hf htime hinj hdr hv hi₀ he₀
     (by rw [he₀r]; omega)
   obtain ⟨r', ow, hsome, hle, hro, -, hexit, hout⟩ := tryBuild_exit hb
   -- the build read in memory as on disk

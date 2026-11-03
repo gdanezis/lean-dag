@@ -1,4 +1,6 @@
 import LeanDag.Node.Memory
+import LeanDag.Scheme.Model.Witness
+import LeanDag.Common.BypassView
 import Mathlib.Data.Finset.Sort
 /-!
 # An honest node — its transition function
@@ -136,6 +138,8 @@ structure State where
   lo : ℕ
   /-- The decisions the node output, the latest first. -/
   decided : List (ℕ × Option BlockId)
+  /-- The blocks of the proofs of the decided slots, which the node keeps. -/
+  proofs : Finset BlockId
   /-- The round whose timer is set. -/
   armed : Option ℕ
   /-- Restarted, and since neither built nor had a timer fire. -/
@@ -150,7 +154,7 @@ def Config.genesis : Block Validator BlockId Payload := ⟨0, cfg.me, ∅, cfg.p
 def State.init : State Validator BlockId Payload :=
   ⟨Store.empty cfg.genesis, Store.empty cfg.genesis, 0, Store.Mirrors.empty,
     fun _ h => absurd (by simp [Store.empty]) h, [], ∅, ∅, none,
-    none, ∅, 0, [], none, false⟩
+    none, ∅, 0, [], ∅, none, false⟩
 
 /-- **Keep a block**: on disk, and in memory if its round is the floor or
 above. -/
@@ -396,19 +400,67 @@ def built (bs : List (BlockId × Block Validator BlockId Payload)) :
 reach on a disk whose top round is `R`. -/
 def decidable (R : ℕ) : ℕ := cfg.m * (R / cfg.per + 1)
 
+/-- The verdict a list of decisions gives slot `k`, if it decides it. -/
+def verdictIn (ds : List (ℕ × Option BlockId)) (k : ℕ) : Option BlockId :=
+  ((ds.find? fun e => e.1 == k).map Prod.snd).join
+
+/-- **The blocks a node ordered after `n` slots** (Phase 3.1): the ledger of
+its verdicts under bypass below the decided horizon, read from the blocks of
+its disk as accepted. -/
+def State.ordered [S : Slots Validator] (q : ℕ) (s : State Validator BlockId Payload) (n : ℕ) :
+    Finset BlockId :=
+  ledgerOn s.disk.full q (verdictIn s.decided) n
+
+/-- **The proof of slot `k`'s decision**, scanning to slot `N` on the memory's
+window at the round of the next undecided slot (D13): the blocks that decide
+it, with their histories down to the round below the slot's. -/
+def proofOf (s : State Validator BlockId Payload) (N k : ℕ) : Finset BlockId :=
+  letI := cfg.slots
+  let R := cfg.slots.slotRound s.lo
+  ((Scheme.witnessAt cfg.p cfg.σ (s.memory.window R) (s.memory.windowView R) N k).biUnion
+    fun w => historyFrom s.disk.full w).filter fun x =>
+      x ∈ s.disk.ids ∧ cfg.slots.slotRound k - 1 ≤ (s.disk.blk x).round
+
+/-- **The blocks the node lets go** (D13): below the round under its floor,
+not its own block, ordered by none of its commits, in none of its proofs,
+referenced by no block it stores, and bypassed by the blocks it ordered. -/
+def dropSet (s : State Validator BlockId Payload) : List BlockId :=
+  letI := cfg.slots
+  let ord := s.ordered cfg.q s.lo
+  (s.disk.ids.sort (· ≤ ·)).filter fun x => decide ((s.disk.blk x).round + 1 < s.floor ∧
+    s.own ≠ some x ∧ x ∉ ord ∧ x ∉ s.proofs ∧ (∀ i ∈ s.disk.ids, x ∉ (s.disk.blk i).refs) ∧
+    cfg.q ≤ (bypassersOn s.disk.full ord x (s.disk.blk x).round).card)
+
+/-- **Let go of the blocks of the drop set**, when the node drops. -/
+def drop (s : State Validator BlockId Payload) : State Validator BlockId Payload :=
+  if cfg.drops then
+    have hl : ∀ j ∈ dropSet cfg s, (s.disk.blk j).round < s.floor := fun j hj => by
+      unfold dropSet at hj
+      have := (List.mem_filter.mp hj).2
+      simp only [decide_eq_true_eq] at this
+      omega
+    { s with
+      disk := s.disk.eraseAll (dropSet cfg s)
+      mirrors := s.mirrors.eraseAll hl
+      low := s.disk.low_eraseAll s.low _ }
+  else s
+
 /-- **Decide**: `tryDecide` from the next undecided slot to the last slot
 at a round the disk holds, on the memory's window at the round of the
 first slot, if the memory holds that round; output and keep what it
-decides, if anything, and release the memory below the lowest round the
-node then reads. -/
+decides, if anything, with the proofs of its decisions, release the memory
+below the lowest round the node then reads, and let go of the blocks of the
+drop set. -/
 def decideStep (s : State Validator BlockId Payload) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   letI := cfg.slots
   let N := decidable cfg s.disk.topRound
   let R := cfg.slots.slotRound s.lo
   let ds := Scheme.tryDecide cfg.p cfg.σ (s.memory.window R) (s.memory.windowView R) s.lo (N - 1)
+  let ps := (ds.map fun e => proofOf cfg s (N - 1) e.1).foldr (fun a b => a ∪ b) s.proofs
   if s.lo < N ∧ s.floor ≤ R ∧ ds ≠ [] then
-    (release cfg { s with lo := s.lo + ds.length, decided := ds.reverse ++ s.decided },
+    (drop cfg (release cfg
+      { s with lo := s.lo + ds.length, decided := ds.reverse ++ s.decided, proofs := ps }),
       ds.map fun e => .commit e.1 e.2)
   else (s, [])
 

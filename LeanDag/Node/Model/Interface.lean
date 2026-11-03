@@ -99,6 +99,8 @@ structure Config where
   /-- The payload of the node's round-`r` block, carrying the evidence `E`
   and exposing the authors `X`. -/
   payload : ℕ → Finset (Validator × BlockId × BlockId) → Finset Validator → Payload
+  /-- Whether the node lets go of bypassed blocks below its floor (D13). -/
+  drops : Bool
 
 variable {Validator BlockId Payload}
 

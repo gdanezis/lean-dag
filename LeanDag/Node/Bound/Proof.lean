@@ -28,10 +28,12 @@ namespace Node
 namespace Bound
 
 theorem bounded : Bounded := by
-  intro Validator BlockId Payload _ _ _ cfg H tr v i m k htime hinj hv hq s hexp hk
+  intro Validator BlockId Payload _ _ _ cfg H tr v i m k htime hinj hdr hv hq s hexp hk
   set st := s.disk with hst
-  have hC : Steady (cfg.at v) s := steady_before hinj hv i
-  have hval : StoreValid cfg.q cfg.xp st := (Converge.inv_before (cfg := cfg) (tr := tr) i v).valid
+  have hC : Steady (cfg.at v) s := steady_before hinj hdr hv i
+  have hval : StoreValid cfg.q cfg.xp st :=
+    (Converge.inv_before (cfg := cfg) (tr := tr) i v).valid hdr
+  have hcl := hval.fullClosed.causal
   -- each block above round `0` references an honest block one round below
   have hcb : CorrectBelow st.full st.ids H := by
     intro b hb hr
@@ -41,7 +43,7 @@ theorem bounded : Bounded := by
       intro Y hY
       obtain ⟨j, hj, rfl⟩ := mem_creatorsOf.mp hY
       exact Finset.mem_compl.mpr fun hYH =>
-        hno j hj (st.full_refs b hb j hj).1 hYH (st.causal_full.refs_round b hb j hj)
+        hno j hj (hcl.complete b hb j hj) hYH (hcl.refs_round b hb j hj)
     have := ((hval b hb).2.quorum hr).trans (Finset.card_le_card hsub)
     change cfg.q ≤ Hᶜ.card at this
     omega
@@ -55,7 +57,7 @@ theorem bounded : Bounded := by
   have hfree : ∀ X ∈ s.detected, ∀ x ∈ st.ids, (st.full x).creator = X → m + 1 ≤ (st.full x).round →
       ∀ z ∈ st.ids, x ∉ (st.full z).refs := by
     intro X hX x hx hxc hxr z hz hxz
-    have hzr : (st.full x).round + 1 = (st.full z).round := st.causal_full.refs_round z hz x hxz
+    have hzr : (st.full x).round + 1 = (st.full z).round := hcl.refs_round z hz x hxz
     exact not_mem_creators_refs_of_correct_exposed (n := m) hcb hdos hup
       (fun c hc hcr hcH => by
         have hf := st.full_fields c
@@ -106,12 +108,13 @@ author an honest node convicted**: those authors are in `D`, its builder
 convicted all of `D` and references none of them, so its payload names
 them. -/
 theorem exposes_spread {Validator BlockId Payload : Type} [Fintype Validator]
-    [DecidableEq Validator] [LinearOrder BlockId] {cfg : Config Validator BlockId Payload} {H : Finset Validator}
+    [DecidableEq Validator] [LinearOrder BlockId] {cfg : Config Validator BlockId Payload}
+    {H : Finset Validator}
     {tr : Trace Validator BlockId Payload} {D : Finset Validator} {nE : ℕ}
     (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : cfg.Faithful)
     (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
-    (hinj : Converge.HashInjective cfg H tr) (hsp : Live.Spread cfg H tr D nE)
-    {v : Validator} (hv : v ∈ H) (i : ℕ) {c : BlockId} {r : ℕ}
+    (hinj : Converge.HashInjective cfg H tr) (hdr : cfg.drops = false)
+    (hsp : Live.Spread cfg H tr D nE) {v : Validator} (hv : v ∈ H) (i : ℕ) {c : BlockId} {r : ℕ}
     (hc : c ∈ (stateBefore cfg tr i v).disk.ids)
     (hcr : ((stateBefore cfg tr i v).disk.blk c).round = r + 1)
     (hcH : ((stateBefore cfg tr i v).disk.blk c).creator ∈ H) (hrE : nE ≤ r) :
@@ -121,8 +124,8 @@ theorem exposes_spread {Validator BlockId Payload : Type} [Fintype Validator]
   set s := stateBefore cfg tr i v with hs
   -- the author is in `D`
   have hXD : X ∈ D := by
-    obtain ⟨e, he, he1, hne⟩ := (Converge.evidenceOn_before (cfg := cfg) (tr := tr) v i).1 X hX
-    exact excluded_before_spread hsp hv i 0 (Finset.mem_union_left _
+    obtain ⟨e, he, he1, hne⟩ := (Converge.evidenceOn_before (cfg := cfg) (tr := tr) v hdr i).1 X hX
+    exact excluded_before_spread hsp hdr hv i 0 (Finset.mem_union_left _
       (Finset.mem_image.mpr ⟨e, Finset.mem_filter.mpr ⟨he, hne⟩, he1⟩))
   -- the block as its builder built it
   have hcut := (cut_before hσ hadm hf htime hinj i v hv).1
@@ -132,7 +135,7 @@ theorem exposes_spread {Validator BlockId Payload : Type} [Fintype Validator]
   have hcr' : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
       c).round = r + 1 := by rw [hcut.round hc]; exact hcr
   obtain ⟨iw, inpw, xw, oww, hiw, -, hbsw, hshw, -, ⟨-, -, -, -, hew⟩, -, -, -, -, hpay⟩ :=
-    built_block (fun _ => 0) hσ hadm hf htime hinj hcH hcU hcc hcr'
+    built_block (fun _ => 0) hσ hadm hf htime hinj hdr hcH hcU hcc hcr'
   have ho : ∀ j, oww = some j →
       (xw.disk.blk j).creator = (cfg.at (s.disk.blk c).creator).me := fun j hj => by
     rcases hshw.2.2 with ⟨ht, hoe⟩ | ⟨-, hon, -⟩
@@ -155,11 +158,11 @@ theorem exposes_spread {Validator BlockId Payload : Type} [Fintype Validator]
 
 /-- **Under spread evidence the bound holds from round `nE + 1`.** -/
 theorem spreads : Spreads := by
-  intro Validator BlockId Payload _ _ _ cfg H tr D nE v i k hσ hadm hfa hf hq htime hinj hsp hv
-    hk
-  exact bounded Validator BlockId Payload cfg H tr v i nE k htime hinj hv hq
-    (fun c hc hcr hcH X hX => exposes_spread hσ hadm hfa hf htime hinj hsp hv i hc hcr hcH le_rfl
-      X hX) hk
+  intro Validator BlockId Payload _ _ _ cfg H tr D nE v i k hσ hadm hfa hf hq htime hinj hdr hsp
+    hv hk
+  exact bounded Validator BlockId Payload cfg H tr v i nE k htime hinj hdr hv hq
+    (fun c hc hcr hcH X hX => exposes_spread hσ hadm hfa hf htime hinj hdr hsp hv i hc hcr hcH
+      le_rfl X hX) hk
 
 theorem holds : Statement := ⟨bounded, spreads⟩
 

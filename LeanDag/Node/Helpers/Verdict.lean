@@ -50,19 +50,16 @@ theorem verdict_decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H f
   · rename_i hlt
     obtain ⟨hlt, hfl, -⟩ := hlt
     rw [commitsOf_map] at he
-    obtain ⟨V', -, hiff⟩ := hc.extend ⟨∅, Finset.empty_subset _,
-      fun _ h => absurd h (Finset.notMem_empty _)⟩ (fun i hi => absurd hi (Finset.notMem_empty i))
     have hT : tryDecide cfg.p boundedSel s.disk.toRecord s.disk.view s.lo
         (decidable cfg s.disk.topRound - 1) =
-        tryDecide cfg.p boundedSel U V' s.lo (decidable cfg s.disk.topRound - 1) :=
-      (ViewsAbove.of_storeAbove (cfg.slots.slotRound s.lo) hiff
-        (fun i hi => ⟨hc.round hi, hc.creator hi⟩)
-        (fun i hi hR => hc.eq_blk hi (by
-          by_contra hk
-          have := s.low i hk
-          omega))).tryDecide_eq cfg.p hw _ le_rfl
+        tryDecide cfg.p boundedSel U hc.histView s.lo (decidable cfg s.disk.topRound - 1) :=
+      (hc.viewsAbove (R := cfg.slots.slotRound s.lo) fun i hi hR => by
+        by_contra hk
+        have := s.low i hk
+        omega).tryDecide_eq cfg.p hw _ le_rfl
     rw [tryDecide_memory hσ hw s hfl, hT] at he
-    exact ⟨V', (Loop.sound _ _ _ P H cfg.p boundedSel U V' s.lo _ hl hcv (by omega)).2 e he⟩
+    exact ⟨hc.histView, (Loop.sound _ _ _ P H cfg.p boundedSel U hc.histView s.lo _ hl hcv
+      (by omega)).2 e he⟩
   · simp [commitsOf] at he
 
 variable {Good : BlockId → Block Validator BlockId Payload → Prop}

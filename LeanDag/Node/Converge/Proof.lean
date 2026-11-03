@@ -25,7 +25,7 @@ namespace Node
 namespace Converge
 
 theorem converges : Converges := by
-  intro Validator BlockId Payload _ _ _ cfg H tr hdel htime hinj hev u hu j hown y hy v hv
+  intro Validator BlockId Payload _ _ _ cfg H tr hdel htime hinj hev hdr u hu j hown y hy v hv
   have hiu := inv_before (cfg := cfg) (tr := tr) tr.length u
   obtain ⟨hjd, hjB⟩ := hiu.own j hown
   set b := (stateBefore cfg tr tr.length u).disk.full j with hb
@@ -44,25 +44,25 @@ theorem converges : Converges := by
   change j = cfg.idOf b at hid
   change b.creator = u at hc
   suffices hjv : j ∈ (stateBefore cfg tr tr.length v).disk.ids by
-    rw [hist_eq hinj hu hjd] at hy
-    exact hist_sub hinj hv hjv hy
+    rw [hist_eq hinj hdr hu hjd] at hy
+    exact hist_sub hinj hdr hv hjv hy
   by_cases huv : u = v
   · subst huv; exact hjd
   by_contra hlackL
   have hlack : ∀ τ, j ∉ (stateBefore cfg tr τ v).disk.ids := fun τ h => by
     rcases le_total τ tr.length with hτ | hτ
-    · exact hlackL ((grows_before (cfg := cfg) v hτ).1 h)
+    · exact hlackL ((grows_before (cfg := cfg) v hdr hτ).1 h)
     · exact hlackL (by rwa [stateBefore_of_le hτ] at h)
   have hval : 0 < b.round → cfg.q ≤ b.refs.card := fun hpos =>
-    ((hiu.valid j hjd).2.quorum hpos).trans Finset.card_image_le
+    ((hiu.valid hdr j hjd).2.quorum hpos).trans Finset.card_image_le
   -- `u` broadcast `(j, b)`; `v` was given it, and has had a sync for it since
   obtain ⟨p, -, hpu, hpp⟩ := mem_persists_before (cfg := cfg) u tr.length hjB
   obtain ⟨inpp, hp⟩ := event_of_map hpu
   obtain ⟨k, -, hk⟩ := hdel p u inpp hp hu (v, .deliver u j b)
     ⟨.broadcast j b, mem_broadcasts.mp (broadcasts_of_persists hpp), Ne.symm huv, rfl⟩ hv
   have hkL : k < tr.length := (List.getElem?_eq_some_iff.mp hk).1
-  have hfin := sync_stays htime hev hu hv htop hlack
-    (sync_made htime hev hu hv huv hpers htop hlack hid hc hval hk) tr.length (by omega)
+  have hfin := sync_stays htime hev hu hv htop hlack hdr
+    (sync_made htime hev hu hv huv hpers htop hlack hdr hid hc hval hk) tr.length (by omega)
   -- its last request, answered by `u` with the stream of `j`'s history
   obtain ⟨R, hRL, fr, ids, ⟨inpR, hR⟩, hreq, hnoR, hall⟩ := last_ask tr.length hfin
   obtain ⟨A₁, he₁, -⟩ := hall (R + 1) (by omega) (by omega)
@@ -70,8 +70,10 @@ theorem converges : Converges := by
   obtain ⟨R', hRR', hR'⟩ := hdel R v inpR hR hv (u, .syncRequest v j fr ids)
     ⟨.sync u j fr ids, hreq, rfl, rfl⟩ hu
   obtain ⟨hju, hjbu⟩ :=
-    own_stored (own_known (v := u) htime hv hu (show R + 1 ≤ R' by omega) hkn hc)
+    own_stored hdr (own_known (v := u) htime hv hu (show R + 1 ≤ R' by omega) hkn hc)
   set st := (stateBefore cfg tr R' u).disk with hst
+  have hcl := ((inv_before (cfg := cfg) (tr := tr) R' u).valid hdr).fullClosed
+  have hclu := hcl.causal
   set Lu := streamOf st j fr ids with hLu
   have hLmap : ∀ e ∈ Lu, e.2 = st.full e.1 := fun e he => (mem_streamOf st j he).2
   have hjLu : j ∈ Lu.map Prod.fst := mem_streamOf_self st j hju
@@ -82,7 +84,7 @@ theorem converges : Converges := by
     rw [if_neg]
     · exact List.mem_singleton_self _
     · rintro (h | h)
-      · exact not_detected htime hev hv hu R' h
+      · exact not_detected htime hev hdr hv hu R' h
       · rw [List.isEmpty_iff] at h
         rw [h] at hjLu
         exact absurd hjLu List.not_mem_nil
@@ -97,8 +99,9 @@ theorem converges : Converges := by
   have hheld : j ∉ (Node.step (cfg.at v) s (.stream u Lu)).1.disk.ids := by
     rw [← step_before hR'']; exact hlack _
   have hdet : u ∉ (Node.step (cfg.at v) s (.stream u Lu)).1.detected := by
-    rw [← step_before hR'']; exact not_detected htime hev hu hv _
-  obtain ⟨hadm, hasked⟩ := step_stream_stuck (syncsOn_before v R'') heA hno hheld hdet
+    rw [← step_before hR'']; exact not_detected htime hev hdr hu hv _
+  obtain ⟨hadm, hasked⟩ :=
+    step_stream_stuck (cfg := cfg.at v) (syncsOn_before v R'') hdr heA hno hheld hdet
   -- the piece's part in `j`'s history
   set P := inHistory (cfg.at v) (j, b) Lu with hP
   set Lh := hashed (cfg.at v) Lu with hLh
@@ -132,10 +135,11 @@ theorem converges : Converges := by
       rw [heb, hRu _ hest]
     · obtain ⟨-, hest, heb⟩ := hPLu e he
       rw [heb]
-      refine ⟨fun k hk => ?_, rowValid_congr (fun k hk => ?_) ((inv_before R' u).valid _ hest).2⟩
-      · rw [← hRu k (st.full_refs _ hest k hk).1]
-        exact st.causal_full.refs_round _ hest k hk
-      · rw [hRu k (st.full_refs _ hest k hk).1]
+      refine ⟨fun k hk => ?_,
+        rowValid_congr (fun k hk => ?_) ((inv_before R' u).valid hdr _ hest).2⟩
+      · rw [← hRu k (hclu.complete _ hest k hk)]
+        exact hclu.refs_round _ hest k hk
+      · rw [hRu k (hclu.complete _ hest k hk)]
         exact ⟨rfl, rfl, rfl⟩
     · by_cases hyd : y ∈ s.disk.ids
       · exact Or.inl hyd
@@ -154,8 +158,9 @@ theorem converges : Converges := by
     rcases List.mem_cons.mp h with h | h
     · exact hyP (h ▸ List.mem_map_of_mem (f := Prod.fst) hjP)
     · exact hyP h))
-  have hyst : y' ∈ st.ids := (st.full_refs xi hxst y' hy').1
-  have hyLu : y' ∈ Lu.map Prod.fst := streamOf_closed st j hxi hy' hyst (Or.inr (Or.inl hyids))
+  have hyst : y' ∈ st.ids := hclu.complete xi hxst y' hy'
+  have hyLu : y' ∈ Lu.map Prod.fst :=
+    streamOf_closed st j hcl hxi hy' hyst (Or.inr (Or.inl hyids))
   have hyLu' : (y', st.full y') ∈ Lu := by
     obtain ⟨e, he, hey⟩ := List.mem_map.mp hyLu
     have : e = (y', st.full y') := Prod.ext hey (by rw [hLmap e he, hey])
@@ -166,7 +171,7 @@ theorem converges : Converges := by
     refine (mem_inHistory Lu).mpr ⟨hyLh, fun hcv => ?_,
       found_closed Lh j hxf ((pieceRefs_of_map Lh hLhmap hxi').mpr hy')
         (List.mem_map_of_mem (f := Prod.fst) hyLh)⟩
-    exact hyn (own_stored (own_known (v := v) htime hu hv (show R' ≤ R'' by omega)
+    exact hyn (own_stored hdr (own_known (v := v) htime hu hv (show R' ≤ R'' by omega)
       ((inv_before R' u).known y' hyst) hcv)).1
   exact hyP (List.mem_map_of_mem (f := Prod.fst) hyP')
 

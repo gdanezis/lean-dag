@@ -160,6 +160,7 @@ def cfgFor (sc : Scenario) (p : Scheme.Params) (q : ℕ) {n : ℕ} (hn : 0 < n) 
   idOf := idOf
   xp := payXp
   payload := fun _ E X => ⟨twin, E, X⟩
+  drops := false
 
 /-- An agent: a node, and which copy of it (`0` unless it equivocates). -/
 structure Agent (n : ℕ) where

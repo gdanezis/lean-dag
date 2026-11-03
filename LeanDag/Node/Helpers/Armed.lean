@@ -174,21 +174,22 @@ theorem armed_before (v : Validator) (i : ℕ) : Armed (cfg.at v) (stateBefore c
     (fun _ h => by simp [stateBefore, inputsBefore, run, State.init] at h)
     (fun _ inp h => h.step inp) i
 
-/-- **An armed round has a quorum**, before every event. -/
-theorem armedQuorum_before (v : Validator) (i : ℕ) :
+/-- **An armed round has a quorum**, before every event, when the node does
+not drop. -/
+theorem armedQuorum_before (v : Validator) (hd : cfg.drops = false) (i : ℕ) :
     ArmedQuorum (cfg.at v) (stateBefore cfg tr i v) :=
   inv_before (cfg := cfg) v (fun s => ArmedQuorum (cfg.at v) s)
     (fun _ h => by simp [stateBefore, inputsBefore, run, State.init] at h)
-    (fun _ inp h => (timersSet_step h inp).2) i
+    (fun _ inp h => (timersSet_step h hd inp).2) i
 
 /-- **The timers a node sets at an event**, read on its state after it:
 each at or below the top, one of the top round above `0` only with a
-quorum of it. -/
-theorem timersSet_before {i : ℕ} {inp : Input Validator BlockId Payload}
+quorum of it, when the node does not drop. -/
+theorem timersSet_before (hd : cfg.drops = false) {i : ℕ} {inp : Input Validator BlockId Payload}
     (hi : tr[i]? = some (v, inp)) :
     TimersSet (cfg.at v) (stateBefore cfg tr (i + 1) v) (outputsAt cfg tr i) := by
   rw [outputsAt_eq hi, stateBefore_succ hi, if_pos rfl]
-  exact (timersSet_step (armedQuorum_before v i) inp).1
+  exact (timersSet_step (armedQuorum_before v hd i) hd inp).1
 
 /-- **A round armed later was armed earlier, or had its timer set in
 between.** -/
@@ -228,9 +229,10 @@ theorem top_between {p q : ℕ} (hpq : p ≤ q) {n : ℕ}
 open Classical in
 /-- **The last event that set an armed top round's timer**: a node at
 round `n` with `n` armed before event `E` set round `n`'s timer at a last
-event before `E`, and from it to `E` it is at round `n` with `n` armed. -/
-theorem armed_last {E n : ℕ} (ha : (stateBefore cfg tr E v).armed = some n)
-    (ht : (stateBefore cfg tr E v).top = some n) :
+event before `E`, and from it to `E` it is at round `n` with `n` armed,
+when it does not drop. -/
+theorem armed_last (hd : cfg.drops = false) {E n : ℕ}
+    (ha : (stateBefore cfg tr E v).armed = some n) (ht : (stateBefore cfg tr E v).top = some n) :
     ∃ a < E, (tr[a]?.map Prod.fst) = some v ∧
       Output.setTimer n (cfg.timeout n) ∈ outputsAt cfg tr a ∧
       (∀ a', a < a' → a' < E → (tr[a']?.map Prod.fst) = some v →
@@ -250,7 +252,7 @@ theorem armed_last {E n : ℕ} (ha : (stateBefore cfg tr E v).armed = some n)
     Nat.findGreatest_is_greatest h₁ (by omega)
   refine ⟨a, haE, hPa.1, hPa.2, fun a' h₁ h₂ h₃ h₄ => hmax a' h₁ h₂ ⟨h₃, h₄⟩, fun k hak hkE => ?_⟩
   obtain ⟨inpa, hai⟩ := Converge.event_of_map hPa.1
-  obtain ⟨t, hta, hnt, -⟩ := timersSet_before hai n _ hPa.2
+  obtain ⟨t, hta, hnt, -⟩ := timersSet_before hd hai n _ hPa.2
   obtain ⟨hr₁, hr₂, -⟩ := rises_before (cfg := cfg) (tr := tr) v (show a + 1 ≤ k by omega)
   rw [hta] at hr₁ hr₂
   simp only [Option.getD_some] at hr₁
@@ -272,11 +274,11 @@ def TopTimerBy (T : Finset Validator) (tr : Trace Validator BlockId Payload)
       ∃ f, tr[f]? = some (v, .timer n) ∧ time f ≤ s + cfg.timeout n
 
 /-- **The armed top round's timer fires**, a timeout after it was last
-set, when timers fire. -/
-theorem TopTimerBy.of_fire {G : ℕ} (hmono : Live.TimeMono tr time)
+set, when timers fire and the node does not drop. -/
+theorem TopTimerBy.of_fire {G : ℕ} (hmono : Live.TimeMono tr time) (hd : cfg.drops = false)
     (h : Live.TimersFire cfg T tr time t₁) : TopTimerBy cfg T tr time G t₁ := by
   intro v hv s n _ hst₁ hts has
-  obtain ⟨a, haE, hav, hset, -, -⟩ := armed_last (E := eventsBy tr time s) has hts
+  obtain ⟨a, haE, hav, hset, -, -⟩ := armed_last hd (E := eventsBy tr time s) has hts
   obtain ⟨inp, hai⟩ := Converge.event_of_map hav
   have hal : a < tr.length := (List.getElem?_eq_some_iff.mp hai).1
   have hta : time a ≤ s := (lt_eventsBy hmono hal).mp haE
@@ -285,12 +287,13 @@ theorem TopTimerBy.of_fire {G : ℕ} (hmono : Live.TimeMono tr time)
 
 /-- **Past the last restart, the armed top round's timer fires within its
 timeout**: a restart after its last setting, while armed, would have set
-it again. -/
-theorem topTimerBy_of_up (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time t_r t₁)
+it again, when the node does not drop. -/
+theorem topTimerBy_of_up (hmono : Live.TimeMono tr time) (hd : cfg.drops = false)
+    (hup : Live.UpFrom T tr time t_r t₁)
     (hfire : Live.TimersFireUp cfg T tr time t₁) {G : ℕ} (hG : t_r ≤ G) :
     TopTimerBy cfg T tr time G t₁ := by
   intro v hv s n hgs hst₁ hts has
-  obtain ⟨a, haE, hav, hset, hmax, hat⟩ := armed_last (E := eventsBy tr time s) has hts
+  obtain ⟨a, haE, hav, hset, hmax, hat⟩ := armed_last hd (E := eventsBy tr time s) has hts
   obtain ⟨inp, hai⟩ := Converge.event_of_map hav
   have hal : a < tr.length := (List.getElem?_eq_some_iff.mp hai).1
   have hta : time a ≤ s := (lt_eventsBy hmono hal).mp haE
@@ -312,8 +315,9 @@ theorem topTimerBy_of_up (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr
 
 /-- **A timer that fires was set before**: at an event after which the
 node was at its round or above, and if at its round, above `0`, a
-timeout before, with a quorum of it. -/
-theorem timer_set (hwait : Live.TimersAfterSet cfg T tr time) (hv : v ∈ T) {j n : ℕ}
+timeout before, with a quorum of it, when the node does not drop. -/
+theorem timer_set (hwait : Live.TimersAfterSet cfg T tr time) (hd : cfg.drops = false)
+    (hv : v ∈ T) {j n : ℕ}
     (hj : tr[j]? = some (v, .timer n)) :
     ∃ i < j, (tr[i]?.map Prod.fst) = some v ∧
       ∃ t, (stateBefore cfg tr (i + 1) v).top = some t ∧ n ≤ t ∧
@@ -321,7 +325,7 @@ theorem timer_set (hwait : Live.TimersAfterSet cfg T tr time) (hv : v ∈ T) {j 
           cfg.q ≤ ((stateBefore cfg tr (i + 1) v).disk.authorsAt n).card) := by
   obtain ⟨i, hij, a, hiv, hset, hta⟩ := hwait j v n hj hv
   obtain ⟨inp, hi⟩ := Converge.event_of_map hiv
-  obtain ⟨t, ht, hnt, hq⟩ := timersSet_before hi n a hset
+  obtain ⟨t, ht, hnt, hq⟩ := timersSet_before hd hi n a hset
   refine ⟨i, hij, hiv, t, ht, hnt, fun h₁ h₂ => ?_⟩
   obtain ⟨ha, hq'⟩ := hq h₁ h₂
   exact ⟨ha ▸ hta, hq'⟩

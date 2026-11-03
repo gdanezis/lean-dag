@@ -5,8 +5,8 @@ import LeanDag.Node.Helpers.Steps
 
 Event `i` moves only its own node: node `v`'s state before event `i + 1`
 is its step at event `i` if that event is `v`'s, and its state before
-event `i` otherwise (`stateBefore_succ`). So a node's disk grows from
-event to event (`grows_before`), and what its run up to an event
+event `i` otherwise (`stateBefore_succ`). So the disk of a node that does
+not drop grows from event to event (`grows_before`), and what its run up to an event
 persisted or was delivered is what the trace's earlier events at it
 persisted or delivered (`mem_persists_before`, `mem_delivered_before`).
 -/
@@ -71,8 +71,8 @@ theorem outputsAt_eq {i : ℕ} {w : Validator} {inp : Input Validator BlockId Pa
     outputsAt cfg tr i = (step (cfg.at w) (stateBefore cfg tr i w) inp).2 := by
   unfold outputsAt; rw [h]
 
-/-- **A node's disk grows from event to event.** -/
-theorem grows_before (v : Validator) : ∀ {i j : ℕ}, i ≤ j →
+/-- **A node's disk grows from event to event**, when nodes do not drop. -/
+theorem grows_before (v : Validator) (hd : cfg.drops = false) : ∀ {i j : ℕ}, i ≤ j →
     Grows (stateBefore cfg tr i v).disk (stateBefore cfg tr j v).disk := by
   intro i j hij
   induction j, hij using Nat.le_induction with
@@ -86,7 +86,7 @@ theorem grows_before (v : Validator) : ∀ {i j : ℕ}, i ≤ j →
       exact Grows.refl _
     · rw [stateBefore_succ hj]
       split
-      · rename_i hw; subst hw; exact Grows.step _ _
+      · rename_i hw; subst hw; exact Grows.step _ _ hd
       · exact Grows.refl _
 
 /-- **What a node's run up to event `i` persisted**, its events before `i`

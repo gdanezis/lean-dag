@@ -73,10 +73,10 @@ theorem InK.advance {K : Set (BlockId × Block Validator BlockId Payload)}
   have h₁ := InK.progress _ h fun e he => hK e (List.mem_append_left _ he)
   generalize Node.progress cfg (s.disk.topRound + 2) s = r at h₁ ⊢
   have h₂ : InK K (Node.decideStep cfg r.1).1 := by
-    have hd := decideStep_disk (cfg := cfg) r.1
+    have hd := decideStep_shrinks (cfg := cfg) r.1
     refine ⟨fun j hj => ?_, by rw [decideStep_syncs (cfg := cfg) r.1]; exact h₁.2⟩
-    rw [hd.full]
-    exact h₁.1 j (hd.ids ▸ hj)
+    rw [hd.full j hj]
+    exact h₁.1 j (hd.ids hj)
   set d := (Node.decideStep cfg r.1).1
   obtain ⟨⟨L, hL, hd⟩, -, hsub, -⟩ := flushSyncs_eq (cfg := cfg) (d.syncs.length + 1) d
   refine ⟨by
@@ -187,14 +187,14 @@ theorem progress_below (hq : 2 ≤ cfg.q) {R : ℕ} : ∀ (fuel : ℕ) {s : Stat
         · rw [hs₁] at ht₂'; exact ⟨ht₂, by omega⟩
 
 omit [Fintype Validator] in
-/-- **Deciding** keeps the disk, the syncs and the top, and
-raises the next undecided slot to at most the slots at the disk's
-rounds. -/
+/-- **Deciding** keeps the disk's blocks but those it drops, the syncs and
+the top, and raises the next undecided slot to at most the slots at the
+disk's rounds. -/
 theorem decideStep_bound (s : State Validator BlockId Payload) :
     let d := (Node.decideStep cfg s).1
-    Store.Restrips d.floor s.disk d.disk ∧ d.syncs = s.syncs ∧ d.top = s.top ∧ s.lo ≤ d.lo ∧
+    Store.Shrinks s.disk d.disk ∧ d.syncs = s.syncs ∧ d.top = s.top ∧ s.lo ≤ d.lo ∧
       d.lo ≤ max s.lo (decidable cfg s.disk.topRound) :=
-  ⟨decideStep_disk s, decideStep_syncs s, decideStep_top s, decideStep_lo s,
+  ⟨decideStep_shrinks s, decideStep_syncs s, decideStep_top s, decideStep_lo s,
     decideStep_lo_le s⟩
 
 /-! ## A pass -/
@@ -208,7 +208,7 @@ theorem decideStep_eq_of_lo {s : State Validator BlockId Payload}
   dsimp only at h ⊢
   split at h
   · rename_i hc
-    rw [release_lo] at h
+    rw [drop_lo, release_lo] at h
     simp only [Nat.add_eq_left, List.length_eq_zero_iff] at h
     exact absurd h hc.2.2
   · rename_i hc
@@ -437,7 +437,7 @@ theorem Stops.settled {s : State Validator BlockId Payload} (h : Stops cfg s) :
     have hlo' : (Node.decideStep cfg s).1.lo ≠ s.lo := by
       unfold Node.decideStep
       dsimp only
-      rw [if_pos ⟨hlt, hfl', hne⟩, release_lo]
+      rw [if_pos ⟨hlt, hfl', hne⟩, drop_lo, release_lo]
       simp only [ne_eq, Nat.add_eq_left, List.length_eq_zero_iff]
       exact hne
     rw [hds] at hlo'

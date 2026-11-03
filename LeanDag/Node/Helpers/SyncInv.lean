@@ -31,16 +31,18 @@ theorem syncsOn_before (v : Validator) : ∀ i, SyncsOn (stateBefore cfg tr i v)
       exact (syncsOn_before v i).step inp
     · rw [same_before fun inp h => he ⟨inp, h⟩]; exact syncsOn_before v i
 
-/-- **Only evidence convicts an author**, before every event. -/
-theorem evidenceOn_before (v : Validator) : ∀ i, EvidenceOn (cfg.at v) (stateBefore cfg tr i v)
+/-- **Only evidence convicts an author**, before every event, when the node does
+not drop. -/
+theorem evidenceOn_before (v : Validator) (hd : cfg.drops = false) :
+    ∀ i, EvidenceOn (cfg.at v) (stateBefore cfg tr i v)
   | 0 => ⟨fun a ha => by simp [stateBefore, inputsBefore, run, State.init] at ha,
       fun e he => by simp [stateBefore, inputsBefore, run, State.init] at he⟩
   | i + 1 => by
     by_cases he : ∃ inp, tr[i]? = some (v, inp)
     · obtain ⟨inp, hi⟩ := he
       rw [step_before hi]
-      exact EvidenceOn.step (cfg := cfg.at v) (syncsOn_before v i) (evidenceOn_before v i) inp
-    · rw [same_before fun inp h => he ⟨inp, h⟩]; exact evidenceOn_before v i
+      exact EvidenceOn.step (cfg := cfg.at v) (syncsOn_before v i) hd (evidenceOn_before v hd i) inp
+    · rw [same_before fun inp h => he ⟨inp, h⟩]; exact evidenceOn_before v hd i
 
 /-- **An honest node holds the evidence of its disk** before every event,
 under a faithful payload source. -/

@@ -1,15 +1,13 @@
 import LeanDag.Node.Runs.Statement
-import LeanDag.Node.Helpers.Agree
+import LeanDag.Node.Cut.Proof
+import LeanDag.Node.Local.Proof
 /-!
 # Many honest nodes — proof
 
-Timely authentication and the hash over the trace give them at its end,
-so the blocks the honest nodes knew form a record at the quorum with
-honest set `H` (`globalRecord`), which grounds what they knew (`ground`). Along
-each node's run every disk is a cut of the record, and the node's
-decisions are nothing or one call of the loop on a view of the record
-(`CommitInv.run`); two calls on views of one record are
-prefix-comparable (`Loop.prefixComparable`).
+An honest node's decisions are the slots `0, 1, …` in order
+(`Local.decisions`), and two honest nodes decide each slot alike
+(`Cut.agrees`), so the shorter list of decisions is a prefix of the longer
+(`prefix_of_agree`).
 -/
 
 namespace LeanDag
@@ -18,38 +16,46 @@ namespace Node
 
 namespace Runs
 
+/-- **Two lists of decisions of the slots `0, 1, …` in order that agree on
+each common slot are prefix-comparable.** -/
+theorem prefix_of_agree {BlockId : Type} {L₁ L₂ : List (ℕ × Option BlockId)}
+    (h₁ : L₁.map Prod.fst = List.range L₁.length) (h₂ : L₂.map Prod.fst = List.range L₂.length)
+    (hag : ∀ e ∈ L₁, ∀ e' ∈ L₂, e.1 = e'.1 → e.2 = e'.2) : L₁ <+: L₂ ∨ L₂ <+: L₁ := by
+  have hfst : ∀ (L : List (ℕ × Option BlockId)), L.map Prod.fst = List.range L.length →
+      ∀ k (hk : k < L.length), L[k].1 = k := fun L h k hk => by
+    have := congrArg (·[k]?) h
+    simp only [List.getElem?_map, List.getElem?_range hk, List.getElem?_eq_getElem hk,
+      Option.map_some, Option.some.injEq] at this
+    exact this
+  -- the shorter list is the longer one taken to its length
+  have htake : ∀ (A B : List (ℕ × Option BlockId)), A.map Prod.fst = List.range A.length →
+      B.map Prod.fst = List.range B.length → (∀ e ∈ A, ∀ e' ∈ B, e.1 = e'.1 → e.2 = e'.2) →
+      A.length ≤ B.length → A <+: B := fun A B hA hB hAB hle => by
+    have heq : A = B.take A.length := by
+      refine List.ext_getElem (by simp [hle]) fun k hkA hkT => ?_
+      have hkB : k < B.length := lt_of_lt_of_le hkA hle
+      rw [List.getElem_take]
+      have h1 := hfst A hA k hkA
+      have h2 := hfst B hB k hkB
+      exact Prod.ext (h1.trans h2.symm)
+        (hAB _ (List.getElem_mem hkA) _ (List.getElem_mem hkB) (h1.trans h2.symm))
+    rw [heq]
+    exact List.take_prefix _ _
+  rcases le_total L₁.length L₂.length with hle | hle
+  · exact Or.inl (htake L₁ L₂ h₁ h₂ hag hle)
+  · exact Or.inr (htake L₂ L₁ h₂ h₁ (fun e he e' he' hk => (hag e' he' e he hk.symm).symm) hle)
+
 theorem safety : Safety := by
-  intro Validator BlockId Payload _ _ _ cfg H tr hσ hadm hf htime hinj' v hv w hw
-  have hinj := hashInjective_of_trace hinj'
-  have hauth := authentic_of_timely htime
-  unfold decisionsOf
-  haveI : Validity.Quorate (ValidAt (Validator := Validator) (BlockId := BlockId)
-      (Payload := Payload) cfg.q Clause.none) cfg.q :=
-    Validity.Quorate.of_validAt hadm.2.2.2.1 fun _ _ => Iff.rfl
-  let U := globalRecord hinj hauth
-  have ht : cfg.p.Tolerates H cfg.f cfg.q := ⟨hf, hadm.2.2.2.2, hadm.1⟩
-  have hg := ground hinj hauth
-  -- each honest node's decisions are nothing or one call of the loop on `U`
-  have hone : ∀ u ∈ H, commitsOf (runOf cfg tr u).2 = [] ∨
-      ∃ (V : U.View) (N : ℕ), commitsOf (runOf cfg tr u).2 =
-        Scheme.tryDecide (S := cfg.slots) cfg.p boundedSel U V 0 N := by
-    intro u hu
-    have h₀ : CommitInv (cfg.at u) U (State.init (cfg.at u)) [] := ⟨rfl, Or.inl rfl⟩
-    have h := CommitInv.run (cfg := cfg.at u) (U := U) (f := cfg.f) (q := cfg.q) hg hσ ht
-      (inputsBefore tr tr.length u) h₀ (isCut_init hinj hauth _)
-      (fun _ h => absurd h List.not_mem_nil)
-      (fun e he => ⟨u, hu, by simp only [knownOf, List.mem_append]; exact Or.inl he⟩)
-      (fun e he => ⟨u, hu, by simp only [knownOf, List.mem_append]; exact Or.inr he⟩)
-    rcases h.2 with h0 | ⟨V, N, -, -, hcs⟩
-    · exact Or.inl h0
-    · exact Or.inr ⟨V, N, hcs⟩
-  rcases hone v hv with h₁ | ⟨V₁, N₁, h₁⟩ <;> rcases hone w hw with h₂ | ⟨V₂, N₂, h₂⟩
-  · rw [h₁]; exact Or.inl (List.nil_prefix)
-  · rw [h₁]; exact Or.inl (List.nil_prefix)
-  · rw [h₂]; exact Or.inr (List.nil_prefix)
-  · rw [h₁, h₂]
-    exact Scheme.Loop.prefixComparable _ _ _ _ cfg.q H cfg.f cfg.p boundedSel U V₁ V₂ 0 N₁ N₂
-      (S := cfg.slots) ht (Nat.zero_le _) (Nat.zero_le _)
+  intro Validator BlockId Payload _ _ _ cfg H tr hσ hadm hf htime hinj hid v hv w hw
+  have hlen : ∀ u, (commitsOf (runOf cfg tr u).2).map Prod.fst =
+      List.range (commitsOf (runOf cfg tr u).2).length := fun u => by
+    obtain ⟨-, h⟩ := Local.decisions Validator BlockId Payload (cfg.at u)
+      (inputsBefore tr tr.length u)
+    change (commitsOf (runOf cfg tr u).2).map Prod.fst = List.range (runOf cfg tr u).1.lo at h
+    rw [h, ← List.length_map (f := Prod.fst), h, List.length_range]
+  exact prefix_of_agree (hlen v) (hlen w)
+    (Cut.agrees Validator BlockId Payload cfg H tr hσ hadm hf htime hinj hid v hv w hw
+      tr.length tr.length)
 
 theorem holds : Statement := safety
 

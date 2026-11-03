@@ -187,16 +187,17 @@ include hinj
 
 /-- **An honest disk holding a block reads its history, as accepted, as the
 trace does.** -/
-theorem hist_eq {v : Validator} (hv : v ∈ H) {i : ℕ} {b : BlockId}
+theorem hist_eq (hd : cfg.drops = false) {v : Validator} (hv : v ∈ H) {i : ℕ} {b : BlockId}
     (hb : b ∈ (stateBefore cfg tr i v).disk.ids) :
     historyFrom (stateBefore cfg tr i v).disk.full b = historyFrom (gT cfg H tr) b :=
-  historyFrom_congr (stateBefore cfg tr i v).disk.causal_full.complete (reads_before hinj hv i) hb
+  historyFrom_congr ((inv_before (cfg := cfg) (tr := tr) i v).valid hd).fullClosed.causal.complete
+    (reads_before hinj hv i) hb
 
-theorem hist_sub {v : Validator} (hv : v ∈ H) {i : ℕ} {b : BlockId}
+theorem hist_sub (hd : cfg.drops = false) {v : Validator} (hv : v ∈ H) {i : ℕ} {b : BlockId}
     (hb : b ∈ (stateBefore cfg tr i v).disk.ids) :
     historyFrom (gT cfg H tr) b ⊆ (stateBefore cfg tr i v).disk.ids := by
-  rw [← hist_eq hinj hv hb]
-  exact (stateBefore cfg tr i v).disk.causal_full.history_subset_ids hb
+  rw [← hist_eq hinj hd hv hb]
+  exact ((inv_before (cfg := cfg) (tr := tr) i v).valid hd).fullClosed.causal.history_subset_ids hb
 
 omit hinj in
 /-- **What a node holds on disk it knew.** -/
@@ -206,40 +207,42 @@ theorem stored_known {v : Validator} (hv : v ∈ H) {i : ℕ} {j : BlockId}
   knownBefore_sub hv i ((inv_before (cfg := cfg) i v).known j hj)
 
 /-- **A block on an honest disk fits every honest node.** -/
-theorem fits_stored {u : Validator} (hu : u ∈ H) {i : ℕ} {j : BlockId}
+theorem fits_stored (hd : cfg.drops = false) {u : Validator} (hu : u ∈ H) {i : ℕ} {j : BlockId}
     (hj : j ∈ (stateBefore cfg tr i u).disk.ids) (v : Validator) :
     Fits (cfg.at v) (gT cfg H tr) (j, (stateBefore cfg tr i u).disk.full j) := by
   set st := (stateBefore cfg tr i u).disk
   have hR := reads_before hinj hu i
-  obtain ⟨href, hval⟩ := (inv_before (cfg := cfg) i u).valid j hj
+  obtain ⟨href, hval⟩ := (inv_before (cfg := cfg) i u).valid hd j hj
   refine fits_of_valid ⟨fun k hk => ?_, ?_⟩
   · rw [← hR k (href hk)]
-    exact st.causal_full.refs_round j hj k hk
+    exact ((inv_before (cfg := cfg) (tr := tr) i u).valid hd).fullClosed.causal.refs_round j hj k hk
   · refine rowValid_congr (fun k hk => ?_) hval
     rw [hR k (href hk)]
     exact ⟨rfl, rfl, rfl⟩
 
 omit hinj in
 /-- **What an event makes is on its node's disk after it.** -/
-theorem persist_stored {i : ℕ} {u : Validator} {inp : Input Validator BlockId Payload}
+theorem persist_stored (hd : cfg.drops = false) {i : ℕ} {u : Validator}
+    {inp : Input Validator BlockId Payload}
     (hi : tr[i]? = some (u, inp)) {e : BlockId × Block Validator BlockId Payload}
     (he : e ∈ persists (outputsAt cfg tr i)) :
     e.1 ∈ (stateBefore cfg tr (i + 1) u).disk.ids ∧
       (stateBefore cfg tr (i + 1) u).disk.full e.1 = e.2 := by
   rw [outputsAt_eq hi] at he
   rw [step_before hi]
-  exact step_persist e he
+  exact step_persist (cfg := cfg.at u) hd e he
 
 omit hinj in
 /-- **What an event broadcasts is on its node's disk after it.** -/
-theorem broadcast_stored {i : ℕ} {u : Validator} {inp : Input Validator BlockId Payload}
+theorem broadcast_stored (hd : cfg.drops = false) {i : ℕ} {u : Validator}
+    {inp : Input Validator BlockId Payload}
     (hi : tr[i]? = some (u, inp)) {e : BlockId × Block Validator BlockId Payload}
     (he : e ∈ broadcasts (outputsAt cfg tr i)) :
     e.1 ∈ (stateBefore cfg tr (i + 1) u).disk.ids ∧
       (stateBefore cfg tr (i + 1) u).disk.full e.1 = e.2 := by
   obtain ⟨j, hj, inp', hj', hje⟩ := persists_of_broadcasts hi he
-  obtain ⟨h₁, h₂⟩ := persist_stored hj' hje
-  have hg := grows_before (cfg := cfg) (tr := tr) u (show j + 1 ≤ i + 1 by omega)
+  obtain ⟨h₁, h₂⟩ := persist_stored hd hj' hje
+  have hg := grows_before (cfg := cfg) (tr := tr) u hd (show j + 1 ≤ i + 1 by omega)
   exact ⟨hg.1 h₁, by rw [hg.full h₁]; exact h₂⟩
 
 end Histories

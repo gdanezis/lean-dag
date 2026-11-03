@@ -6,7 +6,8 @@ import LeanDag.Scheme.Model.TryDecide
 
 `docs/validator.md` §5, V12. Over a trace of honest nodes `H` and an
 adversary, with timely authentication, the hash injective on what the
-honest nodes knew, and at most `f` nodes outside `H`, there is a block
+honest nodes knew, at most `f` nodes outside `H`, and nodes that do not
+drop (`cfg.drops = false`), there is a block
 record `U` at quorum `q` whose honest set is `H`, the run's record, such
 that:
 
@@ -136,7 +137,7 @@ def HasRecord : Prop :=
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload),
     cfg.σ = boundedSel → cfg.Admissible → Hᶜ.card ≤ cfg.f →
-    Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr →
+    Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr → cfg.drops = false →
     ∃ U : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H,
       Holds cfg H tr U ∧ Loops cfg H tr U ∧ Timed cfg H tr U ∧ Recovering cfg H tr U
 

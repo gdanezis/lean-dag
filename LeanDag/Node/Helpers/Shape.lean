@@ -58,7 +58,7 @@ theorem decideStep_recovering (s : State Validator BlockId Payload) :
   unfold Node.decideStep
   dsimp only
   split
-  · exact release_recovering _
+  · rw [drop_recovering]; exact release_recovering _
   · rfl
 
 omit [Fintype Validator] in
@@ -118,13 +118,12 @@ theorem progress_shape : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
 omit [Fintype Validator] in
 theorem decideStep_shape (s : State Validator BlockId Payload) :
     let d := Node.decideStep cfg s
-    d.1.fired = s.fired ∧ d.1.top = s.top ∧ Store.Restrips d.1.floor s.disk d.1.disk ∧
-      Silent d.2 := by
+    d.1.fired = s.fired ∧ d.1.top = s.top ∧ Store.Shrinks s.disk d.1.disk ∧ Silent d.2 := by
   intro d
-  refine ⟨?_, ?_, decideStep_disk s, ?_⟩ <;> unfold d Node.decideStep <;> dsimp only <;> split
-  · exact release_fired _
+  refine ⟨?_, ?_, decideStep_shrinks s, ?_⟩ <;> unfold d Node.decideStep <;> dsimp only <;> split
+  · rw [drop_fired]; exact release_fired _
   · rfl
-  · exact release_top _
+  · rw [drop_top]; exact release_top _
   · rfl
   · refine Silent.of_quiet fun o h => ?_
     obtain ⟨_, -, rfl⟩ := List.mem_map.mp h

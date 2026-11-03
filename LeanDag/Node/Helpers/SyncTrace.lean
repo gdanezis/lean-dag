@@ -25,14 +25,15 @@ variable [LinearOrder BlockId]
 variable {cfg : Config Validator BlockId Payload} {H : Finset Validator}
 variable {tr : Trace Validator BlockId Payload}
 
-/-- **What a node made is on its disk.** -/
-theorem own_stored {w : Validator} {E : ℕ} {x : BlockId × Block Validator BlockId Payload}
+/-- **What a node made is on its disk**, when it does not drop. -/
+theorem own_stored (hd : cfg.drops = false) {w : Validator} {E : ℕ}
+    {x : BlockId × Block Validator BlockId Payload}
     (hx : x ∈ persists (run (cfg.at w) (State.init (cfg.at w)) (inputsBefore tr E w)).2) :
     x.1 ∈ (stateBefore cfg tr E w).disk.ids ∧ (stateBefore cfg tr E w).disk.full x.1 = x.2 := by
   obtain ⟨j, hjE, hjw, hxj⟩ := mem_persists_before (cfg := cfg) w E hx
   obtain ⟨inp, hj⟩ := event_of_map hjw
-  obtain ⟨h₁, h₂⟩ := persist_stored hj hxj
-  have hg := grows_before (cfg := cfg) (tr := tr) w (show j + 1 ≤ E by omega)
+  obtain ⟨h₁, h₂⟩ := persist_stored hd hj hxj
+  have hg := grows_before (cfg := cfg) (tr := tr) w hd (show j + 1 ≤ E by omega)
   exact ⟨hg.1 h₁, by rw [hg.full h₁]; exact h₂⟩
 
 /-- **What a node made by an event it made by the end.** -/
@@ -55,14 +56,14 @@ theorem auth_final (htime : TimelyAuthentic cfg H tr) {u v : Validator} (hu : u 
   obtain ⟨i, -, inpi, hi, hix⟩ := persists_of_broadcasts hp hpb
   exact persists_final (persists_of_event hi hix)
 
-/-- **An honest node never convicts an honest one.** -/
+/-- **An honest node never convicts an honest one**, when it does not drop. -/
 theorem not_detected (htime : TimelyAuthentic cfg H tr) (hev : EvidenceAuthentic cfg H tr)
-    {u v : Validator} (hu : u ∈ H) (hv : v ∈ H) (i : ℕ) :
+    (hdr : cfg.drops = false) {u v : Validator} (hu : u ∈ H) (hv : v ∈ H) (i : ℕ) :
     u ∉ (stateBefore cfg tr i v).detected := by
   wlog hi : i ≤ tr.length generalizing i
   · rw [stateBefore_of_le (by omega) v]; exact this tr.length le_rfl
   intro hd
-  have hE := evidenceOn_before (cfg := cfg) (tr := tr) v i
+  have hE := evidenceOn_before (cfg := cfg) (tr := tr) v hdr i
   obtain ⟨e, he, rfl, hne⟩ := hE.1 _ hd
   rcases (hE.2 e he).2 with ⟨ha, ha', hac, hac', hr⟩ | ⟨c, hc, hce⟩
   · have hown : ∀ c ∈ (stateBefore cfg tr i v).disk.ids,
@@ -77,13 +78,13 @@ theorem not_detected (htime : TimelyAuthentic cfg H tr) (hev : EvidenceAuthentic
       (by simp only; rw [((stateBefore cfg tr i v).disk.full_fields c).2.2]; exact hce) hne hu
 
 /-- **An honest node leaves out no honest author**, given authentic
-evidence. -/
+evidence, when it does not drop. -/
 theorem not_excluded (htime : TimelyAuthentic cfg H tr) (hev : EvidenceAuthentic cfg H tr)
-    {u v : Validator} (hu : u ∈ H) (hv : v ∈ H) (i r : ℕ) :
+    (hd : cfg.drops = false) {u v : Validator} (hu : u ∈ H) (hv : v ∈ H) (i r : ℕ) :
     u ∉ excluded (cfg.at v) (stateBefore cfg tr i v).disk r (stateBefore cfg tr i v).evidence := by
   wlog hi : i ≤ tr.length generalizing i
   · rw [stateBefore_of_le (by omega) v]; exact this tr.length le_rfl
-  have hE := evidenceOn_before (cfg := cfg) (tr := tr) v i
+  have hE := evidenceOn_before (cfg := cfg) (tr := tr) v hd i
   intro hm
   rcases Finset.mem_union.mp hm with hm | hm
   · obtain ⟨e, he, rfl⟩ := Finset.mem_image.mp hm
@@ -101,7 +102,7 @@ theorem not_excluded (htime : TimelyAuthentic cfg H tr) (hev : EvidenceAuthentic
     · exact hev _ (stored_known hv hc) e
         (by simp only; rw [((stateBefore cfg tr i v).disk.full_fields c).2.2]; exact hce) hne hu
   · obtain ⟨c, hcR, hcm⟩ := Finset.mem_biUnion.mp hm
-    exact ex_not_named (inv_before (cfg := cfg) (tr := tr) i v).valid
+    exact ex_not_named ((inv_before (cfg := cfg) (tr := tr) i v).valid hd)
       (fun j hj e he hne => hev _ (stored_known hv hj) e
         (by simp only; rw [((stateBefore cfg tr i v).disk.full_fields j).2.2]; exact he) hne) c
       (Store.mem_atRound.mp hcR).1 u hcm hu
@@ -182,7 +183,7 @@ variable {u v : Validator} (hu : u ∈ H) (hv : v ∈ H) (huv : u ≠ v) {j : Bl
   {b : Block Validator BlockId Payload}
 variable (hpers : (j, b) ∈ persists (runOf cfg tr u).2)
 variable (htop : ∀ x ∈ persists (runOf cfg tr u).2, x.2.round ≤ b.round)
-variable (hlack : ∀ τ, j ∉ (stateBefore cfg tr τ v).disk.ids)
+variable (hlack : ∀ τ, j ∉ (stateBefore cfg tr τ v).disk.ids) (hdr : cfg.drops = false)
 
 include hpers htop in
 /-- **A block of `u`'s at the round of `(j, b)` or above is `(j, b)`.** -/
@@ -190,7 +191,7 @@ theorem eq_top {x : BlockId × Block Validator BlockId Payload}
     (hx : x ∈ persists (runOf cfg tr u).2) (hr : b.round ≤ x.2.round) : x = (j, b) :=
   eq_of_persists u hx hpers (le_antisymm (htop x hx) hr)
 
-include htime hev hu hv huv hpers htop hlack in
+include htime hev hu hv huv hpers htop hlack hdr in
 /-- **`v` given `(j, b)` by `u` has a sync for it after.** -/
 theorem sync_made (hid : j = cfg.idOf b) (hc : b.creator = u)
     (hval : 0 < b.round → cfg.q ≤ b.refs.card) {k : ℕ}
@@ -198,17 +199,18 @@ theorem sync_made (hid : j = cfg.idOf b) (hc : b.creator = u)
     ∃ A, (u, (j, b), A) ∈ (stateBefore cfg tr (k + 1) v).syncs := by
   have hs := syncsOn_before (cfg := cfg) (tr := tr) v k
   have hl := hlack (k + 1)
-  have hd := not_detected htime hev hu hv (k + 1)
+  have hd := not_detected htime hev hdr hu hv (k + 1)
   rw [step_before hk] at hl hd ⊢
   set s := stateBefore cfg tr k v
   have hg : j = (cfg.at v).idOf b ∧ b.creator = u ∧ u ≠ (cfg.at v).me ∧ u ∉ s.detected ∧
-      j ∉ s.disk.ids := ⟨hid, hc, huv, not_detected htime hev hu hv k, hlack k⟩
+      j ∉ s.disk.ids := ⟨hid, hc, huv, not_detected htime hev hdr hu hv k, hlack k⟩
   rw [step_deliver_eq, if_pos hg] at hl hd ⊢
   split_ifs at hl hd ⊢ with hr hcnd
-  · exact absurd ((Thins.settle _).grows.1 ((Thins.tidy (cfg := cfg.at v) _).grows.1 (mem_accept hr
-      hg.2.2.2.2))) hl
+  · exact absurd ((Thins.settle (cfg := cfg.at v) _).grows hdr |>.1
+      ((Thins.tidy (cfg := cfg.at v) _).grows hdr |>.1 (mem_accept hr hg.2.2.2.2))) hl
   · rcases (Thins.settle (cfg := cfg.at v) { s with syncs := (u, (j, b), ([] : List BlockId)) ::
-        (s.syncs.filter fun e => decide (e.1 ≠ u)) }).kept _ List.mem_cons_self with h | h | h
+        (s.syncs.filter fun e => decide (e.1 ≠ u)) }).kept hdr _ List.mem_cons_self with
+        h | h | h
     · exact ⟨[], h⟩
     · exact absurd h hl
     · exact absurd h hd
@@ -232,7 +234,7 @@ theorem sync_made (hid : j = cfg.idOf b) (hc : b.creator = u)
       subst heu this
       exact he
 
-include htime hev hu hv htop hlack in
+include htime hev hu hv htop hlack hdr in
 /-- **`v`'s sync for `(j, b)` stays.** -/
 theorem sync_stays {k : ℕ} (hmade : ∃ A, (u, (j, b), A) ∈ (stateBefore cfg tr (k + 1) v).syncs) :
     ∀ τ, k + 1 ≤ τ → ∃ A, (u, (j, b), A) ∈ (stateBefore cfg tr τ v).syncs := by
@@ -244,10 +246,10 @@ theorem sync_stays {k : ℕ} (hmade : ∃ A, (u, (j, b), A) ∈ (stateBefore cfg
     by_cases hev : ∃ inp, tr[τ]? = some (v, inp)
     · obtain ⟨inp, hτ⟩ := hev
       have hl := hlack (τ + 1)
-      have hd := not_detected htime hev hu hv (τ + 1)
+      have hd := not_detected htime hev hdr hu hv (τ + 1)
       rw [step_before hτ] at hl hd ⊢
-      rcases step_keeps (syncsOn_before (cfg := cfg) (tr := tr) v τ) hA inp with
-        h | h | ⟨id, b', rfl, hid', hc', hr'⟩ | h
+      rcases step_keeps (cfg := cfg.at v) (syncsOn_before (cfg := cfg) (tr := tr) v τ) hdr hA
+        inp with h | h | ⟨id, b', rfl, hid', hc', hr'⟩ | h
       · exact absurd h hl
       · exact absurd h hd
       · have hx : (id, b') ∈ delivered (cfg.at v) [Input.deliver u id b'] := by

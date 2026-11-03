@@ -10,7 +10,8 @@ adversary, assume:
   delivered to an honest node with an honest author's identity and its
   hash was broadcast by that author earlier;
 * **the hash** (`Converge.HashInjective`): no two different blocks the
-  honest nodes knew have one identifier.
+  honest nodes knew have one identifier;
+* **injective identifiers**: no two different blocks have one identifier.
 
 Then, at the bounded vote, with an admissible row and at most `f` nodes
 outside `H`, **any two honest nodes' decisions are prefix-comparable**
@@ -32,7 +33,7 @@ def Safety : Prop :=
     (tr : Trace Validator BlockId Payload),
     cfg.σ = boundedSel → cfg.Admissible → Hᶜ.card ≤ cfg.f →
     Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr →
-    ∀ v ∈ H, ∀ w ∈ H, decisionsOf cfg tr v <+: decisionsOf cfg tr w ∨
+    Function.Injective cfg.idOf → ∀ v ∈ H, ∀ w ∈ H, decisionsOf cfg tr v <+: decisionsOf cfg tr w ∨
       decisionsOf cfg tr w <+: decisionsOf cfg tr v
 
 /-- Many honest nodes. -/

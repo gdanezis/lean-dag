@@ -22,6 +22,8 @@ of at least `q` nodes, and a GST `gst`, assume up to a time `t₁`:
 * every reliable node **starts** by `gst` (`StartedBy`), and does not
   **restart** by `t₁` (`UpFrom` from `0`);
 * timely authentication of blocks;
+* **no dropping** (`cfg.drops = false`): no node lets go of a block it
+  accepted;
 * the injective hash, injective on every block, at most `f` nodes
   outside `H`, `n − f − c` reliable nodes, a quorum of two or more, and
   `2 (Δ + Δₛ) < timeout r` at every round.
@@ -213,7 +215,7 @@ def Progresses : Prop :=
     cfg.q ≤ T.card → Fintype.card Validator - cfg.f - cfg.c ≤ T.card → 2 ≤ cfg.q →
     Function.Injective cfg.idOf → (∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) →
     Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr →
-    Converge.EvidenceAuthentic cfg H tr → TimeMono tr time →
+    Converge.EvidenceAuthentic cfg H tr → cfg.drops = false → TimeMono tr time →
     Spread cfg H tr D nE → (∀ v ∈ T, nE ≤ topAt cfg tr time v gst) →
     DeliveredWithin cfg T tr time gst Δ t₁ →
     TimersFire cfg T tr time t₁ → TimersAfterSet cfg H tr time →
@@ -235,7 +237,7 @@ def Recovers : Prop :=
     cfg.q ≤ T.card → Fintype.card Validator - cfg.f - cfg.c ≤ T.card → 2 ≤ cfg.q →
     Function.Injective cfg.idOf → (∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) →
     Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr →
-    Converge.EvidenceAuthentic cfg H tr → TimeMono tr time →
+    Converge.EvidenceAuthentic cfg H tr → cfg.drops = false → TimeMono tr time →
     Spread cfg H tr D nE → (∀ v ∈ T, nE ≤ topAt cfg tr time v (max t_r gst)) →
     DeliveredFrom cfg T tr time gst Δ t_r t₁ → TimersFireUp cfg T tr time t₁ →
     TimersAfterSet cfg H tr time → SyncedFrom cfg T tr time gst Δₛ t_r t₁ →

@@ -25,12 +25,13 @@ gathered from `byRound`, those at `R` read without references, and
 `windowView st R` its view of all its blocks.
 
 A store may keep a block without its references (`strip`, `stripAll`),
-holding those references apart (`kept`); they are accepted and one round
-below the block (`kept_closed`). The block as accepted (`full`) restores
-them, so the blocks as accepted are closed under references too
-(`full_refs`, `causal_full`). `Restrips F st st'` says `st'` keeps the
-blocks of `st`, as accepted, perhaps more of those below `F` without their
-references.
+holding those references apart (`kept`). The block as accepted (`full`)
+restores them; the blocks as accepted are closed under references when no
+reference kept apart was let go (`FullClosed`). `Restrips F st st'` says
+`st'` keeps the blocks of `st`, as accepted, perhaps more of those below `F`
+without their references. A store lets go of a block no block it holds
+references (`erase`, `eraseAll`); `Shrinks st st'` says `st'` keeps some of
+the blocks of `st`, as accepted.
 -/
 
 namespace LeanDag
@@ -84,9 +85,6 @@ structure Store where
   kept : Std.TreeMap BlockId (Finset BlockId) compare
   /-- A block kept without its references is accepted and holds none. -/
   kept_spec : ∀ j, kept.contains j = true → j ∈ ids ∧ (map.getD j junk).refs = ∅
-  /-- The references kept apart are accepted, one round below their block. -/
-  kept_closed : ∀ j R, kept[j]? = some R → ∀ x ∈ R,
-    x ∈ ids ∧ (map.getD x junk).round + 1 = (map.getD j junk).round
 
 namespace Store
 
@@ -104,7 +102,6 @@ def empty (junk : Block Validator BlockId Payload) : Store Validator BlockId Pay
   byRound_spec := fun r => by simp [Std.TreeMap.getD_emptyc]
   kept := ∅
   kept_spec := fun j h => by simp [Std.TreeMap.contains_emptyc] at h
-  kept_closed := fun j R h => by simp at h
 
 variable (s : Store Validator BlockId Payload)
 
@@ -205,13 +202,6 @@ def insert (id : BlockId) (b : Block Validator BlockId Payload) (hnew : id ∉ s
     refine ⟨Finset.mem_cons_of_mem hj, ?_⟩
     rw [treeMap_getD_insert_ne (ne_of_mem_of_not_mem hj hnew).symm]
     exact hr
-  kept_closed := fun j R hR x hx => by
-    have hj := (s.kept_spec j (by rw [Std.TreeMap.contains_eq_isSome_getElem?, hR]; rfl)).1
-    obtain ⟨hxi, hxr⟩ := s.kept_closed j R hR x hx
-    refine ⟨Finset.mem_cons_of_mem hxi, ?_⟩
-    rw [treeMap_getD_insert_ne (ne_of_mem_of_not_mem hj hnew).symm,
-      treeMap_getD_insert_ne (ne_of_mem_of_not_mem hxi hnew).symm]
-    exact hxr
 
 omit [DecidableEq Validator] in
 variable {s} in
@@ -280,17 +270,6 @@ theorem full_insert {id : BlockId} {b : Block Validator BlockId Payload} {hnew :
     rw [hk, hlk, if_neg hji]
 
 omit [DecidableEq Validator] in
-/-- **The references of a block as accepted are accepted**, one round below
-it. -/
-theorem full_refs (j : BlockId) (hj : j ∈ s.ids) :
-    ∀ x ∈ (s.full j).refs, x ∈ s.ids ∧ (s.blk x).round + 1 = (s.blk j).round := by
-  unfold full
-  split
-  · rename_i R hR
-    exact s.kept_closed j R hR
-  · exact fun x hx => ⟨s.complete j hj x hx, s.pred j hj x hx⟩
-
-omit [DecidableEq Validator] in
 /-- A block's stored references are among its references as accepted. -/
 theorem refs_sub_full (j : BlockId) : (s.blk j).refs ⊆ (s.full j).refs := by
   unfold full
@@ -301,13 +280,46 @@ theorem refs_sub_full (j : BlockId) : (s.blk j).refs ⊆ (s.full j).refs := by
     rw [this]; exact Finset.empty_subset _
   · exact subset_rfl
 
-omit [DecidableEq Validator] in
 /-- **The blocks as accepted are closed under references**, each one round
 below its referrer. -/
-theorem causal_full : CausalStructure s.full s.ids where
-  complete i hi j hj := (s.full_refs i hi j hj).1
+def FullClosed : Prop :=
+  ∀ j ∈ s.ids, ∀ x ∈ (s.full j).refs, x ∈ s.ids ∧ (s.blk x).round + 1 = (s.blk j).round
+
+omit [DecidableEq Validator] in
+variable {s} in
+theorem FullClosed.causal (h : s.FullClosed) : CausalStructure s.full s.ids where
+  complete i hi j hj := (h i hi j hj).1
   refs_round i hi j hj := by
-    rw [(s.full_fields j).1, (s.full_fields i).1]; exact (s.full_refs i hi j hj).2
+    rw [(s.full_fields j).1, (s.full_fields i).1]; exact (h i hi j hj).2
+
+omit [DecidableEq Validator] in
+variable {s} in
+theorem FullClosed.insert (h : s.FullClosed) {id : BlockId} {b : Block Validator BlockId Payload}
+    {hnew : id ∉ s.ids} {hrefs : b.refs ⊆ s.ids}
+    {hpred : ∀ j ∈ b.refs, (s.blk j).round + 1 = b.round} :
+    (s.insert id b hnew hrefs hpred).FullClosed := by
+  have hb : ∀ i, i ≠ id → (s.insert id b hnew hrefs hpred).blk i = s.blk i := fun i hi => by
+    change (s.map.insert id b).getD i s.junk = _
+    exact treeMap_getD_insert_ne (Ne.symm hi)
+  have hself : (s.insert id b hnew hrefs hpred).blk id = b := by
+    change (s.map.insert id b).getD id s.junk = _
+    exact Std.TreeMap.getD_insert_self
+  intro j hj x hx
+  rw [full_insert] at hx
+  rw [insert_ids] at hj
+  have hj' : j = id ∨ j ∈ s.ids := Finset.mem_insert.mp hj
+  split at hx
+  · rename_i hji
+    subst hji
+    have hxi : x ≠ j := fun e => hnew (e ▸ hrefs hx)
+    refine ⟨mem_insert_of_mem (hrefs hx), ?_⟩
+    rw [hb x hxi, hself]
+    exact hpred x hx
+  · rename_i hji
+    have hjs := hj'.resolve_left hji
+    obtain ⟨hxs, hxr⟩ := h j hjs x hx
+    have hxi : x ≠ id := fun e => hnew (e ▸ hxs)
+    exact ⟨mem_insert_of_mem hxs, by rw [hb x hxi, hb j hji]; exact hxr⟩
 
 /-- **Keep the block `j` without its references**, its references apart. -/
 def strip (j : BlockId) : Store Validator BlockId Payload :=
@@ -348,18 +360,7 @@ def strip (j : BlockId) : Store Validator BlockId Payload :=
         by_cases h : i = j
         · subst h; exact ⟨hj, by rw [Std.TreeMap.getD_insert_self]⟩
         · obtain ⟨hi', hr⟩ := s.kept_spec i (hi.resolve_left h)
-          exact ⟨hi', by rw [hrefs i h]; exact hr⟩
-      kept_closed := fun i R hR x hx => by
-        rw [hround, hround]
-        rw [Std.TreeMap.getElem?_insert] at hR
-        split at hR
-        · rename_i he
-          have hij : j = i := compare_eq_iff_eq.mp he
-          subst hij
-          rw [Option.some.injEq] at hR
-          subst hR
-          exact s.full_refs j hj x hx
-        · exact s.kept_closed i R hR x hx }
+          exact ⟨hi', by rw [hrefs i h]; exact hr⟩ }
   else s
 
 omit [DecidableEq Validator] in
@@ -566,6 +567,15 @@ theorem Restrips.trans {F F' : ℕ} {a b c : Store Validator BlockId Payload} (h
     · have := h₁.low i hb h₀; omega
 
 omit [DecidableEq Validator] in
+theorem Restrips.fullClosed {F : ℕ} {st st' : Store Validator BlockId Payload}
+    (h : Restrips F st st') (hc : st.FullClosed) : st'.FullClosed := by
+  intro j hj x hx
+  rw [h.full] at hx
+  rw [h.ids] at hj ⊢
+  rw [(h.fields x).1, (h.fields j).1]
+  exact hc j hj x hx
+
+omit [DecidableEq Validator] in
 theorem Restrips.atRound {F : ℕ} {st st' : Store Validator BlockId Payload} (h : Restrips F st st')
     (r : ℕ) : st'.atRound r = st.atRound r := by
   change st'.byRound.getD r ∅ = st.byRound.getD r ∅
@@ -623,6 +633,149 @@ theorem Restrips.low_of {st st' : Store Validator BlockId Payload} {F₀ F : ℕ
   by_cases h₀ : st.kept[j]? = none
   · exact h.low j hj h₀
   · have := hlow j h₀; omega
+
+/-- **Let go of the block `x`**, if the store holds it and no block it holds
+references it. -/
+def erase (x : BlockId) : Store Validator BlockId Payload :=
+  if hx : x ∈ s.ids ∧ ∀ i ∈ s.ids, x ∉ (s.blk i).refs then
+    have hlk : ∀ i, i ≠ x → (s.map.erase x).getD i s.junk = s.blk i := fun i hi => by
+      rw [Std.TreeMap.getD_erase]
+      simp [Ne.symm hi, blk]
+    { map := s.map.erase x
+      ids := s.ids.erase x
+      junk := s.junk
+      complete := fun i hi j hj => by
+        have hix : i ≠ x := Finset.ne_of_mem_erase hi
+        rw [hlk i hix] at hj
+        have hi' := Finset.mem_of_mem_erase hi
+        refine Finset.mem_erase.mpr ⟨fun e => hx.2 i hi' (e ▸ hj), s.complete i hi' j hj⟩
+      pred := fun i hi j hj => by
+        have hix : i ≠ x := Finset.ne_of_mem_erase hi
+        rw [hlk i hix] at hj ⊢
+        have hi' := Finset.mem_of_mem_erase hi
+        have hjx : j ≠ x := fun e => hx.2 i hi' (e ▸ hj)
+        rw [hlk j hjx]
+        exact s.pred i hi' j hj
+      mem_map := fun j => by
+        rw [Finset.mem_erase, Std.TreeMap.contains_erase, Bool.and_eq_true, bne_iff_ne,
+          ← s.mem_map]
+        exact ⟨fun h => ⟨fun e => h.1 (compare_eq_iff_eq.mp e).symm, h.2⟩,
+          fun h => ⟨fun e => h.1 (compare_eq_iff_eq.mpr e.symm), h.2⟩⟩
+      topRound := (s.ids.erase x).sup fun i => ((s.map.erase x).getD i s.junk).round
+      topRound_spec := rfl
+      byRound := s.byRound.insert (s.blk x).round ((s.byRound.getD (s.blk x).round ∅).erase x)
+      byRound_spec := fun r => by
+        by_cases hr : (s.blk x).round = r
+        · subst hr
+          rw [Std.TreeMap.getD_insert_self, s.byRound_spec]
+          ext i
+          simp only [Finset.mem_erase, Finset.mem_filter]
+          constructor
+          · rintro ⟨hix, hi, hir⟩
+            exact ⟨⟨hix, hi⟩, by rw [hlk i hix]; exact hir⟩
+          · rintro ⟨⟨hix, hi⟩, hir⟩
+            exact ⟨hix, hi, by rw [hlk i hix] at hir; exact hir⟩
+        · rw [treeMap_getD_insert_ne hr, s.byRound_spec]
+          ext i
+          simp only [Finset.mem_erase, Finset.mem_filter]
+          constructor
+          · rintro ⟨hi, hir⟩
+            have hix : i ≠ x := fun e => hr (e ▸ hir)
+            exact ⟨⟨hix, hi⟩, by rw [hlk i hix]; exact hir⟩
+          · rintro ⟨⟨hix, hi⟩, hir⟩
+            exact ⟨hi, by rw [hlk i hix] at hir; exact hir⟩
+      kept := s.kept.erase x
+      kept_spec := fun j hj => by
+        rw [Std.TreeMap.contains_erase] at hj
+        simp only [Bool.and_eq_true, bne_iff_ne, ne_eq] at hj
+        have hjx : j ≠ x := fun e => hj.1 (by rw [e]; exact compare_eq_iff_eq.mpr rfl)
+        obtain ⟨hj', hr⟩ := s.kept_spec j hj.2
+        exact ⟨Finset.mem_erase.mpr ⟨hjx, hj'⟩, by rw [hlk j hjx]; exact hr⟩ }
+  else s
+
+/-- **Let go of the blocks of `l`**, each if no block held references it. -/
+def eraseAll (l : List BlockId) : Store Validator BlockId Payload :=
+  l.foldl (fun st x => st.erase x) s
+
+omit [DecidableEq Validator] in
+/-- Letting go of `x` keeps every other block, as stored and as accepted. -/
+theorem erase_spec (x : BlockId) : (s.erase x).ids ⊆ s.ids ∧
+    (∀ i ∈ s.ids, i ≠ x → i ∈ (s.erase x).ids) ∧
+    ∀ i ∈ (s.erase x).ids, (s.erase x).blk i = s.blk i ∧ (s.erase x).kept[i]? = s.kept[i]? := by
+  unfold erase
+  split
+  · rename_i hx
+    refine ⟨Finset.erase_subset _ _, fun i hi hix => Finset.mem_erase.mpr ⟨hix, hi⟩,
+      fun i hi => ?_⟩
+    have hix : i ≠ x := Finset.ne_of_mem_erase hi
+    refine ⟨?_, ?_⟩
+    · change (s.map.erase x).getD i s.junk = _
+      rw [Std.TreeMap.getD_erase]
+      simp [Ne.symm hix, blk]
+    · change (s.kept.erase x)[i]? = _
+      rw [Std.TreeMap.getElem?_erase]
+      have : ¬ compare x i = Ordering.eq := fun e => hix (compare_eq_iff_eq.mp e).symm
+      simp [this]
+  · exact ⟨subset_rfl, fun i hi _ => hi, fun _ _ => ⟨rfl, rfl⟩⟩
+
+omit [DecidableEq Validator] in
+theorem eraseAll_spec : ∀ (l : List BlockId) (st : Store Validator BlockId Payload),
+    (st.eraseAll l).ids ⊆ st.ids ∧ (∀ i ∈ st.ids, i ∉ l → i ∈ (st.eraseAll l).ids) ∧
+    ∀ i ∈ (st.eraseAll l).ids,
+      (st.eraseAll l).blk i = st.blk i ∧ (st.eraseAll l).kept[i]? = st.kept[i]?
+  | [], st => ⟨subset_rfl, fun _ hi _ => hi, fun _ _ => ⟨rfl, rfl⟩⟩
+  | x :: l, st => by
+    obtain ⟨h₁, h₂, h₃⟩ := st.erase_spec x
+    obtain ⟨g₁, g₂, g₃⟩ := eraseAll_spec l (st.erase x)
+    refine ⟨g₁.trans h₁, fun i hi hil => ?_, fun i hi => ?_⟩
+    · rw [List.mem_cons, not_or] at hil
+      exact g₂ i (h₂ i hi hil.1) hil.2
+    · obtain ⟨e₁, e₂⟩ := g₃ i hi
+      obtain ⟨f₁, f₂⟩ := h₃ i (g₁ hi)
+      exact ⟨e₁.trans f₁, e₂.trans f₂⟩
+
+/-- **`st'` keeps some of the blocks of `st`**, each as accepted, at the same
+round, author and payload. -/
+structure Shrinks (st st' : Store Validator BlockId Payload) : Prop where
+  ids : st'.ids ⊆ st.ids
+  full : ∀ i ∈ st'.ids, st'.full i = st.full i
+  fields : ∀ i ∈ st'.ids, (st'.blk i).round = (st.blk i).round ∧
+    (st'.blk i).creator = (st.blk i).creator ∧ (st'.blk i).payload = (st.blk i).payload
+
+omit [DecidableEq Validator] in
+theorem Shrinks.trans {a b c : Store Validator BlockId Payload} (h₁ : Shrinks a b)
+    (h₂ : Shrinks b c) : Shrinks a c where
+  ids := h₂.ids.trans h₁.ids
+  full i hi := (h₂.full i hi).trans (h₁.full i (h₂.ids hi))
+  fields i hi := ⟨(h₂.fields i hi).1.trans (h₁.fields i (h₂.ids hi)).1,
+    (h₂.fields i hi).2.1.trans (h₁.fields i (h₂.ids hi)).2.1,
+    (h₂.fields i hi).2.2.trans (h₁.fields i (h₂.ids hi)).2.2⟩
+
+omit [DecidableEq Validator] in
+theorem Restrips.shrinks {F : ℕ} {st st' : Store Validator BlockId Payload}
+    (h : Restrips F st st') : Shrinks st st' :=
+  ⟨fun _ hi => h.ids ▸ hi, fun i _ => h.full i, fun i _ => h.fields i⟩
+
+omit [DecidableEq Validator] in
+theorem shrinks_eraseAll (l : List BlockId) : Shrinks s (s.eraseAll l) := by
+  obtain ⟨h₁, -, h₃⟩ := eraseAll_spec l s
+  refine ⟨h₁, fun i hi => ?_, fun i hi => by rw [(h₃ i hi).1]; exact ⟨rfl, rfl, rfl⟩⟩
+  unfold full
+  rw [(h₃ i hi).2, (h₃ i hi).1]
+
+omit [DecidableEq Validator] in
+/-- Letting go of blocks keeps every block kept without references below a
+round. -/
+theorem low_eraseAll {F : ℕ} (hlow : ∀ j, s.kept[j]? ≠ none → (s.blk j).round < F)
+    (l : List BlockId) :
+    ∀ j, (s.eraseAll l).kept[j]? ≠ none → ((s.eraseAll l).blk j).round < F := by
+  intro j hj
+  obtain ⟨-, -, h₃⟩ := eraseAll_spec l s
+  have hji : j ∈ (s.eraseAll l).ids :=
+    ((s.eraseAll l).kept_spec j (by
+      rw [Std.TreeMap.contains_eq_isSome_getElem?]; exact Option.isSome_iff_ne_none.mpr hj)).1
+  rw [(h₃ j hji).1]
+  exact hlow j (by rw [← (h₃ j hji).2]; exact hj)
 
 omit [DecidableEq Validator] in
 /-- The rounds `R … topRound`, each read off `byRound`, hold disjoint sets. -/

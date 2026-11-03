@@ -213,7 +213,7 @@ any timing), B1 (liveness in synchrony) and V13 are proved again.
 1. **Ordering.** The node computes its ledger and its decided horizon
    from its verdicts (`bypassLedger`). Done: what a node ordered after
    `n` slots is the ledger of its verdicts read from its disk
-   (`State.ordered`, `ledgerOn`, `Node/Model/Order.lean`). Two honest
+   (`State.ordered`, `Node/Model/Step.lean`; `ledgerOn`). Two honest
    nodes order the same blocks after any number of slots both decided
    (`Order.Agrees`), and an honest node holds what it ordered
    (`Order.Held`), in `Node/Order`. The ordered set is read off the
@@ -325,10 +325,27 @@ store closed, and needs none of this.
      (`State.low`, `Inv.unkept`, `ViewsAbove.of_storeAbove`). V12's
      holdings, `Cut.Cuts` and convergence now speak of the blocks as
      accepted.
-  3. *Dropping* (D13), below the base: the ordered blocks and the
-     proofs (`witnessView`) are kept.
+  3. *Dropping* (D13). Done, behind a switch (`Config.drops`). A
+     decision keeps, for each slot it decides, the proof of its verdict:
+     the blocks of the slot's witness (`witnessAt`) with their histories
+     down to the round below the slot's (`proofOf`, `State.proofs`). It
+     then lets go of each block below the round under its floor that is
+     not its own block, not ordered, in no proof, referenced by no block
+     the disk holds, and bypassed by ordered blocks of `q` authors one
+     round above it (`dropSet`, `drop`, `Store.eraseAll`). The disk then
+     keeps some of its blocks, as accepted (`Store.Shrinks`,
+     `decideStep_shrinks`), and the node's own block
+     (`decideStep_own_mem`). With dropping on, the node's
+     invariant holds, with the disk's validity only without dropping
+     (`Inv.drop`); every honest disk reads as the padded record from each
+     cut up (`Cut.Cuts`, `Cut.Agrees`), and V3 follows from `Cut.Agrees`
+     (`Runs.prefix_of_agree`). Convergence, V11, V11′, V12, V13 and
+     `Order` assume that no node drops (`cfg.drops = false`): a node whose
+     cut lies below a peer's floor may wait forever on a block the peer
+     let go, until it catches up on proofs (item 4).
   4. *Catch-up* (D16), with the jump of a node whose top lies below its
-     cut. V12 on one record ends here: a decision on a proof is a verdict
+     cut. With it convergence, V11 and V13 are to be proved with dropping
+     on. V12 on one record ends here: a decision on a proof is a verdict
      on the padded record only.
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 

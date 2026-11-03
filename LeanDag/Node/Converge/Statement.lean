@@ -15,7 +15,9 @@ adversary, assume:
   nodes knew have one identifier;
 * **authentic evidence** (`EvidenceAuthentic`): no block the honest
   nodes knew carries evidence naming an honest author with two distinct
-  blocks, which is what signed headers give.
+  blocks, which is what signed headers give;
+* **no dropping** (`cfg.drops = false`): no node lets go of a block it
+  accepted.
 
 Then **every block in the history of an honest node's block at its top
 is on every honest node's disk at the end** (`Converges`).
@@ -74,7 +76,7 @@ def Converges : Prop :=
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload),
     Delivered cfg H tr → TimelyAuthentic cfg H tr → HashInjective cfg H tr →
-    EvidenceAuthentic cfg H tr →
+    EvidenceAuthentic cfg H tr → cfg.drops = false →
     ∀ u ∈ H, ∀ j, (stateBefore cfg tr tr.length u).own = some j →
       ∀ y ∈ historyFrom (stateBefore cfg tr tr.length u).disk.full j, ∀ v ∈ H,
         y ∈ (stateBefore cfg tr tr.length v).disk.ids

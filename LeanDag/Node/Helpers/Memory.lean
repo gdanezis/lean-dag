@@ -310,6 +310,65 @@ theorem release_floor : (release cfg s).floor = max s.floor (floorOf cfg s) := b
 
 end Release
 
+section Drop
+
+variable (s : State Validator BlockId Payload)
+
+omit [Fintype Validator] in
+/-- A node that does not drop keeps its state. -/
+theorem drop_of_false (hd : cfg.drops = false) : drop cfg s = s := by
+  unfold drop; rw [hd]; rfl
+
+omit [Fintype Validator] in
+/-- **Dropping only lets go of blocks.** -/
+theorem drop_disk : Store.Shrinks s.disk (drop cfg s).disk := by
+  unfold drop; split
+  · exact s.disk.shrinks_eraseAll _
+  · exact (Store.Restrips.refl _ 0).shrinks
+
+omit [Fintype Validator] in
+/-- **Dropping keeps the node's own block.** -/
+theorem drop_own_mem {j : BlockId} (hj : s.own = some j) (hm : j ∈ s.disk.ids) :
+    j ∈ (drop cfg s).disk.ids := by
+  unfold drop
+  split
+  · refine (Store.eraseAll_spec _ _).2.1 j hm fun hd => ?_
+    unfold dropSet at hd
+    have := (List.mem_filter.mp hd).2
+    simp only [decide_eq_true_eq] at this
+    exact this.2.1 hj
+  · exact hm
+
+omit [Fintype Validator] in
+@[simp] theorem drop_syncs : (drop cfg s).syncs = s.syncs := by unfold drop; split <;> rfl
+omit [Fintype Validator] in
+@[simp] theorem drop_top : (drop cfg s).top = s.top := by unfold drop; split <;> rfl
+omit [Fintype Validator] in
+@[simp] theorem drop_own : (drop cfg s).own = s.own := by unfold drop; split <;> rfl
+omit [Fintype Validator] in
+@[simp] theorem drop_fired : (drop cfg s).fired = s.fired := by unfold drop; split <;> rfl
+omit [Fintype Validator] in
+@[simp] theorem drop_lo : (drop cfg s).lo = s.lo := by unfold drop; split <;> rfl
+omit [Fintype Validator] in
+@[simp] theorem drop_decided : (drop cfg s).decided = s.decided := by unfold drop; split <;> rfl
+omit [Fintype Validator] in
+@[simp] theorem drop_proofs : (drop cfg s).proofs = s.proofs := by unfold drop; split <;> rfl
+omit [Fintype Validator] in
+@[simp] theorem drop_armed : (drop cfg s).armed = s.armed := by unfold drop; split <;> rfl
+omit [Fintype Validator] in
+@[simp] theorem drop_detected : (drop cfg s).detected = s.detected := by
+  unfold drop; split <;> rfl
+omit [Fintype Validator] in
+@[simp] theorem drop_evidence : (drop cfg s).evidence = s.evidence := by
+  unfold drop; split <;> rfl
+omit [Fintype Validator] in
+@[simp] theorem drop_recovering : (drop cfg s).recovering = s.recovering := by
+  unfold drop; split <;> rfl
+omit [Fintype Validator] in
+@[simp] theorem drop_floor : (drop cfg s).floor = s.floor := by unfold drop; split <;> rfl
+
+end Drop
+
 omit [Fintype Validator] in
 /-- **At the bounded vote, the memory and the disk agree from the floor
 up.** -/
