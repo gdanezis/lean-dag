@@ -3,11 +3,8 @@ import LeanDag.Node.Helpers.Grow
 # Accepting blocks on a store
 
 On stores reading as a block map `g`, accepting blocks of `g` keeps the
-store reading as `g` (`ReadsAs.foldl`). A block that `accept` takes
-whenever it is ready (`Fits`), which every block valid under `g` is
-(`fits_of_valid`), is taken by accepting a list holding it once it is
-ready (`foldl_takes`). Accepting known blocks keeps the store known
-(`foldl_in`).
+store reading as `g` (`ReadsAs.foldl`). Accepting known blocks keeps the
+store known (`foldl_in`).
 -/
 
 namespace LeanDag
@@ -63,46 +60,6 @@ theorem ReadsAs.foldl {F : ℕ} : ∀ (l : List (BlockId × Block Validator Bloc
     ReadsAs.foldl l (h.accept (hl e List.mem_cons_self))
       fun x hx => hl x (List.mem_cons_of_mem _ hx)
 
-variable (cfg g) in
-/-- **`accept` takes the block whenever it is ready**, on a store reading
-as `g`. -/
-def Fits (y : BlockId × Block Validator BlockId Payload) : Prop :=
-  ∀ (F : ℕ) (st : Store Validator BlockId Payload), ReadsAs g st → readyOn cfg F st y = true →
-    y.1 ∈ (acceptOn cfg F st y.1 y.2).ids
-
-omit [Fintype Validator] in
-/-- **A block valid under `g` fits.** -/
-theorem fits_of_valid {y : BlockId × Block Validator BlockId Payload}
-    (hv : (∀ j ∈ y.2.refs, (g j).round + 1 = y.2.round) ∧ rowValid cfg.q cfg.xp g y.2) :
-    Fits cfg g y := by
-  intro F st hst hr
-  unfold acceptOn
-  by_cases hin : y.1 ∈ st.ids
-  · split
-    · exact Store.mem_insert_self
-    · split
-      · rw [Store.base_ids]; exact Finset.mem_insert_self _ _
-      · exact hin
-  · by_cases hc : st.Checks cfg.q cfg.xp y.1 y.2
-    · rw [dif_pos ⟨hin, hc⟩]; exact Store.mem_insert_self
-    have hb : cfg.drops = true ∧ y.2.round < F := by
-      simpa [readyOn, hc] using hr
-    by_cases hrefs : y.2.refs ⊆ st.ids
-    swap
-    · rw [dif_neg (fun h => hrefs h.2.1), dif_pos ⟨hb.1, hin, hb.2⟩, Store.base_ids]
-      exact Finset.mem_insert_self _ _
-    have hag : ∀ j ∈ y.2.refs, (st.blk j).round = (g j).round ∧
-        (st.blk j).creator = (g j).creator ∧ (st.blk j).payload = (g j).payload := fun j hj => by
-      rw [← hst j (hrefs hj)]
-      have := st.full_fields j
-      exact ⟨this.1.symm, this.2.1.symm, this.2.2.symm⟩
-    rw [dif_pos ⟨hin, hrefs, fun j hj => by rw [(hag j hj).1]; exact hv.1 j hj,
-      rowValid_congr (fun j hj => by
-        have hj' : j ≠ y.1 := fun e => hin (e ▸ hrefs hj)
-        rw [Function.update_of_ne hj']
-        exact ⟨(hag j hj).1.symm, (hag j hj).2.1.symm, (hag j hj).2.2.symm⟩) hv.2⟩]
-    exact Store.mem_insert_self
-
 omit [Fintype Validator] in
 theorem ready_mono {F : ℕ} {st st' : Store Validator BlockId Payload} (hg : Grows st st')
     {e : BlockId × Block Validator BlockId Payload}
@@ -118,21 +75,6 @@ theorem ready_mono {F : ℕ} {st st' : Store Validator BlockId Payload} (hg : Gr
   · rw [Function.update_of_ne hje, Function.update_of_ne hje]
     have := hg.fields (h₁ hj)
     exact ⟨this.1.symm, this.2.1.symm, this.2.2.symm⟩
-
-omit [Fintype Validator] in
-theorem foldl_takes {F : ℕ} : ∀ (l : List (BlockId × Block Validator BlockId Payload))
-    {st : Store Validator BlockId Payload} {y : BlockId × Block Validator BlockId Payload},
-    ReadsAs g st → (∀ e ∈ l, g e.1 = e.2) → Fits cfg g y → y ∈ l →
-    readyOn cfg F st y = true → y.1 ∈ (l.foldl (fun s e => acceptOn cfg F s e.1 e.2) st).ids
-  | [], _, _, _, _, _, hy, _ => absurd hy (List.not_mem_nil)
-  | e :: l, st, y, h, hl, hf, hy, hr => by
-    rw [List.foldl_cons]
-    have hst₁ := h.accept (cfg := cfg) (F := F) (hl e List.mem_cons_self)
-    have hg := Grows.foldl (cfg := cfg) F l (acceptOn cfg F st e.1 e.2)
-    rcases List.mem_cons.mp hy with rfl | hy
-    · exact hg.1 (hf F st h hr)
-    · refine foldl_takes l hst₁ (fun x hx => hl x (List.mem_cons_of_mem _ hx)) hf hy ?_
-      exact ready_mono (Grows.accept (cfg := cfg) F st e.1 e.2) hr
 
 omit [Fintype Validator] in
 theorem accept_in {K : Set (BlockId × Block Validator BlockId Payload)} {F : ℕ}

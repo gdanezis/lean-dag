@@ -202,20 +202,6 @@ theorem stored_known {v : Validator} (hv : v ∈ H) {i : ℕ} {j : BlockId}
     (j, (stateBefore cfg tr i v).disk.full j) ∈ knownIn cfg H tr :=
   knownBefore_sub hv i ((inv_before (cfg := cfg) i v).known j hj)
 
-/-- **A block on an honest disk fits every honest node.** -/
-theorem fits_stored (hd : cfg.drops = false) {u : Validator} (hu : u ∈ H) {i : ℕ} {j : BlockId}
-    (hj : j ∈ (stateBefore cfg tr i u).disk.ids) (v : Validator) :
-    Fits (cfg.at v) (gT cfg H tr) (j, (stateBefore cfg tr i u).disk.full j) := by
-  set st := (stateBefore cfg tr i u).disk
-  have hR := reads_before hinj hu i
-  obtain ⟨href, hval⟩ := (inv_before (cfg := cfg) i u).valid hd j hj
-  refine fits_of_valid ⟨fun k hk => ?_, ?_⟩
-  · rw [← hR k (href hk)]
-    exact ((inv_before (cfg := cfg) (tr := tr) i u).valid hd).fullClosed.causal.refs_round j hj k hk
-  · refine rowValid_congr (fun k hk => ?_) hval
-    rw [hR k (href hk)]
-    exact ⟨rfl, rfl, rfl⟩
-
 omit hinj in
 /-- **What an event makes is on its node's disk after it**, at or above
 the node's floor when it drops. -/
