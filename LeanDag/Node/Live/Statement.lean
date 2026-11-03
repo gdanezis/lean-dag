@@ -62,6 +62,11 @@ every honest node: after every node crashed and restarted, the nodes
 decide each reliably led run of slots above the rounds they reached by
 then.
 
+**With dropping** (`SyncedHeld`). For nodes that drop, synchronisation
+is assumed only when every block the receiver needs at its floor, the
+history of the block from that floor up (`Needs`), is held by a reliable
+node at the delivery (`docs/dos-bounds.md`, Phase 3.2 item 4.3).
+
 Statements only; the proofs are `Proof.lean`.
 -/
 
@@ -109,6 +114,30 @@ def SyncedWithin (cfg : Config Validator BlockId Payload) (T : Finset Validator)
   ∀ j v u id b, tr[j]? = some (v, .deliver u id b) → v ∈ T → b.creator ∈ T → id = cfg.idOf b →
     topAt cfg tr time b.creator gst ≤ b.round →
     ∀ τ, max (time j) gst + Δₛ ≤ τ → τ ≤ t₁ → id ∈ (stateAt cfg tr time v τ).disk.ids
+
+/-- **The blocks a node at floor `F` needs to accept a block `b`**, under
+their hash: the references of `b` if it lies at `F` or above, and the
+references of each such block at `F` or above. -/
+inductive Needs (cfg : Config Validator BlockId Payload) (F : ℕ)
+    (b : Block Validator BlockId Payload) : Block Validator BlockId Payload → Prop
+  | ref {x : Block Validator BlockId Payload} : F ≤ b.round → cfg.idOf x ∈ b.refs →
+      Needs cfg F b x
+  | step {y x : Block Validator BlockId Payload} : Needs cfg F b y → F ≤ y.round →
+      cfg.idOf x ∈ y.refs → Needs cfg F b x
+
+/-- **Synchronisation within `Δₛ` past GST from the blocks reliable nodes
+hold**, for nodes that drop: as `SyncedWithin`, when every block the
+receiver needs at its floor (`Needs`) is on the disk of a reliable node at
+the delivery; the receiver then holds the block, or its floor lies above
+the block's round. -/
+def SyncedHeld (cfg : Config Validator BlockId Payload) (T : Finset Validator)
+    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δₛ t₁ : ℕ) : Prop :=
+  ∀ j v u id b, tr[j]? = some (v, .deliver u id b) → v ∈ T → b.creator ∈ T → id = cfg.idOf b →
+    topAt cfg tr time b.creator gst ≤ b.round →
+    (∀ x, Needs cfg (stateBefore cfg tr j v).floor b x →
+      ∃ w ∈ T, cfg.idOf x ∈ (stateBefore cfg tr j w).disk.ids) →
+    ∀ τ, max (time j) gst + Δₛ ≤ τ → τ ≤ t₁ →
+      id ∈ (stateAt cfg tr time v τ).disk.ids ∨ b.round < (stateAt cfg tr time v τ).floor
 
 /-- **Delivery within `Δ` past GST, from `t_r` on**: a message one
 reliable node sends another at a time `t ≥ t_r` arrives by

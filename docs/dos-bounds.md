@@ -385,14 +385,28 @@ store closed, and needs none of this.
         synchronisation premise is restated as *held by a reliable node*:
         a reliable node given a reliable author's block holds it within
         `Δₛ` when every block of that block's history at or above the
-        receiver's floor is held by some reliable node. The steps: a
+        receiver's floor is held by some reliable node. Production by
+        every reliable node within a bound does not hold with dropping, even
+        eventually: rounds have no least duration, so past GST the other
+        nodes may decide many slots in the `2Δ` a slow reliable node takes
+        to catch up one, and a block of a Byzantine author that only they
+        held, below their floors and in the history of each of their new
+        blocks, keeps the slow node from syncing any of them. Decided with
+        the user, the eventual V11 with dropping is therefore: (i)
+        *catch-up*, every reliable node decides each slot a reliable node
+        decided, within a bound per slot between; (ii) *progress*, the
+        reliable nodes keep deciding the reliably led slots: a node syncs a
+        reliable peer's block when its floor is at or above the peer's,
+        the peer holding the block's history from its own floor up, so
+        when no reliable node decides for long enough, the others catch up,
+        the floors meet and the argument of V11 applies; (iii) production
+        within a bound only for a node whose floor is at or above those of
+        the nodes whose blocks it needs. The steps: a
         proof a reliable node keeps decides its slot at the receiver (the
         replay lemma); a node behind decides a slot a reliable node decided
-        within a bounded time (the catch-up lemma); every reliable block
-        reaches each reliable node, or that node's floor passes it; and
-        the eventual V11, from the observation that a reliable node can
-        need a let-go block only while another reliable node is ahead of it
-        in deciding, which catch-up closes. Done so far: the replay of a
+        within a bounded time (the catch-up lemma); a reliable node syncs a
+        block whose history a reliable node holds from a floor at or below
+        its own; and (i) to (iii). Done so far: the replay of a
         decision on a store that holds its witness and reads as the view
         from the slot's round up (`verdictOn_of_decision`,
         `Node/Helpers/Replay.lean`), from the loop's indifference to slots
@@ -426,8 +440,13 @@ store closed, and needs none of this.
         wave of that slot's round, and then the retry timer of the round it
         built does. So once a reliable peer is past `k`, the node's next
         undecided slot rises within `askDelay k n` and `2Δ` past GST
-        (`moves_up`). What remains is arrival-or-passed and the eventual
-        V11.
+        (`moves_up`). The restated premise is `SyncedHeld`, on the blocks a
+        node needs at its floor to accept a block (`Needs`): a reliable
+        node given a reliable author's block that a reliable node with a
+        floor at or below its own holds then holds it within `Δₛ` past
+        GST, or its floor lies above it (`synced_held`), the holder's disk
+        keeping the references of its blocks from its floor up
+        (`needs_held`). What remains is (i) to (iii).
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase
