@@ -253,25 +253,6 @@ theorem IsCut.down (hc : IsCut U st) (hcl : st.FullClosed) {i : BlockId} :
     have hcs : c ∈ (st.full a).refs := by rw [← hc.eq hj]; exact hstep
     exact ih (hcl a hj c hcs).1
 
-omit [Fintype Validator] in
-/-- **Reaching down from a cut, from a round up**: a block at or above `R`
-that a block of the cut reaches in the record is in the cut, when the cut
-keeps every block from `R` up with its references. -/
-theorem IsCut.down_above [P.Mechanised] (hc : IsCut U st) {R : ℕ}
-    (hk : ∀ a ∈ st.ids, R ≤ (st.blk a).round → st.kept[a]? = none) {i : BlockId}
-    (hiR : R ≤ (U.block i).round) :
-    ∀ {j : BlockId}, j ∈ st.ids → ReachesFrom U.block j i → i ∈ st.ids := by
-  intro j hj h
-  induction h using Relation.ReflTransGen.head_induction_on with
-  | refl => exact hj
-  | @head a c hstep hrest ih =>
-    have hstep : c ∈ (U.block a).refs := hstep
-    have hai : R ≤ (st.blk a).round := by
-      rw [← hc.round hj]
-      exact hiR.trans (round_le_of_reaches (hc a hj).1 (Relation.ReflTransGen.head hstep hrest))
-    have hcs : c ∈ (st.blk a).refs := by rw [← hc.eq_blk hj (hk a hj hai)]; exact hstep
-    exact ih (st.complete a hj c hcs)
-
 omit [Fintype Validator] [DecidableEq Validator] in
 /-- **A view grown by a cut**: a view whose blocks the cut holds grows into
 the view holding exactly the cut's blocks, when the cut's blocks as
@@ -284,24 +265,103 @@ theorem IsCut.extend (hc : IsCut U st) (hcl : st.FullClosed) (V : U.View)
   rw [hc.eq hi] at hj
   exact (hcl i hi j hj).1
 
-/-- **The histories of a cut's blocks**, as a view of the record. -/
-def IsCut.histView [P.Mechanised] (hc : IsCut U st) : U.View :=
-  U.historiesView st.ids fun i hi => (hc i hi).1
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- A store read as the record reads it from `G` up holds its blocks from
+`G` up in the record, at their rounds and authors. -/
+theorem AllGood.above_mem {G : ℕ} (hc : AllGood (CutAbove U G) st) {j : BlockId}
+    (hj : j ∈ st.ids) (hr : G ≤ (st.blk j).round) : j ∈ U.ids :=
+  (hc j hj (by rw [(st.full_fields j).1]; exact hr)).1
+
+omit [Fintype Validator] [DecidableEq Validator] in
+theorem AllGood.above_round {G : ℕ} (hc : AllGood (CutAbove U G) st) {j : BlockId}
+    (hj : j ∈ st.ids) (hr : G ≤ (st.blk j).round) : (U.block j).round = (st.blk j).round := by
+  rw [← (st.full_fields j).1]
+  exact (hc j hj (by rw [(st.full_fields j).1]; exact hr)).2.1
+
+omit [Fintype Validator] [DecidableEq Validator] in
+theorem AllGood.above_creator {G : ℕ} (hc : AllGood (CutAbove U G) st) {j : BlockId}
+    (hj : j ∈ st.ids) (hr : G ≤ (st.blk j).round) :
+    (U.block j).creator = (st.blk j).creator := by
+  rw [← (st.full_fields j).2.1]
+  exact (hc j hj (by rw [(st.full_fields j).1]; exact hr)).2.2.1
+
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- Above `G`, such a store holds the record's blocks. -/
+theorem AllGood.above_eq {G : ℕ} (hc : AllGood (CutAbove U G) st) {j : BlockId}
+    (hj : j ∈ st.ids) (hr : G < (st.blk j).round) : U.block j = st.full j :=
+  (hc j hj (by rw [(st.full_fields j).1]; exact hr.le)).2.2.2
+    (by rw [(st.full_fields j).1]; exact hr)
+
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- A cut is read as the record reads it from any round up. -/
+theorem IsCut.cutAbove (hc : IsCut U st) (G : ℕ) : AllGood (CutAbove U G) st := fun j hj _ =>
+  ⟨(hc j hj).1, by rw [hc.eq hj], by rw [hc.eq hj], fun _ => hc.eq hj⟩
 
 omit [Fintype Validator] in
-/-- **The histories of a cut's blocks agree with it from `R` up**, when the
-cut keeps every block from `R` up with its references. -/
-theorem IsCut.viewsAbove [P.Mechanised] (hc : IsCut U st) {R : ℕ}
-    (hk : ∀ a ∈ st.ids, R ≤ (st.blk a).round → st.kept[a]? = none) :
-    ViewsAbove R boundedSel boundedSel st.view hc.histView := by
-  refine ViewsAbove.of_boundedSel (fun i hi _ => ?_) (fun i hi hR => ?_)
-    (fun i hi _ => hc.round hi) (fun i hi _ => hc.creator hi) (fun i hi hR => ?_)
-  · exact Finset.mem_biUnion.mpr ⟨i, hi, mem_history_self⟩
+/-- **A record path from a store read as the record reads it from `G` up
+stays on the store**, from a round `R ≥ G` up, when the store keeps every
+block from `R` up with its references. -/
+theorem AllGood.down_above [P.Mechanised] {G : ℕ} (hc : AllGood (CutAbove U G) st) {R : ℕ}
+    (hGR : G ≤ R) (hk : ∀ a ∈ st.ids, R ≤ (st.blk a).round → st.kept[a]? = none)
+    {i : BlockId} (hiR : R ≤ (U.block i).round) :
+    ∀ {j : BlockId}, j ∈ st.ids → G ≤ (st.full j).round →
+      ReachesFrom U.block j i → i ∈ st.ids ∧ G ≤ (st.full i).round := by
+  intro j hj hjG h
+  induction h using Relation.ReflTransGen.head_induction_on with
+  | refl => exact ⟨hj, hjG⟩
+  | @head a c hstep hrest ih =>
+    have hstep : c ∈ (U.block a).refs := hstep
+    obtain ⟨haU, har, -, hab⟩ := hc a hj hjG
+    have hca := round_le_of_reaches haU (Relation.ReflTransGen.head hstep hrest)
+    have hci := round_le_of_reaches (U.complete a haU c hstep) hrest
+    have hcr := Validity.Mechanised.pred _ _ (U.valid a haU) c hstep
+    have hGa : G < (st.full a).round := by rw [← har]; omega
+    have hka : st.kept[a]? = none := hk a hj (by rw [← (st.full_fields a).1]; omega)
+    have hcs : c ∈ (st.blk a).refs := by
+      rw [← st.full_of_kept_none hka, ← hab hGa]; exact hstep
+    have hcst := st.complete a hj c hcs
+    have hcG : G ≤ (st.full c).round := by
+      obtain ⟨-, hcr', -, -⟩ := hc c hcst (by
+        have := st.pred a hj c hcs
+        change (st.blk c).round + 1 = (st.blk a).round at this
+        rw [(st.full_fields c).1]; rw [(st.full_fields a).1] at hGa; omega)
+      rw [← hcr']; omega
+    exact ih hcst hcG
+
+/-- **The histories of a store's blocks from `G` up**, in a record that
+reads them so, as a view of the record. -/
+def AllGood.storeView [P.Mechanised] {G : ℕ} (hc : AllGood (CutAbove U G) st) : U.View :=
+  U.historiesView (st.ids.filter fun i => G ≤ (st.full i).round)
+    fun i hi => (hc i (Finset.mem_filter.mp hi).1 (Finset.mem_filter.mp hi).2).1
+
+omit [Fintype Validator] in
+/-- **The store view agrees with the store from `R ≥ G` up**, when the store
+keeps every block from `R` up with its references. -/
+theorem AllGood.viewsAbove [P.Mechanised] {G : ℕ} (hc : AllGood (CutAbove U G) st) {R : ℕ}
+    (hGR : G ≤ R) (hk : ∀ i ∈ st.ids, R ≤ (st.blk i).round → st.kept[i]? = none) :
+    ViewsAbove R boundedSel boundedSel st.view hc.storeView := by
+  have hround : ∀ i, (st.toRecord.block i).round = (st.full i).round :=
+    fun i => (st.full_fields i).1.symm
+  refine ViewsAbove.of_boundedSel (fun i hi hR => ?_) (fun i hi hR => ?_)
+    (fun i hi hR => ?_) (fun i hi hR => ?_) (fun i hi hR => ?_)
+  · rw [hround] at hR
+    exact Finset.mem_biUnion.mpr ⟨i, Finset.mem_filter.mpr ⟨hi, by omega⟩, mem_history_self⟩
   · obtain ⟨a, ha, hia⟩ := Finset.mem_biUnion.mp hi
-    have hiS := hc.down_above hk hR ha ((mem_history_iff (hc a ha).1).mp hia)
-    exact ⟨hiS, by change R ≤ (st.blk i).round; rw [← hc.round hiS]; exact hR⟩
-  · change (U.block i).refs = (st.blk i).refs
-    rw [hc.eq_blk hi (hk i hi (le_of_lt hR))]
+    obtain ⟨has, haG⟩ := Finset.mem_filter.mp ha
+    have haU := (hc a has haG).1
+    obtain ⟨his, hiG⟩ := hc.down_above hGR hk hR has haG ((mem_history_iff haU).mp hia)
+    refine ⟨his, ?_⟩
+    rw [hround, ← (hc i his hiG).2.1]
+    exact hR
+  · rw [hround] at hR ⊢
+    exact (hc i hi (by omega)).2.1
+  · rw [hround] at hR
+    rw [(hc i hi (by omega)).2.2.1]
+    exact (st.full_fields i).2.1
+  · change R < (st.blk i).round at hR
+    have hlt : G < (st.full i).round := by rw [(st.full_fields i).1]; omega
+    change (U.block i).refs = (st.blk i).refs
+    rw [(hc i hi hlt.le).2.2.2 hlt, st.full_of_kept_none (hk i hi hR.le)]
 
 end Cut
 

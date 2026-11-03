@@ -216,7 +216,6 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
   intro h inp x n c hh hn₀ hjt hcU hcv hcr hj₀ hbs hxt hcx hbuild hgx hexit hnr
   obtain ⟨y, o, hb, heo, he⟩ := hbuild
   have hj₀l : j < tr.length := (List.getElem?_eq_some_iff.mp hj₀).1
-  have hxc := cut_of_rises hσ hadm hf htime hinj hdr hh hgx
   rcases hexit with hfired | hbeh
   · -- it waited the round's timer, armed with a quorum of the round
     have hj : ∃ k ≤ j, tr[k]? = some (h, Input.timer n) := by
@@ -250,8 +249,10 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
   · -- it was behind: an earlier honest block of the round
     obtain ⟨w', hw'H, hw'h, j', hj'j, inp', z, hj', hz, hzr, hzx, hzb⟩ :=
       behind_honest htime hinj hf hh hj₀ hbs hb heo he hcr hgx (Or.inl hdr) hbeh
-    have hzU : z.1 ∈ U.ids := (hxc _ hzx).1
-    have hzB : U.block z.1 = z.2 := (hxc.eq hzx).trans hzb
+    have hzr₀ : (x.disk.blk z.1).round = n + 1 := by
+      rw [← (x.disk.full_fields z.1).1, hzb, hzr]
+    have hzU : z.1 ∈ U.ids := hbs.cut.above_mem hzx (Nat.zero_le _)
+    have hzB : U.block z.1 = z.2 := (hbs.cut.above_eq hzx (by omega)).trans hzb
     have hzc : (U.block z.1).creator = w' := by
       rw [hzB]
       exact (Local.authored _ _ _ (cfg.at w') _ z (persists_of_event hj' hz)).2
@@ -261,7 +262,6 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
         (base_of_false hσ hadm hf htime hinj hdr 0 tr.length) hw'H hzU hzc hzr' (Nat.zero_le _)
         (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true)
         ⟨j', by have := (List.getElem?_eq_some_iff.mp hj').1; omega, by rw [hj']; rfl, z, hz, hzr⟩
-    have hxcw := cut_of_rises hσ hadm hf htime hinj hdr hw'H hgxw
     have hiwj : iw = j' := persist_events_eq hiw hj' hew hz (by rw [hzr', hzr])
     subst hiwj
     -- the earlier block did not pass the tests, else the node would have
@@ -278,7 +278,7 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
         rw [← (x.disk.full_fields z.1).1, hzb, hzr]
       have hkz : x.disk.kept[z.1]? = none := hiXx.unkept hdr hxn (by omega)
       have hZR : (x.disk.blk z.1).refs = refsAt (cfg.at w') xw.disk n oww xw.evidence := by
-        rw [← x.disk.full_of_kept_none hkz, ← hxc.eq hzx, hzrefs]
+        rw [← x.disk.full_of_kept_none hkz, ← hbs.cut.above_eq hzx (by omega), hzrefs]
       -- no block on disk has the identifier of a next block of the node's own
       have hfresh : ∀ (P : Payload) R,
           (cfg.at h).idOf ⟨n + 1, (cfg.at h).me, R, P⟩ ∉ x.disk.ids := by
@@ -288,8 +288,10 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
         have hidk := Converge.id_of_knownIn (knownOf_sub hv' hk)
         have hraw : x.disk.full _ = (⟨n + 1, h, R, P⟩ : Block Validator BlockId Payload) :=
           hid hidk.symm
-        have := U.eq_of_creator_eq (hxc _ hin).1 hcU hh
-          (by rw [hxc.eq hin, hraw]) hcv (by rw [hxc.eq hin, hraw, hcr])
+        have heq := hbs.cut.above_eq hin
+          (by rw [← (x.disk.full_fields _).1, hraw]; exact Nat.succ_pos n)
+        have := U.eq_of_creator_eq (hbs.cut.above_mem hin (Nat.zero_le _)) hcU hh
+          (by rw [heq, hraw]) hcv (by rw [heq, hraw, hcr])
         exact hcx (this ▸ hin)
       obtain ⟨B, hiX⟩ := hbs.inv
       obtain ⟨hlZ, hlb⟩ := lent_buildable (cfg := cfg.at h) (fun j hj _ => hiX.valid hdr j hj)
@@ -309,12 +311,15 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
           excluded (cfg.at h) x.disk n x.evidence :=
         excluded_lent hfa hbsw hbs (Or.inl hdr) ho hzx (by rw [hzr₁]; omega) hzpay
       have hready := ready_transfer (cfg := cfg.at h) hσ (fun h => certThreshold_pos hadm h)
-        hxcw hxc hzsub hRR hlZ (fun a _ ha => hiXw.unkept hdr hshw.2.1 ha)
+        hbsw.cut hbs.cut (Nat.zero_le _) hzsub hRR hlZ (fun a _ ha => hiXw.unkept hdr hshw.2.1 ha)
         (fun a _ ha => hiXx.unkept hdr hxn ha) (fun b hb => by
-          rw [← hxcw.round (hzsub hb)]
+          rw [← hbsw.cut.above_round (hzsub hb) (Nat.zero_le _)]
           change (U.block b).round = n
           have h₁ := (U.valid z.1 hzU).predecessor b (by rw [hzrefs]; exact hb)
           have h₂ := hzr'
+          omega) (fun b hb => by
+          have := x.disk.pred z.1 hzx b (hRR hb)
+          change (x.disk.blk b).round + 1 = (x.disk.blk z.1).round at this
           omega) hXX hrw.1 hrw.2
       -- the lent references avoid the authors the node leaves out
       have hAD := refs_avoid_spread (r := n) hsp hiw hw'H hbsw hew (by rw [hzr']; omega) ho
@@ -324,10 +329,11 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
           rw [← hZR]; exact hk
         have hkx : k ∈ x.disk.ids := x.disk.complete z.1 hzx k hk
         have hcr : (x.disk.blk k).creator = (xw.disk.blk k).creator := by
-          rw [← hxc.creator hkx, ← hxcw.creator (hzsub hk')]
+          rw [← hbs.cut.above_creator hkx (Nat.zero_le _),
+            ← hbsw.cut.above_creator (hzsub hk') (Nat.zero_le _)]
         exact hAD k hk' (hcr ▸ excluded_sub_spread hsp hbs (Or.inl hdr) hmk)
       exact refsAt_ready (cfg := cfg.at h) hzx hzr₁
-        (by rw [← hxc.creator hzx, hzc]; exact hw'h) hready hlb hav
+        (by rw [← hbs.cut.above_creator hzx (Nat.zero_le _), hzc]; exact hw'h) hready hlb hav
     have hexitw' : n ∈ xw.fired ∨ behind (cfg.at w') xw.disk n := by
       rcases hexitw with h' | ⟨h₁, -⟩
       · exact absurd h' hnrw
@@ -390,7 +396,6 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
   intro i₀ v inp x n c hv hn₀ hnN hcU hcv hcr hi₀ hbt hbs hxt hcx hbuild hcrefs hgx hexit hfor hnr
     b hbU hbT hbr
   have hi₀l : i₀ < tr.length := (List.getElem?_eq_some_iff.mp hi₀).1
-  have hxc := cut_of_rises hσ hadm hf htime hinj hdr (hTH hv) hgx
   have hi₀t : time i₀ ≤ t :=
     hbt ▸ builtAt_le_of_top hmono (hst v hv) ((hN v hv).trans' hnN)
       (harr.no_jump hdr hmono hv ((hbelow v hv).trans_le (by omega)) (by
@@ -447,9 +452,9 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
       have hex := hheld e.1 heU (by rw [heC]; exact hw) (by rw [heR, her])
       refine Finset.mem_sdiff.mpr ⟨mem_authorsIn.mpr ⟨e.1, hex, ?_, ?_⟩, hnx w (hTH hw)⟩
       · change (x.disk.blk e.1).round = n
-        rw [← hxc.round hex, heR, her]
+        rw [← hbs.cut.above_round hex (Nat.zero_le _), heR, her]
       · change (x.disk.blk e.1).creator = w
-        rw [← hxc.creator hex, heC]
+        rw [← hbs.cut.above_creator hex (Nat.zero_le _), heC]
     have hfresh : (cfg.at v).idOf (blockOn (cfg.at v) x.disk n
         (refsFor (cfg.at v) x.disk n x.own x.evidence) x.evidence) ∉ x.disk.ids := by
       intro hin
@@ -460,8 +465,10 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
           (refsFor (cfg.at v) x.disk n x.own x.evidence) x.evidence)) =
           blockOn (cfg.at v) x.disk n (refsFor (cfg.at v) x.disk n x.own x.evidence) x.evidence :=
         hid hidk.symm
-      have := U.eq_of_creator_eq (hxc _ hin).1 hcU (hTH hv)
-        (by rw [hxc.eq hin, hraw]; rfl) hcv (by rw [hxc.eq hin, hraw, hcr]; rfl)
+      have heq := hbs.cut.above_eq hin
+        (by rw [← (x.disk.full_fields _).1, hraw]; exact Nat.succ_pos n)
+      have := U.eq_of_creator_eq (hbs.cut.above_mem hin (Nat.zero_le _)) hcU (hTH hv)
+        (by rw [heq, hraw]; rfl) hcv (by rw [heq, hraw, hcr]; rfl)
       exact hcx (this ▸ hin)
     obtain ⟨o', hoo, hoi, hor, hoc⟩ := hbs.own n hxt
     obtain ⟨B, hiX⟩ := hbs.inv
@@ -472,9 +479,10 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
     rw [hnb] at hb
     cases hb
   rw [hcrefs, hfor']
-  exact mem_refsFor_of_cut hxc hbx (by rw [← hxc.round hbx, hbr])
-    (by rw [← hxc.creator hbx]; exact hTH hbT) (fun _ => hbs.own _ hxt)
-    (hnx _ (by rw [← hxc.creator hbx]; exact hTH hbT))
+  exact mem_refsFor_of_cut hbs.cut (Nat.zero_le _) hbx
+    (by rw [← hbs.cut.above_round hbx (Nat.zero_le _), hbr])
+    (by rw [← hbs.cut.above_creator hbx (Nat.zero_le _)]; exact hTH hbT) (fun _ => hbs.own _ hxt)
+    (hnx _ (by rw [← hbs.cut.above_creator hbx (Nat.zero_le _)]; exact hTH hbT))
 
 /-- **Reach or reference, at a reliable node**, from round `n₀` on: a block
 of `v` at the round above slot `k`'s round plus `m`, below
@@ -511,7 +519,6 @@ theorem reach_or_refs_node (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < c
       hcU hcv hcr (Nat.zero_le _) (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true)
       ⟨ie, by have := (List.getElem?_eq_some_iff.mp hie).1; omega, by rw [hie]; rfl, e, hee,
         by rw [her, hcr]⟩
-  have hxc := cut_of_rises hσ hadm hf htime hinj hdr (hTH hv) hgx
   -- the evidence the honest nodes knew names no honest author, so no honest
   -- leader is left out
   have hlX : cfg.slots.leader k ∉
@@ -530,7 +537,8 @@ theorem reach_or_refs_node (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < c
         (cfg.slots.slotRound k + m)
         (excluded (cfg.at v) x.disk (cfg.slots.slotRound k + m)
           x.evidence) = true
-  · exact Or.inl (reaches_of_reachReady (cfg := cfg.at v) hxc hready.1 hsub hm rfl
+  · exact Or.inl (reaches_of_reachReady (cfg := cfg.at v) hbs.cut hready.1 hsub
+      (Nat.zero_le _) hm rfl
       (hTH hlead) hlX hL hcrefs)
   · right
     -- not a jump, whose references pass the tests: above its top, on its own block
@@ -594,7 +602,6 @@ theorem cert_or_refs_node (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cf
       hcU hcv hcr (Nat.zero_le _) (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true)
       ⟨ie, by have := (List.getElem?_eq_some_iff.mp hie).1; omega, by rw [hie]; rfl, e, hee,
         by rw [her, hcr]⟩
-  have hxc := cut_of_rises hσ hadm hf htime hinj hdr (hTH hv) hgx
   -- the evidence the honest nodes knew names no honest author, so no honest
   -- leader is left out
   have hlX : cfg.slots.leader k ∉
@@ -614,12 +621,13 @@ theorem cert_or_refs_node (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cf
         (excluded (cfg.at v) x.disk (cfg.slots.slotRound k + cfg.p.voteOffset)
           x.evidence) = true
   · obtain ⟨Bx, hiXx⟩ := hbs.inv
-    refine Or.inl (isCert_of_certReady (cfg := cfg.at v) hσ hxc hready.2 hsub hvc rfl
+    refine Or.inl (isCert_of_certReady (cfg := cfg.at v) hσ hbs.cut hready.2 hsub hvc
+      (Nat.zero_le _) rfl
       (hTH hlead) hlX (fun i _ hi => hiXx.unkept hdr hsh.2.1
         (show cfg.slots.slotRound k + cfg.p.voteOffset - cfg.p.voteOffset ≤ _ by
           rw [Nat.add_sub_cancel]; exact hi))
       (fun b hb => ?_) hL hcrefs)
-    rw [← hxc.round (hsub hb)]
+    rw [← hbs.cut.above_round (hsub hb) (Nat.zero_le _)]
     have h₁ := ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).valid c
       hcU).predecessor b (by rw [hcrefs]; exact hb)
     have h₂ := hcr

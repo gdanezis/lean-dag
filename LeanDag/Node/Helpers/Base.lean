@@ -85,18 +85,6 @@ theorem base_of_false (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : 
         ((floorOf_le_top (cfg := cfg.at v) hdr _).trans (Nat.sub_le _ _)),
       fun _ => Regular.of_false hdr⟩
 
-/-- **Without dropping, a state whose disk an honest disk keeps is a cut of
-the record of the run** (`cut_before`). -/
-theorem cut_of_rises (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
-    (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    (hdr : cfg.drops = false) {v : Validator} (hv : v ∈ H) {k : ℕ}
-    {x : State Validator BlockId Payload} (hx : DiskRises (cfg.at v) x (stateBefore cfg tr k v)) :
-    IsCut (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)) x.disk :=
-  fun j hj => by
-    obtain ⟨hj', heq⟩ := hx.2 j hj (Or.inl hdr)
-    obtain ⟨hU, hb⟩ := (cut_before hσ hadm hf htime hinj hdr k v hv).1 j hj'
-    exact ⟨hU, hb.trans heq⟩
-
 end Node
 
 end LeanDag

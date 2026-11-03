@@ -32,38 +32,53 @@ section Cut
 variable {st : Store Validator BlockId Payload}
 
 omit [Fintype Validator] in
-/-- **A record path from a cut is a store path**, when the store keeps every
-block from the round of its end up with its references. -/
-theorem IsCut.reachesFrom_store [P.Mechanised] (hc : IsCut U st) {i : BlockId}
+/-- **A record path is a store path**, from a block at or above `G` down to
+one at or above `G`, when the store is read as the record reads it from `G`
+up and keeps every block from the round of the path's end up with its
+references. -/
+theorem AllGood.reachesFrom_store [P.Mechanised] {G : ℕ} (hc : AllGood (CutAbove U G) st)
+    {i : BlockId} (hiG : G ≤ (U.block i).round)
     (hk : ∀ a ∈ st.ids, (U.block i).round ≤ (st.blk a).round → st.kept[a]? = none) :
-    ∀ {j : BlockId}, j ∈ st.ids → ReachesFrom U.block j i → ReachesFrom st.blk j i := by
-  intro j hj h
+    ∀ {j : BlockId}, j ∈ st.ids → G ≤ (st.full j).round →
+      ReachesFrom U.block j i → ReachesFrom st.blk j i := by
+  intro j hj hjG h
   induction h using Relation.ReflTransGen.head_induction_on with
   | refl => exact ReachesFrom.refl
   | @head a c hstep hrest ih =>
     have hstep : c ∈ (U.block a).refs := hstep
-    have hai : (U.block i).round ≤ (st.blk a).round := by
-      rw [← hc.round hj]
-      exact round_le_of_reaches (hc a hj).1 (Relation.ReflTransGen.head hstep hrest)
-    have hcs : c ∈ (st.blk a).refs := by rw [← hc.eq_blk hj (hk a hj hai)]; exact hstep
-    exact Relation.ReflTransGen.head hcs (ih (st.complete a hj c hcs))
+    obtain ⟨haU, har, -, hab⟩ := hc a hj hjG
+    have hci := round_le_of_reaches (U.complete a haU c hstep) hrest
+    have hcr := Validity.Mechanised.pred _ _ (U.valid a haU) c hstep
+    have hGa : G < (st.full a).round := by rw [← har]; omega
+    have hka : st.kept[a]? = none := hk a hj (by rw [← (st.full_fields a).1]; omega)
+    have hcs : c ∈ (st.blk a).refs := by
+      rw [← st.full_of_kept_none hka, ← hab hGa]; exact hstep
+    have hcst := st.complete a hj c hcs
+    have hcG : G ≤ (st.full c).round := by
+      have := st.pred a hj c hcs
+      change (st.blk c).round + 1 = (st.blk a).round at this
+      rw [(st.full_fields c).1]; rw [(st.full_fields a).1] at hGa; omega
+    exact Relation.ReflTransGen.head hcs (ih hcst hcG)
 
 omit [Fintype Validator] in
-/-- **A cut holds a record path's short history**: a block that a block of
+/-- **A store holds a record path's short history**: a block that a block of
 the store reaches in the record, at most `m` rounds below it, lies within `m`
-steps of it in the store, when the store keeps every block from the round of
+steps of it in the store, when both lie at or above `G`, the store is read as
+the record reads it from `G` up, and it keeps every block from the round of
 the end up with its references. -/
-theorem IsCut.mem_historyUptoFrom [P.Mechanised] (hc : IsCut U st) {j i : BlockId} {m : ℕ}
+theorem AllGood.mem_historyUptoFrom [P.Mechanised] {G : ℕ} (hc : AllGood (CutAbove U G) st)
+    {j i : BlockId} {m : ℕ} (hiG : G ≤ (U.block i).round)
     (hk : ∀ a ∈ st.ids, (U.block i).round ≤ (st.blk a).round → st.kept[a]? = none)
-    (hj : j ∈ st.ids) (hm : (U.block j).round ≤ m + (U.block i).round)
-    (h : ReachesFrom U.block j i) :
+    (hj : j ∈ st.ids) (hjG : G ≤ (st.full j).round)
+    (hm : (U.block j).round ≤ m + (U.block i).round) (h : ReachesFrom U.block j i) :
     i ∈ historyUptoFrom st.blk m j := by
   classical
-  have hi : i ∈ st.ids := hc.down_above hk le_rfl hj h
+  obtain ⟨hi, hiG'⟩ := hc.down_above hiG hk le_rfl hj hjG h
   exact mem_historyUptoFrom_of_round st.toRecord.causal hj
     (by change (st.blk j).round ≤ m + (st.blk i).round
-        rw [← hc.round hj, ← hc.round hi]; exact hm)
-    (hc.reachesFrom_store hk hj h)
+        rw [← (st.full_fields j).1, ← (st.full_fields i).1, ← (hc j hj hjG).2.1,
+          ← (hc i hi hiG').2.1]; exact hm)
+    (hc.reachesFrom_store hiG hk hj hjG h)
 
 end Cut
 
@@ -83,28 +98,35 @@ to another holding the superset, and to a superset of the leaders left
 out: the leader blocks the tests read are reached from the references, so
 the second cut holds them. -/
 theorem ready_transfer [P.Mechanised] (hσ : cfg.σ = boundedSel)
-    (hct : cfg.p.voteIsCert = false → 1 ≤ cfg.p.certThreshold)
-    {x Z : Store Validator BlockId Payload} (hx : IsCut U x) (hZ : IsCut U Z)
-    {R R' : Finset BlockId} {n : ℕ} (hR : R ⊆ x.ids) (hRR : R ⊆ R') (hR'Z : R' ⊆ Z.ids)
+    (hct : cfg.p.voteIsCert = false → 1 ≤ cfg.p.certThreshold) {G : ℕ}
+    {x Z : Store Validator BlockId Payload} (hx : AllGood (CutAbove U G) x)
+    (hZ : AllGood (CutAbove U G) Z) {R R' : Finset BlockId} {n : ℕ}
+    (hG : G ≤ n - cfg.p.voteOffset) (hR : R ⊆ x.ids) (hRR : R ⊆ R') (hR'Z : R' ⊆ Z.ids)
     (hkx : ∀ a ∈ x.ids, n - cfg.p.voteOffset ≤ (x.blk a).round → x.kept[a]? = none)
     (hkZ : ∀ a ∈ Z.ids, n - cfg.p.voteOffset ≤ (Z.blk a).round → Z.kept[a]? = none)
-    (hRn : ∀ b ∈ R, (x.blk b).round = n)
+    (hRn : ∀ b ∈ R, (x.blk b).round = n) (hRZ : ∀ b ∈ R, (Z.blk b).round = n)
     {X X' : Finset Validator} (hXX : X ⊆ X')
     (hreach : reachReady cfg x R n X = true) (hcert : certReady cfg x R n X = true) :
     reachReady cfg Z R' n X' = true ∧ certReady cfg Z R' n X' = true := by
+  have hZG : ∀ c ∈ R, G ≤ (Z.full c).round := fun c hc => by
+    rw [(Z.full_fields c).1, hRZ c hc]; omega
   -- a candidate of the store `x` reached from a reference
   have hcand : ∀ k L, L ∈ candidatesIn (S := cfg.slots) x.toRecord x.view k →
-      n - cfg.p.voteOffset ≤ (U.block L).round →
+      n - cfg.p.voteOffset ≤ (x.blk L).round →
       ∀ c ∈ R, ReachesFrom U.block c L →
       L ∈ candidatesIn (S := cfg.slots) Z.toRecord Z.view k ∧ L ∈ Z.ids := by
     intro k L hL hLn c hc hcL
     obtain ⟨hLx, hLc, hLr⟩ := Finset.mem_filter.mp hL
-    have hLZ : L ∈ Z.ids := hZ.down_above hkZ hLn (hR'Z (hRR hc)) hcL
+    have hLG : G ≤ (x.blk L).round := hG.trans hLn
+    have hLU : n - cfg.p.voteOffset ≤ (U.block L).round := by
+      rw [hx.above_round hLx hLG]; exact hLn
+    obtain ⟨hLZ, hLZG⟩ := hZ.down_above hG hkZ hLU (hR'Z (hRR hc)) (hZG c hc) hcL
+    have hLZG' : G ≤ (Z.blk L).round := by rw [← (Z.full_fields L).1]; exact hLZG
     refine ⟨Finset.mem_filter.mpr ⟨hLZ, ?_, ?_⟩, hLZ⟩
     · change (Z.blk L).creator = _
-      rw [← hZ.creator hLZ, hx.creator hLx]; exact hLc
+      rw [← hZ.above_creator hLZ hLZG', hx.above_creator hLx hLG]; exact hLc
     · change (Z.blk L).round = _
-      rw [← hZ.round hLZ, hx.round hLx]; exact hLr
+      rw [← hZ.above_round hLZ hLZG', hx.above_round hLx hLG]; exact hLr
   constructor
   · unfold reachReady at hreach ⊢
     simp only [Store.leaderBlocks_eq] at hreach ⊢
@@ -117,22 +139,23 @@ theorem ready_transfer [P.Mechanised] (hσ : cfg.σ = boundedSel)
       rcases of_decide_eq_true h₂ with hkX | ⟨L, hL, c, hc, hhist⟩
       · exact decide_eq_true (Or.inl (hXX hkX))
       have hLx := (Finset.mem_filter.mp hL).1
-      have hLr : (U.block L).round = n - m := by
-        rw [hx.round hLx]
+      have hmv : m < cfg.p.voteOffset := List.mem_range.mp hm
+      have hLr' : (x.blk L).round = n - m := by
         change (x.toRecord.block L).round = _
         rw [(Finset.mem_filter.mp hL).2.2]
         exact slotRound_of_mem_slotsAt hk
+      have hLG : G ≤ (x.blk L).round := by omega
+      have hLr : (U.block L).round = n - m := by rw [hx.above_round hLx hLG, hLr']
       have hcx := hR hc
       have hrd := round_le_of_mem_historyUptoFrom x.toRecord m hcx hhist
       change (x.blk c).round ≤ m + (x.blk L).round at hrd
       have hcL : ReachesFrom U.block c L :=
-        hx.reachesFrom hcx (reaches_of_mem_historyUptoFrom hhist)
-      have hmv : m < cfg.p.voteOffset := List.mem_range.mp hm
+        hx.reachesFrom hLG hcx (reaches_of_mem_historyUptoFrom hhist)
       obtain ⟨hLZ, -⟩ := hcand k L hL (by omega) c hc hcL
-      have hmv : m < cfg.p.voteOffset := List.mem_range.mp hm
       refine decide_eq_true (Or.inr ⟨L, hLZ, c, hRR hc,
-        hZ.mem_historyUptoFrom (fun a ha har => hkZ a ha (by omega)) (hR'Z (hRR hc)) ?_ hcL⟩)
-      rw [hx.round hcx, hx.round hLx]; exact hrd
+        hZ.mem_historyUptoFrom (by rw [hLr]; omega) (fun a ha har => hkZ a ha (by omega))
+          (hR'Z (hRR hc)) (hZG c hc) ?_ hcL⟩)
+      rw [hx.above_round hcx (by rw [hRn c hc]; omega), hx.above_round hLx hLG]; exact hrd
     · rw [if_neg hmn]
   · unfold certReady at hcert ⊢
     simp only [Store.leaderBlocks_eq] at hcert ⊢
@@ -151,7 +174,7 @@ theorem ready_transfer [P.Mechanised] (hσ : cfg.σ = boundedSel)
           change (x.toRecord.block L).round = _
           rw [(Finset.mem_filter.mp hL).2.2]
           exact slotRound_of_mem_slotsAt hk
-        have hvax := hx.viewsAbove (R := n - cfg.p.voteOffset) hkx
+        have hvax := hx.viewsAbove (R := n - cfg.p.voteOffset) hG hkx
         have hvx : ∀ b ∈ R, (cfg.σ.Votes x.toRecord b L ↔
             (boundedSel : VoteSel Validator BlockId Payload P H).Votes U b L) := by
           intro b hb
@@ -168,9 +191,10 @@ theorem ready_transfer [P.Mechanised] (hσ : cfg.σ = boundedSel)
         have hbU := (hvx b hbR).mp hbv
         obtain ⟨hLh, -, -⟩ := (boundedSel : VoteSel Validator BlockId Payload P H).sound U b _ _ L
           hbU
-        have hbL : ReachesFrom U.block b L := (mem_history_iff (hx b (hR hbR)).1).mp hLh
-        obtain ⟨hLZ, hLZi⟩ := hcand k L hL (by rw [hx.round hLx, hLr]) b hbR hbL
-        have hvaZ := hZ.viewsAbove (R := n - cfg.p.voteOffset) hkZ
+        have hbL : ReachesFrom U.block b L :=
+          (mem_history_iff (hx.above_mem (hR hbR) (by rw [hRn b hbR]; omega))).mp hLh
+        obtain ⟨hLZ, hLZi⟩ := hcand k L hL (by rw [hLr]) b hbR hbL
+        have hvaZ := hZ.viewsAbove (R := n - cfg.p.voteOffset) hG hkZ
         refine decide_eq_true (Or.inr ⟨L, hLZ, le_trans hcount
           (Finset.card_le_card fun a ha => ?_)⟩)
         obtain ⟨b, hb, rfl⟩ := Finset.mem_image.mp ha
@@ -179,12 +203,14 @@ theorem ready_transfer [P.Mechanised] (hσ : cfg.σ = boundedSel)
         have hvZ : cfg.σ.Votes Z.toRecord b L := by
           rw [hσ]
           exact (hvaZ.votes_iff hbZ
-            (by change _ ≤ (Z.blk b).round; rw [← hZ.round hbZ, hx.round (hR hbR), hRn b hbR]
-                omega)
-            hLZi (by change _ ≤ (Z.blk L).round; rw [← hZ.round hLZi, hx.round hLx, hLr])).mpr
+            (by change _ ≤ (Z.blk b).round; rw [hRZ b hbR]; omega)
+            hLZi (by
+              change _ ≤ (Z.toRecord.block L).round
+              rw [(Finset.mem_filter.mp hLZ).2.2, slotRound_of_mem_slotsAt hk])).mpr
             ((hvx b hbR).mp hbv)
         refine Finset.mem_image.mpr ⟨b, Finset.mem_filter.mpr ⟨hRR hbR, hvZ⟩, ?_⟩
-        rw [← hZ.creator hbZ, hx.creator (hR hbR)]
+        rw [← hZ.above_creator hbZ (by rw [hRZ b hbR]; omega),
+          hx.above_creator (hR hbR) (by rw [hRn b hbR]; omega)]
       · rw [if_neg hvn]
     · rfl
 

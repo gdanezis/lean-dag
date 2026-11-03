@@ -1326,19 +1326,26 @@ theorem timersSet_step {s : State Validator BlockId Payload} (hA : ArmedQuorum c
       ((timersSet_rearm hA).rise hr hg)) hts, hAs⟩
 
 omit [Fintype Validator] [DecidableEq Validator] in
-/-- **A cut's paths are the record's**: what a block of the store reaches in
-the store it reaches in the record. -/
-theorem IsCut.reachesFrom {U : BlockRecord Validator BlockId Payload P H}
-    {st : Store Validator BlockId Payload} (hc : IsCut U st) {i : BlockId} :
+/-- **A store's paths are the record's**, down to a block at or above `G`,
+when the store is read as the record reads it from `G` up. -/
+theorem AllGood.reachesFrom {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+    {st : Store Validator BlockId Payload} (hc : AllGood (CutAbove U G) st) {i : BlockId}
+    (hiG : G ≤ (st.blk i).round) :
     ∀ {j : BlockId}, j ∈ st.ids → ReachesFrom st.blk j i → ReachesFrom U.block j i := by
+  suffices h : ∀ {j : BlockId}, j ∈ st.ids → ReachesFrom st.blk j i →
+      ReachesFrom U.block j i ∧ (st.blk i).round ≤ (st.blk j).round from
+    fun {_} hj hji => (h hj hji).1
   intro j hj h
   induction h using Relation.ReflTransGen.head_induction_on with
-  | refl => exact ReachesFrom.refl
+  | refl => exact ⟨ReachesFrom.refl, le_rfl⟩
   | @head a c hstep hrest ih =>
     have hstep : c ∈ (st.blk a).refs := hstep
     have hcs : c ∈ st.ids := st.complete a hj c hstep
-    have hU : c ∈ (U.block a).refs := by rw [hc.eq hj]; exact st.refs_sub_full a hstep
-    exact Relation.ReflTransGen.head hU (ih hcs)
+    obtain ⟨hcU, hic⟩ := ih hcs
+    have hca : (st.blk c).round + 1 = (st.blk a).round := st.pred a hj c hstep
+    have hU : c ∈ (U.block a).refs := by
+      rw [hc.above_eq hj (by omega)]; exact st.refs_sub_full a hstep
+    exact ⟨Relation.ReflTransGen.head hU hcU, by omega⟩
 
 omit [Fintype Validator] in
 /-- Slot `k` is proposed at its slot round. -/
@@ -1355,10 +1362,12 @@ omit [Fintype Validator] in
 references pass the reach test on a cut reaches, in the record, the
 block of each honest leader of a slot `m` rounds below `r`, for `m` below
 the vote offset. -/
-theorem reaches_of_reachReady {U : BlockRecord Validator BlockId Payload P H}
-    {st : Store Validator BlockId Payload} (hc : IsCut U st) {refs : Finset BlockId} {r : ℕ}
+theorem reaches_of_reachReady {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+    {st : Store Validator BlockId Payload} (hc : AllGood (CutAbove U G) st)
+    {refs : Finset BlockId} {r : ℕ}
     {X : Finset Validator} (hready : reachReady cfg st refs r X = true) (hrefs : refs ⊆ st.ids)
-    {k m : ℕ} (hm : m < cfg.p.voteOffset) (hk : cfg.slots.slotRound k + m = r)
+    {k m : ℕ} (hG : G ≤ cfg.slots.slotRound k) (hm : m < cfg.p.voteOffset)
+    (hk : cfg.slots.slotRound k + m = r)
     (hlead : cfg.slots.leader k ∈ H) (hlX : cfg.slots.leader k ∉ X) {L : BlockId}
     (hL : IsLeaderBlock (S := cfg.slots) U k L)
     {c : BlockId} (hcrefs : (U.block c).refs = refs) : Reaches U c L := by
@@ -1369,10 +1378,13 @@ theorem reaches_of_reachReady {U : BlockRecord Validator BlockId Payload P H}
   obtain ⟨L', hL', c', hc', hhist⟩ := (of_decide_eq_true h₂).resolve_left hlX
   rw [Store.leaderBlocks_eq] at hL'
   obtain ⟨hL's, hL'c, hL'r⟩ := Finset.mem_filter.mp hL'
+  have hL'G : G ≤ (st.blk L').round := by
+    change G ≤ (st.toRecord.block L').round; rw [hL'r]; exact hG
   have hreach : ReachesFrom U.block c' L' :=
-    hc.reachesFrom (hrefs hc') (reaches_of_mem_historyUptoFrom hhist)
+    hc.reachesFrom hL'G (hrefs hc') (reaches_of_mem_historyUptoFrom hhist)
   have hlead' : IsLeaderBlock (S := cfg.slots) U k L' :=
-    ⟨(hc L' hL's).1, by rw [hc.round hL's]; exact hL'r, by rw [hc.creator hL's]; exact hL'c⟩
+    ⟨hc.above_mem hL's hL'G, by rw [hc.above_round hL's hL'G]; exact hL'r,
+      by rw [hc.above_creator hL's hL'G]; exact hL'c⟩
   rw [isLeaderBlock_unique_of_honest (S := cfg.slots) hlead hL hlead']
   exact Relation.ReflTransGen.head (show c' ∈ (U.block c).refs by rw [hcrefs]; exact hc') hreach
 
@@ -1380,8 +1392,9 @@ omit [Fintype Validator] in
 /-- **`refsFor` on a cut references each block of the store by an honest author
 at its round**, given the node's own block there as `o` if the author is
 the node. -/
-theorem mem_refsFor_of_cut {U : BlockRecord Validator BlockId Payload P H}
-    {st : Store Validator BlockId Payload} (hc : IsCut U st) {r : ℕ} {o : Option BlockId}
+theorem mem_refsFor_of_cut {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+    {st : Store Validator BlockId Payload} (hc : AllGood (CutAbove U G) st) {r : ℕ} (hG : G ≤ r)
+    {o : Option BlockId}
     {E : Finset (Validator × BlockId × BlockId)}
     {b : BlockId} (hb : b ∈ st.ids) (hbr : (st.blk b).round = r)
     (hhon : (st.blk b).creator ∈ H)
@@ -1391,8 +1404,10 @@ theorem mem_refsFor_of_cut {U : BlockRecord Validator BlockId Payload P H}
     b ∈ refsFor cfg st r o E := by
   have huniq : ∀ i ∈ st.ids, (st.blk i).round = r → (st.blk i).creator = (st.blk b).creator →
       i = b := fun i hi hir hic =>
-    U.no_equivocation i (hc i hi).1 b (hc b hb).1 (by rw [hc.creator hi, hic]; exact hhon)
-      (by rw [hc.creator hi, hc.creator hb, hic]) (by rw [hc.round hi, hc.round hb, hir, hbr])
+    U.no_equivocation i (hc.above_mem hi (by omega)) b (hc.above_mem hb (by omega))
+      (by rw [hc.above_creator hi (by omega), hic]; exact hhon)
+      (by rw [hc.above_creator hi (by omega), hc.above_creator hb (by omega), hic])
+      (by rw [hc.above_round hi (by omega), hc.above_round hb (by omega), hir, hbr])
   refine mem_refsFor hb hbr huniq (fun hme => ?_) hex
   obtain ⟨j, hoj, hj, hjr, hjc⟩ := ho hme
   rw [hoj, huniq j hj hjr (by rw [hjc, hme])]
@@ -1403,10 +1418,11 @@ certified a round later, a block of round `r + 1` whose references pass
 the certificate test on a cut certifies, in the record, the block of each
 honest leader of a slot whose vote round is `r`. -/
 theorem isCert_of_certReady [P.Mechanised] (hσ : cfg.σ = boundedSel)
-    {U : BlockRecord Validator BlockId Payload P H} {st : Store Validator BlockId Payload}
-    (hc : IsCut U st) {refs : Finset BlockId} {r : ℕ} {X : Finset Validator}
+    {U : BlockRecord Validator BlockId Payload P H} {G : ℕ} {st : Store Validator BlockId Payload}
+    (hc : AllGood (CutAbove U G) st) {refs : Finset BlockId} {r : ℕ} {X : Finset Validator}
     (hready : certReady cfg st refs r X = true)
     (hrefs : refs ⊆ st.ids) (hvc : cfg.p.voteIsCert = false) {k : ℕ}
+    (hG : G ≤ cfg.slots.slotRound k)
     (hk : cfg.slots.slotRound k + cfg.p.voteOffset = r) (hlead : cfg.slots.leader k ∈ H)
     (hlX : cfg.slots.leader k ∉ X)
     (hkept : ∀ i ∈ st.ids, cfg.slots.slotRound k ≤ (st.blk i).round → st.kept[i]? = none)
@@ -1420,10 +1436,13 @@ theorem isCert_of_certReady [P.Mechanised] (hσ : cfg.σ = boundedSel)
   obtain ⟨L', hL', hcount⟩ := (of_decide_eq_true h₂).resolve_left hlX
   rw [Store.leaderBlocks_eq] at hL'
   obtain ⟨hL's, hL'c, hL'r⟩ := Finset.mem_filter.mp hL'
+  have hL'G : G ≤ (st.blk L').round := by
+    change G ≤ (st.toRecord.block L').round; rw [hL'r]; exact hG
   have hlead' : IsLeaderBlock (S := cfg.slots) U k L' :=
-    ⟨(hc L' hL's).1, by rw [hc.round hL's]; exact hL'r, by rw [hc.creator hL's]; exact hL'c⟩
+    ⟨hc.above_mem hL's hL'G, by rw [hc.above_round hL's hL'G]; exact hL'r,
+      by rw [hc.above_creator hL's hL'G]; exact hL'c⟩
   rw [isLeaderBlock_unique_of_honest (S := cfg.slots) hlead hL hlead']
-  have hva := hc.viewsAbove (R := cfg.slots.slotRound k) hkept
+  have hva := hc.viewsAbove (R := cfg.slots.slotRound k) hG hkept
   have hf : refs.filter (fun b => cfg.σ.Votes st.toRecord b L') =
       (U.block c).refs.filter (fun b =>
         (boundedSel : Scheme.VoteSel Validator BlockId Payload P H).Votes U b L') := by
@@ -1439,7 +1458,8 @@ theorem isCert_of_certReady [P.Mechanised] (hσ : cfg.σ = boundedSel)
   rw [← hf]
   have hcr : creatorsOf U.block (refs.filter fun b => cfg.σ.Votes st.toRecord b L') =
       creatorsOf st.blk (refs.filter fun b => cfg.σ.Votes st.toRecord b L') :=
-    Finset.image_congr fun b hb => hc.creator (hrefs (Finset.mem_filter.mp hb).1)
+    Finset.image_congr fun b hb => hc.above_creator (hrefs (Finset.mem_filter.mp hb).1)
+      (by rw [hrr b (Finset.mem_filter.mp hb).1]; omega)
   rw [hcr]
   exact hcount
 

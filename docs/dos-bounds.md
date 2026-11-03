@@ -533,11 +533,13 @@ store closed, and needs none of this.
         the lent references (`lent_avoids_before`, `excluded_lent`) and
         the quorums below a block (`quorum_below`) now read any `Base`; the
         wave facts (`Helpers/Wave.lean`, `Helpers/Run.lean`) and V11 read
-        them at `base_of_false`, and a build state is a cut of the record
-        of the run there (`cut_of_rises`). Next: the wave facts on any
-        `Base`, through `CutAbove` forms of the reach and certificate tests
-        on the record (`reaches_of_reachReady`, `isCert_of_certReady`,
-        `ready_transfer`, `mem_refsFor_of_cut`).
+        them at `base_of_false`. The reach and certificate tests, read on
+        the record (`reaches_of_reachReady`, `isCert_of_certReady`,
+        `ready_transfer`, `mem_refsFor_of_cut`), take a store read as the
+        record reads it from `G` up and read only at or above `G`, through
+        the view of its blocks' histories from `G` up (`AllGood.storeView`,
+        `AllGood.viewsAbove`), which also serves the padded record. Next:
+        the wave facts on any `Base` within a steady window.
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase
