@@ -156,3 +156,11 @@ import LeanDagTest.RedSnapper.UnlockElection
 import LeanDagTest.RedSnapper.LiteralThreshold
 import LeanDagTest.RedSnapper.FiveRoutes
 import LeanDagTest.RedSnapper.Termination
+import LeanDagTest.Scheme.LeastSel
+import LeanDagTest.Scheme.VotedBlock
+import LeanDagTest.Scheme.TryDecide
+import LeanDagTest.Scheme.HybridRow
+import LeanDagTest.Scheme.Async
+import LeanDagTest.Scheme.Reactive
+import LeanDagTest.Scheme.ReactiveHybrid
+import LeanDagTest.Scheme.AsyncLocal
