@@ -9,8 +9,8 @@
 
 This document is the design record for the **Hydrozoan** arc: the
 dual-path commit rule of the Hydrozoan paper (`\sysname` in the
-manuscript; `DagHydrangea` in the reference implementation,
-`asonnino/mysticeti`), under the hybrid fault model of DagHydrangea —
+manuscript; implemented in `asonnino/mysticeti`), under the hybrid
+fault model of Hydrangea —
 `n ≥ 3f + 2c + k + 1` replicas, at most `f` Byzantine, at most `c`
 crashed, `k` a tunable slack. A leader is committed in two message
 delays by a fast quorum of votes or in three by a quorum of

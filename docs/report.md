@@ -8624,7 +8624,7 @@ DAG one round further is not live at gap zero.
 
 *(modules `LeanDag/Hydrozoan/`; the design record is `hydrozoan.md`;
 the protocol is Hydrozoan, the dual-path commit rule of the Hydrozoan
-paper — DagHydrangea in the reference implementation — under the
+paper, implemented in `asonnino/mysticeti`, under the
 hybrid fault model `n ≥ 3f + 2c + k + 1`)*
 
 Hydrozoan runs on an uncertified DAG under a hybrid fault model: `n`
