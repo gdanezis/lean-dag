@@ -446,7 +446,13 @@ store closed, and needs none of this.
         floor at or below its own holds then holds it within `Δₛ` past
         GST, or its floor lies above it (`synced_held`), the holder's disk
         keeping the references of its blocks from its floor up
-        (`needs_held`). What remains is (i) to (iii).
+        (`needs_held`). Item (i) is `decides_behind`: once a reliable peer is
+        past slot `k`, a reliable node is past `k` by
+        `max τ gst + g (D + 2Δ)`, for `g` the slots from its next undecided
+        one to `k` and `D` the retry delays of the rounds up to a bound `M`
+        on its round, `M` at least a wave above the round of slot `k`; the
+        node's round enters only through `M`, since rounds have no least
+        duration. What remains is (ii) and (iii).
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase

@@ -16,7 +16,8 @@ the same at every node (`verdictOn_at`), and a step asks only for a proof
 at or below its next undecided slot (`askProof_le_lo`). A node behind asks
 for the proof of its next undecided slot at a timer within `askDelay`
 (`asks_within`), so it moves up a slot once a reliable peer is past it
-(`moves_up`).
+(`moves_up`), and is past every slot the peer decided within a bound per
+slot between (`decides_behind`).
 -/
 
 namespace LeanDag
@@ -225,7 +226,8 @@ theorem caught_up (hσ : cfg.σ = boundedSel) (hw : 2 ≤ cfg.p.waveLength)
     (hask : Output.askProof k ∈ outputsAt cfg tr i)
     {d : Option BlockId} (hvk : (k, d) ∈ (stateBefore cfg tr i v).decided)
     (ht : max (time i) gst + 2 * Δ ≤ t₁) :
-    ∃ j, i < j ∧ time j ≤ max (time i) gst + 2 * Δ ∧ k < (stateBefore cfg tr (j + 1) u).lo := by
+    ∃ j, i < j ∧ j < tr.length ∧ time j ≤ max (time i) gst + 2 * Δ ∧
+      k < (stateBefore cfg tr (j + 1) u).lo := by
   have hk : k ≤ (stateBefore cfg tr (i + 1) u).lo := by
     rw [outputsAt_eq hi] at hask
     rw [Converge.step_before hi]
@@ -257,7 +259,7 @@ theorem caught_up (hσ : cfg.σ = boundedSel) (hw : 2 ≤ cfg.p.waveLength)
     max_le ht₁ ((le_max_right _ _).trans (Nat.le_add_right _ _))
   obtain ⟨j₂, hj₁j₂, hj₂, ht₂⟩ :=
     hdel j₁ v _ hj₁ hv (u, .proof v k L) ⟨_, hrep, rfl, rfl⟩ hu (by omega)
-  refine ⟨j₂, by omega, by omega, ?_⟩
+  refine ⟨j₂, by omega, (List.getElem?_eq_some_iff.mp hj₂).1, by omega, ?_⟩
   have hlo : k ≤ (stateBefore cfg tr j₂ u).lo :=
     hk.trans (rises_before (cfg := cfg) u (show i + 1 ≤ j₂ by omega)).2.2
   rw [Converge.step_before hj₂]
@@ -390,22 +392,117 @@ theorem moves_up (hσ : cfg.σ = boundedSel) (hw : 2 ≤ cfg.p.waveLength)
     (hts : (stateBefore cfg tr E u).top = some n) (hlo : (stateBefore cfg tr E u).lo ≤ k)
     (hvk : k < (stateBefore cfg tr E v).lo) (hτ : ∀ a < E, a < tr.length → time a ≤ τ)
     (ht₁ : max (τ + askDelay cfg k n) gst + 2 * Δ ≤ t₁) :
-    ∃ j, E ≤ j ∧ time j ≤ max (τ + askDelay cfg k n) gst + 2 * Δ ∧
+    ∃ j, E ≤ j ∧ j < tr.length ∧ time j ≤ max (τ + askDelay cfg k n) gst + 2 * Δ ∧
       (stateBefore cfg tr E u).lo < (stateBefore cfg tr (j + 1) u).lo := by
   obtain ⟨g, hEg, htg, hgu, hres⟩ := asks_within hmono hup hfire hdr hu k hts hlo
     (fun _ _ _ => Nat.zero_le _) hτ (by omega)
   have hg₁ := (rises_before (cfg := cfg) (tr := tr) u (show E ≤ g + 1 by omega)).2.2
   have hmax : max (time g) gst ≤ max (τ + askDelay cfg k n) gst := max_le_max htg le_rfl
-  by_cases hk : k < (stateBefore cfg tr (g + 1) u).lo
-  · exact ⟨g, hEg, by omega, by omega⟩
-  have hask := hres.resolve_left hk
   obtain ⟨inp, hg⟩ := Converge.event_of_map hgu
+  have hgl : g < tr.length := (List.getElem?_eq_some_iff.mp hg).1
+  by_cases hk : k < (stateBefore cfg tr (g + 1) u).lo
+  · exact ⟨g, hEg, hgl, by omega, by omega⟩
+  have hask := hres.resolve_left hk
   have hvg := (rises_before (cfg := cfg) (tr := tr) v hEg).2.2
   obtain ⟨d, hd⟩ := (ledger_before (cfg := cfg) (tr := tr) v g).mem
     (k := (stateBefore cfg tr (g + 1) u).lo) (by omega)
-  obtain ⟨j, hgj, htj, hj⟩ := caught_up hσ hw hl hcm hc hid hdr htime hev hTH hdel hu hv hvu hg
-    hask hd (by omega)
-  exact ⟨j, by omega, by omega, by omega⟩
+  obtain ⟨j, hgj, hjl, htj, hj⟩ := caught_up hσ hw hl hcm hc hid hdr htime hev hTH hdel hu hv
+    hvu hg hask hd (by omega)
+  exact ⟨j, by omega, hjl, by omega, by omega⟩
+
+/-- The events before `E` lie at or before `t` exactly when `E` is at most
+the number of events by `t`. -/
+theorem le_eventsBy (hmono : Live.TimeMono tr time) {E t : ℕ} (hE : E ≤ tr.length)
+    (hτ : ∀ a < E, a < tr.length → time a ≤ t) : E ≤ eventsBy tr time t := by
+  rcases Nat.eq_zero_or_pos E with rfl | hpos
+  · exact Nat.zero_le _
+  · have := (lt_eventsBy hmono (show E - 1 < tr.length by omega)).mpr
+      (hτ _ (by omega) (by omega))
+    omega
+
+/-- **The delay of a request for a proof is at most the retry delays of
+the rounds up to `M`**, for `M` at or above the node's round and a wave
+above the round of slot `k`. -/
+theorem askDelay_le {k n M : ℕ} (hn : n ≤ M) (hk : cfg.slots.slotRound k + cfg.p.waveLength ≤ M) :
+    askDelay cfg k n ≤ ∑ r ∈ Finset.range (M + 1), 2 * cfg.timeout (r - 1) := by
+  have := max_le hn hk
+  exact Finset.sum_le_sum_of_subset fun x hx => by
+    simp only [Finset.mem_Icc, Finset.mem_range] at hx ⊢; omega
+
+/-- **A reliable node behind decides the slots a reliable peer has
+decided** (catch-up), at a node that drops: from event `E` on, once a
+reliable peer is past slot `k`, a reliable node that has started is past
+`k` by `max τ gst + g (D + 2Δ)`, for `τ` a time at or after the events
+before `E`, `g` the slots from its next undecided one to `k`, and `D` the
+retry delays of the rounds up to `M`, if no reliable node restarts and its
+round stays at or below `M`, with `M` a wave above the round of slot `k`
+or more. Each slot takes a request and a reply (`moves_up`). -/
+theorem decides_behind (hσ : cfg.σ = boundedSel) (hw : 2 ≤ cfg.p.waveLength)
+    (hl : 1 ≤ cfg.p.linkSize) (hcm : 1 ≤ cfg.p.commitThreshold)
+    (hc : cfg.p.voteIsCert = false → 1 ≤ cfg.p.certThreshold)
+    (hid : Function.Injective cfg.idOf) (hdr : cfg.drops = true)
+    {H : Finset Validator} (htime : Converge.TimelyAuthentic cfg H tr)
+    (hev : Converge.EvidenceAuthentic cfg H tr) (hTH : T ⊆ H) {gst Δ : ℕ}
+    (hmono : Live.TimeMono tr time) (hdel : Live.DeliveredWithin cfg T tr time gst Δ t₁)
+    (hup : Live.UpFrom T tr time 0 t₁) (hfire : Live.TimersFireUp cfg T tr time t₁)
+    {u v : Validator} (hu : u ∈ T) (hv : v ∈ T) (hvu : v ≠ u) {k M : ℕ}
+    (hkM : cfg.slots.slotRound k + cfg.p.waveLength ≤ M) :
+    ∀ {E τ : ℕ}, E ≤ tr.length → (stateBefore cfg tr E u).top.isSome →
+      k < (stateBefore cfg tr E v).lo → (∀ a < E, a < tr.length → time a ≤ τ) →
+      (stateAt cfg tr time u (max τ gst + (k + 1 - (stateBefore cfg tr E u).lo) *
+        ((∑ r ∈ Finset.range (M + 1), 2 * cfg.timeout (r - 1)) + 2 * Δ))).top.getD 0 ≤ M →
+      max τ gst + (k + 1 - (stateBefore cfg tr E u).lo) *
+        ((∑ r ∈ Finset.range (M + 1), 2 * cfg.timeout (r - 1)) + 2 * Δ) ≤ t₁ →
+      k < (stateAt cfg tr time u (max τ gst + (k + 1 - (stateBefore cfg tr E u).lo) *
+        ((∑ r ∈ Finset.range (M + 1), 2 * cfg.timeout (r - 1)) + 2 * Δ))).lo := by
+  set D := (∑ r ∈ Finset.range (M + 1), 2 * cfg.timeout (r - 1)) + 2 * Δ with hD
+  intro E τ hE hts hvk hτ hM ht₁
+  induction hg : k + 1 - (stateBefore cfg tr E u).lo using Nat.strong_induction_on
+    generalizing E τ with
+  | _ g ih =>
+  rw [hg] at hM ht₁
+  have hEB : E ≤ eventsBy tr time (max τ gst + g * D) := le_eventsBy hmono hE
+    (fun a ha hal => (hτ a ha hal).trans ((le_max_left τ gst).trans (Nat.le_add_right _ _)))
+  have hrE := rises_before (cfg := cfg) (tr := tr) u hEB
+  by_cases hk : k < (stateBefore cfg tr E u).lo
+  · exact lt_of_lt_of_le hk hrE.2.2
+  obtain ⟨n, hn⟩ := Option.isSome_iff_exists.mp hts
+  have hnM : n ≤ M := by
+    have := hrE.1; rw [hn] at this; simp only [Option.getD_some] at this
+    exact this.trans hM
+  have hask := askDelay_le (cfg := cfg) (k := k) hnM hkM
+  have hg1 : 1 ≤ g := by omega
+  have hgD : D ≤ g * D := Nat.le_mul_of_pos_left D hg1
+  obtain ⟨j, hEj, hjl, htj, hj⟩ := moves_up hσ hw hl hcm hc hid hdr htime hev hTH hmono hdel
+    hup hfire hu hv hvu hn (by omega) hvk hτ (by
+      have : max (τ + askDelay cfg k n) gst ≤ max τ gst + askDelay cfg k n := max_le
+        (Nat.add_le_add_right (le_max_left _ _) _) ((le_max_right _ _).trans (Nat.le_add_right _ _))
+      omega)
+  have htj' : time j ≤ max τ gst + D := by
+    have : max (τ + askDelay cfg k n) gst ≤ max τ gst + askDelay cfg k n := max_le
+      (Nat.add_le_add_right (le_max_left _ _) _) ((le_max_right _ _).trans (Nat.le_add_right _ _))
+    omega
+  have hj1 : j + 1 ≤ eventsBy tr time (max τ gst + g * D) :=
+    (lt_eventsBy hmono hjl).mpr (by omega)
+  by_cases hkj : k < (stateBefore cfg tr (j + 1) u).lo
+  · exact lt_of_lt_of_le hkj (rises_before (cfg := cfg) (tr := tr) u hj1).2.2
+  -- the next slot, from the event after `j`
+  set g' := k + 1 - (stateBefore cfg tr (j + 1) u).lo with hg'
+  have hgg : g' < g := by omega
+  have hB : max (time j) gst + g' * D ≤ max τ gst + g * D := by
+    have : g' * D + D ≤ g * D := by
+      have := Nat.mul_le_mul_right D (show g' + 1 ≤ g by omega)
+      rwa [Nat.add_mul, one_mul] at this
+    have : max (time j) gst ≤ max τ gst + D := max_le htj' ((le_max_right _ _).trans
+      (Nat.le_add_right _ _))
+    omega
+  have hmonoB := eventsBy_mono (tr := tr) (time := time) hB
+  have hrB := rises_before (cfg := cfg) (tr := tr) u hmonoB
+  have hr₁ := rises_before (cfg := cfg) (tr := tr) u (show E ≤ j + 1 by omega)
+  have := ih g' hgg (E := j + 1) (τ := time j) hjl (hr₁.2.1 hts)
+    (lt_of_lt_of_le hvk (rises_before (cfg := cfg) (tr := tr) v (show E ≤ j + 1 by omega)).2.2)
+    (fun a ha _ => hmono a j (by omega) hjl) (hrB.1.trans hM) (hB.trans ht₁) hg'.symm
+  exact lt_of_lt_of_le this hrB.2.2
 
 end Asking
 
