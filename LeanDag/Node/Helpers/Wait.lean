@@ -747,7 +747,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
               simp only [floorOf, h₁.1, Option.getD_none] at this
               simpa [floorOf, s₀, keep] using this,
             hi.above.insert (hnew := h₂.1) (hrefs := fun _ hj => absurd hj (Finset.notMem_empty _))
-              (hpred := fun j hj => absurd hj (Finset.notMem_empty j)) h₂.2⟩
+              (hpred := fun j hj => absurd hj (Finset.notMem_empty j)) h₂.2, hi.evidence⟩
         refine hset s₀ (built cfg [(cfg.idOf cfg.genesis, cfg.genesis)])
           ⟨hcst, hh₀, ho₀, (Grows.insert s.disk : Grows s.disk st), fun r hr => Or.inl hr,
             ⟨_, hi₀⟩, hev.grow (Grows.insert s.disk : Grows s.disk st) rfl rfl, subset_rfl,
@@ -798,7 +798,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
     refine Or.inr (settle_witness hg (s := s) (inp := .timer r)
       (s₀ := { s with fired := fire s r, recovering := false })
       ⟨hc, hh.grow (Grows.refl _) rfl, hown.grow (Grows.refl _) rfl rfl, Grows.refl _,
-        fun t ht => ?_, ⟨B₀, hi.of_eq rfl rfl rfl rfl rfl le_rfl⟩,
+        fun t ht => ?_, ⟨B₀, hi.of_eq rfl rfl rfl rfl rfl le_rfl rfl rfl⟩,
         hev.grow (Grows.refl _) rfl rfl, subset_rfl,
         fun hf => (hkp hf).restrips (Store.Restrips.refl _ 0) rfl⟩ hdr hp hb e
         hev')
@@ -820,7 +820,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
     exact Or.inr (settle_witness hg (s := s) (inp := .restart)
       (s₀ := { s with recovering := true })
       ⟨hc, hh.grow (Grows.refl _) rfl, hown.grow (Grows.refl _) rfl rfl, Grows.refl _,
-        fun t ht => Or.inl ht, ⟨B₀, hi.of_eq rfl rfl rfl rfl rfl le_rfl⟩,
+        fun t ht => Or.inl ht, ⟨B₀, hi.of_eq rfl rfl rfl rfl rfl le_rfl rfl rfl⟩,
         hev.grow (Grows.refl _) rfl rfl, subset_rfl,
         fun hf => (hkp hf).restrips (Store.Restrips.refl _ 0) rfl⟩ hdr hp hb e
         hev')

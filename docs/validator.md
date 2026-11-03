@@ -367,7 +367,11 @@ author, no later block references it (`exposed_of_correct_exposed`). An
 honest node never convicts an honest one (`Converge.not_detected`): twins
 of an honest author do not exist, and evidence against one does not
 either, which is what signed headers give and the claims assume
-(`EvidenceAuthentic`). Ignoring a convicted peer's requests matters: an
+(`EvidenceAuthentic`). Evidence is extracted once, from two blocks of
+one author at one round or from a block that carries it, and is kept
+apart from the blocks (`State.evidence`), so it holds when the node lets
+go of them: each item the node holds names blocks it knew (`Extracted`,
+`Inv.evidence`), with or without dropping. Ignoring a convicted peer's requests matters: an
 equivocator's copy that rejects every block built on its twin keeps a
 low frontier, and each of its requests would stream the history above
 it. At Orcaella with `n = 9` and an equivocator, the honest nodes

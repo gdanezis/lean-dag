@@ -84,7 +84,7 @@ theorem converges : Converges := by
     rw [if_neg]
     · exact List.mem_singleton_self _
     · rintro (h | h)
-      · exact not_detected htime hev hdr hv hu R' h
+      · exact not_detected htime hev hv hu R' h
       · rw [List.isEmpty_iff] at h
         rw [h] at hjLu
         exact absurd hjLu List.not_mem_nil
@@ -99,7 +99,7 @@ theorem converges : Converges := by
   have hheld : j ∉ (Node.step (cfg.at v) s (.stream u Lu)).1.disk.ids := by
     rw [← step_before hR'']; exact hlack _
   have hdet : u ∉ (Node.step (cfg.at v) s (.stream u Lu)).1.detected := by
-    rw [← step_before hR'']; exact not_detected htime hev hdr hu hv _
+    rw [← step_before hR'']; exact not_detected htime hev hu hv _
   obtain ⟨hadm, hasked⟩ :=
     step_stream_stuck (cfg := cfg.at v) (syncsOn_before v R'') hdr heA hno hheld hdet
   -- the piece's part in `j`'s history

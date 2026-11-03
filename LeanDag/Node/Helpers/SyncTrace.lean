@@ -5,7 +5,8 @@ import LeanDag.Node.Helpers.Arrive
 
 Along a trace a node's syncs keep their shape and only evidence convicts
 an author (`syncsOn_before`, `evidenceOn_before`), so an honest node
-never convicts an honest one, given authentic evidence (`not_detected`).
+never convicts an honest one, given authentic evidence (`not_detected`):
+the evidence it holds was extracted from blocks it knew.
 A sync present at `τ` was asked for last at some event `R < τ`, and has
 been present since, asking only for names of that request (`last_ask`).
 
@@ -56,26 +57,28 @@ theorem auth_final (htime : TimelyAuthentic cfg H tr) {u v : Validator} (hu : u 
   obtain ⟨i, -, inpi, hi, hix⟩ := persists_of_broadcasts hp hpb
   exact persists_final (persists_of_event hi hix)
 
-/-- **An honest node never convicts an honest one**, when it does not drop. -/
+/-- **Evidence an honest node extracted names no honest author**, given
+authentic evidence. -/
+theorem not_extracted (htime : TimelyAuthentic cfg H tr) (hev : EvidenceAuthentic cfg H tr)
+    {v : Validator} (hv : v ∈ H) {i : ℕ} (hi : i ≤ tr.length) {e : Validator × BlockId × BlockId}
+    (he : Extracted (cfg.at v) (knownBefore cfg tr i v) e) (hu : e.1 ∈ H) : False := by
+  obtain ⟨hne, ⟨x, hx, y, hy, hx1, hy1, hxc, hyc, hr⟩ | ⟨x, hx, hxe⟩⟩ := he
+  · have hxy := eq_of_persists e.1 (persists_final (own_known htime hv hu hi hx hxc))
+      (persists_final (own_known htime hv hu hi hy hyc)) hr
+    exact hne (hx1.symm.trans ((congrArg Prod.fst hxy).trans hy1))
+  · exact hev x (knownBefore_sub hv i hx) e hxe hne hu
+
+/-- **An honest node never convicts an honest one**, given authentic
+evidence. -/
 theorem not_detected (htime : TimelyAuthentic cfg H tr) (hev : EvidenceAuthentic cfg H tr)
-    (hdr : cfg.drops = false) {u v : Validator} (hu : u ∈ H) (hv : v ∈ H) (i : ℕ) :
+    {u v : Validator} (hu : u ∈ H) (hv : v ∈ H) (i : ℕ) :
     u ∉ (stateBefore cfg tr i v).detected := by
   wlog hi : i ≤ tr.length generalizing i
   · rw [stateBefore_of_le (by omega) v]; exact this tr.length le_rfl
   intro hd
-  have hE := evidenceOn_before (cfg := cfg) (tr := tr) v hdr i
-  obtain ⟨e, he, rfl, hne⟩ := hE.1 _ hd
-  rcases (hE.2 e he).2 with ⟨ha, ha', hac, hac', hr⟩ | ⟨c, hc, hce⟩
-  · have hown : ∀ c ∈ (stateBefore cfg tr i v).disk.ids,
-        ((stateBefore cfg tr i v).disk.blk c).creator = e.1 →
-        (c, (stateBefore cfg tr i v).disk.full c) ∈ persists (runOf cfg tr e.1).2 := fun c hc hcu =>
-      persists_final (own_known (v := e.1) htime hv hu hi ((inv_before i v).known c hc)
-        (by simp only; rw [((stateBefore cfg tr i v).disk.full_fields c).2.1]; exact hcu))
-    exact hne (Prod.mk.inj (eq_of_persists e.1 (hown _ ha hac) (hown _ ha' hac') (by
-      simp only; rw [((stateBefore cfg tr i v).disk.full_fields _).1,
-        ((stateBefore cfg tr i v).disk.full_fields _).1]; exact hr))).1
-  · exact hev _ (stored_known hv hc) e
-      (by simp only; rw [((stateBefore cfg tr i v).disk.full_fields c).2.2]; exact hce) hne hu
+  have hE := (inv_before (cfg := cfg) (tr := tr) i v).evidence
+  obtain ⟨e, he, rfl⟩ := hE.1 _ hd
+  exact not_extracted htime hev hv hi (hE.2 e he) hu
 
 /-- **An honest node leaves out no honest author**, given authentic
 evidence, when it does not drop. -/
@@ -84,23 +87,11 @@ theorem not_excluded (htime : TimelyAuthentic cfg H tr) (hev : EvidenceAuthentic
     u ∉ excluded (cfg.at v) (stateBefore cfg tr i v).disk r (stateBefore cfg tr i v).evidence := by
   wlog hi : i ≤ tr.length generalizing i
   · rw [stateBefore_of_le (by omega) v]; exact this tr.length le_rfl
-  have hE := evidenceOn_before (cfg := cfg) (tr := tr) v hd i
   intro hm
   rcases Finset.mem_union.mp hm with hm | hm
   · obtain ⟨e, he, rfl⟩ := Finset.mem_image.mp hm
-    obtain ⟨he, hne⟩ := Finset.mem_filter.mp he
-    rcases (hE.2 e he).2 with ⟨ha, ha', hac, hac', hr⟩ | ⟨c, hc, hce⟩
-    · have hown : ∀ c ∈ (stateBefore cfg tr i v).disk.ids,
-          ((stateBefore cfg tr i v).disk.blk c).creator = e.1 →
-          (c, (stateBefore cfg tr i v).disk.full c) ∈ persists (runOf cfg tr e.1).2 :=
-        fun c hc hcu =>
-          persists_final (own_known (v := e.1) htime hv hu hi ((inv_before i v).known c hc)
-            (by simp only; rw [((stateBefore cfg tr i v).disk.full_fields c).2.1]; exact hcu))
-      exact hne (Prod.mk.inj (eq_of_persists e.1 (hown _ ha hac) (hown _ ha' hac') (by
-        simp only; rw [((stateBefore cfg tr i v).disk.full_fields _).1,
-          ((stateBefore cfg tr i v).disk.full_fields _).1]; exact hr))).1
-    · exact hev _ (stored_known hv hc) e
-        (by simp only; rw [((stateBefore cfg tr i v).disk.full_fields c).2.2]; exact hce) hne hu
+    exact not_extracted htime hev hv hi
+      ((inv_before (cfg := cfg) (tr := tr) i v).evidence.2 e (Finset.mem_filter.mp he).1) hu
   · obtain ⟨c, hcR, hcm⟩ := Finset.mem_biUnion.mp hm
     exact ex_not_named ((inv_before (cfg := cfg) (tr := tr) i v).valid hd)
       (fun j hj e he hne => hev _ (stored_known hv hj) e
@@ -204,11 +195,11 @@ theorem sync_made (hid : j = cfg.idOf b) (hc : b.creator = u)
     ∃ A, (u, (j, b), A) ∈ (stateBefore cfg tr (k + 1) v).syncs := by
   have hs := syncsOn_before (cfg := cfg) (tr := tr) v k
   have hl := hlack (k + 1)
-  have hd := not_detected htime hev hdr hu hv (k + 1)
+  have hd := not_detected htime hev hu hv (k + 1)
   rw [step_before hk] at hl hd ⊢
   set s := stateBefore cfg tr k v
   have hg : j = (cfg.at v).idOf b ∧ b.creator = u ∧ u ≠ (cfg.at v).me ∧ u ∉ s.detected ∧
-      j ∉ s.disk.ids := ⟨hid, hc, huv, not_detected htime hev hdr hu hv k, hlack k⟩
+      j ∉ s.disk.ids := ⟨hid, hc, huv, not_detected htime hev hu hv k, hlack k⟩
   rw [step_deliver_eq, if_pos hg] at hl hd ⊢
   split_ifs at hl hd ⊢ with hr hcnd
   · exact absurd ((Thins.settle (cfg := cfg.at v) _).grows hdr |>.1
@@ -251,7 +242,7 @@ theorem sync_stays {k : ℕ} (hmade : ∃ A, (u, (j, b), A) ∈ (stateBefore cfg
     by_cases hev : ∃ inp, tr[τ]? = some (v, inp)
     · obtain ⟨inp, hτ⟩ := hev
       have hl := hlack (τ + 1)
-      have hd := not_detected htime hev hdr hu hv (τ + 1)
+      have hd := not_detected htime hev hu hv (τ + 1)
       rw [step_before hτ] at hl hd ⊢
       rcases step_keeps (cfg := cfg.at v) (syncsOn_before (cfg := cfg) (tr := tr) v τ) hdr hA
         inp with h | h | ⟨id, b', rfl, hid', hc', hr'⟩ | h

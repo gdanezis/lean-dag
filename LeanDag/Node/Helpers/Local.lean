@@ -186,6 +186,42 @@ theorem Good.mono {K K' : Set (BlockId × Block Validator BlockId Payload)} (hK 
   ⟨h.1, h.2.1, fun j hj => let ⟨c, hc⟩ := h.2.2.1 j hj; ⟨c, hK hc⟩,
     fun blk hblk => h.2.2.2 blk fun x hx => hblk x (hK hx)⟩
 
+/-- **Evidence extracted from blocks the node knew**, `K`: it names two
+distinct blocks, either two blocks of its author at one round in `K`, or
+it is carried by a block in `K`. -/
+def Extracted (cfg : Config Validator BlockId Payload)
+    (K : Set (BlockId × Block Validator BlockId Payload)) (e : Validator × BlockId × BlockId) :
+    Prop :=
+  e.2.1 ≠ e.2.2 ∧
+    ((∃ x ∈ K, ∃ y ∈ K, x.1 = e.2.1 ∧ y.1 = e.2.2 ∧ x.2.creator = e.1 ∧ y.2.creator = e.1 ∧
+      x.2.round = y.2.round) ∨ ∃ x ∈ K, e ∈ cfg.xp.ev x.2.payload)
+
+omit [Fintype Validator] in
+theorem Extracted.mono {K K' : Set (BlockId × Block Validator BlockId Payload)} (hK : K ⊆ K')
+    {e : Validator × BlockId × BlockId} (h : Extracted cfg K e) : Extracted cfg K' e := by
+  refine ⟨h.1, ?_⟩
+  rcases h.2 with ⟨x, hx, y, hy, h⟩ | ⟨x, hx, h⟩
+  · exact Or.inl ⟨x, hK hx, y, hK hy, h⟩
+  · exact Or.inr ⟨x, hK hx, h⟩
+
+/-- **What the node holds as evidence was extracted from blocks it knew**,
+`K`, and names every author it convicted. -/
+def EvidenceIn (cfg : Config Validator BlockId Payload)
+    (K : Set (BlockId × Block Validator BlockId Payload)) (s : State Validator BlockId Payload) :
+    Prop :=
+  (∀ a ∈ s.detected, ∃ e ∈ s.evidence, e.1 = a) ∧ ∀ e ∈ s.evidence, Extracted cfg K e
+
+omit [Fintype Validator] in
+theorem EvidenceIn.mono {K K' : Set (BlockId × Block Validator BlockId Payload)} (hK : K ⊆ K')
+    {s : State Validator BlockId Payload} (h : EvidenceIn cfg K s) : EvidenceIn cfg K' s :=
+  ⟨h.1, fun e he => (h.2 e he).mono hK⟩
+
+omit [Fintype Validator] in
+theorem EvidenceIn.of_eq {K : Set (BlockId × Block Validator BlockId Payload)}
+    {s s' : State Validator BlockId Payload} (h : EvidenceIn cfg K s)
+    (hdet : s'.detected = s.detected) (hev : s'.evidence = s.evidence) : EvidenceIn cfg K s' := by
+  unfold EvidenceIn; rw [hdet, hev]; exact h
+
 /-- **Own blocks below a top**: at strictly increasing rounds, none above
 `t`. -/
 def Rounds (B : List (BlockId × Block Validator BlockId Payload)) (t : ℕ) : Prop :=
@@ -495,6 +531,7 @@ structure Inv (cfg : Config Validator BlockId Payload) (s : State Validator Bloc
   own : ∀ j, s.own = some j → j ∈ s.disk.ids ∧ (j, s.disk.full j) ∈ B
   floor : s.floor ≤ floorOf cfg s
   above : UpperValid cfg.q cfg.xp s.floor s.disk
+  evidence : EvidenceIn cfg K s
 
 omit [Fintype Validator] in
 theorem Inv.mono {s : State Validator BlockId Payload}
@@ -503,7 +540,7 @@ theorem Inv.mono {s : State Validator BlockId Payload}
     Inv cfg s K' B :=
   ⟨fun j hj => hK (h.known j hj), fun e he => hK (h.pend e he), h.rounds,
     fun e he => (h.good e he).mono hK, fun e he => hK (h.sub e he), h.valid, h.own, h.floor,
-    h.above⟩
+    h.above, h.evidence.mono hK⟩
 
 omit [Fintype Validator] [DecidableEq Validator] in
 /-- Accepting a known block keeps the store known. -/
@@ -544,6 +581,21 @@ theorem Inv.unkept {s : State Validator BlockId Payload}
   omega
 
 omit [Fintype Validator] in
+theorem tryBuild_detected {s s' : State Validator BlockId Payload}
+    {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
+    s'.detected = s.detected ∧ s'.evidence = s.evidence := by
+  obtain ⟨_, _, _, -, h, -⟩ := tryBuild_cases h
+  unfold buildAbove at h
+  dsimp only at h
+  split at h
+  · split at h
+    · rw [Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, -⟩ := h
+      exact ⟨release_detected _, release_evidence _⟩
+    · exact absurd h (by simp)
+  · exact absurd h (by simp)
+
+omit [Fintype Validator] in
 /-- **A build step keeps the disk valid at the row from the floor up.** -/
 theorem UpperValid.tryBuild {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)}
@@ -565,7 +617,7 @@ theorem Inv.tryBuild {s s' : State Validator BlockId Payload}
   obtain ⟨id', b', hout', hown, hid', hblk⟩ := tryBuild_own h
   have hK : K ⊆ K ∪ {(id, b)} := Set.subset_union_left
   have hmem : (id, b) ∈ K ∪ {(id, b)} := Set.mem_union_right _ rfl
-  refine ⟨(id, b), hout, ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩⟩
+  refine ⟨(id, b), hout, ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩⟩
   · intro j hj
     rw [hst.full]
     exact known_insert (fun j hj => hK (hi.known j hj)) hmem j (hst.ids ▸ hj)
@@ -607,6 +659,7 @@ theorem Inv.tryBuild {s s' : State Validator BlockId Payload}
     exact max_le (hi.floor.trans (floorOf_mono hlo.ge (by
       rw [htop]; exact hr.2.1.trans (Nat.le_succ r)))) le_rfl
   · exact hi.above.tryBuild h
+  · exact (hi.evidence.mono hK).of_eq (tryBuild_detected h).1 (tryBuild_detected h).2
 
 omit [Fintype Validator] in
 /-- **Building keeps the disk valid at the row from the floor up.** -/
@@ -725,13 +778,14 @@ theorem Inv.of_eq {s s' : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B)
     (hst : s'.disk = s.disk) (hpd : s'.syncs = s.syncs) (htop : s'.top = s.top)
-    (hown : s'.own = s.own) (hfl : s'.floor = s.floor) (hlo : s.lo ≤ s'.lo) :
+    (hown : s'.own = s.own) (hfl : s'.floor = s.floor) (hlo : s.lo ≤ s'.lo)
+    (hdet : s'.detected = s.detected) (hev : s'.evidence = s.evidence) :
     Inv cfg s' K B :=
   ⟨by rw [hst]; exact hi.known, by rw [hpd]; exact hi.pend,
     by rw [htop]; exact hi.rounds, hi.good, hi.sub, by rw [hst]; exact hi.valid,
     by rw [hst, hown]; exact hi.own,
     by rw [hfl]; exact hi.floor.trans (floorOf_mono hlo (by rw [htop])),
-    by rw [hst, hfl]; exact hi.above⟩
+    by rw [hst, hfl]; exact hi.above, hi.evidence.of_eq hdet hev⟩
 
 omit [Fintype Validator] in
 /-- **Releasing the memory keeps the disk valid at the row from the floor
@@ -750,7 +804,8 @@ theorem Inv.release {s : State Validator BlockId Payload}
   have hf : floorOf cfg (Node.release cfg s) = floorOf cfg s := by
     simp only [floorOf, release_lo, release_top]
   have hd := release_disk (cfg := cfg) s
-  refine ⟨?_, ?_, ?_, hi.good, hi.sub, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, hi.good, hi.sub, ?_, ?_, ?_, ?_,
+    hi.evidence.of_eq (release_detected _) (release_evidence _)⟩
   · intro j hj; rw [hd.full]; exact hi.known j (hd.ids ▸ hj)
   · rw [release_syncs]; exact hi.pend
   · rw [release_top]; exact hi.rounds
@@ -802,7 +857,7 @@ theorem Inv.drop {s : State Validator BlockId Payload}
   have hs := drop_disk (cfg := cfg) s
   refine ⟨fun j hj => ?_, by rw [drop_syncs]; exact hi.pend, by rw [drop_top]; exact hi.rounds,
     hi.good, hi.sub, fun hd => by rw [drop_of_false _ hd]; exact hi.valid hd, fun j hj => ?_, ?_,
-    ?_⟩
+    ?_, hi.evidence.of_eq (drop_detected _) (drop_evidence _)⟩
   · rw [hs.full j hj]; exact hi.known j (hs.ids hj)
   · rw [drop_own] at hj
     have hm := drop_own_mem (cfg := cfg) s hj (hi.own j hj).1
@@ -822,7 +877,7 @@ theorem Inv.decideStep {s : State Validator BlockId Payload}
   dsimp only
   split
   · exact ⟨out_quiet (quiet_commits _), Inv.drop (Inv.release (hi.of_eq rfl rfl rfl rfl rfl
-      (Nat.le_add_right _ _)))⟩
+      (Nat.le_add_right _ _) rfl rfl))⟩
   · exact ⟨⟨rfl, rfl⟩, hi⟩
 
 omit [Fintype Validator] in
@@ -878,6 +933,68 @@ theorem UpperValid.absorb {s : State Validator BlockId Payload}
   rw [(absorb_rest (cfg := cfg) s L).1, absorb_disk]; exact UpperValid.foldl L hab
 
 omit [Fintype Validator] in
+/-- **Accepting a known block keeps its evidence extracted from known
+blocks**, and every author it convicts named by it. -/
+theorem evidence_accept {s : State Validator BlockId Payload}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    (hK : ∀ j ∈ s.disk.ids, (j, s.disk.full j) ∈ K)
+    (h : EvidenceIn cfg K s) {id : BlockId} {b : Block Validator BlockId Payload}
+    (hb : (id, b) ∈ K) : EvidenceIn cfg K (Node.accept cfg s id b) := by
+  obtain ⟨hcv, hex⟩ := h
+  -- the evidence accepting a new block gives
+  have key : id ∉ s.disk.ids → ∀ s' : State Validator BlockId Payload,
+      s'.detected = s.detected ∪ named (evidenceOf cfg s.disk id b) →
+      s'.evidence = s.evidence ∪ evidenceOf cfg s.disk id b → EvidenceIn cfg K s' := by
+    intro hnew s' hsdet hsev
+    unfold EvidenceIn
+    rw [hsdet, hsev]
+    refine ⟨fun a ha => ?_, fun e he => ?_⟩
+    · rcases Finset.mem_union.mp ha with ha | ha
+      · obtain ⟨e, he, h₁⟩ := hcv a ha
+        exact ⟨e, Finset.mem_union_left _ he, h₁⟩
+      · obtain ⟨e, he, rfl⟩ := Finset.mem_image.mp ha
+        exact ⟨e, Finset.mem_union_right _ (Finset.mem_filter.mp he).1, rfl⟩
+    rcases Finset.mem_union.mp he with he | he
+    · exact hex e he
+    rcases Finset.mem_union.mp he with he | he
+    · cases ht : twinOf s.disk b with
+      | none => rw [ht] at he; simp at he
+      | some i =>
+        rw [ht] at he
+        simp only [Option.map_some, Option.toFinset_some, Finset.mem_singleton] at he
+        subst he
+        have hi := Finset.mem_filter.mp (mem_of_leastOf ht)
+        rw [Store.mem_atRound] at hi
+        have hf := s.disk.full_fields i
+        refine ⟨fun e => hnew (by simp only at e; exact e ▸ hi.1.1),
+          Or.inl ⟨_, hK i hi.1.1, _, hb, rfl, rfl, ?_, rfl, ?_⟩⟩
+        · simp only; rw [hf.2.1]; exact hi.2
+        · simp only; rw [hf.1]; exact hi.1.2
+    · obtain ⟨he, hne⟩ := Finset.mem_filter.mp he
+      exact ⟨hne, Or.inr ⟨_, hb, he⟩⟩
+  unfold Node.accept
+  split
+  · rename_i hc; exact key hc.1 _ rfl rfl
+  · split
+    · rename_i hc; exact key hc.2.1 _ rfl rfl
+    · exact ⟨hcv, hex⟩
+
+omit [Fintype Validator] in
+/-- **Taking known blocks in keeps the evidence extracted from known
+blocks**, and every convicted author named by it. -/
+theorem evidence_absorb {K : Set (BlockId × Block Validator BlockId Payload)} :
+    ∀ (L : List (BlockId × Block Validator BlockId Payload)) (s : State Validator BlockId Payload),
+    (∀ e ∈ L, e ∈ K) → (∀ j ∈ s.disk.ids, (j, s.disk.full j) ∈ K) →
+    (cfg.drops = false → StoreValid cfg.q cfg.xp s.disk) → EvidenceIn cfg K s →
+    EvidenceIn cfg K (Node.absorb cfg s L)
+  | [], _, _, _, _, h => h
+  | x :: L, s, hL, hK, hV, h => by
+    have h₁ := evidence_accept (cfg := cfg) hK h (hL x List.mem_cons_self)
+    have h₂ := accept_known (cfg := cfg) (F := s.floor) hK hV (hL x List.mem_cons_self)
+    rw [← accept_disk] at h₂
+    exact evidence_absorb L _ (fun e he => hL e (List.mem_cons_of_mem _ he)) h₂.1 h₂.2 h₁
+
+omit [Fintype Validator] in
 /-- **Taking known blocks in keeps the invariant.** -/
 theorem Inv.absorb {s : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
@@ -887,7 +1004,8 @@ theorem Inv.absorb {s : State Validator BlockId Payload}
   have hfl := foldl_accept_known (cfg := cfg) (F := s.floor) L hi.known hi.valid hL
   have hg := Grows.foldl (cfg := cfg) s.floor L s.disk
   obtain ⟨h₁, h₂, h₃, h₄, -, h₆, -, -, -, -⟩ := absorb_rest (cfg := cfg) s L
-  refine ⟨?_, ?_, ?_, hi.good, hi.sub, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, hi.good, hi.sub, ?_, ?_, ?_, ?_,
+    evidence_absorb (cfg := cfg) L s hL hi.known hi.valid hi.evidence⟩
   · rw [absorb_disk]; exact hfl.1
   · rw [h₂]; exact hi.pend
   · rw [h₃]; exact hi.rounds
@@ -916,7 +1034,7 @@ theorem Inv.decideOn {s : State Validator BlockId Payload}
         lo := k + 1
         decided := (k, d) :: s.decided
         proofs := (k, (proofStore cfg k L).ids) :: s.proofs })
-      rfl rfl rfl rfl rfl hk).release
+      rfl rfl rfl rfl rfl hk rfl rfl).release
 
 omit [Fintype Validator] in
 /-- **Dropping syncs keeps the invariant.** -/
@@ -925,7 +1043,7 @@ theorem Inv.tidy {s : State Validator BlockId Payload}
     {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B) :
     Inv cfg (Node.tidy s) K B :=
   ⟨hi.known, fun e he => hi.pend e (List.mem_of_mem_filter he), hi.rounds, hi.good, hi.sub,
-    hi.valid, hi.own, hi.floor, hi.above⟩
+    hi.valid, hi.own, hi.floor, hi.above, hi.evidence⟩
 
 omit [Fintype Validator] in
 /-- **Accepting the syncs' blocks keeps the invariant.** -/
@@ -1116,7 +1234,7 @@ theorem Inv.advance {s : State Validator BlockId Payload}
     simpa using ((out_built bs).append hds).append (out_quiet (arm_quiet _))
   · simp only [Node.advance]
     rw [ha]
-    exact hi₃.of_eq rfl rfl rfl rfl rfl le_rfl
+    exact hi₃.of_eq rfl rfl rfl rfl rfl le_rfl rfl rfl
 
 omit [Fintype Validator] in
 /-- **A pass keeps the disk valid at the row from the floor up.** -/
@@ -1527,7 +1645,8 @@ theorem Inv.step {s : State Validator BlockId Payload}
             fun x hx => Set.subset_union_left (hi.pend x hx), Or.inr ⟨0, rfl, ?_⟩,
             fun x hx => ?_, fun x hx => ?_, fun hd => (hi.valid hd).insert (hnew := h₂.1)
               (hrefs := hr₀) (hpred := hp₀) h₂.2, fun j hj => ?_, ?_,
-            hi.above.insert (hnew := h₂.1) (hrefs := hr₀) (hpred := hp₀) h₂.2⟩
+            hi.above.insert (hnew := h₂.1) (hrefs := hr₀) (hpred := hp₀) h₂.2,
+            hi.evidence.mono Set.subset_union_left⟩
           · rw [hB, List.nil_append]
             exact ⟨by simp, fun x hx => by rw [List.mem_singleton] at hx; subst hx; rfl⟩
           · rw [hB, List.nil_append, List.mem_singleton] at hx
@@ -1571,7 +1690,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
               rcases List.mem_cons.mp hx with rfl | hx
               · exact hmem
               · exact hiK.pend x (List.mem_of_mem_filter hx), hiK.rounds, hiK.good, hiK.sub,
-              hiK.valid, hiK.own, hiK.floor, hiK.above⟩
+              hiK.valid, hiK.own, hiK.floor, hiK.above, hiK.evidence⟩
           refine Exists.imp (fun bs h => ⟨Sent.of_out h.1, h.2⟩)
             (hi₁.settle_of subset_rfl [_] ?_)
           intro o ho
@@ -1603,7 +1722,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
                 (Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 L))
                 (e₁.2.1 :: inHistory cfg e.2.1 L)).dedup) else x } K' B := by
           refine ⟨hi₁.known, fun x hx => ?_, hi₁.rounds, hi₁.good, hi₁.sub, hi₁.valid, hi₁.own,
-            hi₁.floor, hi₁.above⟩
+            hi₁.floor, hi₁.above, hi₁.evidence⟩
           obtain ⟨y, hy, rfl⟩ := List.mem_map.mp hx
           split
           · exact he₁K
@@ -1618,7 +1737,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
     simp only [Node.step]
     obtain ⟨bs, ho, hi'⟩ :=
       ((hi.mono hsub).of_eq (s' := { s with fired := fire s r, recovering := false }) rfl rfl rfl
-        rfl rfl le_rfl).settle
+        rfl rfl le_rfl rfl rfl).settle
     split
     · exact ⟨bs, (Sent.of_out ho).resend hi', hi'⟩
     · exact ⟨bs, Sent.of_out (by simpa using ho.append (out_quiet (askBehind_quiet _))), hi'⟩
@@ -1643,7 +1762,8 @@ theorem Inv.step {s : State Validator BlockId Payload}
     have h' : Sent B [] (Node.resend cfg s ++ Node.rearm cfg s) := by
       simpa using h.quiet_append (rearm_quiet (cfg := cfg) s)
     obtain ⟨bs, ho, hi'⟩ :=
-      ((hi.mono hsub).of_eq (s' := { s with recovering := true }) rfl rfl rfl rfl rfl le_rfl).settle
+      ((hi.mono hsub).of_eq (s' := { s with recovering := true }) rfl rfl rfl rfl rfl le_rfl rfl
+        rfl).settle
     exact ⟨bs, h'.append_out ho, by simpa using hi'⟩
   | askProof peer k =>
     simp only [Node.step]
@@ -1756,6 +1876,8 @@ theorem Inv.init : Inv cfg (State.init cfg) ∅ [] where
   own := fun _ h => absurd h (by simp [State.init])
   floor := Nat.zero_le _
   above := fun _ h => absurd h (Finset.notMem_empty _)
+  evidence :=
+    ⟨fun _ h => absurd h (Finset.notMem_empty _), fun _ h => absurd h (Finset.notMem_empty _)⟩
 
 end Node
 

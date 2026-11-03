@@ -407,7 +407,10 @@ store closed, and needs none of this.
         on itself (`proofHolds_decide`) and a proof it took from a peer
         (`KeepsProofs.decideOn`), whose blocks all enter its disk
         (`acceptOn_holds`). A reply from such proofs gives the peer the
-        node's verdict (`verdictOn_reply`).
+        node's verdict (`verdictOn_reply`). Evidence is kept apart from the
+        blocks it was extracted from (decided with the user), so an honest
+        node never convicts an honest one with dropping on too
+        (`not_detected`, from `Inv.evidence`).
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase

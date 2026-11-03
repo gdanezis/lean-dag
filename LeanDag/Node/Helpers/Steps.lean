@@ -250,21 +250,6 @@ theorem Kept.accept {s : State Validator BlockId Payload} (h : Kept cfg s)
     · exact h
 
 omit [Fintype Validator] in
-theorem tryBuild_detected {s s' : State Validator BlockId Payload}
-    {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
-    s'.detected = s.detected ∧ s'.evidence = s.evidence := by
-  obtain ⟨_, _, _, -, h, -⟩ := tryBuild_cases h
-  unfold buildAbove at h
-  dsimp only at h
-  split at h
-  · split at h
-    · rw [Option.some.injEq, Prod.mk.injEq] at h
-      obtain ⟨rfl, -⟩ := h
-      exact ⟨release_detected _, release_evidence _⟩
-    · exact absurd h (by simp)
-  · exact absurd h (by simp)
-
-omit [Fintype Validator] in
 /-- **On a valid store whose evidence names no author of `A`, no block
 exposes one.** -/
 theorem ex_not_named {q : ℕ} {E : Exposure Validator BlockId Payload}
@@ -325,6 +310,9 @@ structure Received (inp : Input Validator BlockId Payload)
   armed : s₁.armed = s.armed
   recovering : s₁.recovering = s.recovering
   ev : EvidenceOn cfg s → EvidenceOn cfg s₁
+  evidence : ∀ K : Set (BlockId × Block Validator BlockId Payload), (∀ e ∈ s.syncs, e.2.1 ∈ K) →
+    (∀ e ∈ delivered cfg [inp], e ∈ K) → (∀ j ∈ s.disk.ids, (j, s.disk.full j) ∈ K) →
+    (cfg.drops = false → StoreValid cfg.q cfg.xp s.disk) → EvidenceIn cfg K s → EvidenceIn cfg K s₁
   det : s.detected ⊆ s₁.detected
   holds : Kept cfg s → Kept cfg s₁
 
@@ -368,11 +356,16 @@ theorem received_absorb {inp : Input Validator BlockId Payload}
   obtain ⟨h₁, h₂, h₃, h₄, h₅, h₆, h₇, h₈, h₉, h₁₀⟩ := absorb_rest (cfg := cfg) s L
   have ht := tidy_eq (absorb cfg s L)
   refine ⟨⟨L, hL, by rw [ht.1, absorb_disk]⟩, fun e he => ?_, h₁, h₃, h₄, h₅, h₆, h₇, h₈, h₉,
-    ?_, h₁₀, fun h => (h.absorb L).restrips (Store.Restrips.refl _ 0) rfl⟩
+    fun h => (h.absorb L).grow (Grows.refl _) rfl rfl, ?_, h₁₀,
+    fun h => (h.absorb L).restrips (Store.Restrips.refl _ 0) rfl⟩
   · have := ht.2.2.2.2.2.2.2.2.2.2 he
     rw [h₂] at this
     exact Or.inl (List.mem_map_of_mem this)
-  · exact fun h => (h.absorb L).grow (Grows.refl _) rfl rfl
+  · intro K hs hd hK hV h
+    refine evidence_absorb L s (fun e he => ?_) hK hV h
+    rcases hL e he with h | h
+    · obtain ⟨x, hx, rfl⟩ := List.mem_map.mp h; exact hs x hx
+    · exact hd e h
 
 omit [Fintype Validator] in
 /-- **Changing the syncs to blocks of the old ones or of the input is a
@@ -382,7 +375,7 @@ theorem received_syncs {inp : Input Validator BlockId Payload} {s : State Valida
     (hS : ∀ e ∈ S, e.2.1 ∈ s.syncs.map (·.2.1) ∨ e.2.1 ∈ delivered cfg [inp]) :
     Received cfg inp s { s with syncs := S } :=
   ⟨⟨[], fun _ h => absurd h List.not_mem_nil, rfl⟩, hS, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
-    fun h => h.grow (Grows.refl _) rfl rfl, subset_rfl,
+    fun h => h.grow (Grows.refl _) rfl rfl, fun _ _ _ _ _ h => h, subset_rfl,
     fun h => h.restrips (Store.Restrips.refl _ 0) rfl⟩
 
 omit [Fintype Validator] in
@@ -416,7 +409,8 @@ theorem Received.inv {inp : Input Validator BlockId Payload}
   have hg := hr.grows
   refine ⟨by rw [hdk]; exact hfl.1, fun e he => ?_, by rw [hr.top]; exact hi.rounds, hi.good,
     hi.sub, by rw [hdk]; exact hfl.2, fun j hj => ?_, ?_,
-    by rw [hdk, hr.floor]; exact UpperValid.foldl L hi.above⟩
+    by rw [hdk, hr.floor]; exact UpperValid.foldl L hi.above,
+    hr.evidence K hi.pend hd hi.known hi.valid hi.evidence⟩
   · rcases hr.syncs e he with h | h
     · obtain ⟨x, hx, hxe⟩ := List.mem_map.mp h; rw [← hxe]; exact hi.pend x hx
     · exact hd _ h
@@ -434,7 +428,8 @@ theorem Received.trans {inp : Input Validator BlockId Payload}
   refine ⟨⟨L₁ ++ L₂, fun e he => ?_, by rw [hd₂, hd₁, List.foldl_append, h₁.floor]⟩, fun e he => ?_,
     h₂.floor.trans h₁.floor, h₂.top.trans h₁.top, h₂.own.trans h₁.own, h₂.fired.trans h₁.fired,
     h₂.lo.trans h₁.lo, h₂.decided.trans h₁.decided, h₂.armed.trans h₁.armed,
-    h₂.recovering.trans h₁.recovering, h₂.ev ∘ h₁.ev, h₁.det.trans h₂.det,
+    h₂.recovering.trans h₁.recovering, h₂.ev ∘ h₁.ev, fun K hs hd hK hV h => ?_,
+    h₁.det.trans h₂.det,
     h₂.holds ∘ h₁.holds⟩
   · rcases List.mem_append.mp he with he | he
     · exact hL₁ e he
@@ -446,6 +441,17 @@ theorem Received.trans {inp : Input Validator BlockId Payload}
     · obtain ⟨x, hx, hxe⟩ := List.mem_map.mp h
       rw [← hxe]; exact h₁.syncs x hx
     · exact Or.inr h
+  · have hs₁ : ∀ e ∈ s₁.syncs, e.2.1 ∈ K := fun e he => by
+      rcases h₁.syncs e he with h | h
+      · obtain ⟨x, hx, hxe⟩ := List.mem_map.mp h; rw [← hxe]; exact hs x hx
+      · exact hd _ h
+    have hL₁K : ∀ e ∈ L₁, e ∈ K := fun e he => by
+      rcases hL₁ e he with h | h
+      · obtain ⟨x, hx, rfl⟩ := List.mem_map.mp h; exact hs x hx
+      · exact hd e h
+    obtain ⟨hk, hv⟩ := foldl_accept_known (cfg := cfg) (F := s.floor) L₁ hK hV hL₁K
+    exact h₂.evidence K hs₁ hd (by rw [hd₁]; exact hk) (by rw [hd₁]; exact hv)
+      (h₁.evidence K hs hd hK hV h)
 
 /-- **A delivery**, unfolded. -/
 theorem step_deliver_eq (s : State Validator BlockId Payload) (u : Validator) (id : BlockId)
