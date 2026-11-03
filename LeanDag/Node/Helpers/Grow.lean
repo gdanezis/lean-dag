@@ -174,6 +174,22 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
   | askProof peer k => exact Grows.refl _
   | proof u k L => rw [step_proof_of_false hd]; exact Grows.refl _
 
+/-! ## Regular stretches -/
+
+variable (cfg) in
+/-- **A regular stretch from `s` to `s'`**: when the node drops, its floor
+lies at or below its top and at or above the round of its next undecided
+slot, and neither the floor nor that slot changes; so it builds each round
+in turn. -/
+def Regular (s s' : State Validator BlockId Payload) : Prop :=
+  cfg.drops = true → s.floor ≤ s.top.getD 0 ∧ cfg.slots.slotRound s.lo ≤ s.floor ∧
+    s'.lo = s.lo ∧ s'.floor = s.floor
+
+omit [Fintype Validator] in
+theorem Regular.of_false (hd : cfg.drops = false) {s s' : State Validator BlockId Payload} :
+    Regular cfg s s' :=
+  fun h => absurd (hd.symm.trans h) Bool.false_ne_true
+
 /-! ## The floor rises, and the disk keeps its blocks from the floor up -/
 
 variable (cfg) in

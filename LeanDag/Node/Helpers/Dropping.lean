@@ -1,4 +1,5 @@
 import LeanDag.Node.Helpers.CatchUp
+import LeanDag.Node.Helpers.Base
 /-!
 # Syncing with dropping on
 
@@ -231,6 +232,36 @@ theorem arrival_steady {H : Finset Validator} (hσ : cfg.σ = boundedSel)
   by_contra h
   have := (lt_eventsBy (t := G) hmono hkl).mp (by omega)
   omega
+
+omit [Fintype Validator] in
+/-- A store valid at the row from `F` up is so from any higher round. -/
+theorem UpperValid.mono {q : ℕ} {E : Exposure Validator BlockId Payload} {F F' : ℕ}
+    {st : Store Validator BlockId Payload} (h : UpperValid q E F st) (hF : F ≤ F') :
+    UpperValid q E F' st :=
+  fun j hj hr => h j hj (hF.trans hr)
+
+/-- **In a steady window of the honest nodes, the record padded below the
+round under slot `L`'s is a base from that round on**, at a node that
+drops: every honest disk is read as the padded record from there up
+(`cutAbove_before`), its floor is slot `L`'s round (`Steady.floor`), at or
+below its top, it grows while its next undecided slot stays
+(`Converge.grows_of_lo`), and its steps are regular (`Steady.regular`). -/
+theorem base_steady {H : Finset Validator} [Infinite BlockId] (hσ : cfg.σ = boundedSel)
+    (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
+    (hinj : Converge.HashInjective cfg H tr) (hq : cfg.q ≤ Fintype.card Validator)
+    (hdr : cfg.drops = true) (hst : Live.Steady cfg H tr time G t₁ L) (hL : 1 ≤ L) :
+    Base cfg H tr time
+      (padded (hashInjective_of_trace hinj) (authentic_of_timely htime) hq
+        (cfg.slots.slotRound L - 1))
+      (cfg.slots.slotRound L - 1) G t₁ := by
+  intro v hv k h₁ h₂
+  obtain ⟨hlo, -⟩ := hst v hv k h₁ h₂
+  have hfl := Steady.floor hdr hst hL hv h₁ h₂
+  exact ⟨(cutAbove_before (hashInjective_of_trace hinj) (authentic_of_timely htime) hq hσ hadm
+      hf (cfg.slots.slotRound L - 1) k v hv).1 (by rw [hlo]; omega),
+    ((Converge.inv_before (cfg := cfg) (tr := tr) k v).above).mono (by rw [hfl]; omega),
+    fun k' hk hk' => Converge.grows_of_lo v hk (by rw [(hst v hv k' (by omega) hk').1, hlo]),
+    by rw [hfl]; exact (hst v hv k h₁ h₂).2, fun hk => Steady.regular hdr hst hL hv h₁ hk⟩
 
 end Steady
 

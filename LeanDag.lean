@@ -608,6 +608,7 @@ import LeanDag.Node.Cut.Statement
 import LeanDag.Node.Cut.Proof
 import LeanDag.Node.Helpers.Verdict
 import LeanDag.Node.Helpers.Agree
+import LeanDag.Node.Helpers.Base
 import LeanDag.Node.Live.Statement
 import LeanDag.Node.Live.Proof
 import LeanDag.Node.Helpers.Wait

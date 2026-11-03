@@ -63,20 +63,6 @@ theorem decideStep_recovering (s : State Validator BlockId Payload) :
   · rw [drop_recovering]; exact release_recovering _
   · rfl
 
-variable (cfg) in
-/-- **A regular stretch from `s` to `s'`**: when the node drops, its floor
-lies at or below its top and at or above the round of its next undecided
-slot, and neither the floor nor that slot changes; so it builds each round
-in turn. -/
-def Regular (s s' : State Validator BlockId Payload) : Prop :=
-  cfg.drops = true → s.floor ≤ s.top.getD 0 ∧ cfg.slots.slotRound s.lo ≤ s.floor ∧
-    s'.lo = s.lo ∧ s'.floor = s.floor
-
-omit [Fintype Validator] in
-theorem Regular.of_false (hd : cfg.drops = false) {s s' : State Validator BlockId Payload} :
-    Regular cfg s s' :=
-  fun h => absurd (hd.symm.trans h) Bool.false_ne_true
-
 omit [Fintype Validator] in
 /-- **Building** keeps the fired timers; builds above the top it starts at;
 when it starts not recovering, builds every round up to the top it

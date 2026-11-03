@@ -399,14 +399,14 @@ store closed, and needs none of this.
         reliable peer's block when its floor is at or above the peer's,
         the peer holding the block's history from its own floor up, so
         when no reliable node decides for long enough, the others catch up,
-        the floors meet and the argument of V11 applies; (iii) production
-        within a bound only for a node whose floor is at or above those of
-        the nodes whose blocks it needs. The steps: a
+        the floors meet and the argument of V11 applies. Production within a
+        bound for the nodes not behind, first planned as (iii), is dropped
+        (decided with the user): decisions do not need it. The steps: a
         proof a reliable node keeps decides its slot at the receiver (the
         replay lemma); a node behind decides a slot a reliable node decided
         within a bounded time (the catch-up lemma); a reliable node syncs a
         block whose history a reliable node holds from a floor at or below
-        its own; and (i) to (iii). Done so far: the replay of a
+        its own; and (i) and (ii). Done so far: the replay of a
         decision on a store that holds its witness and reads as the view
         from the slot's round up (`verdictOn_of_decision`,
         `Node/Helpers/Replay.lean`), from the loop's indifference to slots
@@ -452,7 +452,7 @@ store closed, and needs none of this.
         one to `k` and `D` the retry delays of the rounds up to a bound `M`
         on its round, `M` at least a wave above the round of slot `k`; the
         node's round enters only through `M`, since rounds have no least
-        duration. What remains is (ii) and (iii). The plan for (ii):
+        duration. What remains is (ii). The plan for (ii):
         (a) floors along a trace with dropping: a floor only rises, and
         once a node has built or decided it is the round of its next
         undecided slot, so equal next undecided slots give equal floors;
@@ -512,7 +512,22 @@ store closed, and needs none of this.
         (`syncedFrom_steady`); with the retry timer's resend taking the
         place of a recovery's (`sends_again`, now on regular steps rather
         than no dropping), reliable blocks arrive (`arrival_steady`), the
-        `Arrival` the argument of V11 reads.
+        `Arrival` the argument of V11 reads. Strategy for the rest of (c), decided with the
+        user: one premise in place of both no dropping and the record of
+        the run throughout the wave argument, `Base` (`Helpers/Base.lean`):
+        over a stretch of events every honest disk is read as a record `R`
+        reads it from a round `B` up, is valid above `B`, and grows; each
+        honest floor lies at or below its top, and each step is regular.
+        Without dropping the record of the run is a base from round `0`
+        over the whole run (`base_of_false`); in a steady window of the
+        honest nodes the record padded below the round under slot `L`'s is
+        one from there (`base_steady`), so one refactor serves V11 and the
+        window. Besides `Base` the wave argument reads, within a step, that
+        the step does not decide, which holds at each event of a window,
+        and the evidence the node keeps apart from blocks (`EvidenceIn`,
+        `Kept.exposed`) in place of the evidence on its disk. It reads at a
+        floor only for the decision of slot `L` itself, which the padded
+        record's view covers (`viewsAbove_store`, `decidesWell_padded`).
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase
