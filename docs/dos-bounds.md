@@ -546,9 +546,11 @@ store closed, and needs none of this.
         builder convicted at any round at or above its floor
         (`built_avoids_spread`), so the lent references (`lent_avoids_before`)
         and catch-up (`catches_up`) hold from the round above the base, the
-        floor of a steady window. Next: production in a steady window, from
-        the floor up; then the wave facts on any `Base` from a round
-        `voteOffset` above the floor.
+        floor of a steady window. Production holds over any base, within its
+        stretch, at rounds above the base's round when the nodes drop
+        (`produces_from`), so in a steady window from the floor up. Next:
+        the wave facts on any `Base` from a round `voteOffset` above the
+        floor, which production reaches.
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase

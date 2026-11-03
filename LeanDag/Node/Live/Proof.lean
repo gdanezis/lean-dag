@@ -59,21 +59,27 @@ namespace Live
 variable {Validator BlockId Payload : Type} [Fintype Validator] [DecidableEq Validator]
 variable [LinearOrder BlockId]
 
-/-- **Production**: past GST, the reliable nodes are above round `n` a
-timeout and `A` after all were at `n` or above. -/
-theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validator}
+/-- **Production over a base**: past GST, within the stretch of a base,
+the reliable nodes are above round `n` a timeout and `A` after all were at
+`n` or above, for `n` at or above the base's round, and above it when the
+nodes drop. -/
+theorem produces_from {cfg : Config Validator BlockId Payload} {H T : Finset Validator}
     {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ} {gst Δ Δₛ t₁ : ℕ}
-    (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : cfg.Faithful) (hf : Hᶜ.card ≤ cfg.f)
-        (hTH : T ⊆ H)
+    (hadm : cfg.Admissible) (hfa : cfg.Faithful) (hf : Hᶜ.card ≤ cfg.f) (hTH : T ⊆ H)
     (hqT : cfg.q ≤ T.card) (hq : 2 ≤ cfg.q) (hid : Function.Injective cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    (hev : Converge.EvidenceAuthentic cfg H tr) (hdr : cfg.drops = false)
+    (hev : Converge.EvidenceAuthentic cfg H tr)
+    {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H} {B E₀ E₁ : ℕ}
+    (hbase : Base cfg H tr R B E₀ E₁)
     (hmono : TimeMono tr time) (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁)
     (htop : TopTimerBy cfg T tr time gst t₁)
     (hstart : StartedBy T tr time gst) {D : Finset Validator} {nE : ℕ}
-    (hsp : Spread cfg H tr D nE) (hnE : ∀ v ∈ T, nE ≤ topAt cfg tr time v gst) :
-    Produces cfg T tr time gst (Δ + Δₛ) t₁ := by
-  intro s n hgs hst₁ hall v hv
+    (hsp : Spread cfg H tr D nE) (hnE : ∀ v ∈ T, nE ≤ topAt cfg tr time v gst) {s n : ℕ}
+    (hgs : gst ≤ s) (hst₁ : s + (Δ + Δₛ) + cfg.timeout n ≤ t₁) (hs₀ : E₀ ≤ eventsBy tr time s)
+    (hs₁ : eventsBy tr time (s + (Δ + Δₛ) + cfg.timeout n) ≤ E₁) (hBn : B ≤ n)
+    (hBd : cfg.drops = true → B + 1 ≤ n) (hall : ∀ v ∈ T, n ≤ topAt cfg tr time v s) :
+    ∀ v ∈ T, n + 1 ≤ topAt cfg tr time v (s + (Δ + Δₛ) + cfg.timeout n) := by
+  intro v hv
   have hstarted : ∀ w ∈ T, (stateAt cfg tr time w s).top.isSome := fun w hw =>
     started_at hadm hfa hid htime hTH hmono hstart hw hgs
   by_contra hlt
@@ -108,8 +114,7 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
       obtain ⟨j, hj, hjr, -⟩ :=
         top_arrives htime hinj hTH hmono harr hw hv hwv hgs (hstarted w hw) (τ := τ) le_rfl
           (by omega)
-      exact quorum_below (base_of_false hσ hadm hf htime hinj hdr 0 tr.length) hadm (hTH hv)
-        (eventsBy_le_length _) _ hj hjr n hwn (Nat.zero_le _)
+      exact quorum_below hbase hadm (hTH hv) (hτE.trans hs₁) _ hj hjr n hwn hBn
     · push Not at hup
       refine hqT.trans (Finset.card_le_card fun w hw => ?_)
       rw [mem_authorsIn]
@@ -122,7 +127,10 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
         exact ⟨j, hj, hjr.trans (le_antisymm (hup w hw hwv) (hall w hw)), hjc⟩
   have harm := armed_before (cfg := cfg) (tr := tr) v (eventsBy tr time τ) n hτt (by
     rw [(stateBefore cfg tr (eventsBy tr time τ) v).mirrors.authorsAt_eq
-      ((Converge.floor_before hdr hτt).trans (Nat.sub_le _ _))]
+      (by
+        have := (hbase.window v (hTH hv) _ (hs₀.trans hsτ) (hτE.trans hs₁)).2.1
+        rw [show (stateBefore cfg tr (eventsBy tr time τ) v).top = some n from hτt] at this
+        exact this)]
     exact hcard)
   obtain ⟨f, hfe, htf⟩ := htop v hv τ n (by omega) (by omega) hτt harm
   have hfl : f < tr.length := (List.getElem?_eq_some_iff.mp hfe).1
@@ -133,12 +141,21 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
   have hcardE : cfg.q ≤ (authorsIn (stateBefore cfg tr E v).disk.toRecord
       (stateBefore cfg tr E v).disk.ids n).card := by
     rw [← Store.authorsAt_eq]
-    exact hcard.trans (Finset.card_le_card (Grows.authorsAt (grows_before v hdr hτE) n))
+    exact hcard.trans (Finset.card_le_card (Grows.authorsAt
+      ((hbase.window v (hTH hv) _ (hs₀.trans hsτ) (hτE.trans hs₁)).1 E hτE hs₁) n))
   obtain ⟨j₁, hj₁, hj₁i, hj₁r, hj₁c⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) E n hZt
   set Z := stateBefore cfg tr E v with hZ
-  have hvalid : StoreValid (cfg.at v).q (cfg.at v).xp Z.disk :=
-    (Converge.inv_before (cfg := cfg) (tr := tr) E v).valid hdr
-  have hgτ := grows_before (cfg := cfg) (tr := tr) v hdr hτE
+  have hgτ := (hbase.window v (hTH hv) _ (hs₀.trans hsτ) (hτE.trans hs₁)).1 E hτE hs₁
+  have hZF : Z.floor ≤ n := by
+    have := (hbase.window v (hTH hv) E (hs₀.trans (hsτ.trans hτE)) hs₁).2.1
+    rw [hZt] at this; exact this
+  -- the blocks of round `n` are valid, and those above it
+  have hvalid : ∀ j ∈ Z.disk.ids, n ≤ (Z.disk.blk j).round →
+      (Z.disk.full j).refs ⊆ Z.disk.ids ∧ rowValid cfg.q cfg.xp Z.disk.full (Z.disk.full j) :=
+    fun j hj hjr => hbase.valid (hTH hv) hs₁ hj (by
+      cases hd : cfg.drops
+      · exact Or.inl rfl
+      · exact Or.inr ((hBd hd).trans hjr))
   -- references it can build on: a peer's round-`n + 1` block lends its own, or
   -- every reliable author's round-`n` block is held, none of them left out
   have hB : buildable (cfg.at v) Z.disk n (refsFor (cfg.at v) Z.disk n Z.own Z.evidence)
@@ -158,8 +175,8 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
           (Z.disk.blk z).creator ∈ H := by
         by_cases hnt : n + 1 = topAt cfg tr time w s
         · exact ⟨j, hjE, hjr'.trans hnt.symm, hjc' ▸ hTH hw⟩
-        · have h₁ := quorum_below (base_of_false hσ hadm hf htime hinj hdr 0 tr.length) hadm
-            (hTH hv) (eventsBy_le_length _) _ hjE hjr' (n + 1) (by omega) (Nat.zero_le _)
+        · have h₁ := quorum_below hbase hadm (hTH hv) hs₁ _ hjE hjr' (n + 1) (by omega)
+            (by omega)
           have h₂ := two_f_c_lt_q hadm
           exact exists_honest_at hf (by
             rw [Store.authorsAt_eq]; exact (show cfg.f + 1 ≤ cfg.q by omega).trans h₁)
@@ -175,23 +192,25 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
         simp only [Option.getD_some] at h₁
         exact (hnE v hv).trans h₁
       exact Or.inr ⟨_, lent_mem_lents hz hzr hzm
-        (lent_avoids_before htime (base_of_false hσ hadm hf htime hinj hdr 0 tr.length)
-          hsp (hTH hv) (eventsBy_le_length _) hz hzr hzH hnE' (Nat.zero_le _)
-          (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true) (Or.inl hdr)),
-        (lent_buildable (cfg := cfg.at v) (fun j hj _ => hvalid j hj) hz hzr
-        ((Converge.inv_before (cfg := cfg) (tr := tr) E v).unkept hdr (by rw [hZt])
-          (by change _ ≤ (Z.disk.blk z).round; rw [hzr]
-              exact le_trans (Nat.sub_le _ _) (Nat.le_succ n)))
+        (lent_avoids_before htime hbase hsp (hTH hv) hs₁ hz hzr hzH hnE' hBn hBd
+          (Or.inr ⟨hfa, hZF⟩)),
+        (lent_buildable (cfg := cfg.at v) (fun j hj hjr => hvalid j hj (by omega)) hz hzr
+        (by
+          by_contra hk
+          have := Z.low z hk
+          have : (Z.disk.blk z).round = n + 1 := hzr
+          omega)
         hfa (fresh_before hid htime (hTH hv) hZt) _
-        fun j hj _ => (Converge.kept_before hfa v E).exposed hj (hvalid j hj).2).2⟩
+        fun j hj hjr => (Converge.kept_before hfa v E).exposed hj
+          (hvalid j hj (by rw [hjr])).2).2⟩
     · push Not at hup
       refine Or.inl (refsFor_buildable (cfg := cfg.at v) _ hfa
-        (fun j hj _ => (Converge.kept_before hfa v E).exposed hj (hvalid j hj).2)
+        (fun j hj hjr => (Converge.kept_before hfa v E).exposed hj (hvalid j hj (by rw [hjr])).2)
         (fun j hj => by rw [hj₁] at hj; cases hj; exact ⟨hj₁i, hj₁r, hj₁c⟩)
         (hqT.trans (Finset.card_le_card fun w hw => ?_))
         (fresh_before hid htime (hTH hv) hZt _ _))
       refine Finset.mem_sdiff.mpr
-        ⟨?_, Converge.not_excluded htime hev (hTH hw) (hTH hv) E n (Or.inl hdr)⟩
+        ⟨?_, Converge.not_excluded htime hev (hTH hw) (hTH hv) E n (Or.inr ⟨hfa, hZF⟩)⟩
       rw [mem_authorsIn]
       by_cases hwv : w = v
       · subst hwv
@@ -210,11 +229,28 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
       (eventsBy_mono (by omega)))
     (Or.inl hfired) hcardE
     (fun j hj => by rw [hj₁] at hj; cases hj; exact ⟨hj₁i, hj₁r, hj₁c⟩) hB
-    (fresh_before hid htime (hTH hv) hZt)
-    ((Converge.floor_before hdr hZt).trans (Nat.sub_le _ _))
+    (fresh_before hid htime (hTH hv) hZt) hZF
   rcases settled_before (cfg := cfg) hq v E with h | h
   · rw [hZt] at h; cases h
   · rw [h.build] at hsome; cases hsome
+
+/-- **Production**: past GST, the reliable nodes are above round `n` a
+timeout and `A` after all were at `n` or above. -/
+theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validator}
+    {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ} {gst Δ Δₛ t₁ : ℕ}
+    (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : cfg.Faithful) (hf : Hᶜ.card ≤ cfg.f)
+    (hTH : T ⊆ H) (hqT : cfg.q ≤ T.card) (hq : 2 ≤ cfg.q) (hid : Function.Injective cfg.idOf)
+    (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
+    (hev : Converge.EvidenceAuthentic cfg H tr) (hdr : cfg.drops = false)
+    (hmono : TimeMono tr time) (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁)
+    (htop : TopTimerBy cfg T tr time gst t₁)
+    (hstart : StartedBy T tr time gst) {D : Finset Validator} {nE : ℕ}
+    (hsp : Spread cfg H tr D nE) (hnE : ∀ v ∈ T, nE ≤ topAt cfg tr time v gst) :
+    Produces cfg T tr time gst (Δ + Δₛ) t₁ := fun _ _ hgs hst₁ hall =>
+  produces_from hadm hfa hf hTH hqT hq hid htime hinj hev
+    (base_of_false hσ hadm hf htime hinj hdr 0 tr.length) hmono harr htop hstart hsp hnE hgs hst₁
+    (Nat.zero_le _) (eventsBy_le_length _) (Nat.zero_le _)
+    (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true) hall
 
 /-- **Decision**: from a round `n₀` above every reliable node's round
 at GST, once every reliable node is at the decision round of the last of
