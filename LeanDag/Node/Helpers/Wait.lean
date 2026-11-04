@@ -499,8 +499,8 @@ disk read as `U` reads it from round `G` up, its floor at or above `s`'s and
 its disk keeping `s`'s blocks from that floor up, its own block at its top
 on the disk, each round it counts as fired fired before or by `inp`, its
 blocks known in `K` and valid, when the node drops the floor at its next
-undecided slot at round `G + 1` or below, and its top at or above `s`'s. -/
-structure BuildState (U : BlockRecord Validator BlockId Payload P H) (G : ℕ)
+undecided slot at round `F` or below, and its top at or above `s`'s. -/
+structure BuildState (U : BlockRecord Validator BlockId Payload P H) (G F : ℕ)
     (K : Set (BlockId × Block Validator BlockId Payload))
     (s : State Validator BlockId Payload) (inp : Input Validator BlockId Payload)
     (x : State Validator BlockId Payload) : Prop where
@@ -511,16 +511,16 @@ structure BuildState (U : BlockRecord Validator BlockId Payload P H) (G : ℕ)
   inv : ∃ B, Inv cfg x K B
   det : s.detected ⊆ x.detected
   holds : cfg.Faithful → Kept cfg x
-  slot : cfg.drops = true → floorAt cfg x.lo ≤ G + 1
+  slot : cfg.drops = true → floorAt cfg x.lo ≤ F
   top : s.top.getD 0 ≤ x.top.getD 0
 
 omit [Fintype Validator] in
-theorem BuildState.tryBuild {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+theorem BuildState.tryBuild {U : BlockRecord Validator BlockId Payload P H} {G F : ℕ}
     {K : Set (BlockId × Block Validator BlockId Payload)} {s x y : State Validator BlockId Payload}
     (hg : BuildBase cfg U G K s) {inp : Input Validator BlockId Payload}
-    {o : List (Output Validator BlockId Payload)} (h : BuildState cfg U G K s inp x)
+    {o : List (Output Validator BlockId Payload)} (h : BuildState cfg U G F K s inp x)
     (hb : Node.tryBuild cfg x = some (y, o)) (hK : ∀ e ∈ persists o, e ∈ K) :
-    BuildState cfg U G K s inp y := by
+    BuildState cfg U G F K s inp y := by
   obtain ⟨_, _, _, _, _, _, ⟨-, hr, -⟩, -, -, -, -, -, ht, -, hlo, -⟩ := tryBuild_some hb
   refine ⟨h.cut.tryBuild hg.grounds hb hK, OwnTop.tryBuild hb,
     h.grows.trans (diskRises_tryBuild hb),
@@ -538,11 +538,11 @@ theorem BuildState.tryBuild {U : BlockRecord Validator BlockId Payload P H} {G :
 
 omit [Fintype Validator] in
 /-- **A node that drops builds from a state whose floor lies at or below
-`G + 1`.** -/
-theorem BuildState.floor_drops {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+`F`.** -/
+theorem BuildState.floor_drops {U : BlockRecord Validator BlockId Payload P H} {G F : ℕ}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {s x : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
-    (h : BuildState cfg U G K s inp x) (hdr : cfg.drops = true) : x.floor ≤ G + 1 := by
+    (h : BuildState cfg U G F K s inp x) (hdr : cfg.drops = true) : x.floor ≤ F := by
   obtain ⟨Bs, hi⟩ := h.inv
   have h₁ := hi.floor
   unfold floorOf at h₁
@@ -551,13 +551,13 @@ theorem BuildState.floor_drops {U : BlockRecord Validator BlockId Payload P H} {
 
 omit [Fintype Validator] in
 /-- **The floor of a state the node builds from lies `voteOffset` below a
-round**, its top or above, when the round lies `voteOffset` above `G + 1`
-at a node that drops. -/
-theorem BuildState.floor_le {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+round**, its top or above, when the round lies `voteOffset` above `F` at a
+node that drops. -/
+theorem BuildState.floor_le {U : BlockRecord Validator BlockId Payload P H} {G F : ℕ}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {s x : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
-    (h : BuildState cfg U G K s inp x) {n : ℕ} (hn : x.top.getD 0 ≤ n)
-    (hd : cfg.drops = true → G + 1 + cfg.p.voteOffset ≤ n) : x.floor ≤ n - cfg.p.voteOffset := by
+    (h : BuildState cfg U G F K s inp x) {n : ℕ} (hn : x.top.getD 0 ≤ n)
+    (hd : cfg.drops = true → F + cfg.p.voteOffset ≤ n) : x.floor ≤ n - cfg.p.voteOffset := by
   cases hdr : cfg.drops
   · obtain ⟨Bs, hi⟩ := h.inv
     exact hi.floor.trans ((floorOf_le_top (cfg := cfg) hdr _).trans (Nat.sub_le_sub_right hn _))
@@ -568,12 +568,12 @@ theorem BuildState.floor_le {U : BlockRecord Validator BlockId Payload P H} {G :
 omit [Fintype Validator] in
 /-- **A state the node builds from keeps its blocks with their references
 from `voteOffset` below a round up**, its top or above, when the round
-lies `voteOffset` above `G + 1` at a node that drops. -/
-theorem BuildState.unkept {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+lies `voteOffset` above `F` at a node that drops. -/
+theorem BuildState.unkept {U : BlockRecord Validator BlockId Payload P H} {G F : ℕ}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {s x : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
-    (h : BuildState cfg U G K s inp x) {n : ℕ} (hn : x.top.getD 0 ≤ n)
-    (hd : cfg.drops = true → G + 1 + cfg.p.voteOffset ≤ n) {a : BlockId}
+    (h : BuildState cfg U G F K s inp x) {n : ℕ} (hn : x.top.getD 0 ≤ n)
+    (hd : cfg.drops = true → F + cfg.p.voteOffset ≤ n) {a : BlockId}
     (ha : n - cfg.p.voteOffset ≤ (x.disk.blk a).round) : x.disk.kept[a]? = none := by
   by_contra hk
   have := x.low a hk
@@ -585,10 +585,10 @@ omit [Fintype Validator] in
 holds is named by evidence**: in the block's history, which the node holds,
 when it does not drop; in the node's own evidence, at or above its floor
 under a faithful payload source. -/
-theorem BuildState.exposed {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+theorem BuildState.exposed {U : BlockRecord Validator BlockId Payload P H} {G F : ℕ}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {s x : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
-    (h : BuildState cfg U G K s inp x) {A : Finset Validator}
+    (h : BuildState cfg U G F K s inp x) {A : Finset Validator}
     (hK : ∀ j ∈ x.disk.ids, ∀ e ∈ cfg.xp.ev (x.disk.blk j).payload, e.2.1 ≠ e.2.2 → e.1 ∉ A)
     (hE : ∀ a ∈ named x.evidence, a ∉ A) {r : ℕ}
     (hr : cfg.drops = false ∨ cfg.Faithful ∧ x.floor ≤ r) :
@@ -603,10 +603,10 @@ theorem BuildState.exposed {U : BlockRecord Validator BlockId Payload P H} {G : 
 omit [Fintype Validator] in
 /-- **The authors a node's evidence names are among those whose twins or
 carried evidence it knew.** -/
-theorem BuildState.named_sub {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+theorem BuildState.named_sub {U : BlockRecord Validator BlockId Payload P H} {G F : ℕ}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {s x : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
-    (h : BuildState cfg U G K s inp x) {A : Finset Validator}
+    (h : BuildState cfg U G F K s inp x) {A : Finset Validator}
     (hev : ∀ y ∈ K, ∀ e ∈ cfg.xp.ev y.2.payload, e.2.1 ≠ e.2.2 → e.1 ∈ A)
     (htw : ∀ y ∈ K, ∀ z ∈ K, y.1 ≠ z.1 → y.2.creator = z.2.creator →
       y.2.round = z.2.round → y.2.creator ∈ A) :
@@ -624,10 +624,10 @@ theorem BuildState.named_sub {U : BlockRecord Validator BlockId Payload P H} {G 
 evidence it knew names none and no honest author has two known blocks of a
 round: at a round at or above its floor under a faithful payload source,
 when it drops. -/
-theorem BuildState.not_excluded {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+theorem BuildState.not_excluded {U : BlockRecord Validator BlockId Payload P H} {G F : ℕ}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {s x : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
-    (h : BuildState cfg U G K s inp x)
+    (h : BuildState cfg U G F K s inp x)
     (hK : ∀ y ∈ K, ∀ e ∈ cfg.xp.ev y.2.payload, e.2.1 ≠ e.2.2 → e.1 ∉ H)
     (htw : ∀ y ∈ K, ∀ z ∈ K, y.1 ≠ z.1 → y.2.creator = z.2.creator →
       y.2.round = z.2.round → y.2.creator ∉ H)
@@ -650,10 +650,10 @@ theorem BuildState.not_excluded {U : BlockRecord Validator BlockId Payload P H} 
 `D` holds every author that evidence in a known block names and every
 author with two known blocks of a round: at a round at or above its floor
 under a faithful payload source, when it drops. -/
-theorem BuildState.excluded_sub {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+theorem BuildState.excluded_sub {U : BlockRecord Validator BlockId Payload P H} {G F : ℕ}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {s x : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
-    (h : BuildState cfg U G K s inp x) {D : Finset Validator}
+    (h : BuildState cfg U G F K s inp x) {D : Finset Validator}
     (hev : ∀ y ∈ K, ∀ e ∈ cfg.xp.ev y.2.payload, e.2.1 ≠ e.2.2 → e.1 ∈ D)
     (htw : ∀ y ∈ K, ∀ z ∈ K, y.1 ≠ z.1 → y.2.creator = z.2.creator →
       y.2.round = z.2.round → y.2.creator ∈ D)
@@ -674,10 +674,10 @@ theorem BuildState.excluded_sub {U : BlockRecord Validator BlockId Payload P H} 
 names**, under a faithful payload source: a block's exposure is named by
 evidence the node holds, in its history when it does not drop, at or above
 its floor when it drops. -/
-theorem BuildState.excluded_sub_named {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+theorem BuildState.excluded_sub_named {U : BlockRecord Validator BlockId Payload P H} {G F : ℕ}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {s x : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
-    (h : BuildState cfg U G K s inp x) (hf : cfg.Faithful) {r : ℕ}
+    (h : BuildState cfg U G F K s inp x) (hf : cfg.Faithful) {r : ℕ}
     (hr : cfg.drops = false ∨ x.floor ≤ r) :
     excluded cfg x.disk r x.evidence ⊆ named x.evidence := by
   intro a hm
@@ -693,14 +693,15 @@ theorem BuildState.excluded_sub_named {U : BlockRecord Validator BlockId Payload
 
 omit [Fintype Validator] in
 /-- **A pass keeps a state the node builds from**, one whose floor at the next
-undecided slot stays at round `G + 1` or below when the node drops. -/
-theorem BuildState.advance {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+undecided slot stays at round `F` or below when the node drops, `F` at
+`G + 1` or below. -/
+theorem BuildState.advance {U : BlockRecord Validator BlockId Payload P H} {G F : ℕ}
     {K : Set (BlockId × Block Validator BlockId Payload)} {s x : State Validator BlockId Payload}
     (hg : BuildBase cfg U G K s) {inp : Input Validator BlockId Payload}
-    (h : BuildState cfg U G K s inp x)
-    (hfin : cfg.drops = true → floorAt cfg (Node.advance cfg x).1.lo ≤ G + 1)
+    (h : BuildState cfg U G F K s inp x)
+    (hFG : F ≤ G + 1) (hfin : cfg.drops = true → floorAt cfg (Node.advance cfg x).1.lo ≤ F)
     (hp : ∀ e ∈ x.syncs, e.2.1 ∈ K) (hK : ∀ e ∈ persists (Node.advance cfg x).2, e ∈ K) :
-    BuildState cfg U G K s inp (Node.advance cfg x).1 := by
+    BuildState cfg U G F K s inp (Node.advance cfg x).1 := by
   obtain ⟨B, hi⟩ := h.inv
   refine ⟨AllGood.advanceStore hg.grounds (fun hd => ⟨hi.floor,
       fun y hy hyr => hg.known hd y hy (by have := hfin hd; omega)⟩) h.cut hp hK,
@@ -713,12 +714,12 @@ theorem BuildState.advance {U : BlockRecord Validator BlockId Payload P H} {G : 
 omit [Fintype Validator] in
 /-- **Each block a pass persists comes from one build**, at a state the
 node builds from. -/
-theorem advance_witness {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+theorem advance_witness {U : BlockRecord Validator BlockId Payload P H} {G F : ℕ}
     {K : Set (BlockId × Block Validator BlockId Payload)} {s s₀ : State Validator BlockId Payload}
     (hg : BuildBase cfg U G K s) {inp : Input Validator BlockId Payload}
-    (h₀ : BuildState cfg U G K s inp s₀)
+    (h₀ : BuildState cfg U G F K s inp s₀)
     (hK : ∀ e ∈ persists (Node.advance cfg s₀).2, e ∈ K) :
-    ∀ e ∈ persists (Node.advance cfg s₀).2, ∃ x y o, BuildState cfg U G K s inp x ∧
+    ∀ e ∈ persists (Node.advance cfg s₀).2, ∃ x y o, BuildState cfg U G F K s inp x ∧
       Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o ∧
       DiskRises cfg x (Node.advance cfg s₀).1 := by
   have hpe : persists (Node.advance cfg s₀).2 =
@@ -730,18 +731,18 @@ theorem advance_witness {U : BlockRecord Validator BlockId Payload P H} {G : ℕ
   rw [hpe] at hK
   intro e he
   rw [hpe] at he
-  obtain ⟨x, y, o, hx, hb, heo, hg'⟩ := progress_witness (BuildState cfg U G K s inp) K
+  obtain ⟨x, y, o, hx, hb, heo, hg'⟩ := progress_witness (BuildState cfg U G F K s inp) K
     (fun _ _ _ hx hb hK => hx.tryBuild hg hb hK) _ s₀ h₀ hK e he
   exact ⟨x, y, o, hx, hb, heo, hg'.trans hga⟩
 
 omit [Fintype Validator] in
-theorem quiesce_witness {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+theorem quiesce_witness {U : BlockRecord Validator BlockId Payload P H} {G F : ℕ}
     {K : Set (BlockId × Block Validator BlockId Payload)} {s : State Validator BlockId Payload}
-    (hg : BuildBase cfg U G K s) {inp : Input Validator BlockId Payload} :
-    ∀ (n : ℕ) (s₀ : State Validator BlockId Payload), BuildState cfg U G K s inp s₀ →
+    (hg : BuildBase cfg U G K s) (hFG : F ≤ G + 1) {inp : Input Validator BlockId Payload} :
+    ∀ (n : ℕ) (s₀ : State Validator BlockId Payload), BuildState cfg U G F K s inp s₀ →
     (∀ e ∈ s₀.syncs, e.2.1 ∈ K) → (∀ e ∈ persists (quiesce cfg n s₀).2, e ∈ K) →
-    (cfg.drops = true → floorAt cfg (quiesce cfg n s₀).1.lo ≤ G + 1) →
-    ∀ e ∈ persists (quiesce cfg n s₀).2, ∃ x y o, BuildState cfg U G K s inp x ∧
+    (cfg.drops = true → floorAt cfg (quiesce cfg n s₀).1.lo ≤ F) →
+    ∀ e ∈ persists (quiesce cfg n s₀).2, ∃ x y o, BuildState cfg U G F K s inp x ∧
       Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o ∧
       DiskRises cfg x (quiesce cfg n s₀).1
   | 0, s₀, _, _, _, _ => by intro e he; simp [Node.quiesce, persists] at he
@@ -750,7 +751,7 @@ theorem quiesce_witness {U : BlockRecord Validator BlockId Payload P H} {G : ℕ
     · exact advance_witness hg h₀ hK
     · rw [persists_append] at hK
       have hadv : cfg.drops = true →
-          floorAt cfg (Node.advance cfg s₀).1.lo ≤ G + 1 := fun hd =>
+          floorAt cfg (Node.advance cfg s₀).1.lo ≤ F := fun hd =>
         (floorAt_mono (growsUnless_quiesce (cfg := cfg) n (Node.advance cfg s₀).1).1).trans
           (hlo hd)
       intro e he'
@@ -759,28 +760,28 @@ theorem quiesce_witness {U : BlockRecord Validator BlockId Payload P H} {G : ℕ
       · obtain ⟨x, y, o, hx, hb, heo, hg'⟩ :=
           advance_witness hg h₀ (fun e he => hK e (List.mem_append_left _ he)) e he'
         exact ⟨x, y, o, hx, hb, heo, hg'.trans (diskRises_quiesce n _)⟩
-      · exact quiesce_witness hg n _
-          (h₀.advance hg hadv hp (fun e he => hK e (List.mem_append_left _ he)))
+      · exact quiesce_witness hg hFG n _
+          (h₀.advance hg hFG hadv hp (fun e he => hK e (List.mem_append_left _ he)))
           (fun e he => hp e (advance_sub (cfg := cfg) s₀ e he))
           (fun e he => hK e (List.mem_append_right _ he)) hlo e he'
 
 omit [Fintype Validator] in
 /-- **Each block a settle persists comes from one build**, at a state the
 node builds from. -/
-theorem settle_witness {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+theorem settle_witness {U : BlockRecord Validator BlockId Payload P H} {G F : ℕ}
     {K : Set (BlockId × Block Validator BlockId Payload)} {s s₀ : State Validator BlockId Payload}
-    (hg : BuildBase cfg U G K s) {inp : Input Validator BlockId Payload}
-    (h₀ : BuildState cfg U G K s inp s₀) (hp : ∀ e ∈ s₀.syncs, e.2.1 ∈ K)
+    (hg : BuildBase cfg U G K s) (hFG : F ≤ G + 1) {inp : Input Validator BlockId Payload}
+    (h₀ : BuildState cfg U G F K s inp s₀) (hp : ∀ e ∈ s₀.syncs, e.2.1 ∈ K)
     (hK : ∀ e ∈ persists (Node.settle cfg s₀).2, e ∈ K)
-    (hlo : cfg.drops = true → floorAt cfg (Node.settle cfg s₀).1.lo ≤ G + 1) :
-    ∀ e ∈ persists (Node.settle cfg s₀).2, ∃ x y o, BuildState cfg U G K s inp x ∧
+    (hlo : cfg.drops = true → floorAt cfg (Node.settle cfg s₀).1.lo ≤ F) :
+    ∀ e ∈ persists (Node.settle cfg s₀).2, ∃ x y o, BuildState cfg U G F K s inp x ∧
       Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o ∧
       DiskRises cfg x (Node.settle cfg s₀).1 :=
-  quiesce_witness hg _ s₀ h₀ hp hK hlo
+  quiesce_witness hg hFG _ s₀ h₀ hp hK hlo
 
 /-- **Each block a step persists is the genesis block or comes from one
 build**, at a state the node builds from. -/
-theorem step_witness {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
+theorem step_witness {U : BlockRecord Validator BlockId Payload P H} {G F : ℕ}
     {K : Set (BlockId × Block Validator BlockId Payload)} {s : State Validator BlockId Payload}
     (hg : BuildBase cfg U G K s) {inp : Input Validator BlockId Payload}
     {B₀ : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B₀)
@@ -788,33 +789,33 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
     (hkp : cfg.Faithful → Kept cfg s) (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K)
     (hd : ∀ e ∈ delivered cfg [inp], e ∈ K)
     (hb : ∀ e ∈ persists (Node.step cfg s inp).2, e ∈ K)
-    (hfin : cfg.drops = true → floorAt cfg (Node.step cfg s inp).1.lo ≤ G + 1) :
+    (hFG : F ≤ G + 1) (hfin : cfg.drops = true → floorAt cfg (Node.step cfg s inp).1.lo ≤ F) :
     ∀ e ∈ persists (Node.step cfg s inp).2, e.2.round = 0 ∨ ∃ x y o,
-      BuildState cfg U G K s inp x ∧ Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o ∧
+      BuildState cfg U G F K s inp x ∧ Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o ∧
       DiskRises cfg x (Node.step cfg s inp).1 := by
-  have hslot₀ : cfg.drops = true → floorAt cfg s.lo ≤ G + 1 := fun hd' =>
+  have hslot₀ : cfg.drops = true → floorAt cfg s.lo ≤ F := fun hd' =>
     (floorAt_mono (growsUnless_step (cfg := cfg) s inp).1).trans (hfin hd')
   -- a step that settles `s₀` after outputs persisting only round-`0` blocks
   have hset : ∀ (s₀ : State Validator BlockId Payload)
       (pre : List (Output Validator BlockId Payload)),
-      BuildState cfg U G K s inp s₀ → (∀ e ∈ s₀.syncs, e.2.1 ∈ K) →
+      BuildState cfg U G F K s inp s₀ → (∀ e ∈ s₀.syncs, e.2.1 ∈ K) →
       (∀ e ∈ persists pre, e.2.round = 0) →
       Node.step cfg s inp = ((Node.settle cfg s₀).1, pre ++ (Node.settle cfg s₀).2) →
       ∀ e ∈ persists (Node.step cfg s inp).2, e.2.round = 0 ∨ ∃ x y o,
-        BuildState cfg U G K s inp x ∧ Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o ∧
+        BuildState cfg U G F K s inp x ∧ Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o ∧
         DiskRises cfg x (Node.step cfg s inp).1 := by
     intro s₀ pre h₀ hp₀ hpre he e hev
-    have hlo₀ : cfg.drops = true → floorAt cfg (Node.settle cfg s₀).1.lo ≤ G + 1 :=
+    have hlo₀ : cfg.drops = true → floorAt cfg (Node.settle cfg s₀).1.lo ≤ F :=
       fun hd' => by have := hfin hd'; rw [he] at this; exact this
     rw [he] at hb hev ⊢
     rw [persists_append] at hb hev
     rcases List.mem_append.mp hev with hev | hev
     · exact Or.inl (hpre e hev)
-    · exact Or.inr (settle_witness hg h₀ hp₀ (fun e he => hb e (List.mem_append_right _ he))
+    · exact Or.inr (settle_witness hg hFG h₀ hp₀ (fun e he => hb e (List.mem_append_right _ he))
         hlo₀ e hev)
   have hsame : Node.step cfg s inp = (s, []) →
       ∀ e ∈ persists (Node.step cfg s inp).2, e.2.round = 0 ∨ ∃ x y o,
-        BuildState cfg U G K s inp x ∧ Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o ∧
+        BuildState cfg U G F K s inp x ∧ Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o ∧
         DiskRises cfg x (Node.step cfg s inp).1 := by
     intro he e hev; rw [he] at hev; simp [persists] at hev
   -- the blocks taken in on their header lie at or below `G`
@@ -932,7 +933,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
     intro e hev'
     rw [persists_step_timer] at hb hev'
     rw [step_timer_fst]
-    refine Or.inr (settle_witness hg (s := s) (inp := .timer r)
+    refine Or.inr (settle_witness hg hFG (s := s) (inp := .timer r)
       (s₀ := { s with fired := fire s r, recovering := false })
       ⟨hc, hown.grow (Grows.refl _) rfl rfl, DiskRises.of_grows (Grows.refl _) le_rfl rfl,
         fun t ht => ?_, ⟨B₀, hi.of_eq rfl rfl rfl rfl rfl le_rfl rfl rfl⟩, subset_rfl,
@@ -953,7 +954,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
     intro e hev'
     rw [persists_step_restart] at hb hev'
     rw [step_restart_fst]
-    exact Or.inr (settle_witness hg (s := s) (inp := .restart)
+    exact Or.inr (settle_witness hg hFG (s := s) (inp := .restart)
       (s₀ := { s with recovering := true })
       ⟨hc, hown.grow (Grows.refl _) rfl rfl, DiskRises.of_grows (Grows.refl _) le_rfl rfl,
         fun t ht => Or.inl ht, ⟨B₀, hi.of_eq rfl rfl rfl rfl rfl le_rfl rfl rfl⟩, subset_rfl,
@@ -978,17 +979,17 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
         have hL : ∀ e ∈ hashed cfg L, e ∈ K := fun e he' =>
           hd e (by simpa [delivered, hashed] using he')
         obtain ⟨h₁, h₂, h₃, h₄, h₅, -, -, -, h₉⟩ := decideOn_rest (cfg := cfg) s s.lo d L
-        have hfin₀ : cfg.drops = true → floorAt cfg (Node.settle cfg s₀).1.lo ≤ G + 1 :=
+        have hfin₀ : cfg.drops = true → floorAt cfg (Node.settle cfg s₀).1.lo ≤ F :=
           fun hd' => by have := hfin hd'; rw [he] at this; exact this
-        have hs₀lo : cfg.drops = true → floorAt cfg s₀.lo ≤ G + 1 := fun hd' =>
+        have hs₀lo : cfg.drops = true → floorAt cfg s₀.lo ≤ F := fun hd' =>
           (floorAt_mono (growsUnless_settle (cfg := cfg) s₀).1).trans (hfin₀ hd')
         have hcut₀ : AllGood (CutAbove U G) s₀.disk :=
           (AllGood.decideOn (cfg := cfg) (C := fun n => floorAt cfg n ≤ G + 1)
             (fun _ _ h h' => (floorAt_mono h).trans h')
             (fun hd' n hn x hx hr => hg.known hd' x hx (by omega)) hg.grounds
             (fun _ => hc) hi.floor (Nat.le_succ _) d hL).1
-            (by have := hs₀lo hdr; simp only [hs₀, Node.tidy, h₅] at this; exact this)
-        have h₀ : BuildState cfg U G K s (.proof u s.lo L) s₀ :=
+            (by have := hs₀lo hdr; simp only [hs₀, Node.tidy, h₅] at this; omega)
+        have h₀ : BuildState cfg U G F K s (.proof u s.lo L) s₀ :=
           ⟨hcut₀, hown.grow (Grows.decideOn s s.lo d L) h₂ h₃, diskRises_decideOn s s.lo d L,
             fun r hr => Or.inl (by rw [← h₄]; exact hr),
             ⟨B₀, (hi.decideOn (Nat.le_succ _) d hL).tidy⟩, h₉,
@@ -1003,7 +1004,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H} {G : ℕ}
             persists (Output.commit s.lo d :: l) = persists l from fun _ => rfl, persists_append,
           show persists [Output.askProof (Validator := Validator) (BlockId := BlockId)
             (Payload := Payload) _] = [] from rfl, List.append_nil] at hev
-        exact Or.inr (settle_witness hg h₀ (fun e he' => hp e (by
+        exact Or.inr (settle_witness hg hFG h₀ (fun e he' => hp e (by
           rw [hs₀] at he'; exact h₁ ▸ List.mem_of_mem_filter he')) hp₀ hfin₀ e hev)
     · exact hsame (by simp only [Node.step, if_neg hcnd])
 

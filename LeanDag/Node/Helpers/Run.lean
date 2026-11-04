@@ -83,7 +83,8 @@ theorem waveFacts_of_run (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf
     (hbase : Base cfg H tr R B E₀ E₁) (hE₀ : E₀ ≤ eventsBy tr time gst)
     (hE₁ : eventsBy tr time t₁ ≤ E₁)
     (hTB : ∀ v ∈ T, B ≤ topAt cfg tr time v gst ∧
-      (cfg.drops = true → B + 1 ≤ topAt cfg tr time v gst))
+      (cfg.drops = true → ∀ w ∈ H, ∀ k ≤ E₁,
+        floorAt cfg (stateBefore cfg tr k w).lo ≤ topAt cfg tr time v gst))
     (hev : Converge.EvidenceAuthentic cfg H tr) (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
     (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁) (hq : 2 ≤ cfg.q)
     (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) (hwait : Live.TimersAfterSet cfg H tr time)
@@ -136,7 +137,8 @@ theorem run_commits (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : c
     (hbase : Base cfg H tr R B E₀ E₁) (hE₀ : E₀ ≤ eventsBy tr time gst)
     (hE₁ : eventsBy tr time t₁ ≤ E₁)
     (hTB : ∀ v ∈ T, B ≤ topAt cfg tr time v gst ∧
-      (cfg.drops = true → B + 1 ≤ topAt cfg tr time v gst))
+      (cfg.drops = true → ∀ w ∈ H, ∀ k ≤ E₁,
+        floorAt cfg (stateBefore cfg tr k w).lo ≤ topAt cfg tr time v gst))
     (hev : Converge.EvidenceAuthentic cfg H tr)
     (hmono : Live.TimeMono tr time) (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁)
     (hwait : Live.TimersAfterSet cfg H tr time) (hstart : Live.StartedBy T tr time gst)

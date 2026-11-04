@@ -137,6 +137,13 @@ section Steady
 
 variable {T : Finset Validator} {time : ℕ → ℕ} {G t₁ L : ℕ}
 
+/-- **Up to a steady window's end a node's next undecided slot is `L` or
+below.** -/
+theorem Steady.lo_le (hst : Live.Steady cfg T tr time G t₁ L) (hGt : G ≤ t₁) {v : Validator}
+    (hv : v ∈ T) {k : ℕ} (hk : k ≤ eventsBy tr time t₁) : (stateBefore cfg tr k v).lo ≤ L := by
+  rw [← (hst v hv (eventsBy tr time t₁) (eventsBy_mono hGt) le_rfl).1]
+  exact (rises_before (cfg := cfg) (tr := tr) v hk).2.2
+
 /-- **In a steady window a node's floor is the floor at its slot**, at a
 node that drops. -/
 theorem Steady.floor (hdr : cfg.drops = true) (hst : Live.Steady cfg T tr time G t₁ L)
@@ -302,16 +309,13 @@ theorem base_steady {H : Finset Validator} [Infinite BlockId] (hσ : cfg.σ = bo
       (padded (hashInjective_of_trace hinj) (authentic_of_timely htime) hq
         (floorAt cfg L - 1))
       (floorAt cfg L - 1) (eventsBy tr time G) (eventsBy tr time t₁) := by
-  refine base_below hσ hadm hf htime hinj hq hdr (fun v hv k h₂ => ?_)
+  refine base_below hσ hadm hf htime hinj hq hdr (fun v hv k h₂ => Steady.lo_le hst hGt hv h₂)
     fun v hv k h₁ h₂ => ?_
-  · -- up to the window's end the next undecided slot is at most `L`
-    rw [← (hst v hv (eventsBy tr time t₁) (eventsBy_mono hGt) le_rfl).1]
-    exact (rises_before (cfg := cfg) (tr := tr) v h₂).2.2
-  · obtain ⟨hlo, -⟩ := hst v hv k h₁ h₂
-    have hfl := Steady.floor hdr hst hv h₁ h₂
-    exact ⟨fun k' hk hk' => Converge.grows_of_lo v hk
-        (by rw [(hst v hv k' (by omega) hk').1, hlo]),
-      by rw [hfl]; exact (hst v hv k h₁ h₂).2, fun hk => Steady.regular hdr hst hv h₁ hk⟩
+  obtain ⟨hlo, -⟩ := hst v hv k h₁ h₂
+  have hfl := Steady.floor hdr hst hv h₁ h₂
+  exact ⟨fun k' hk hk' => Converge.grows_of_lo v hk
+      (by rw [(hst v hv k' (by omega) hk').1, hlo]),
+    by rw [hfl]; exact (hst v hv k h₁ h₂).2, fun hk => Steady.regular hdr hst hv h₁ hk⟩
 
 end Steady
 

@@ -81,7 +81,8 @@ theorem waited_holds (hq : 2 ≤ cfg.q) (hadm : cfg.Admissible) (hfa : cfg.Faith
     (hbase : Base cfg H tr R B E₀ E₁) (hE₀ : E₀ ≤ eventsBy tr time gst)
     (hE₁ : eventsBy tr time t₁ ≤ E₁)
     (hTB : ∀ v ∈ T, B ≤ topAt cfg tr time v gst ∧
-      (cfg.drops = true → B + 1 ≤ topAt cfg tr time v gst))
+      (cfg.drops = true → ∀ w ∈ H, ∀ k ≤ E₁,
+        floorAt cfg (stateBefore cfg tr k w).lo ≤ topAt cfg tr time v gst))
     (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
     (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁) (hstart : Live.StartedBy T tr time gst)
     (hTc : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) {n₀ : ℕ}
@@ -174,7 +175,8 @@ variable {N n₀ t : ℕ} (hσ : cfg.σ = boundedSel)
   (hBV : (B + 1 + cfg.p.voteOffset ≤ n₀ ∧ ∀ v ∈ H, topAt cfg tr time v gst < n₀) ∨
       B = 0 ∧ cfg.drops = false)
   (hTB : ∀ v ∈ T, B ≤ topAt cfg tr time v gst ∧
-    (cfg.drops = true → B + 1 ≤ topAt cfg tr time v gst))
+    (cfg.drops = true → ∀ w ∈ H, ∀ k ≤ E₁,
+      floorAt cfg (stateBefore cfg tr k w).lo ≤ topAt cfg tr time v gst))
 include hσ hadm hfa hf htime hinj hev hTH hmono harr hbelow hst hN ht₁ hbase hE₀ hE₁ hB₀ hBV hTB
 
 /-- **By `A` after every reliable node reached a round, each holds every
@@ -230,7 +232,7 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
     (R.block c).creator = h →
     (R.block c).round = n + 1 →
     tr[j]? = some (h, inp) →
-    BuildState (cfg.at h) R B (knownAll cfg H tr) (stateBefore cfg tr j h) inp x →
+    BuildState (cfg.at h) R B (B + 1) (knownAll cfg H tr) (stateBefore cfg tr j h) inp x →
     x.top = some n → c ∉ x.disk.ids →
     (∃ y o, tryBuild (cfg.at h) x = some (y, o) ∧
       (c, R.block c) ∈
@@ -428,7 +430,7 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
     (R.block c).creator = v →
     (R.block c).round = n + 1 →
     tr[i₀]? = some (v, inp) → builtAt cfg tr time v (n + 1) = time i₀ →
-    BuildState (cfg.at v) R B (knownAll cfg H tr) (stateBefore cfg tr i₀ v) inp x →
+    BuildState (cfg.at v) R B (B + 1) (knownAll cfg H tr) (stateBefore cfg tr i₀ v) inp x →
     x.top = some n → c ∉ x.disk.ids →
     (∃ y o, tryBuild (cfg.at v) x = some (y, o) ∧
       (c, R.block c) ∈

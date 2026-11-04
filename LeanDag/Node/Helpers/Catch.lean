@@ -368,10 +368,10 @@ section Lend
 left out only authors its evidence names, its block carries that evidence
 against each, since it references none of them, and the borrower holds
 the block, so holds the evidence. -/
-theorem excluded_lent {K : Set (BlockId × Block Validator BlockId Payload)} {G : ℕ}
+theorem excluded_lent {K : Set (BlockId × Block Validator BlockId Payload)} {G F : ℕ}
     (hfa : cfg.Faithful) {w h : Validator}
     {s s' xw x : State Validator BlockId Payload} {inp inp' : Input Validator BlockId Payload}
-    (hbsw : BuildState (cfg.at w) U G K s inp xw) (hbs : BuildState (cfg.at h) U G K s' inp' x)
+    (hbsw : BuildState (cfg.at w) U G F K s inp xw) (hbs : BuildState (cfg.at h) U G F K s' inp' x)
     {n : ℕ} (hn : cfg.drops = false ∨ xw.floor ≤ n) {ow : Option BlockId}
     (ho : ∀ j, ow = some j → (xw.disk.blk j).creator = (cfg.at w).me)
     {z : BlockId} (hz : z ∈ x.disk.ids) (hzG : G < (x.disk.blk z).round)
@@ -405,7 +405,7 @@ variable {tr : Trace Validator BlockId Payload} {D : Finset Validator} {nE : ℕ
 `D`**, at a state it builds from. -/
 theorem excluded_sub_spread (hsp : Live.Spread cfg H tr D nE) {v : Validator}
     {s x : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
-    {G : ℕ} (h : BuildState (cfg.at v) U G (knownAll cfg H tr) s inp x) {r : ℕ}
+    {G F : ℕ} (h : BuildState (cfg.at v) U G F (knownAll cfg H tr) s inp x) {r : ℕ}
     (hr : cfg.drops = false ∨ cfg.Faithful ∧ x.floor ≤ r) :
     excluded (cfg.at v) x.disk r x.evidence ⊆ D :=
   h.excluded_sub
@@ -454,7 +454,7 @@ out every author of `D`**. -/
 theorem spread_sub_excluded (hsp : Live.Spread cfg H tr D nE) {i : ℕ} {w : Validator}
     {inp : Input Validator BlockId Payload} {x : State Validator BlockId Payload}
     (hi : tr[i]? = some (w, inp)) (hw : w ∈ H)
-    {G : ℕ} (hbs : BuildState (cfg.at w) U G (knownAll cfg H tr) (stateBefore cfg tr i w) inp x)
+    {G F : ℕ} (hbs : BuildState (cfg.at w) U G F (knownAll cfg H tr) (stateBefore cfg tr i w) inp x)
     {e : BlockId × Block Validator BlockId Payload} (he : e ∈ persists (outputsAt cfg tr i))
     (her : nE < e.2.round) (r : ℕ) {st : Store Validator BlockId Payload} :
     D ⊆ excluded (cfg.at w) st r x.evidence :=
@@ -470,8 +470,8 @@ references no author of `D`**: its builder convicted them before the event,
 and leaves out the authors it convicted. -/
 theorem refs_avoid_spread (hsp : Live.Spread cfg H tr D nE) {i : ℕ} {w : Validator}
     {inp : Input Validator BlockId Payload} {x : State Validator BlockId Payload}
-    {ow : Option BlockId} {r : ℕ} (hi : tr[i]? = some (w, inp)) (hw : w ∈ H) {G : ℕ}
-    (hbs : BuildState (cfg.at w) U G (knownAll cfg H tr) (stateBefore cfg tr i w) inp x)
+    {ow : Option BlockId} {r : ℕ} (hi : tr[i]? = some (w, inp)) (hw : w ∈ H) {G F : ℕ}
+    (hbs : BuildState (cfg.at w) U G F (knownAll cfg H tr) (stateBefore cfg tr i w) inp x)
     {e : BlockId × Block Validator BlockId Payload} (he : e ∈ persists (outputsAt cfg tr i))
     (her : nE < e.2.round) (ho : ∀ j, ow = some j → (x.disk.blk j).creator = (cfg.at w).me) :
     ∀ k ∈ refsAt (cfg.at w) x.disk r ow x.evidence, (x.disk.blk k).creator ∉ D := by
@@ -480,16 +480,16 @@ theorem refs_avoid_spread (hsp : Live.Spread cfg H tr D nE) {i : ℕ} {w : Valid
 
 /-- **Under spread evidence, a block an honest node builds above `nE`
 references no block of an author of `D`, read in a record that reads its
-disk from `G` up**, when the block lies above `G`, and above `G + 1` at a
+disk from `G` up**, when the block lies above `G`, and above `F` at a
 node that drops: it builds in memory on references avoiding the authors it
 convicted, at a round at or above its floor. -/
 theorem built_avoids_spread (hsp : Live.Spread cfg H tr D nE) {i : ℕ} {w : Validator}
     {inp : Input Validator BlockId Payload} {x y : State Validator BlockId Payload}
     {o : List (Output Validator BlockId Payload)} (hi : tr[i]? = some (w, inp)) (hw : w ∈ H)
-    {G : ℕ} (hbs : BuildState (cfg.at w) U G (knownAll cfg H tr) (stateBefore cfg tr i w) inp x)
+    {G F : ℕ} (hbs : BuildState (cfg.at w) U G F (knownAll cfg H tr) (stateBefore cfg tr i w) inp x)
     (hb : tryBuild (cfg.at w) x = some (y, o)) {e : BlockId × Block Validator BlockId Payload}
     (heo : e ∈ persists o) (he : e ∈ persists (outputsAt cfg tr i)) (her : nE < e.2.round)
-    (hG : G + 1 ≤ e.2.round) (hGd : cfg.drops = true → G + 2 ≤ e.2.round) :
+    (hG : G + 1 ≤ e.2.round) (hGd : cfg.drops = true → F + 1 ≤ e.2.round) :
     ∀ k ∈ e.2.refs, (U.block k).creator ∉ D := by
   obtain ⟨r, ow, -, hle, hsh, -, -, hout⟩ := tryBuild_exit hb
   rw [hout, persists_built, List.mem_singleton] at heo
@@ -504,7 +504,7 @@ theorem built_avoids_spread (hsp : Live.Spread cfg H tr D nE) {i : ℕ} {w : Val
     · have h₁ := hiX.floor
       unfold floorOf at h₁
       rw [if_pos (show (cfg.at w).drops = true from hd)] at h₁
-      have h₂ : x.floor ≤ G + 1 := h₁.trans (hbs.slot hd)
+      have h₂ : x.floor ≤ F := h₁.trans (hbs.slot hd)
       have := hGd hd
       omega
   change ∀ k ∈ refsAt (cfg.at w) x.memory r ow x.evidence, _
@@ -548,7 +548,7 @@ theorem lent_avoids_before (htime : Converge.TimelyAuthentic cfg H tr)
     (hz : z ∈ (stateBefore cfg tr E v).disk.ids)
     (hzr : ((stateBefore cfg tr E v).disk.blk z).round = m + 1)
     (hzH : ((stateBefore cfg tr E v).disk.blk z).creator ∈ H) (hmE : nE ≤ m) (hmB : B ≤ m)
-    (hrV : cfg.drops = true → B + 1 ≤ m)
+    (hrV : cfg.drops = true → ∀ w ∈ H, ∀ k ≤ E, floorAt cfg (stateBefore cfg tr k w).lo ≤ m)
     (hr : cfg.drops = false ∨ cfg.Faithful ∧ (stateBefore cfg tr E v).floor ≤ m) :
     ∀ k ∈ lent (stateBefore cfg tr E v).disk z, ((stateBefore cfg tr E v).disk.blk k).creator ∉
       excluded (cfg.at v) (stateBefore cfg tr E v).disk m (stateBefore cfg tr E v).evidence := by
@@ -561,10 +561,12 @@ theorem lent_avoids_before (htime : Converge.TimelyAuthentic cfg H tr)
     (own_known htime hv hzH le_rfl hzk (Z.disk.full_fields z).2.1)
   obtain ⟨inpw, hjw'⟩ := Converge.event_of_map hjw
   obtain ⟨xw, yw, ow, hbsw, hbw, heow, -⟩ :=
-    build_witness hbase hzH hjw' (by omega) hjz (by change (Z.disk.full z).round ≠ 0; omega)
+    build_witness hbase hzH hjw' (by omega) (min_le_right m (B + 1))
+      (fun hd => le_min (hrV hd _ hzH _ (by omega)) ((hbase.disk _ hzH _ (by omega)).2.2 hd))
+      hjz (by change (Z.disk.full z).round ≠ 0; omega)
   have hAD := built_avoids_spread hsp hjw' hzH hbsw hbw heow hjz
     (by change nE < (Z.disk.full z).round; omega) (by change _ ≤ (Z.disk.full z).round; omega)
-    (fun hd => by have := hrV hd; change _ ≤ (Z.disk.full z).round; omega)
+    (fun _ => by change _ ≤ (Z.disk.full z).round; omega)
   intro k hk hmk
   have hkZ : k ∈ Z.disk.ids := Z.disk.complete z hz k hk
   -- the reference lies at round `m`, read alike by the record
@@ -661,8 +663,8 @@ theorem behind_honest (htime : Converge.TimelyAuthentic cfg H tr)
     {i : ℕ} {inp : Input Validator BlockId Payload} (hi : tr[i]? = some (w, inp))
     {x y : State Validator BlockId Payload} {o : List (Output Validator BlockId Payload)}
     {e : BlockId × Block Validator BlockId Payload} {n : ℕ}
-    {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H} {G : ℕ}
-    (hx : BuildState (cfg.at w) R G (knownAll cfg H tr) (stateBefore cfg tr i w) inp x)
+    {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H} {G F : ℕ}
+    (hx : BuildState (cfg.at w) R G F (knownAll cfg H tr) (stateBefore cfg tr i w) inp x)
     (hb : tryBuild (cfg.at w) x = some (y, o)) (heo : e ∈ persists o)
     (he : e ∈ persists (outputsAt cfg tr i)) (her : e.2.round = n + 1)
     (hgx : DiskRises (cfg.at w) x (stateBefore cfg tr (i + 1) w))
@@ -787,7 +789,8 @@ theorem catches_up (hq : 2 ≤ cfg.q)
     {D : Finset Validator} {nE : ℕ} (hsp : Live.Spread cfg H tr D nE)
     {v : Validator} (hv : v ∈ T) (hvE : nE ≤ topAt cfg tr time v gst)
     (hvB : B ≤ topAt cfg tr time v gst)
-    (hvV : cfg.drops = true → B + 1 ≤ topAt cfg tr time v gst) :
+    (hvV : cfg.drops = true → ∀ w ∈ H, ∀ k ≤ E₁,
+      floorAt cfg (stateBefore cfg tr k w).lo ≤ topAt cfg tr time v gst) :
     n ≤ topAt cfg tr time v (τ + (Δ + Δₛ)) := by
   set E := eventsBy tr time (τ + (Δ + Δₛ)) with hE
   by_contra hlt
@@ -823,7 +826,8 @@ theorem catches_up (hq : 2 ≤ cfg.q)
     rw [hm] at this
     simpa using this
   have hmB : B ≤ m := hvB.trans hmg
-  have hmV : cfg.drops = true → B + 1 ≤ m := fun hd => (hvV hd).trans hmg
+  have hmV : cfg.drops = true → ∀ w ∈ H, ∀ k ≤ E₁, floorAt cfg (stateBefore cfg tr k w).lo ≤ m :=
+    fun hd w hw k hk => (hvV hd w hw k hk).trans hmg
   have hFm : Z.floor ≤ m := by
     cases hd : cfg.drops
     · exact (Converge.floor_before (cfg := cfg) (tr := tr) hd hm).trans (Nat.sub_le _ _)
@@ -862,7 +866,8 @@ theorem catches_up (hq : 2 ≤ cfg.q)
     have h₂ : (Z.disk.blk z).round = m + 1 := hzr
     omega
   have hav := lent_avoids_before htime hbase hsp (hTH hv) hE₁ hzZ hzr hzH hmE hmB
-    hmV (by cases hd : cfg.drops; exact Or.inl rfl; exact Or.inr ⟨hfa, hFm⟩)
+    (fun hd w hw k hk => hmV hd w hw k (hk.trans hE₁))
+    (by cases hd : cfg.drops; exact Or.inl rfl; exact Or.inr ⟨hfa, hFm⟩)
   have hsome := tryBuild_isSome (cfg := cfg.at v) hm
     (harr.recovered (by omega) v hv E (eventsBy_mono (tr := tr) (time := time) (by omega))
       (eventsBy_mono (by omega)))
@@ -877,8 +882,7 @@ theorem catches_up (hq : 2 ≤ cfg.q)
         omega) hfa
       (fresh_before hid htime (hTH hv) hm (Nat.lt_succ_self _)) _
       (fun j hj hjr => (Converge.kept_before hfa v E).exposed hj
-        (hbase.valid (hTH hv) hE₁ hj (by
-          cases hd : cfg.drops; exact Or.inl rfl; exact Or.inr (by have := hmV hd; omega))).2)).2⟩)
+        ((Converge.inv_before (cfg := cfg) (tr := tr) E v).above j hj (hFm.trans hjr.ge)).2)).2⟩)
     (fresh_before hid htime (hTH hv) hm (Nat.lt_succ_self _)) hFm
   rw [hSet.build] at hsome
   cases hsome

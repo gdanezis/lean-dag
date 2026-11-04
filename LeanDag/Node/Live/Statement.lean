@@ -299,8 +299,8 @@ def prefixOf (ev : ℕ → Validator × Input Validator BlockId Payload) (N : �
 dropping**: over an infinite run whose events are timed without decrease
 and without bound, every prefix of which meets the assumptions of V11 up to
 a time before its end, with synchronisation from the blocks reliable nodes
-hold (`SyncedHeld`) in place of `SyncedWithin`, every honest node reliable
-and at round `1` or above by GST, skip and commit thresholds above `f`, and
+hold (`SyncedHeld`) in place of `SyncedWithin`, every honest node reliable,
+skip and commit thresholds above `f`, and
 runs of `c` slots led by honest nodes, spanning the rule's eligibility,
 beyond every slot: for every slot `k`, after some number of events every
 honest node is past `k`. -/
@@ -326,7 +326,7 @@ def Eventually : Prop :=
       TimersFire cfg H (prefixOf ev N) time t₁ ∧ SyncedHeld cfg H (prefixOf ev N) time gst Δₛ t₁ ∧
       UpFrom H (prefixOf ev N) time 0 t₁) →
     (∀ N, gst < time N → StartedBy H (prefixOf ev N) time gst ∧
-      ∀ v ∈ H, max 1 nE ≤ topAt cfg (prefixOf ev N) time v gst) →
+      ∀ v ∈ H, nE ≤ topAt cfg (prefixOf ev N) time v gst) →
     ∀ k, ∃ N, ∀ v ∈ H, k < (stateBefore cfg (prefixOf ev N) N v).lo
 
 /-- The reliable nodes' liveness, without crashes and with them, and with

@@ -25,20 +25,23 @@ variable {H : Finset Validator}
 
 /-- **Each block a reliable node builds at an event before a base's end
 comes from one build**, at a state whose disk is read as the base's record
-reads it, and keeps the disk before the event from its floor up. -/
+reads it, and keeps the disk before the event from its floor up; when the
+node drops, the floor at that state's next undecided slot lies at `F` or
+below, given that it does after the event. -/
 theorem build_witness {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H}
     {B E₀ E₁ : ℕ} (hbase : Base cfg H tr R B E₀ E₁) {v : Validator} (hv : v ∈ H) {i : ℕ}
     {inp : Input Validator BlockId Payload} (hi : tr[i]? = some (v, inp)) (h₁ : i + 1 ≤ E₁)
+    {F : ℕ} (hFB : F ≤ B + 1)
+    (hfin : cfg.drops = true → floorAt cfg (stateBefore cfg tr (i + 1) v).lo ≤ F)
     {e : BlockId × Block Validator BlockId Payload}
     (he : e ∈ persists (outputsAt cfg tr i)) (hr : e.2.round ≠ 0) :
-    ∃ x y o, BuildState (cfg.at v) R B (knownAll cfg H tr) (stateBefore cfg tr i v) inp x ∧
+    ∃ x y o, BuildState (cfg.at v) R B F (knownAll cfg H tr) (stateBefore cfg tr i v) inp x ∧
       tryBuild (cfg.at v) x = some (y, o) ∧ e ∈ persists o ∧
       DiskRises (cfg.at v) x (stateBefore cfg tr (i + 1) v) := by
   have hK : ∀ x ∈ knownOf cfg tr v, x ∈ knownAll cfg H tr := fun x hx => ⟨v, hv, hx⟩
   have hinv := Converge.inv_before (cfg := cfg) (tr := tr) i v
   obtain ⟨hd, hb⟩ := event_knownOf (cfg := cfg) hi
   obtain ⟨hcut, -, -⟩ := hbase.disk v hv i (by omega)
-  have hfin := (hbase.disk v hv (i + 1) h₁).2.2
   rw [Converge.step_before hi] at hfin
   rw [outputsAt_eq hi] at he
   rcases step_witness (cfg := cfg.at v) ⟨hbase.grounds v hv, hbase.known⟩
@@ -46,7 +49,7 @@ theorem build_witness {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q 
       (ownTop_before (cfg := cfg) i)
       (fun hfa => Converge.kept_before (cfg := cfg) (tr := tr) hfa v i)
       (fun x hx => hK _ (knownBefore_knownOf (hinv.pend x hx)))
-      (fun x hx => hK x (hd x hx)) (fun x hx => hK x (hb x hx)) hfin e he with h | h
+      (fun x hx => hK x (hd x hx)) (fun x hx => hK x (hb x hx)) hFB hfin e he with h | h
   · exact absurd h hr
   · rw [stateBefore_succ hi, if_pos rfl]; exact h
 
@@ -117,7 +120,7 @@ theorem built_block (hσ : cfg.σ = boundedSel)
     (hE₀ : cfg.drops = true → ∀ k < E₀, (tr[k]?.map Prod.fst) = some v →
       ∀ e ∈ persists (outputsAt cfg tr k), e.2.round ≠ r + 1) :
     ∃ i₀ inp x ow, tr[i₀]? = some (v, inp) ∧ builtAt cfg tr time v (r + 1) = time i₀ ∧
-      BuildState (cfg.at v) R B (knownAll cfg H tr) (stateBefore cfg tr i₀ v) inp x ∧
+      BuildState (cfg.at v) R B (B + 1) (knownAll cfg H tr) (stateBefore cfg tr i₀ v) inp x ∧
         (x.top.isSome ∧ x.top.getD 0 ≤ r ∧
           ((x.top = some r ∧ ow = x.own) ∨
             ((x.recovering = true ∨ (cfg.drops = true ∧ x.top.getD 0 < x.floor)) ∧ ow = none ∧
@@ -167,7 +170,8 @@ theorem built_block (hσ : cfg.σ = boundedSel)
   have hc₁ : e₀.1 = c := by rw [hxdef]
   subst hc₁
   have hw₁ : i₀ + 1 ≤ E₁ := by omega
-  obtain ⟨x', y, o, hbs, hb, heo, hgx⟩ := build_witness hbase hv hi₀ hw₁ he₀
+  obtain ⟨x', y, o, hbs, hb, heo, hgx⟩ := build_witness hbase hv hi₀ hw₁ le_rfl
+    (hbase.disk v hv _ hw₁).2.2 he₀
     (by rw [he₀r]; omega)
   obtain ⟨r', ow, hsome, hle, hro, -, hexit, hout⟩ := tryBuild_exit hb
   -- it builds round `r + 1`

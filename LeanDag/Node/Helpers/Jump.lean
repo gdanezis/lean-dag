@@ -97,7 +97,8 @@ theorem floor_le_top_before [Infinite BlockId] (hσ : cfg.σ = boundedSel)
   have hFm' : Z.floor ≤ m := hFL.trans hFm
   -- it lends references the node can build on
   have hav := lent_avoids_before htime hbase hsp hv le_rfl hxZ hzr hzH (hnE.trans htm.le)
-    (by omega) (fun _ => by omega) (Or.inr ⟨hfa, hFm'⟩)
+    (by omega) (fun _ w hw k hk => (floorAt_mono (hle w hw k hk)).trans hFm)
+    (Or.inr ⟨hfa, hFm'⟩)
   have hinv := Converge.inv_before (cfg := cfg) (tr := tr) i v
   rw [← hZ] at hinv
   obtain ⟨hsub, hbuild⟩ := lent_buildable (cfg := cfg.at v) (hinv.above.mono (by omega)) hxZ hzr

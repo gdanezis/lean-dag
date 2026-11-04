@@ -137,7 +137,7 @@ structure RunMeets (H : Finset Validator) (ev : ℕ → Validator × Input Valid
     TimersFire cfg H (prefixOf ev N) time t₁ ∧ SyncedHeld cfg H (prefixOf ev N) time gst Δₛ t₁ ∧
     UpFrom H (prefixOf ev N) time 0 t₁
   started : ∀ N, gst < time N → StartedBy H (prefixOf ev N) time gst ∧
-    ∀ v ∈ H, max 1 nE ≤ topAt cfg (prefixOf ev N) time v gst
+    ∀ v ∈ H, nE ≤ topAt cfg (prefixOf ev N) time v gst
 
 section Run
 

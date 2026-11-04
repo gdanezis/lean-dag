@@ -578,19 +578,19 @@ store closed, and needs none of this.
         undecided slot at `L` from `G` to `t₁`, each at the floor at `L` or
         above, the honest nodes never all reach the decision round of a
         reliably led run above round `floorAt L + voteOffset` by `t₁ − A`,
-        given arrival from some `G' ≥ G` (`arrival_steady`), the honest
-        nodes started there and at round `1` or above; read on the record
+        given arrival from some `G' ≥ G` (`arrival_steady`) and the honest
+        nodes started there; read on the record
         padded below `floorAt L − 1` (`base_steady`) each would decide the
         run (`decides_from`) and move past `L`. So a steady window is short
         (`Live.steady_bounded`): with the armed top round's timer firing
-        from `G'`, once every honest node is at round `n₁ ≥ 1`, at or above
+        from `G'`, once every honest node is at round `n₁`, at or above
         `floorAt L`, at `s₀ ≥ G'`, it ends before
         `s₀ + ∑_{n₁ ≤ r < N} (timeout r + A) + A`, for `N` the decision
         round of such a run (`produces_from`, `climbs`). (e) is proved, and
         with it (ii) (`Live.eventually`, V11″ of `docs/validator.md`): over
         an infinite run whose prefixes meet the assumptions, at skip and
         commit thresholds above `f`, with every honest node reliable and
-        above round `0` by GST and honestly led runs spanning the rule's
+        honestly led runs spanning the rule's
         eligibility beyond every slot, every honest node's next undecided
         slot grows without bound. Catch-up holds along the run
         (`catchup_run`); were the slots bounded, they would settle at one
@@ -599,9 +599,11 @@ store closed, and needs none of this.
         slot below holds an honest block it can build on above its top and
         a settled node does not build (`witnessAt_author`,
         `floor_le_top_before`, `floor_run`); and the rest of the run would
-        be a steady window, which is short. Left: relaxing every honest
-        node reliable, an explicit time bound, and the premise that every
-        honest node leaves round `0` by GST.
+        be a steady window, which is short. The wave argument reads the
+        floor at each honest node's next undecided slot in place of the
+        round above the base (`BuildState`, `lent_avoids_before`,
+        `produces_from`, `catches_up`), so it holds from round `0`. Left:
+        relaxing every honest node reliable, and an explicit time bound.
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase

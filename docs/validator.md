@@ -505,7 +505,7 @@ four a round. It needs no bootstrap, since no block is collected.
 | V8 | The claims are about the program that runs: its disk and memory are ordered maps, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` (§6) |
 | V11 | **Liveness**: over a timed trace of nodes that do not drop, with delivery within `Δ` and synchronisation within `Δₛ` past GST, reliable nodes that do not restart, their timers on time, no honest node's timer early, timeouts above `2(Δ + Δₛ)`, authentic evidence, a faithful payload source, and evidence that has spread by a round every reliable node is at by GST, the reliable nodes produce a round per timeout and `Δ + Δₛ`, and a run of reliably led slots from a round that every reliable node was below at GST is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of a timeout and `Δ + Δₛ` per round. The honest nodes outside the reliable set need meet no other timing assumption. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy`, `Node.held_before` |
 | V11′ | **Liveness across crashes**: of nodes that do not drop, if the reliable nodes stay up from `t_r` to the horizon `t₁`, with delivery, synchronisation and timers assumed only from then on, and timers lost only to a restart, with authentic evidence, a faithful payload source, and evidence that has spread by a round every reliable node is at by `max t_r gst`, the conclusions of V11 hold with GST replaced by `max t_r gst + W`, for `W` twice the largest timeout of the round below the one a reliable node is at by `max t_r gst`. Crashes before GST are the case `t_r ≤ gst`. The honest nodes outside the reliable set may keep crashing and restarting; with every honest node reliable, after every node crashed and restarted, the nodes decide again. | `Node.Live.Recovers` (proved, §5.6): `Node.arrival_of_recovered`, `Node.sends_again`, `Node.retry_fires`, `Node.recovered_by`, `Node.topTimerBy_of_up`, `Node.top_arrives`, `Node.quorum_below` |
-| V11″ | **Liveness with dropping**: over an infinite run of nodes that drop, whose every prefix meets the assumptions of V11 with synchronisation from the blocks reliable nodes hold, with every honest node reliable and above round `0` by GST, skip and commit thresholds above `f`, and beyond every slot a run of slots led by honest nodes spanning the rule's eligibility, every honest node's next undecided slot grows without bound. | `Node.Live.Eventually` (proved, §5.8): `Live.eventually`, `Node.catchup_run`, `Node.floor_le_top_before`, `Live.steady_bounded` |
+| V11″ | **Liveness with dropping**: over an infinite run of nodes that drop, whose every prefix meets the assumptions of V11 with synchronisation from the blocks reliable nodes hold, with every honest node reliable, skip and commit thresholds above `f`, and beyond every slot a run of slots led by honest nodes spanning the rule's eligibility, every honest node's next undecided slot grows without bound. | `Node.Live.Eventually` (proved, §5.8): `Live.eventually`, `Node.catchup_run`, `Node.floor_le_top_before`, `Live.steady_bounded` |
 | V12 | **Refinement**: for an admissible configuration at the bounded vote, over a trace with timely authentication, an injective hash and at most `f` nodes outside the honest set, of nodes that do not drop, there is a `BlockRecord` at quorum `q` of which every honest disk, before every event, is a cut; every honest node's decisions are none or `Scheme.tryDecide` from slot `0` on a view of it that the node's disk holds. Under the assumptions of V11 (no timer need fire) or of V11′, it has the scheme's `WaveFacts` over every window of rounds from one above every reliable node's round at GST, and every slot of a reliably led run is decided by every reliable node to a leader block. | `Node.Refines.HasRecord` (proved, §5.7): `Node.commitInv_before`, `Node.waveFacts_of_run`, `Node.run_commits`, `Refines.waves_leads` |
 
 Every claim depends only on the standard axioms (`propext`,
@@ -891,8 +891,7 @@ jump, and need blocks every reliable node let go of. V11″ is an eventual
 property of an infinite run (`Live.Eventually`): its events `ev`, timed
 without decrease and without bound, whose prefixes (`prefixOf`) meet the
 assumptions of V11 with `SyncedHeld` in place of `SyncedWithin`. Every
-honest node is reliable and at round `1` or above by GST, the skip and
-commit thresholds exceed `f`, and beyond every slot there are `c`
+honest node is reliable, the skip and commit thresholds exceed `f`, and beyond every slot there are `c`
 consecutive slots led by honest nodes, with `c` spanning the rule's
 eligibility. Then for every slot `k`, after some number of events every
 honest node is past `k` (`Live.eventually`).
@@ -915,10 +914,11 @@ honest node is past `k` (`Live.eventually`).
   within `Σ (timeout r + A) + A` of the window's arrival point, and moves
   every honest node past `L`: a contradiction.
 
-The wave argument with dropping reads blocks above the base's round, and
-the base lies below the floor at `L`, which is round `0` for the first
-slots; hence the premise that every honest node is above round `0` by
-GST.
+The wave argument reads an honest disk as valid at its floor and above, and
+a node at its floor builds on a block one round above it. The base lies one
+round below the floor at `L`, at round `0` when that floor is `0`, so the
+argument reads the floor bound itself (`floorAt` of each honest node's next
+undecided slot), not the round above the base, and holds from round `0`.
 
 ## 6. Testing
 
@@ -1112,8 +1112,8 @@ and the bound on the blocks a node holds a round (V13), Stage 4. Open:
 * without dropping, only a node that restarted jumps: a node that falls
   behind without crashing builds each round it missed, on being behind
   (§3.2);
-* V11″ assumes every honest node reliable and above round `0` by GST,
-  and gives no time bound (§5.8);
+* V11″ assumes every honest node reliable and gives no time bound
+  (§5.8);
 * a node of `T` that restarts between `t_r` and `t₁` falls outside the
   claims for that interval, since a jump leaves it without a block at
   the rounds it jumped over, which the wave facts read (§5.6). A claim
