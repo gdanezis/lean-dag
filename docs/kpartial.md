@@ -1,6 +1,6 @@
 # K-partial DAGs
 
-This document studies the safety of the Mysticeti commit rule on a
+This document studies the safety and liveness of the Mysticeti commit rule on a
 *K-partial DAG*, a DAG substrate in which an honest node holds only part of
 the history of the blocks it references. The Lean development is
 `LeanDag/KPartialDag`.
@@ -144,10 +144,55 @@ The development proves (`Node.Statement`):
 * **agreement** (`Node.Agrees`): at `K ≥ 3`, two nodes decide each slot
   alike, by soundness on the full view and §4's agreement.
 
-## 6. Next
+## 6. Liveness
 
-* Liveness: the cost of fetching the sub-DAG, how far below an anchor
-  decisions reach, and how long honest nodes must keep the histories they
-  downloaded.
+Partial synchrony is read on the record as in the rest of the tree. From a
+round `R` on, every block of an author in a quorum `T` of correct validators
+references every block of an author in `T` of the round below
+(`SynchronisedOn`), and the rounds are populated by `T` (`PopulatedOn`). The
+schedule offers runs: past any slot, `c` consecutive slots led by `T`
+(`FairRunOn`), and each run spans eligibility, that is, every slot below a
+run may be anchored by the run's last slot. No bound on `K` is needed for
+liveness.
+
+A node decides the slots up to `n` once it holds two sets of blocks:
+
+* the blocks of `T` over the rounds of the run, with their references
+  (`WithRefs`);
+* the available sub-DAG below every leader block of a slot up to `n` that
+  has a certificate (`AvailBelow`). It depends only on the history of that
+  block, so it does not change as the record grows.
+
+The development proves (`Live.Statement`):
+
+* **a leader in `T` commits** (`Live.Commits`): after `R`, every block of
+  `T` two rounds above the slot carries votes from all of `T` for the
+  leader's block (`carriesVotes_of_synchronisedOn`), so a node holding those
+  blocks with their references commits the slot directly;
+* **a committed run decides below it** (`Live.Descends`): a committed block
+  has a certificate (`NodeDecided.certified`), so the node has fetched the
+  sub-DAG below each anchor it uses (§5's `Fetchable`). Its indirect test
+  then returns a commit or a skip. Each slot below the run takes its nearest
+  committed eligible anchor, and the slots between are skipped, by
+  induction downward (`nodeDecided_below`);
+* **what a node needs, a correct node holds** (`Live.Delivered`): the blocks
+  of `T` are their correct authors', their references lie in those authors'
+  windows, and the sub-DAG below a certified block lies in the window of a
+  block that a correct voter of the certificate, or a correct author's block
+  of the sub-DAG, references (§3's `Held`). So after synchrony a node can
+  fetch each of them from a correct node;
+* **every slot is decided** (`Live.Progress`): past any slot `k` and round
+  `R` the schedule names a run from `b`, fixed before the record. On every
+  record synchronised on `T` from `R` and populated over the run, a node
+  holding what the run needs decides every slot below `b + c`.
+
+With §5's agreement, every correct node eventually decides every slot, and
+all decide each slot alike. Under three-round spacing `c = 1`; with one slot
+a round, `c = 3`.
+
+## 7. Next
+
 * The order: what a committed leader orders, read on the available sub-DAG
   below it rather than its whole history.
+* Bounds: the cost of fetching the sub-DAG, and how long correct nodes must
+  keep the histories they downloaded.

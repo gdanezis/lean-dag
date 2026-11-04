@@ -577,3 +577,7 @@ import LeanDag.KPartialDag.Model.Node
 import LeanDag.KPartialDag.Helpers.Node
 import LeanDag.KPartialDag.Node.Statement
 import LeanDag.KPartialDag.Node.Proof
+import LeanDag.KPartialDag.Model.Live
+import LeanDag.KPartialDag.Helpers.Live
+import LeanDag.KPartialDag.Live.Statement
+import LeanDag.KPartialDag.Live.Proof
