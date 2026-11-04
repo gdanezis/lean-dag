@@ -384,6 +384,47 @@ omit [Fintype Validator] in
 
 end Drop
 
+section LetGo
+
+variable (s : State Validator BlockId Payload) (l : List BlockId)
+
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- **Letting go only lets go of blocks.** -/
+theorem letGo_disk : Store.Shrinks s.disk (letGo s l).disk := s.disk.shrinks_eraseAll l
+
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- **Letting go keeps every block not in the list.** -/
+theorem letGo_keeps {j : BlockId} (hj : j ∈ s.disk.ids) (hjl : j ∉ l) :
+    j ∈ (letGo s l).disk.ids := (Store.eraseAll_spec l s.disk).2.1 j hj hjl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem letGo_nil : letGo s [] = s := rfl
+
+end LetGo
+
+omit [Fintype Validator] in
+/-- **A block a decision on a proof spares the node** is one `s'` holds and
+`s` does not, of an author `s'` convicted, other than the committed leader,
+at a node that drops. -/
+theorem mem_spareSet {s s' : State Validator BlockId Payload} {d : Option BlockId}
+    {i : BlockId} (h : i ∈ spareSet cfg s s' d) :
+    i ∈ s'.disk.ids ∧ i ∉ s.disk.ids ∧ cfg.drops = true ∧
+      (s'.disk.blk i).creator ∈ s'.detected ∧ d ≠ some i := by
+  unfold spareSet at h
+  obtain ⟨h₁, h₂⟩ := Finset.mem_filter.mp ((Finset.mem_sort _).mp (List.mem_mergeSort.mp h))
+  obtain ⟨h₃, h₄⟩ := Finset.mem_sdiff.mp h₁
+  exact ⟨h₃, h₄, h₂⟩
+
+omit [Fintype Validator] in
+/-- **A decision on a proof spares a node that does not drop nothing.** -/
+theorem spareSet_of_false (hd : cfg.drops = false) (s s' : State Validator BlockId Payload)
+    (d : Option BlockId) : spareSet cfg s s' d = [] := by
+  rw [List.eq_nil_iff_forall_not_mem]
+  intro i hi
+  have := (mem_spareSet hi).2.2.1
+  rw [hd] at this
+  cases this
+
 omit [Fintype Validator] in
 /-- **Deciding on a proof changes the next undecided slot, the decisions,
 the proofs, the disk, the memory, the floor and the detected authors**,

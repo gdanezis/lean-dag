@@ -289,9 +289,9 @@ theorem floor_run [Infinite BlockId] (hrun : RunMeets cfg H ev time gst Δ Δₛ
     rw [ht] at h₃
     simp only [Option.getD_some] at h₃
     omega
-  obtain ⟨htime, hinj, -, hsp, -⟩ := hrun.timeless n
+  obtain ⟨htime, hinj, hev, hsp, -⟩ := hrun.timeless n
   have hlo := heq v hv n (by omega)
-  have h := floor_le_top_before hσ hadm hfa hf hid htime hinj hq hdr hsk hcm hsp hv ht hnE
+  have h := floor_le_top_before hσ hadm hfa hf hid htime hev hinj hq hdr hsk hcm hsp hv ht hnE
     (by rw [hlo]; exact hLpos) (fun w hw k hk => by
       rw [stateBefore_prefixOf hk, hlo]; exact hle w hw k)
   rw [floor_eq_before hdr v n, hlo] at h

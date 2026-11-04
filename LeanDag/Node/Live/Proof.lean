@@ -727,7 +727,7 @@ theorem bounded : Bounded := by
       change topAt cfg tr time u gst ≤ _ at this
       rw [ht'] at this
       exact (hnE u hu).trans this
-    have h := floor_le_top_before hσ hadm hfa hf hid htime hinj hq hdr hsk hcm hsp hu ht' hnE'
+    have h := floor_le_top_before hσ hadm hfa hf hid htime hev hinj hq hdr hsk hcm hsp hu ht' hnE'
       (by rw [hlo]; exact hLpos) (fun w hw k' hk' => by
         rw [hlo]
         exact ((rises_before (cfg := cfg) (tr := tr) w (hk'.trans h₂)).2.2).trans (hpast w hw))

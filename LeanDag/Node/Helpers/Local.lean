@@ -1077,6 +1077,49 @@ theorem Inv.absorb {s : State Validator BlockId Payload}
   · exact hi.above.absorb L
 
 omit [Fintype Validator] in
+omit [Fintype Validator] in
+/-- **Letting go of blocks keeps the disk valid at the row from the floor
+up**: a block the store keeps references only blocks it keeps. -/
+theorem UpperValid.letGo {s : State Validator BlockId Payload}
+    (hab : UpperValid cfg.q cfg.xp s.floor s.disk) (l : List BlockId) :
+    UpperValid cfg.q cfg.xp (Node.letGo s l).floor (Node.letGo s l).disk := by
+  have hs := letGo_disk s l
+  intro j hj hjF
+  change s.floor ≤ _ at hjF
+  have hjs := hs.ids hj
+  rw [(hs.fields j hj).1] at hjF
+  obtain ⟨-, hv⟩ := hab j hjs hjF
+  have hkn : (Node.letGo s l).disk.kept[j]? = none := by
+    by_contra hk
+    have := (Node.letGo s l).low j hk
+    rw [(hs.fields j hj).1] at this
+    change (s.disk.blk j).round < s.floor at this
+    omega
+  have hrefs : ((Node.letGo s l).disk.full j).refs ⊆ (Node.letGo s l).disk.ids := by
+    rw [(Node.letGo s l).disk.full_of_kept_none hkn]
+    exact fun x hx => (Node.letGo s l).disk.complete j hj x hx
+  refine ⟨hrefs, ?_⟩
+  rw [hs.full j hj]
+  refine rowValid_congr (fun i hi => ?_) hv
+  rw [hs.full i (hrefs (by rw [hs.full j hj]; exact hi))]
+  exact ⟨rfl, rfl, rfl⟩
+
+omit [Fintype Validator] in
+/-- **Letting go of blocks other than its own keeps the invariant**, at a
+node that drops. -/
+theorem Inv.letGo {s : State Validator BlockId Payload}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B)
+    {l : List BlockId} (hown : ∀ j, s.own = some j → j ∉ l) (hd : cfg.drops = false → l = []) :
+    Inv cfg (Node.letGo s l) K B := by
+  have hs := letGo_disk s l
+  refine ⟨fun j hj => ?_, hi.pend, hi.rounds, hi.good, hi.sub, fun hdr => ?_, fun j hj => ?_,
+    hi.floor, hi.above.letGo l, hi.evidence⟩
+  · rw [hs.full j hj]; exact hi.known j (hs.ids hj)
+  · rw [hd hdr]; exact hi.valid hdr
+  · have hm := letGo_keeps s l (hi.own j hj).1 (hown j hj)
+    exact ⟨hm, by rw [hs.full j hm]; exact (hi.own j hj).2⟩
+
 /-- **Deciding on a proof of known blocks keeps the invariant.** -/
 theorem Inv.decideOn {s : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
@@ -1085,7 +1128,10 @@ theorem Inv.decideOn {s : State Validator BlockId Payload}
     {L : List (BlockId × Block Validator BlockId Payload)} (hL : ∀ e ∈ hashed cfg L, e ∈ K) :
     Inv cfg (Node.decideOn cfg s k d L) K B := by
   unfold Node.decideOn
-  refine Inv.absorb ?_ fun e he => hL e (List.mem_mergeSort.mp he)
+  refine Inv.letGo (Inv.absorb ?_ fun e he => hL e (List.mem_mergeSort.mp he))
+    (fun j hj hjl => (mem_spareSet hjl).2.1 (hi.own j (by
+      rw [(absorb_rest (cfg := cfg) _ _).2.2.2.1, release_own] at hj; exact hj)).1)
+    fun hdr => spareSet_of_false hdr _ _ _
   exact (hi.of_eq (s' :=
       { s with
         lo := k + 1

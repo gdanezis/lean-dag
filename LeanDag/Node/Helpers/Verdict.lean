@@ -166,14 +166,16 @@ theorem AllGood.decideOn (hg : Grounds cfg Good K) {s : State Validator BlockId 
       decided := (k, d) :: s.decided
       proofs := (k, hashed cfg L) :: s.proofs }
   let l := (hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round)
-  have e : Node.decideOn cfg s k d L = absorb cfg (release cfg s₁) l := rfl
+  have e : Node.decideOn cfg s k d L = letGo (absorb cfg (release cfg s₁) l)
+      (spareSet cfg s (absorb cfg (release cfg s₁) l) d) := rfl
   have hF₁ : (release cfg s₁).floor ≤ floorOf cfg s₁ := by
     rw [release_floor]
     exact max_le (hF.trans (floorOf_mono hk le_rfl)) le_rfl
   have hF₂ : cfg.drops = true → (release cfg s₁).floor ≤ floorAt cfg (k + 1) := fun hd => by
     have := hF₁; unfold floorOf at this; rw [if_pos hd] at this; exact this
   rw [e]
-  refine ⟨fun hCk => ?_, by
+  refine ⟨fun hCk => AllGood.shrinks ?_ (letGo_disk _ _), by
+    change (absorb cfg (release cfg s₁) l).floor ≤ floorOf cfg (absorb cfg (release cfg s₁) l)
     rw [(absorb_rest (cfg := cfg) _ _).1]
     simpa only [floorOf, (absorb_rest (cfg := cfg) _ _).2.2.1,
       (absorb_rest (cfg := cfg) _ _).2.2.2.2.2.1, release_top, release_lo] using hF₁⟩

@@ -84,8 +84,9 @@ input `i` in the state `s`: the new state and the outputs.
   store the proof's blocks under their hash build, those of the round below
   the slot's without their references (`proofStore`, `verdictOn`); it keeps
   the verdict and, as the proof, the blocks under their hash, takes the
-  blocks in as it accepts any block (`decideOn`), and asks for the next
-  slot.
+  blocks in as it accepts any block, then lets go of those of convicted
+  authors, other than the committed leader, that no block it keeps
+  references (`decideOn`, `spareSet`, `letGo`), and asks for the next slot.
 * **Syncing** (`request`, `streamOf`, `inHistory`, `absorb`): a request
   names the sync's block, the node's frontier (for each author the least
   round at which its disk holds no block of it, `0` for a detected author,
@@ -656,9 +657,30 @@ def absorb (s : State Validator BlockId Payload)
     (L : List (BlockId × Block Validator BlockId Payload)) : State Validator BlockId Payload :=
   L.foldl (fun s e => accept cfg s e.1 e.2) s
 
+/-- **Let go of the blocks of `l`** on disk and in memory, in turn, each if no
+block held references it. -/
+def letGo (s : State Validator BlockId Payload) (l : List BlockId) :
+    State Validator BlockId Payload :=
+  { s with
+    disk := s.disk.eraseAll l
+    memory := s.memory.eraseAll l
+    mirrors := s.mirrors.eraseBoth l
+    low := s.disk.low_eraseAll s.low l }
+
+/-- **The blocks a decision on a proof spares the node** (D16): at a node
+that drops, the blocks `s'` holds that `s` does not, of authors `s'`
+convicted, other than the committed leader `d`, from the highest round
+down. -/
+def spareSet (s s' : State Validator BlockId Payload) (d : Option BlockId) : List BlockId :=
+  (((s'.disk.ids \ s.disk.ids).filter fun i =>
+    cfg.drops = true ∧ (s'.disk.blk i).creator ∈ s'.detected ∧ d ≠ some i).sort (· ≤ ·)).mergeSort
+      fun x y => decide ((s'.disk.blk y).round ≤ (s'.disk.blk x).round)
+
 /-- **Decide slot `k` on a proof** (D16): keep the verdict, and under `k` the
 proof's blocks under their hash, release the memory below the lowest round
-the node then reads, and take in those blocks, in order of round. -/
+the node then reads, take in those blocks, in order of round, and let go of
+those of convicted authors, other than the committed leader, that no block it
+keeps references (`spareSet`). -/
 def decideOn (s : State Validator BlockId Payload) (k : ℕ) (d : Option BlockId)
     (L : List (BlockId × Block Validator BlockId Payload)) : State Validator BlockId Payload :=
   let s₁ : State Validator BlockId Payload :=
@@ -666,7 +688,9 @@ def decideOn (s : State Validator BlockId Payload) (k : ℕ) (d : Option BlockId
       lo := k + 1
       decided := (k, d) :: s.decided
       proofs := (k, hashed cfg L) :: s.proofs }
-  absorb cfg (release cfg s₁) ((hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round))
+  let s₂ := absorb cfg (release cfg s₁)
+    ((hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round))
+  letGo s₂ (spareSet cfg s s₂ d)
 
 /-- **Take a stream piece in, header first**: its part `L` in the history
 of the sync's block `t`, if taking it in makes `t` held; otherwise

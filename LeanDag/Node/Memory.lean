@@ -390,6 +390,80 @@ theorem Mirrors.eraseAll (h : m.Mirrors d F) {l : List BlockId}
     rw [(h₃ i hi').1]
 
 omit [DecidableEq Validator] in
+/-- **Letting go of a block on disk and in memory keeps the memory the
+disk's window at `F`**: a block on disk that references one at `F` or above
+lies above `F`, so the memory holds it with its references, and the two let
+go of the block alike. -/
+theorem Mirrors.erase (h : m.Mirrors d F) (x : BlockId) : (m.erase x).Mirrors (d.erase x) F := by
+  by_cases hxm : x ∈ m.ids
+  · obtain ⟨hxd, hxF⟩ := (h.mem x).mp hxm
+    have hiff : (∀ i ∈ m.ids, x ∉ (m.blk i).refs) ↔ ∀ i ∈ d.ids, x ∉ (d.blk i).refs := by
+      constructor
+      · intro hm i hi hxi
+        have hp := d.pred i hi x hxi
+        change (d.blk x).round + 1 = (d.blk i).round at hp
+        have him : i ∈ m.ids := (h.mem i).mpr ⟨hi, by omega⟩
+        refine hm i him ?_
+        rw [h.blk i him]
+        unfold windowBlk
+        dsimp only
+        rw [if_neg (by omega)]
+        exact hxi
+      · intro hd i hi hxi
+        rw [h.blk i hi] at hxi
+        unfold windowBlk at hxi
+        dsimp only at hxi
+        split at hxi
+        · simp at hxi
+        · exact hd i ((h.mem i).mp hi).1 hxi
+    by_cases hc : ∀ i ∈ d.ids, x ∉ (d.blk i).refs
+    · have hmi : (m.erase x).ids = m.ids.erase x := by
+        unfold Store.erase; rw [dif_pos ⟨hxm, hiff.mpr hc⟩]
+      have hdi : (d.erase x).ids = d.ids.erase x := by
+        unfold Store.erase; rw [dif_pos ⟨hxd, hc⟩]
+      have hb : ∀ i, i ≠ x → i ∈ d.ids → (d.erase x).blk i = d.blk i := fun i hix hi =>
+        ((d.erase_spec x).2.2 i ((d.erase_spec x).2.1 i hi hix)).1
+      refine ⟨fun i => ?_, fun i hi => ?_⟩
+      · rw [hmi, hdi, Finset.mem_erase, Finset.mem_erase]
+        constructor
+        · rintro ⟨hix, him⟩
+          obtain ⟨hid, hr⟩ := (h.mem i).mp him
+          exact ⟨⟨hix, hid⟩, by rw [hb i hix hid]; exact hr⟩
+        · rintro ⟨⟨hix, hid⟩, hr⟩
+          exact ⟨hix, (h.mem i).mpr ⟨hid, by rwa [hb i hix hid] at hr⟩⟩
+      · have him : i ∈ m.ids := (m.erase_spec x).1 hi
+        have hix : i ≠ x := by rw [hmi] at hi; exact Finset.ne_of_mem_erase hi
+        rw [((m.erase_spec x).2.2 i hi).1, h.blk i him]
+        unfold windowBlk
+        rw [hb i hix ((h.mem i).mp him).1]
+    · have hm : m.erase x = m := by
+        unfold Store.erase; rw [dif_neg fun h' => hc (hiff.mp h'.2)]
+      have hd : d.erase x = d := by
+        unfold Store.erase; rw [dif_neg fun h' => hc h'.2]
+      rw [hm, hd]
+      exact h
+  · have hm : m.erase x = m := by
+      unfold Store.erase; rw [dif_neg fun h' => hxm h'.1]
+    rw [hm]
+    by_cases hxd : x ∈ d.ids
+    · have hr : (d.blk x).round < F := by
+        by_contra hr
+        exact hxm ((h.mem x).mpr ⟨hxd, by omega⟩)
+      exact h.eraseAll (l := [x]) fun j hj => by rw [List.mem_singleton.mp hj]; exact hr
+    · have hd : d.erase x = d := by
+        unfold Store.erase; rw [dif_neg fun h' => hxd h'.1]
+      rw [hd]
+      exact h
+
+omit [DecidableEq Validator] in
+/-- **Letting go of blocks on disk and in memory keeps the memory the disk's
+window at `F`.** -/
+theorem Mirrors.eraseBoth : ∀ (l : List BlockId) {m d : Store Validator BlockId Payload},
+    m.Mirrors d F → (m.eraseAll l).Mirrors (d.eraseAll l) F
+  | [], _, _, h => h
+  | x :: l, _, _, h => Mirrors.eraseBoth l (h.erase x)
+
+omit [DecidableEq Validator] in
 /-- **Accepting a block below `F` without its references keeps the memory
 the disk's window at `F`.** -/
 theorem Mirrors.base (h : m.Mirrors d F) {id : BlockId} {b : Block Validator BlockId Payload}

@@ -563,7 +563,11 @@ hash, those of the round below the slot's without their references
 (`proofStore`), and decides the slot by `tryDecide` on it, scanning to the
 last slot of the store's top round (`verdictOn`). It then keeps the verdict
 and, as the proof, the blocks under their hash, takes the blocks in as it
-accepts any block (`decideOn`), and asks for the next slot. A node that
+accepts any block, lets go of those of authors it convicted, other than the
+committed leader, that no block it keeps references (`decideOn`,
+`spareSet`, `letGo`), and asks for the next slot. A Byzantine peer may add
+to a proof any number of valid blocks no other block references; those of
+a convicted author do not stay on the disk, and the proof is kept apart. A node that
 drops keeps its floor at the round of its next undecided slot `k`, or at
 `voteOffset − 1` above the round of slot `k − 1`, whichever is lower, one
 above its cut (`floorAt`, `floorOf`): the blocks that decided slot `k − 1`
@@ -1127,11 +1131,7 @@ and the bound on the blocks a node holds a round (V13), Stage 4. Open:
   reliable set;
 * the record V12 builds is at `ValidAt q Clause.none`, not at the
   exposure clause the node checks;
-* V13 assumes that no node drops. With dropping, a node deciding on a
-  proof takes in every block of the proof that is valid on the store the
-  proof builds (`decideOn`), so a Byzantine peer can add to a proof any
-  number of valid blocks no other block references, twins of a convicted
-  author among them (`docs/dos-bounds.md`, Phase 3.2 item 5);
+* V13 assumes that no node drops;
 * a node answers every request of a peer it has not convicted, so before
   conviction a node can be made to stream any amount;
 * a piece has no size limit. The frontier is an author's least round not

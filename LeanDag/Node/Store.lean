@@ -820,6 +820,17 @@ theorem Restrips.shrinks {F : ℕ} {st st' : Store Validator BlockId Payload}
   ⟨fun _ hi => h.ids ▸ hi, fun i _ => h.full i, fun i _ => h.fields i⟩
 
 omit [DecidableEq Validator] in
+/-- Letting go of blocks keeps what an identifier outside the map denotes. -/
+theorem eraseAll_junk : ∀ (l : List BlockId) (st : Store Validator BlockId Payload),
+    (st.eraseAll l).junk = st.junk
+  | [], _ => rfl
+  | x :: l, st => by
+    change ((st.erase x).eraseAll l).junk = st.junk
+    rw [eraseAll_junk l (st.erase x)]
+    unfold erase
+    split <;> rfl
+
+omit [DecidableEq Validator] in
 theorem shrinks_eraseAll (l : List BlockId) : Shrinks s (s.eraseAll l) := by
   obtain ⟨h₁, -, h₃⟩ := eraseAll_spec l s
   refine ⟨h₁, fun i hi => ?_, fun i hi => by rw [(h₃ i hi).1]; exact ⟨rfl, rfl, rfl⟩⟩

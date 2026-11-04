@@ -94,7 +94,19 @@ theorem Grows.decideOn (s : State Validator BlockId Payload) (k : ℕ) (d : Opti
       lo := k + 1
       decided := (k, d) :: s.decided
       proofs := (k, hashed cfg L) :: s.proofs }
-  exact (Grows.of_restrips (release_disk (cfg := cfg) s₁)).trans (Grows.absorb (release cfg s₁) _)
+  have hg : Grows s.disk (Node.absorb cfg (Node.release cfg s₁)
+      ((hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round))).disk :=
+    (Grows.of_restrips (release_disk (cfg := cfg) s₁)).trans (Grows.absorb (release cfg s₁) _)
+  have hs := letGo_disk (Node.absorb cfg (Node.release cfg s₁)
+      ((hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round)))
+    (spareSet cfg s (Node.absorb cfg (Node.release cfg s₁)
+      ((hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round))) d)
+  have hk : ∀ i ∈ s.disk.ids, i ∈ (Node.decideOn cfg s k d L).disk.ids := fun i hi =>
+    letGo_keeps _ _ (hg.1 hi) fun h => (mem_spareSet h).2.1 hi
+  refine ⟨hk, ?_, fun i hi => ?_⟩
+  · change (Store.eraseAll _ _).junk = _
+    rw [Store.eraseAll_junk]; exact hg.2.1
+  · exact (hs.full i (hk i hi)).trans (hg.2.2 i hi)
 
 omit [Fintype Validator] in
 theorem Grows.advance (s : State Validator BlockId Payload) (hd : cfg.drops = false) :
@@ -373,9 +385,9 @@ theorem diskRises_decideOn (s : State Validator BlockId Payload) (k : ℕ) (d : 
     (L : List (BlockId × Block Validator BlockId Payload)) :
     DiskRises cfg s (Node.decideOn cfg s k d L) := by
   refine ⟨⟨?_, fun hdr => Or.inr ?_⟩, KeepsFrom.of_grows (Grows.decideOn s k d L)⟩
-  · unfold Node.decideOn
+  · simp only [Node.decideOn, Node.letGo]
     rw [(absorb_rest (cfg := cfg) _ _).1, release_floor]; exact le_max_left _ _
-  · unfold Node.decideOn
+  · simp only [Node.decideOn, Node.letGo]
     rw [(absorb_rest (cfg := cfg) _ _).2.2.2.2.2.1, (absorb_rest (cfg := cfg) _ _).1, release_lo,
       release_floor]
     unfold floorOf; rw [if_pos hdr]; exact le_max_right _ _

@@ -630,14 +630,19 @@ store closed, and needs none of this.
      takes in no block below the cut (`Local.Horizon`). A node that does
      not drop has cut `0`, so V3′, `SyncsBound`, V11, V11′, V12 and V13
      stand as they were, and V11″ rests on the sync premise `SyncedHeld`,
-     which the change does not touch. V13 assumes that no node drops. With
-     dropping it fails as the node stands, through catch-up: a node
-     deciding on a proof takes in every block of the proof that is valid
-     on the store the proof builds (`decideOn`, `proofStore`), and a
-     Byzantine peer may add to a proof any number of valid blocks no
-     other block references, twins of a convicted author among them. The
-     witness of a verdict may itself hold twins (`blamersAt`, `certsAt`).
-     Bounding what a proof brings in is part of B3 and B6 (Phase 4).
+     which the change does not touch. V13 assumes that no node drops.
+     Toward V13 with dropping, three model fixes (decided with the user):
+     the walk through a stream piece follows only references one round
+     below, so a block kept on its header alone below the floor leads it
+     nowhere (`pieceLevel`); a node keeps the proof of each verdict apart
+     from its disk (`State.proofs`); and a node deciding on a proof lets
+     go of the blocks it took in with it of authors it convicted, other
+     than the committed leader, that no block it keeps references
+     (`spareSet`, `letGo`), since a Byzantine peer may add to a proof any
+     number of valid blocks no other block references, and the witness
+     of a verdict may itself hold twins (`blamersAt`, `certsAt`). The
+     honest blocks of a kept proof's witness stay on the disk from the
+     floor up (`ProofHolds`), which the jump of V11″ reads.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase
 3, from R1 to R5, V13 and the invariant of `BypassRun`. R6 is optional.

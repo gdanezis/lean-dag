@@ -34,6 +34,7 @@ slot below lends references it can build on above its top. -/
 theorem floor_le_top_before [Infinite BlockId] (hσ : cfg.σ = boundedSel)
     (hadm : cfg.Admissible) (hfa : cfg.Faithful) (hf : Hᶜ.card ≤ cfg.f)
     (hid : Function.Injective cfg.idOf) (htime : Converge.TimelyAuthentic cfg H tr)
+    (hev : Converge.EvidenceAuthentic cfg H tr)
     (hinj : Converge.HashInjective cfg H tr) (hq : 2 ≤ cfg.q) (hdr : cfg.drops = true)
     (hsk : cfg.f < cfg.p.skipThreshold) (hcm : cfg.f < cfg.p.commitThreshold)
     {D : Finset Validator} {nE : ℕ} (hsp : Live.Spread cfg H tr D nE)
@@ -81,7 +82,7 @@ theorem floor_le_top_before [Infinite BlockId] (hσ : cfg.σ = boundedSel)
     have h₁ : floorAt cfg L ≤ cfg.slots.slotRound (L - 1) + (cfg.p.voteOffset - 1) :=
       min_le_right _ _
     omega
-  obtain ⟨hxZ, hUr, hUc⟩ := (hwit x hxw).2 hFU
+  obtain ⟨hxZ, hUr, hUc⟩ := (hwit x hxw).2 (Converge.not_detected htime hev hxH hv i) hFU
   -- it lies one round above the floor or higher, and above the top
   set m := (Z.disk.blk x).round - 1 with hm
   have hxr' : cfg.slots.slotRound (L - 1) + cfg.p.voteOffset ≤ (Z.disk.blk x).round := by

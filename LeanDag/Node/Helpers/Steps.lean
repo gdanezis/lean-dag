@@ -344,11 +344,11 @@ theorem Kept.decideOn {s : State Validator BlockId Payload} (h : Kept cfg s) (k 
     (d : Option BlockId) (L : List (BlockId × Block Validator BlockId Payload)) :
     Kept cfg (Node.decideOn cfg s k d L) := by
   unfold Node.decideOn
-  refine Kept.absorb (Kept.restrips (s := { s with
+  exact (Kept.absorb (Kept.restrips (s := { s with
       lo := k + 1
       decided := (k, d) :: s.decided
       proofs := (k, hashed cfg L) :: s.proofs }) h
-    (release_disk _) (release_evidence _)) _
+    (release_disk _) (release_evidence _)) _).shrinks (letGo_disk _ _) rfl
 
 omit [Fintype Validator] in
 theorem EvidenceOn.absorb {s : State Validator BlockId Payload} (h : EvidenceOn cfg s) :
