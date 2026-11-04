@@ -92,12 +92,13 @@ input `i` in the state `s`: the new state and the outputs.
   identifiers asked for by name. It is answered with the blocks of the disk
   in the block's history that are the block, asked for, or at or above
   their author's frontier, in order of round. Of a stream piece the node
-  reads the blocks under their hash reached from the sync's block through
-  such blocks (`hashed`, `inHistory`). It takes them in, in order of round,
-  each accepted if it is ready, only if the sync's block is then held: all
-  of them or none (`takeIn`). Otherwise the references that neither the
-  disk nor the piece holds are asked for by name in the next request, those
-  of the blocks whose references the node checks (`missingIn`).
+  reads the blocks at or above its cut under their hash reached from the
+  sync's block through such blocks (`aboveCut`, `hashed`, `inHistory`). It
+  takes them in, in order of round, each accepted if it is ready, only if
+  the sync's block is then held: all of them or none (`takeIn`). Otherwise
+  the references that neither the disk nor the piece holds are asked for by
+  name in the next request, those of the blocks whose references the node
+  checks (`missingIn`).
 * **Resending** (`resend`): when the retry timer, or the top round's,
   fires and the node does not build, and when it restarts, before it
   settles, the node broadcasts its top block again, sets the retry timer
@@ -570,6 +571,13 @@ def hashed (L : List (BlockId × Block Validator BlockId Payload)) :
     List (BlockId × Block Validator BlockId Payload) :=
   L.filter fun e => decide (e.1 = cfg.idOf e.2)
 
+/-- **The blocks of a stream piece at or above the node's cut** (D15): a
+node that drops needs no block below it. -/
+def aboveCut (s : State Validator BlockId Payload)
+    (L : List (BlockId × Block Validator BlockId Payload)) :
+    List (BlockId × Block Validator BlockId Payload) :=
+  L.filter fun e => decide (cutOf cfg s ≤ e.2.round)
+
 /-- **The part of a stream piece in the history of the block `t`**: its
 blocks under their hash reached from `t` through such blocks, not the
 node's own, in order of round. -/
@@ -790,7 +798,7 @@ def step (s : State Validator BlockId Payload) :
     match s.syncs.find? fun e => decide (e.1 = u) with
     | none => (s, [])
     | some e =>
-      let L' := inHistory cfg e.2.1 L
+      let L' := inHistory cfg e.2.1 (aboveCut cfg s L)
       let s₁ := takeIn cfg s e.2.1 L'
       match s₁.syncs.find? fun e => decide (e.1 = u) with
       | none => settle cfg s₁

@@ -562,7 +562,8 @@ theorem Steady.step {g : BlockId → Block Validator BlockId Payload}
       simp only at hp
       subst hp
       have ht := hS _ he
-      rcases step_stream_cases (cfg := cfg) h.2.2 he L with ⟨-, hs⟩ | ⟨-, hs⟩
+      rcases step_stream_cases (cfg := cfg) h.2.2 he L with ⟨-, hs⟩ | ⟨-, hs⟩ <;>
+        rw [aboveCut_of_false hd] at hs
       · rw [hs] at hR ⊢
         exact Steady.settle hd (h.takeIn hd hcl he (hR.of_grows (Grows.settle _ hd)) hL ht)
       · set s₁ := Node.takeIn cfg s t (inHistory cfg t L) with hs₁

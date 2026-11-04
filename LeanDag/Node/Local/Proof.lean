@@ -91,7 +91,8 @@ theorem syncsBound : SyncsBound := by
 
 theorem horizon : Horizon := by
   intro Validator BlockId Payload _ _ _ cfg s inp
-  refine ⟨fun peer t fr ids h a => step_sync_cut s inp h a, ?_⟩
+  refine ⟨fun peer t fr ids h a => step_sync_cut s inp h a, ?_, fun t L e he =>
+    of_decide_eq_true (List.mem_filter.mp (mem_of_mem_inHistory he).1).2⟩
   rintro peer t fr ids rfl u L h e he
   change Output.stream u L ∈ (if peer ∈ s.detected ∨ (streamOf s.disk t fr ids).isEmpty then []
     else [.stream peer (streamOf s.disk t fr ids)]) at h

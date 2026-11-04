@@ -512,17 +512,25 @@ theorem step_receipt_deliver (s : State Validator BlockId Payload) (u : Validato
       · exact Or.inl rfl
   · rw [if_neg hc]; exact Or.inl rfl
 
+omit [Fintype Validator] in
+/-- **A node that does not drop reads a whole stream piece.** -/
+theorem aboveCut_of_false (hd : cfg.drops = false) (s : State Validator BlockId Payload)
+    (L : List (BlockId × Block Validator BlockId Payload)) : aboveCut cfg s L = L := by
+  simp [aboveCut, cutOf, hd]
+
 /-- **A stream piece from a peer with a sync**, unfolded. -/
 theorem step_stream_eq (s : State Validator BlockId Payload) (u : Validator)
     (L : List (BlockId × Block Validator BlockId Payload))
     {e : Validator × (BlockId × Block Validator BlockId Payload) × List BlockId}
     (he : (s.syncs.find? fun e => decide (e.1 = u)) = some e) :
     Node.step cfg s (.stream u L) =
-      match (takeIn cfg s e.2.1 (inHistory cfg e.2.1 L)).syncs.find? fun e => decide (e.1 = u) with
-      | none => Node.settle cfg (takeIn cfg s e.2.1 (inHistory cfg e.2.1 L))
+      match (takeIn cfg s e.2.1 (inHistory cfg e.2.1 (aboveCut cfg s L))).syncs.find?
+          fun e => decide (e.1 = u) with
+      | none => Node.settle cfg (takeIn cfg s e.2.1 (inHistory cfg e.2.1 (aboveCut cfg s L)))
       | some e₁ =>
-        let s₁ := takeIn cfg s e.2.1 (inHistory cfg e.2.1 L)
-        let asked := (e₁.2.2 ++ missingIn cfg s₁ (e₁.2.1 :: inHistory cfg e.2.1 L)).dedup
+        let s₁ := takeIn cfg s e.2.1 (inHistory cfg e.2.1 (aboveCut cfg s L))
+        let asked :=
+          (e₁.2.2 ++ missingIn cfg s₁ (e₁.2.1 :: inHistory cfg e.2.1 (aboveCut cfg s L))).dedup
         let e₂ := (u, e₁.2.1, asked)
         let s₂ := { s₁ with syncs := s₁.syncs.map fun x => if x.1 = u then e₂ else x }
         let r := Node.settle cfg s₂
@@ -543,16 +551,18 @@ theorem step_receipt_stream (s : State Validator BlockId Payload) (u : Validator
   | none => left; simp only [Node.step, hf]
   | some e =>
     rw [step_stream_eq s u L hf]
-    have hL : ∀ x ∈ inHistory cfg e.2.1 L, x ∈ s.syncs.map (·.2.1) ∨
+    have hL : ∀ x ∈ inHistory cfg e.2.1 (aboveCut cfg s L), x ∈ s.syncs.map (·.2.1) ∨
         x ∈ delivered cfg [Input.stream u L] := fun x hx => by
       obtain ⟨hxL, hxh⟩ := mem_of_mem_inHistory hx
-      exact Or.inr (by simp [delivered, List.mem_filter, hxL, hxh])
-    have hr : Received cfg (.stream u L) s (takeIn cfg s e.2.1 (inHistory cfg e.2.1 L)) := by
+      have hxL' := (List.mem_filter.mp hxL).1
+      exact Or.inr (by simp [delivered, List.mem_filter, hxL', hxh])
+    have hr : Received cfg (.stream u L) s
+        (takeIn cfg s e.2.1 (inHistory cfg e.2.1 (aboveCut cfg s L))) := by
       unfold takeIn
       split
       · exact received_absorb hL
       · exact received_syncs (S := s.syncs) fun x hx => Or.inl (List.mem_map_of_mem hx)
-    cases hf₁ : (takeIn cfg s e.2.1 (inHistory cfg e.2.1 L)).syncs.find?
+    cases hf₁ : (takeIn cfg s e.2.1 (inHistory cfg e.2.1 (aboveCut cfg s L))).syncs.find?
         fun e => decide (e.1 = u) with
     | none => exact Or.inr ⟨_, [], hr, fun _ h => absurd h List.not_mem_nil, rfl⟩
     | some e₁ =>

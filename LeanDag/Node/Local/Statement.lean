@@ -22,9 +22,10 @@ initial state:
   undecided slot decides what `tryDecide` decides on any record and view
   holding the disk's blocks, read alike (`DecidesOnView`);
 * **its requests and streams keep to the cut** (D15): a request carries a
-  frontier at or above the node's cut, and a stream holds, besides the
+  frontier at or above the node's cut, a stream holds, besides the
   requested block and the blocks asked for by name, only blocks at or
-  above their author's frontier (`Horizon`).
+  above their author's frontier, and of a stream piece the node reads only
+  blocks at or above its cut (`Horizon`).
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -107,19 +108,21 @@ def DecidesOnView : Prop :=
       else []
 
 /-- **Its requests and streams keep to the cut** (D15): every request a step
-sends carries a frontier at or above the node's cut before the step, and
-every stream it sends in answer to a request holds, besides the requested
-block and the blocks asked for by name, only blocks at or above their
-author's frontier. -/
+sends carries a frontier at or above the node's cut before the step, every
+stream it sends in answer to a request holds, besides the requested block
+and the blocks asked for by name, only blocks at or above their author's
+frontier, and the part of a stream piece the node reads lies at or above
+its cut. -/
 def Horizon : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload)
     (s : State Validator BlockId Payload) (inp : Input Validator BlockId Payload),
     (∀ peer t fr ids, Output.sync peer t fr ids ∈ (Node.step cfg s inp).2 →
       ∀ a, cutOf cfg s ≤ fr a) ∧
-    ∀ peer t fr ids, inp = .syncRequest peer t fr ids →
+    (∀ peer t fr ids, inp = .syncRequest peer t fr ids →
       ∀ u L, Output.stream u L ∈ (Node.step cfg s inp).2 →
-        ∀ e ∈ L, e.1 = t ∨ e.1 ∈ ids ∨ fr e.2.creator ≤ e.2.round
+        ∀ e ∈ L, e.1 = t ∨ e.1 ∈ ids ∨ fr e.2.creator ≤ e.2.round) ∧
+    ∀ t L, ∀ e ∈ inHistory cfg t (aboveCut cfg s L), cutOf cfg s ≤ e.2.round
 
 /-- One node at a time. -/
 def Statement : Prop :=

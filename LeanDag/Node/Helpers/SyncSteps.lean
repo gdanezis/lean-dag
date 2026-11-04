@@ -363,12 +363,13 @@ taken in, then the sync dropped, or its names asked for extended. -/
 theorem step_stream_cases {s : State Validator BlockId Payload} (hs : SyncsOn s) {u : Validator}
     {t : BlockId × Block Validator BlockId Payload} {A : List BlockId} (he : (u, t, A) ∈ s.syncs)
     (L : List (BlockId × Block Validator BlockId Payload)) :
-    ((u, t, A) ∉ (takeIn cfg s t (inHistory cfg t L)).syncs ∧
-      Node.step cfg s (.stream u L) = Node.settle cfg (takeIn cfg s t (inHistory cfg t L))) ∨
-    ((u, t, A) ∈ (takeIn cfg s t (inHistory cfg t L)).syncs ∧
+    ((u, t, A) ∉ (takeIn cfg s t (inHistory cfg t (aboveCut cfg s L))).syncs ∧
       Node.step cfg s (.stream u L) =
-        let s₁ := takeIn cfg s t (inHistory cfg t L)
-        let asked := (A ++ missingIn cfg s₁ (t :: inHistory cfg t L)).dedup
+        Node.settle cfg (takeIn cfg s t (inHistory cfg t (aboveCut cfg s L)))) ∨
+    ((u, t, A) ∈ (takeIn cfg s t (inHistory cfg t (aboveCut cfg s L))).syncs ∧
+      Node.step cfg s (.stream u L) =
+        let s₁ := takeIn cfg s t (inHistory cfg t (aboveCut cfg s L))
+        let asked := (A ++ missingIn cfg s₁ (t :: inHistory cfg t (aboveCut cfg s L))).dedup
         let s₂ := { s₁ with syncs := s₁.syncs.map fun x => if x.1 = u then (u, t, asked) else x }
         ((Node.settle cfg s₂).1,
           (if s₂.disk.ids.card ≠ s.disk.ids.card ∨ asked.length ≠ A.length then
@@ -384,7 +385,7 @@ theorem step_stream_cases {s : State Validator BlockId Payload} (hs : SyncsOn s)
     have he₁ := List.mem_of_find?_eq_some hn
     have hp := List.find?_some hn
     simp only [decide_eq_true_eq] at hp
-    have hsub := Thins.takeIn (cfg := cfg) s t (inHistory cfg t L)
+    have hsub := Thins.takeIn (cfg := cfg) s t (inHistory cfg t (aboveCut cfg s L))
     obtain rfl : e₁ = (u, t, A) := hs.eq (hsub.sub.subset he₁) he hp
     exact Or.inr ⟨he₁, rfl⟩
 
@@ -527,9 +528,9 @@ theorem step_form {s : State Validator BlockId Payload} (hs : SyncsOn s)
         peer = u ∧ i = id ∧ ids = []) ∧
       ∃ fr, Output.sync u id fr [] ∈ (Node.step cfg s inp).2) ∨
     (∃ u L t A, inp = .stream u L ∧ (u, t, A) ∈ s.syncs ∧
-      (u, t, A) ∈ (takeIn cfg s t (inHistory cfg t L)).syncs ∧
-      let s₁ := takeIn cfg s t (inHistory cfg t L)
-      let asked := (A ++ missingIn cfg s₁ (t :: inHistory cfg t L)).dedup
+      (u, t, A) ∈ (takeIn cfg s t (inHistory cfg t (aboveCut cfg s L))).syncs ∧
+      let s₁ := takeIn cfg s t (inHistory cfg t (aboveCut cfg s L))
+      let asked := (A ++ missingIn cfg s₁ (t :: inHistory cfg t (aboveCut cfg s L))).dedup
       let s₂ := { s₁ with syncs := s₁.syncs.map fun x => if x.1 = u then (u, t, asked) else x }
       Thins cfg s₂ (Node.step cfg s inp).1 ∧
       (∀ peer i fr ids, Output.sync peer i fr ids ∈ (Node.step cfg s inp).2 →
@@ -708,7 +709,7 @@ theorem step_keeps {s : State Validator BlockId Payload} (hs : SyncsOn s)
       · exact Or.inr (Or.inr (Or.inr ⟨A, h⟩))
       · exact Or.inl h
       · exact Or.inr (Or.inl h)
-  · have h₁ := Thins.takeIn (cfg := cfg) s t₀ (inHistory cfg t₀ L)
+  · have h₁ := Thins.takeIn (cfg := cfg) s t₀ (inHistory cfg t₀ (aboveCut cfg s L))
     rcases h₁.kept hd _ he with h | h | h
     · by_cases hwu : w = u
       · subst hwu
@@ -757,8 +758,9 @@ theorem step_ask {s : State Validator BlockId Payload} (hs : SyncsOn s) {w : Val
     simp only [Prod.mk.injEq] at this
     exact this.2.2
   · obtain ⟨rfl, -, rfl⟩ := hask _ _ _ _ ho
-    have hs₂ := hs.extend (s₁ := takeIn cfg s t₀ (inHistory cfg t₀ L))
-      (M := missingIn cfg (takeIn cfg s t₀ (inHistory cfg t₀ L)) (t₀ :: inHistory cfg t₀ L))
+    have hs₂ := hs.extend (s₁ := takeIn cfg s t₀ (inHistory cfg t₀ (aboveCut cfg s L)))
+      (M := missingIn cfg (takeIn cfg s t₀ (inHistory cfg t₀ (aboveCut cfg s L)))
+        (t₀ :: inHistory cfg t₀ (aboveCut cfg s L)))
       (Thins.takeIn (cfg := cfg) s _ _).sub he₀
     have := hs₂.eq (ht.sub.subset he) (List.mem_map.mpr ⟨_, hin, if_pos rfl⟩) rfl
     simp only [Prod.mk.injEq] at this
@@ -808,12 +810,14 @@ theorem step_stream_stuck {s : State Validator BlockId Payload} (hs : SyncsOn s)
         y ∉ (t :: inHistory cfg t L).map Prod.fst → y ∈ A := by
   have h₁ := Thins.takeIn (cfg := cfg) s t (inHistory cfg t L)
   rcases step_stream_cases (cfg := cfg) hs he L with ⟨hnin, h⟩ | ⟨hin, h⟩
-  · rw [h] at hheld hdet
+  · rw [aboveCut_of_false hd] at h hnin
+    rw [h] at hheld hdet
     rcases h₁.kept hd _ he with h' | h' | h'
     · exact absurd h' hnin
     · exact absurd (((Thins.settle _).grows hd).1 h') hheld
     · exact absurd ((Thins.settle _).det h') hdet
-  · have hadm : t.1 ∉ (absorb cfg s (inHistory cfg t L)).disk.ids := by
+  · rw [aboveCut_of_false hd] at h hin
+    have hadm : t.1 ∉ (absorb cfg s (inHistory cfg t L)).disk.ids := by
       intro hc
       unfold takeIn at hin
       rw [if_pos hc] at hin

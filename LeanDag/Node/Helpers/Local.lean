@@ -1760,10 +1760,12 @@ theorem Inv.step {s : State Validator BlockId Payload}
     split
     · exact hnil'
     · rename_i e he
-      have hL : ∀ x ∈ inHistory cfg e.2.1 L, x ∈ K' := fun x hx => by
+      have hL : ∀ x ∈ inHistory cfg e.2.1 (aboveCut cfg s L), x ∈ K' := fun x hx => by
         obtain ⟨hxL, hxh⟩ := mem_of_mem_inHistory hx
-        exact Or.inr (by simp [delivered, List.mem_filter, hxL, hxh])
-      have hi₁ : Inv cfg (Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 L)) K' B := by
+        have hxL' := (List.mem_filter.mp hxL).1
+        exact Or.inr (by simp [delivered, List.mem_filter, hxL', hxh])
+      have hi₁ :
+          Inv cfg (Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 (aboveCut cfg s L))) K' B := by
         unfold Node.takeIn
         split
         · exact (hiK.absorb hL).tidy
@@ -1773,11 +1775,12 @@ theorem Inv.step {s : State Validator BlockId Payload}
           (hi₁.settle_of subset_rfl [] (by simp))
       · rename_i e₁ he₁
         have he₁K : e₁.2.1 ∈ K' := hi₁.pend e₁ (List.mem_of_find?_eq_some he₁)
-        have hi₂ : Inv cfg { Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 L) with
-            syncs := (Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 L)).syncs.map fun x =>
+        have hi₂ : Inv cfg { Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 (aboveCut cfg s L)) with
+            syncs :=
+              (Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 (aboveCut cfg s L))).syncs.map fun x =>
               if x.1 = u then (u, e₁.2.1, (e₁.2.2 ++ missingIn cfg
-                (Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 L))
-                (e₁.2.1 :: inHistory cfg e.2.1 L)).dedup) else x } K' B := by
+                (Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 (aboveCut cfg s L)))
+                (e₁.2.1 :: inHistory cfg e.2.1 (aboveCut cfg s L))).dedup) else x } K' B := by
           refine ⟨hi₁.known, fun x hx => ?_, hi₁.rounds, hi₁.good, hi₁.sub, hi₁.valid, hi₁.own,
             hi₁.floor, hi₁.above, hi₁.evidence⟩
           obtain ⟨y, hy, rfl⟩ := List.mem_map.mp hx

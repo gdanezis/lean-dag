@@ -620,10 +620,19 @@ store closed, and needs none of this.
      frontier at or above the cut before the step (`step_sync_cut`), and
      a stream holds, besides the requested block and the blocks asked for
      by name, only blocks at or above their author's frontier
-     (`carried_streamOf`; `Local.Horizon`). A node that does not drop has
-     cut `0`, so V3′, `SyncsBound`, V11, V11′, V12 and V13 stand as they
-     were, and V11″ rests on the sync premise `SyncedHeld`, which the
-     change does not touch.
+     (`carried_streamOf`). Whatever a peer streams, the node reads only
+     the blocks of a piece at or above its cut (`aboveCut`), so a sync
+     takes in no block below the cut (`Local.Horizon`). A node that does
+     not drop has cut `0`, so V3′, `SyncsBound`, V11, V11′, V12 and V13
+     stand as they were, and V11″ rests on the sync premise `SyncedHeld`,
+     which the change does not touch. V13 assumes that no node drops. With
+     dropping it fails as the node stands, through catch-up: a node
+     deciding on a proof takes in every block of the proof that is valid
+     on the store the proof builds (`decideOn`, `proofStore`), and a
+     Byzantine peer may add to a proof any number of valid blocks no
+     other block references, twins of a convicted author among them. The
+     witness of a verdict may itself hold twins (`blamersAt`, `certsAt`).
+     Bounding what a proof brings in is part of B3 and B6 (Phase 4).
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase
 3, from R1 to R5, V13 and the invariant of `BypassRun`. R6 is optional.

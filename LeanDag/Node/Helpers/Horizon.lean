@@ -81,7 +81,7 @@ theorem step_sync_cut (s : State Validator BlockId Payload) (inp : Input Validat
         · split at h
           · simp only [List.mem_singleton, request, Output.sync.injEq] at h
             refine hfr _ ?_ h.2.2.1
-            change s.floor ≤ (takeIn cfg s e.2.1 (inHistory cfg e.2.1 L)).floor
+            change s.floor ≤ (takeIn cfg s e.2.1 (inHistory cfg e.2.1 (aboveCut cfg s L))).floor
             unfold takeIn
             split
             · exact (absorb_rest (cfg := cfg) s _).1.ge

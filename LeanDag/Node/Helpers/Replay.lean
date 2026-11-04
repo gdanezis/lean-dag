@@ -980,7 +980,7 @@ theorem KeepsProofs.step (hσ : cfg.σ = boundedSel) (hid : Function.Injective c
     split
     · exact KeepsProofs.refl s
     · rename_i e he
-      set s₀ := Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 L) with hs₀
+      set s₀ := Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 (aboveCut cfg s L)) with hs₀
       have h₁ : KeepsProofs cfg s s₀ ∧ UpperValid cfg.q cfg.xp s₀.floor s₀.disk := by
         rw [hs₀]
         unfold Node.takeIn
