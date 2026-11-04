@@ -93,7 +93,7 @@ theorem Grows.decideOn (s : State Validator BlockId Payload) (k : ℕ) (d : Opti
     { s with
       lo := k + 1
       decided := (k, d) :: s.decided
-      proofs := (k, (proofStore cfg k L).ids) :: s.proofs }
+      proofs := (k, hashed cfg L) :: s.proofs }
   exact (Grows.of_restrips (release_disk (cfg := cfg) s₁)).trans (Grows.absorb (release cfg s₁) _)
 
 omit [Fintype Validator] in

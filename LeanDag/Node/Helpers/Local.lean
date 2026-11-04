@@ -897,7 +897,7 @@ theorem UpperValid.drop {s : State Validator BlockId Payload}
         have := (List.mem_filter.mp hxd).2
         simp only [decide_eq_true_eq] at this
         rw [s.disk.full_of_kept_none hkn] at hx
-        exact this.2.2.2.2.1 j hjs hx
+        exact this.2.2.2.1 j hjs hx
     have hj' : j ∈ (s.disk.eraseAll (dropSet cfg s)).ids := hj
     rw [show (s.disk.eraseAll (dropSet cfg s)).full j = s.disk.full j from hfull j hj']
     refine ⟨hkept, rowValid_congr (fun i hi => ?_) hv⟩
@@ -1090,7 +1090,7 @@ theorem Inv.decideOn {s : State Validator BlockId Payload}
       { s with
         lo := k + 1
         decided := (k, d) :: s.decided
-        proofs := (k, (proofStore cfg k L).ids) :: s.proofs })
+        proofs := (k, hashed cfg L) :: s.proofs })
       rfl rfl rfl rfl rfl hk rfl rfl).release
 
 omit [Fintype Validator] in

@@ -347,7 +347,7 @@ theorem Kept.decideOn {s : State Validator BlockId Payload} (h : Kept cfg s) (k 
   refine Kept.absorb (Kept.restrips (s := { s with
       lo := k + 1
       decided := (k, d) :: s.decided
-      proofs := (k, (proofStore cfg k L).ids) :: s.proofs }) h
+      proofs := (k, hashed cfg L) :: s.proofs }) h
     (release_disk _) (release_evidence _)) _
 
 omit [Fintype Validator] in

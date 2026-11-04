@@ -71,25 +71,28 @@ theorem floor_le_top_before [Infinite BlockId] (hσ : cfg.σ = boundedSel)
   obtain ⟨d, hd⟩ := (ledger_before (cfg := cfg) (tr := tr) v i).mem (k := L - 1)
     (show L - 1 < L by omega)
   obtain ⟨P, hP⟩ := paired_before (cfg := cfg) (tr := tr) hσ hid v i _ hd
-  obtain ⟨U, V, N, d', -, -, hdec, hwit, hPd⟩ := proofsHold_before (cfg := cfg) (tr := tr)
+  obtain ⟨U, V, N, d', -, -, -, hdec, hwit⟩ := proofsHold_before (cfg := cfg) (tr := tr)
     hσ hid v i _ hP
-  dsimp only at hdec hwit hPd
+  dsimp only at hdec hwit
   obtain ⟨x, hxw, hxH, hxr⟩ := witnessAt_author (σ := boundedSel) (U := U) (V := V) hl hcv hw hf
     hsk hcm N (L - 1) d' hdec
-  obtain ⟨hxP, hxs⟩ := hwit x hxw
-  obtain ⟨hxZ, -, -, hxU⟩ := hPd x hxP
-  obtain ⟨-, hUr, hUc, -, -, hxv⟩ := hxU hxs
+  have hFU : Z.floor ≤ (U.block x).round := by
+    have h₀ : cfg.slots.slotRound (L - 1) + cfg.p.voteOffset ≤ (U.block x).round := hxr
+    have h₁ : floorAt cfg L ≤ cfg.slots.slotRound (L - 1) + (cfg.p.voteOffset - 1) :=
+      min_le_right _ _
+    omega
+  obtain ⟨hxZ, hUr, hUc⟩ := (hwit x hxw).2 hFU
   -- it lies one round above the floor or higher, and above the top
   set m := (Z.disk.blk x).round - 1 with hm
   have hxr' : cfg.slots.slotRound (L - 1) + cfg.p.voteOffset ≤ (Z.disk.blk x).round := by
-    rw [← hUr]; exact hxr
+    rw [hUr]; exact hxr
   have hFm : floorAt cfg L ≤ m := by
     have h₁ : floorAt cfg L ≤ cfg.slots.slotRound (L - 1) + (cfg.p.voteOffset - 1) :=
       min_le_right _ _
     omega
   have hzr : (Z.disk.blk x).round = m + 1 := by omega
   have htm : t < m := by omega
-  have hzH : (Z.disk.blk x).creator ∈ H := by rw [← hUc]; exact hxH
+  have hzH : (Z.disk.blk x).creator ∈ H := by rw [hUc]; exact hxH
   have hzm : (Z.disk.blk x).creator ≠ (cfg.at v).me := fun h => by
     have h₁ := own_le_top htime hv ht hxZ h
     rw [hzr] at h₁

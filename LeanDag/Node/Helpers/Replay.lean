@@ -1,10 +1,18 @@
 import LeanDag.Node.Helpers.CutAbove
+import LeanDag.Node.Helpers.SyncSteps
 /-!
 # A kept proof decides its slot again
 
 `docs/node-sync.md` D16. The store a proof of slot `k` builds holds blocks of
 the proof, as given, at the round below the slot's without their references
-and from the slot's round up with them (`proofStore_spec`).
+and from the slot's round up with them (`proofStore_spec`). A node keeps
+each proof apart from its disk, as a list of blocks. The blocks of a store
+that hold a decision's witness with its histories down to the round below the
+slot's decide the slot again (`verdictOn_listOf`), blocks below that round
+change nothing (`verdictOn_append`), and a settle keeps the disk under its
+hash (`Hashed.settle`). So every proof a node keeps decides its slot again,
+and its witness stays on the disk from the floor up (`ProofsHold.run`), and a
+reply gives the node's verdict (`verdictOn_reply`).
 -/
 
 namespace LeanDag
@@ -454,27 +462,251 @@ theorem verdictOn_of_decision (hσ : cfg.σ = boundedSel) (hw : 2 ≤ cfg.p.wave
 
 end Replay
 
+omit [Fintype Validator] in
+/-- **The blocks of a store under some identifiers decide a slot as a view
+does**: when they hold the view's witness at or above the slot's round, lie
+at or above the round below the slot's and within the view's scan, read as
+the view's blocks from the slot's round up, with their references among
+them, valid at the row, and the store's blocks lie under their hash. -/
+theorem verdictOn_listOf (hσ : cfg.σ = boundedSel) (hw : 2 ≤ cfg.p.waveLength)
+    (hl : 1 ≤ cfg.p.linkSize) (hcm : 1 ≤ cfg.p.commitThreshold)
+    (hc : cfg.p.voteIsCert = false → 1 ≤ cfg.p.certThreshold)
+    {st : Store Validator BlockId Payload} (hhash : ∀ x ∈ st.ids, x = cfg.idOf (st.full x))
+    {U : BlockRecord Validator BlockId Payload (stored Validator BlockId Payload) ∅} {V : U.View}
+    {N k : ℕ} {d : Option BlockId} {P : Finset BlockId} (hkN : k ≤ N)
+    (hdec : decisionAt (S := cfg.slots) cfg.p boundedSel U V N k = some d)
+    (hwit : ∀ x ∈ witnessAt (S := cfg.slots) cfg.p boundedSel U V N k,
+      x ∈ P ∧ cfg.slots.slotRound k ≤ (st.blk x).round)
+    (hP : ∀ x ∈ P, x ∈ st.ids ∧ cfg.slots.slotRound k ≤ (st.blk x).round + 1 ∧
+      decidable cfg (st.blk x).round - 1 ≤ N ∧
+      (cfg.slots.slotRound k ≤ (st.blk x).round →
+        x ∈ V.ids ∧ (U.block x).round = (st.blk x).round ∧
+        (U.block x).creator = (st.blk x).creator ∧
+        (cfg.slots.slotRound k < (st.blk x).round → U.block x = st.full x) ∧
+        (st.full x).refs ⊆ P ∧ rowValid cfg.q cfg.xp st.full (st.full x))) :
+    verdictOn cfg k (listOf st P) = some d := by
+  letI := cfg.slots
+  set L := listOf st P with hL
+  have hround : ∀ i, (st.full i).round = (st.blk i).round := fun i => (st.full_fields i).1
+  have hmemL : ∀ i b, (i, b) ∈ L → b = st.full i ∧ i ∈ P := fun i b he => by
+    rw [hL] at he
+    unfold listOf at he
+    obtain ⟨j, hj, hje⟩ := List.mem_map.mp (List.mem_mergeSort.mp he)
+    simp only [Prod.mk.injEq] at hje
+    obtain ⟨rfl, rfl⟩ := hje
+    exact ⟨rfl, (Finset.mem_filter.mp ((Finset.mem_sort _).mp hj)).1⟩
+  have hinL : ∀ i ∈ P, (i, st.full i) ∈ L := fun i hi => by
+    rw [hL]
+    unfold listOf
+    exact List.mem_mergeSort.mpr (List.mem_map.mpr ⟨i, (Finset.mem_sort _).mpr
+      (Finset.mem_filter.mpr ⟨hi, (hP i hi).1⟩), rfl⟩)
+  have hsort : L.Pairwise fun x y => x.2.round ≤ y.2.round := by
+    rw [hL]
+    unfold listOf
+    exact (List.pairwise_mergeSort
+      (fun a b c h₁ h₂ => by simp only [decide_eq_true_eq] at *; omega)
+      (fun a b => by simp only [Bool.or_eq_true, decide_eq_true_eq]; omega) _).imp
+      (fun h => by simpa using h)
+  -- a block the store holds is one of the proof
+  obtain ⟨hspec, -⟩ := proofStore_spec (cfg := cfg) k L
+  have hstP : ∀ i ∈ (proofStore cfg k L).ids, i ∈ P ∧
+      (proofStore cfg k L).full i = st.full i := fun i hi => by
+    obtain ⟨he, hiP⟩ := hmemL i _ (List.mem_filter.mp (hspec i hi).1).1
+    exact ⟨hiP, he⟩
+  -- the proof's blocks enter the store
+  have hheld : P ⊆ (proofStore cfg k L).ids :=
+    proofStore_holds (g := st.full) (F := P) (hsort.filter _)
+      (fun e he => by
+        obtain ⟨hb, -⟩ := hmemL e.1 e.2 (List.mem_filter.mp he).1
+        exact hb.symm)
+      (fun y hy => by
+        obtain ⟨hyd, hyr, -, -⟩ := hP y hy
+        exact ⟨List.mem_filter.mpr ⟨hinL y hy, by simpa using hhash y hyd⟩,
+          by rw [hround]; exact hyr⟩)
+      (fun y hy hyr => by
+        rw [hround] at hyr
+        obtain ⟨-, -, -, -, hrefs, hv⟩ := (hP y hy).2.2.2 hyr
+        refine ⟨hrefs, fun j hj => ?_, hv⟩
+        have := hv.predecessor j hj
+        rwa [hround, hround] at this ⊢)
+  refine verdictOn_of_decision hσ hw hl hcm hc hkN hdec (fun i hi hiR => ?_) (fun x hx => ?_)
+    (fun i hi => ?_)
+  · obtain ⟨hiP, he⟩ := hstP i hi
+    rw [he, hround] at hiR ⊢
+    obtain ⟨hV, hr, hcr, hb, -, -⟩ := (hP i hiP).2.2.2 hiR
+    exact ⟨hV, hr, hcr.trans (st.full_fields i).2.1.symm, hb⟩
+  · obtain ⟨hxP, hxr⟩ := hwit x hx
+    refine ⟨hheld hxP, ?_⟩
+    rw [(hstP x (hheld hxP)).2, hround]
+    exact hxr
+  · obtain ⟨hiP, he⟩ := hstP i hi
+    have := (hP i hiP).2.2.1
+    rw [← ((proofStore cfg k L).full_fields i).1, he, hround]
+    exact this
+
+omit [Fintype Validator] in
+/-- **Blocks below the round under the slot's do not change a proof's
+verdict.** -/
+theorem verdictOn_append (k : ℕ) (L L' : List (BlockId × Block Validator BlockId Payload))
+    (h : ∀ e ∈ L', e.2.round + 1 < cfg.slots.slotRound k) :
+    verdictOn cfg k (L ++ L') = verdictOn cfg k L := by
+  have hst : proofStore cfg k (L ++ L') = proofStore cfg k L := by
+    unfold proofStore hashed
+    rw [List.filter_append, List.foldl_append]
+    generalize (L.filter fun e => decide (e.1 = cfg.idOf e.2)).foldl (proofStep cfg k)
+      (Store.empty cfg.genesis) = st
+    have h' : ∀ e ∈ L'.filter fun e => decide (e.1 = cfg.idOf e.2),
+        e.2.round + 1 < cfg.slots.slotRound k := fun e he => h e (List.mem_filter.mp he).1
+    generalize L'.filter (fun e => decide (e.1 = cfg.idOf e.2)) = l at h' ⊢
+    induction l generalizing st with
+    | nil => rfl
+    | cons e l ih =>
+      rw [List.foldl_cons]
+      have he := h' e List.mem_cons_self
+      have hs : proofStep cfg k st e = st := by
+        unfold proofStep
+        split
+        · rw [if_neg (by omega), dif_neg (by omega)]
+        · rfl
+      rw [hs]
+      exact ih st fun x hx => h' x (List.mem_cons_of_mem _ hx)
+  unfold verdictOn
+  rw [hst]
+
+omit [Fintype Validator] in
+/-- **A proof gives the verdict of its blocks under their hash.** -/
+theorem verdictOn_hashed (k : ℕ) (L : List (BlockId × Block Validator BlockId Payload)) :
+    verdictOn cfg k (hashed cfg L) = verdictOn cfg k L := by
+  have h : hashed cfg (hashed cfg L) = hashed cfg L := by
+    unfold hashed; rw [List.filter_filter]; simp only [Bool.and_self]
+  unfold verdictOn proofStore
+  rw [h]
+
+variable (cfg) in
+/-- **The disk's blocks and the syncs' blocks lie under their hash.** -/
+def Hashed (s : State Validator BlockId Payload) : Prop :=
+  (∀ x ∈ s.disk.ids, x = cfg.idOf (s.disk.full x)) ∧ ∀ e ∈ s.syncs, e.2.1.1 = cfg.idOf e.2.1.2
+
+omit [Fintype Validator] in
+/-- Accepting a block under its hash keeps a store's blocks under their
+hash. -/
+theorem hashed_acceptOn {F : ℕ} {st : Store Validator BlockId Payload}
+    (h : ∀ x ∈ st.ids, x = cfg.idOf (st.full x)) {id : BlockId}
+    {b : Block Validator BlockId Payload} (hb : id = cfg.idOf b) :
+    ∀ x ∈ (acceptOn cfg F st id b).ids, x = cfg.idOf ((acceptOn cfg F st id b).full x) := by
+  unfold acceptOn
+  split
+  · intro j hj
+    rw [Store.insert_ids] at hj
+    rw [Store.full_insert]
+    by_cases hj' : j = id
+    · subst hj'; rw [if_pos rfl]; exact hb
+    · rw [if_neg hj']; exact h j ((Finset.mem_insert.mp hj).resolve_left hj')
+  · split
+    · intro j hj
+      rw [Store.base_ids] at hj
+      rw [Store.full_base]
+      by_cases hj' : j = id
+      · subst hj'; rw [if_pos rfl]; exact hb
+      · rw [if_neg hj']; exact h j ((Finset.mem_insert.mp hj).resolve_left hj')
+    · exact h
+
+omit [Fintype Validator] in
+theorem hashed_foldl {F : ℕ} : ∀ (l : List (BlockId × Block Validator BlockId Payload))
+    {st : Store Validator BlockId Payload}, (∀ x ∈ st.ids, x = cfg.idOf (st.full x)) →
+    (∀ e ∈ l, e.1 = cfg.idOf e.2) →
+    ∀ x ∈ (l.foldl (fun s e => acceptOn cfg F s e.1 e.2) st).ids,
+      x = cfg.idOf ((l.foldl (fun s e => acceptOn cfg F s e.1 e.2) st).full x)
+  | [], _, h, _ => h
+  | e :: l, _, h, hl =>
+    hashed_foldl l (hashed_acceptOn h (hl e List.mem_cons_self))
+      fun x hx => hl x (List.mem_cons_of_mem _ hx)
+
+omit [Fintype Validator] in
+/-- **Taking in blocks under their hash keeps the state under its hash.** -/
+theorem Hashed.absorb {s : State Validator BlockId Payload} (h : Hashed cfg s)
+    {L : List (BlockId × Block Validator BlockId Payload)} (hL : ∀ e ∈ L, e.1 = cfg.idOf e.2) :
+    Hashed cfg (Node.absorb cfg s L) := by
+  refine ⟨?_, by rw [(absorb_rest (cfg := cfg) s L).2.1]; exact h.2⟩
+  rw [absorb_disk]
+  exact hashed_foldl L h.1 hL
+
+omit [Fintype Validator] in
+theorem Hashed.of_shrinks {s s' : State Validator BlockId Payload} (h : Hashed cfg s)
+    (hd : Store.Shrinks s.disk s'.disk) (hs : ∀ e ∈ s'.syncs, e ∈ s.syncs) : Hashed cfg s' :=
+  ⟨fun x hx => by rw [hd.full x hx]; exact h.1 x (hd.ids hx), fun e he => h.2 e (hs e he)⟩
+
+omit [Fintype Validator] in
+theorem Hashed.tryBuild {s s' : State Validator BlockId Payload}
+    {out : List (Output Validator BlockId Payload)} (hb : tryBuild cfg s = some (s', out))
+    (h : Hashed cfg s) : Hashed cfg s' := by
+  obtain ⟨r, id, b, hnew, hrefs, hpred, -, -, -, hid, -, hst, -, hsy, -⟩ := tryBuild_some hb
+  refine ⟨fun x hx => ?_, by rw [hsy]; exact h.2⟩
+  rw [hst.full x]
+  rw [hst.ids, Store.insert_ids] at hx
+  rw [Store.full_insert]
+  by_cases hx' : x = id
+  · subst hx'; rw [if_pos rfl]; exact hid
+  · rw [if_neg hx']; exact h.1 x ((Finset.mem_insert.mp hx).resolve_left hx')
+
+omit [Fintype Validator] in
+theorem Hashed.progress : ∀ (fuel : ℕ) {s : State Validator BlockId Payload}, Hashed cfg s →
+    Hashed cfg (Node.progress cfg fuel s).1
+  | 0, _, h => h
+  | fuel + 1, s, h => by
+    unfold Node.progress
+    split
+    · rename_i s₁ out hb
+      exact Hashed.progress fuel (h.tryBuild hb)
+    · exact h
+
+omit [Fintype Validator] in
+theorem Hashed.flushSyncs (fuel : ℕ) {s : State Validator BlockId Payload} (h : Hashed cfg s) :
+    Hashed cfg (Node.flushSyncs cfg fuel s) := by
+  obtain ⟨⟨L, hL, hd⟩, -, hsy, -⟩ := flushSyncs_eq (cfg := cfg) fuel s
+  refine ⟨?_, fun e he => h.2 e (hsy he)⟩
+  rw [hd]
+  refine hashed_foldl L h.1 fun e he => ?_
+  obtain ⟨x, hx, rfl⟩ := List.mem_map.mp (hL e he)
+  exact h.2 x hx
+
+omit [Fintype Validator] in
+/-- **A pass keeps the state under its hash.** -/
+theorem Hashed.advance {s : State Validator BlockId Payload} (h : Hashed cfg s) :
+    Hashed cfg (Node.advance cfg s).1 := by
+  have h₁ := Hashed.progress (cfg := cfg) (s.disk.topRound + 2) h
+  have h₂ : Hashed cfg (Node.decideStep cfg (Node.progress cfg (s.disk.topRound + 2) s).1).1 :=
+    h₁.of_shrinks (decideStep_shrinks _) fun e he => by rw [decideStep_syncs] at he; exact he
+  have h₃ := Hashed.flushSyncs (cfg := cfg)
+    ((Node.decideStep cfg (Node.progress cfg (s.disk.topRound + 2) s).1).1.syncs.length + 1) h₂
+  refine ⟨fun x hx => ?_, fun e he => ?_⟩
+  · rw [advance_disk] at hx ⊢; exact h₃.1 x hx
+  · rw [advance_syncs] at he; exact h₃.2 e he
+
+omit [Fintype Validator] in
+/-- **Settling keeps the state under its hash.** -/
+theorem Hashed.settle {s : State Validator BlockId Payload} (h : Hashed cfg s) :
+    Hashed cfg (Node.settle cfg s).1 :=
+  quiesce_ind (P := fun s => Hashed cfg s) (fun _ h => h.advance) _ s h
+
 variable (cfg) in
 /-- **A kept proof decides its slot again**: for the slot `k` kept with the
-blocks `P`, a view decides `k` as the node did, with its witness in `P` from
-the slot's round up; `P` lies on the disk, from the round below the slot's
-up and within the view's scan; and from the slot's round up the blocks of `P`
-are the view's, at the same rounds and authors and above the slot's round
-the same blocks, with their references in `P`, valid at the row. -/
-def ProofHolds (s : State Validator BlockId Payload) (e : ℕ × Finset BlockId) : Prop :=
+blocks `P`, a view decides `k` as the node did, and so does the store `P`
+builds, at the laws of a replay (`verdictOn_of_decision`); the view's witness
+lies at or above the slot's round, and on the disk at its round and author
+when it lies at or above the floor. -/
+def ProofHolds (s : State Validator BlockId Payload)
+    (e : ℕ × List (BlockId × Block Validator BlockId Payload)) : Prop :=
   ∃ (U : BlockRecord Validator BlockId Payload (stored Validator BlockId Payload) ∅)
     (V : U.View) (N : ℕ) (d : Option BlockId),
-    (e.1, d) ∈ s.decided ∧ e.1 ≤ N ∧
-    decisionAt (S := cfg.slots) cfg.p boundedSel U V N e.1 = some d ∧
-    (∀ x ∈ witnessAt (S := cfg.slots) cfg.p boundedSel U V N e.1,
-      x ∈ e.2 ∧ cfg.slots.slotRound e.1 ≤ (s.disk.blk x).round) ∧
-    ∀ x ∈ e.2, x ∈ s.disk.ids ∧ cfg.slots.slotRound e.1 ≤ (s.disk.blk x).round + 1 ∧
-      decidable cfg (s.disk.blk x).round - 1 ≤ N ∧
-      (cfg.slots.slotRound e.1 ≤ (s.disk.blk x).round →
-        x ∈ V.ids ∧ (U.block x).round = (s.disk.blk x).round ∧
-        (U.block x).creator = (s.disk.blk x).creator ∧
-        (cfg.slots.slotRound e.1 < (s.disk.blk x).round → U.block x = s.disk.full x) ∧
-        (s.disk.full x).refs ⊆ e.2 ∧ rowValid cfg.q cfg.xp s.disk.full (s.disk.full x))
+    (e.1, d) ∈ s.decided ∧
+    (2 ≤ cfg.p.waveLength → 1 ≤ cfg.p.linkSize → 1 ≤ cfg.p.commitThreshold →
+      (cfg.p.voteIsCert = false → 1 ≤ cfg.p.certThreshold) → verdictOn cfg e.1 e.2 = some d) ∧
+    e.1 ≤ N ∧ decisionAt (S := cfg.slots) cfg.p boundedSel U V N e.1 = some d ∧
+    ∀ x ∈ witnessAt (S := cfg.slots) cfg.p boundedSel U V N e.1,
+      cfg.slots.slotRound e.1 ≤ (U.block x).round ∧
+      (s.floor ≤ (U.block x).round → x ∈ s.disk.ids ∧
+        (s.disk.blk x).round = (U.block x).round ∧ (s.disk.blk x).creator = (U.block x).creator)
 
 variable (cfg) in
 /-- **The proofs a node keeps decide their slots again.** -/
@@ -482,78 +714,70 @@ def ProofsHold (s : State Validator BlockId Payload) : Prop :=
   ∀ e ∈ s.proofs, ProofHolds cfg s e
 
 omit [Fintype Validator] in
-/-- **A kept proof decides its slot again on a state that keeps its blocks as
-accepted, and the decision.** -/
-theorem ProofHolds.keep {s s' : State Validator BlockId Payload} {e : ℕ × Finset BlockId}
-    (h : ProofHolds cfg s e) (hd : ∀ x ∈ s.decided, x ∈ s'.decided)
-    (hk : ∀ x ∈ e.2, x ∈ s.disk.ids → x ∈ s'.disk.ids ∧ s'.disk.full x = s.disk.full x) :
-    ProofHolds cfg s' e := by
-  obtain ⟨U, V, N, d, hdm, hkN, hdec, hwit, hP⟩ := h
-  have hr : ∀ x ∈ e.2, (s'.disk.blk x).round = (s.disk.blk x).round := fun x hx => by
-    rw [← (s'.disk.full_fields x).1, (hk x hx (hP x hx).1).2, (s.disk.full_fields x).1]
-  have hcr : ∀ x ∈ e.2, (s'.disk.blk x).creator = (s.disk.blk x).creator := fun x hx => by
-    rw [← (s'.disk.full_fields x).2.1, (hk x hx (hP x hx).1).2, (s.disk.full_fields x).2.1]
-  refine ⟨U, V, N, d, hd _ hdm, hkN, hdec, fun x hx => ?_, fun x hx => ?_⟩
-  · obtain ⟨hxP, hxr⟩ := hwit x hx
-    exact ⟨hxP, by rw [hr x hxP]; exact hxr⟩
-  · obtain ⟨hxd, hxr, hxN, hxu⟩ := hP x hx
-    rw [hr x hx]
-    refine ⟨(hk x hx hxd).1, hxr, hxN, fun hxR => ?_⟩
-    obtain ⟨hV, hUr, hUc, hUb, hrefs, hv⟩ := hxu hxR
-    rw [hcr x hx, (hk x hx hxd).2]
-    refine ⟨hV, hUr, hUc, hUb, hrefs, rowValid_congr (fun j hj => ?_) hv⟩
-    rw [(hk j (hrefs hj) (hP j (hrefs hj)).1).2]
-    exact ⟨rfl, rfl, rfl⟩
+/-- **A kept proof decides its slot again on a state that keeps the
+decision, with a floor at or above, keeping the disk's blocks from that floor
+up.** -/
+theorem ProofHolds.keep {s s' : State Validator BlockId Payload}
+    {e : ℕ × List (BlockId × Block Validator BlockId Payload)}
+    (h : ProofHolds cfg s e) (hd : ∀ x ∈ s.decided, x ∈ s'.decided) (hf : s.floor ≤ s'.floor)
+    (hk : KeepsFrom cfg.drops s'.floor s.disk s'.disk) : ProofHolds cfg s' e := by
+  obtain ⟨U, V, N, d, hdm, hv, hkN, hdec, hwit⟩ := h
+  refine ⟨U, V, N, d, hd _ hdm, hv, hkN, hdec, fun x hx => ?_⟩
+  obtain ⟨hxr, hxd⟩ := hwit x hx
+  refine ⟨hxr, fun hfx => ?_⟩
+  obtain ⟨hxs, hr, hc⟩ := hxd (hf.trans hfx)
+  obtain ⟨hxs', hfu⟩ := hk x hxs (Or.inr (by rw [hr]; exact hfx))
+  refine ⟨hxs', ?_, ?_⟩
+  · rw [← (s'.disk.full_fields x).1, hfu, (s.disk.full_fields x).1, hr]
+  · rw [← (s'.disk.full_fields x).2.1, hfu, (s.disk.full_fields x).2.1, hc]
 
 variable (cfg) in
 /-- **`s'` keeps what the proofs of `s` read**: the decisions and proofs of
-`s`, the blocks of those proofs as accepted, and its new proofs decide their
-slots again; and it keeps a proof of each slot it decided, if `s` does. -/
+`s`, a floor at or above, the disk's blocks from that floor up, and its new
+proofs decide their slots again; and it keeps a proof of each slot it
+decided, if `s` does. -/
 structure KeepsProofs (s s' : State Validator BlockId Payload) : Prop where
   decided : ∀ x ∈ s.decided, x ∈ s'.decided
   sub : ∀ e ∈ s.proofs, e ∈ s'.proofs
   fresh : ∀ e ∈ s'.proofs, e ∉ s.proofs → ProofHolds cfg s' e
-  disk : ∀ e ∈ s.proofs, ∀ x ∈ e.2, x ∈ s.disk.ids →
-    x ∈ s'.disk.ids ∧ s'.disk.full x = s.disk.full x
+  floor : s.floor ≤ s'.floor
+  keeps : KeepsFrom cfg.drops s'.floor s.disk s'.disk
   paired : (∀ x ∈ s.decided, ∃ P, (x.1, P) ∈ s.proofs) → ∀ x ∈ s'.decided, ∃ P, (x.1, P) ∈ s'.proofs
 
 omit [Fintype Validator] in
 theorem KeepsProofs.refl (s : State Validator BlockId Payload) : KeepsProofs cfg s s :=
-  ⟨fun _ h => h, fun _ h => h, fun _ h hn => absurd h hn, fun _ _ _ _ h => ⟨h, rfl⟩, id⟩
+  ⟨fun _ h => h, fun _ h => h, fun _ h hn => absurd h hn, le_rfl, fun _ hj _ => ⟨hj, rfl⟩, id⟩
 
 omit [Fintype Validator] in
 theorem KeepsProofs.trans {a b c : State Validator BlockId Payload} (h₁ : KeepsProofs cfg a b)
     (h₂ : KeepsProofs cfg b c) : KeepsProofs cfg a c := by
   refine ⟨fun x hx => h₂.decided x (h₁.decided x hx), fun e he => h₂.sub e (h₁.sub e he),
-    fun e he hn => ?_, fun e he x hx hxa => ?_, h₂.paired ∘ h₁.paired⟩
-  · by_cases hb : e ∈ b.proofs
-    · exact (h₁.fresh e hb hn).keep h₂.decided fun x hx hxb => h₂.disk e hb x hx hxb
-    · exact h₂.fresh e he hb
-  · obtain ⟨hxb, hfb⟩ := h₁.disk e he x hx hxa
-    obtain ⟨hxc, hfc⟩ := h₂.disk e (h₁.sub e he) x hx hxb
-    exact ⟨hxc, hfc.trans hfb⟩
+    fun e he hn => ?_, h₁.floor.trans h₂.floor, (h₁.keeps.mono h₂.floor).trans h₂.keeps,
+    h₂.paired ∘ h₁.paired⟩
+  by_cases hb : e ∈ b.proofs
+  · exact (h₁.fresh e hb hn).keep h₂.decided h₂.floor h₂.keeps
+  · exact h₂.fresh e he hb
 
 omit [Fintype Validator] in
 /-- **Proofs that decide their slots again keep doing so.** -/
 theorem ProofsHold.keeps {s s' : State Validator BlockId Payload} (hp : ProofsHold cfg s)
     (h : KeepsProofs cfg s s') : ProofsHold cfg s' := fun e he => by
   by_cases hs : e ∈ s.proofs
-  · exact (hp e hs).keep h.decided fun x hx hxs => h.disk e hs x hx hxs
+  · exact (hp e hs).keep h.decided h.floor h.keeps
   · exact h.fresh e he hs
 
 omit [Fintype Validator] in
-/-- A state with the decisions and proofs, its disk grown, keeps the proofs. -/
-theorem KeepsProofs.of_grows {s s' : State Validator BlockId Payload}
-    (hg : Grows s.disk s'.disk) (hd : s'.decided = s.decided) (hp : s'.proofs = s.proofs) :
-    KeepsProofs cfg s s' :=
-  ⟨fun _ hx => hd ▸ hx, fun _ he => hp ▸ he, fun _ he hn => absurd (hp ▸ he) hn,
-    fun _ _ _ _ hx => ⟨hg.1 hx, hg.full hx⟩, fun h x hx => hp ▸ h x (hd ▸ hx)⟩
+/-- A part of a step that raises the floor, keeps the disk from it up, and
+keeps the decisions and proofs keeps the proofs. -/
+theorem KeepsProofs.of_rises {s s' : State Validator BlockId Payload} (hr : DiskRises cfg s s')
+    (hd : s'.decided = s.decided) (hp : s'.proofs = s.proofs) : KeepsProofs cfg s s' :=
+  ⟨fun _ hx => hd ▸ hx, fun _ he => hp ▸ he, fun _ he hn => absurd (hp ▸ he) hn, hr.1.1, hr.2,
+    fun h x hx => hp ▸ h x (hd ▸ hx)⟩
 
 omit [Fintype Validator] in
 theorem KeepsProofs.tryBuild {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
     KeepsProofs cfg s s' := by
-  obtain ⟨r, id, b, hnew, hrefs, hpred, -, -, -, -, -, hst, -⟩ := tryBuild_some h
   have hdp : s'.decided = s.decided ∧ s'.proofs = s.proofs := by
     obtain ⟨_, _, _, -, h, -⟩ := tryBuild_cases h
     unfold buildAbove at h
@@ -565,7 +789,7 @@ theorem KeepsProofs.tryBuild {s s' : State Validator BlockId Payload}
         exact ⟨release_decided _, release_proofs _⟩
       · exact absurd h (by simp)
     · exact absurd h (by simp)
-  exact KeepsProofs.of_grows ((Grows.insert s.disk).trans (Grows.of_restrips hst)) hdp.1 hdp.2
+  exact KeepsProofs.of_rises (diskRises_tryBuild h) hdp.1 hdp.2
 
 omit [Fintype Validator] in
 theorem KeepsProofs.progress : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
@@ -579,24 +803,24 @@ theorem KeepsProofs.progress : ∀ (fuel : ℕ) (s : State Validator BlockId Pay
     · exact KeepsProofs.refl s
 
 omit [Fintype Validator] in
-theorem KeepsProofs.accept (s : State Validator BlockId Payload) (id : BlockId)
-    (b : Block Validator BlockId Payload) : KeepsProofs cfg s (Node.accept cfg s id b) :=
-  KeepsProofs.of_grows (by rw [accept_disk]; exact Grows.accept _ _ _ _)
-    (accept_rest s id b).2.2.2.2.2.2.1 (by unfold Node.accept; split <;> (try split) <;> rfl)
-
-omit [Fintype Validator] in
-theorem KeepsProofs.absorb (s : State Validator BlockId Payload) :
-    ∀ L : List (BlockId × Block Validator BlockId Payload), KeepsProofs cfg s (Node.absorb cfg s L)
-  | [] => KeepsProofs.refl s
-  | x :: L => by
-    unfold Node.absorb
-    rw [List.foldl_cons]
-    exact (KeepsProofs.accept s x.1 x.2).trans (KeepsProofs.absorb _ L)
+theorem KeepsProofs.absorb (s : State Validator BlockId Payload)
+    (L : List (BlockId × Block Validator BlockId Payload)) :
+    KeepsProofs cfg s (Node.absorb cfg s L) :=
+  KeepsProofs.of_rises (DiskRises.of_grows (Grows.absorb s L) (absorb_rest (cfg := cfg) s L).1.ge
+    (absorb_rest (cfg := cfg) s L).2.2.2.2.2.1)
+    (absorb_rest (cfg := cfg) s L).2.2.2.2.2.2.1 (by
+      unfold Node.absorb
+      induction L generalizing s with
+      | nil => rfl
+      | cons x L ih =>
+        rw [List.foldl_cons]
+        refine (ih _).trans ?_
+        unfold Node.accept; split <;> (try split) <;> rfl)
 
 omit [Fintype Validator] in
 theorem KeepsProofs.tidy (s : State Validator BlockId Payload) :
     KeepsProofs cfg s (Node.tidy s) :=
-  KeepsProofs.of_grows (Grows.refl _) rfl rfl
+  KeepsProofs.of_rises (DiskRises.of_grows (Grows.refl _) le_rfl rfl) rfl rfl
 
 omit [Fintype Validator] in
 theorem KeepsProofs.flushSyncs : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
@@ -613,42 +837,31 @@ theorem KeepsProofs.flushSyncs : ∀ (fuel : ℕ) (s : State Validator BlockId P
 omit [Fintype Validator] in
 theorem KeepsProofs.release (s : State Validator BlockId Payload) :
     KeepsProofs cfg s (Node.release cfg s) :=
-  KeepsProofs.of_grows (Grows.of_restrips (release_disk _)) (release_decided _) (release_proofs _)
+  KeepsProofs.of_rises (DiskRises.of_grows (Grows.of_restrips (release_disk _))
+    (by rw [release_floor]; exact le_max_left _ _) (release_lo _)) (release_decided _)
+    (release_proofs _)
 
 omit [Fintype Validator] in
-/-- **Dropping keeps the proofs**: it lets go of no block of a proof. -/
 theorem KeepsProofs.drop (s : State Validator BlockId Payload) :
-    KeepsProofs cfg s (Node.drop cfg s) := by
-  refine ⟨fun x hx => by rw [drop_decided]; exact hx, fun e he => by rw [drop_proofs]; exact he,
-    fun e he hn => absurd (by rw [drop_proofs] at he; exact he) hn, fun e he x hx hxs => ?_,
-    fun h x hx => by rw [drop_proofs]; rw [drop_decided] at hx; exact h x hx⟩
-  unfold Node.drop
-  split
-  · obtain ⟨-, h₂, h₃⟩ := Store.eraseAll_spec (dropSet cfg s) s.disk
-    have hxe : x ∈ (s.disk.eraseAll (dropSet cfg s)).ids := h₂ x hxs fun hxd => by
-      unfold dropSet at hxd
-      have := (List.mem_filter.mp hxd).2
-      simp only [decide_eq_true_eq] at this
-      exact this.2.2.2.1 e he hx
-    refine ⟨hxe, ?_⟩
-    change (s.disk.eraseAll (dropSet cfg s)).full x = s.disk.full x
-    unfold Store.full
-    rw [(h₃ x hxe).2, (h₃ x hxe).1]
-  · exact ⟨hxs, rfl⟩
+    KeepsProofs cfg s (Node.drop cfg s) :=
+  KeepsProofs.of_rises ⟨⟨(drop_floor s).ge, fun _ => Or.inl (drop_lo s)⟩,
+    by rw [drop_floor]; exact KeepsFrom.of_drop s⟩ (drop_decided s) (drop_proofs s)
 
 omit [Fintype Validator] in
 /-- **The proof a decision keeps decides its slot again**: a decision of the
 loop on the memory's window at the round of the next undecided slot, from a
-floor at or below that round and a disk valid at the row from the floor up,
-on any state with the same disk that keeps the decision. -/
+floor at or below that round, a disk valid at the row from the floor up and
+under its hash, on any state with the same disk that keeps the decision. -/
 theorem proofHolds_decide (hσ : cfg.σ = boundedSel) {s s' : State Validator BlockId Payload}
     (hab : UpperValid cfg.q cfg.xp s.floor s.disk) (hfl : s.floor ≤ cfg.slots.slotRound s.lo)
+    (hh : ∀ x ∈ s.disk.ids, x = cfg.idOf (s.disk.full x))
     {N k : ℕ} {d : Option BlockId}
     (he : (k, d) ∈ Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ
       (s.memory.window (cfg.slots.slotRound s.lo)) (s.memory.windowView (cfg.slots.slotRound s.lo))
       s.lo N)
     (hN : N = decidable cfg s.disk.topRound - 1) (hdisk : s'.disk = s.disk)
-    (hdec : (k, d) ∈ s'.decided) : ProofHolds cfg s' (k, proofOf cfg s N k) := by
+    (hdec : (k, d) ∈ s'.decided) :
+    ProofHolds cfg s' (k, listOf s.disk (proofOf cfg s N k)) := by
   letI := cfg.slots
   set R := cfg.slots.slotRound s.lo with hR
   rw [hσ] at he
@@ -711,35 +924,61 @@ theorem proofHolds_decide (hσ : cfg.σ = boundedSel) {s s' : State Validator Bl
         (s.disk.full j).round + 1 = (s.disk.full i).round := fun i hi hir j hj => by
     obtain ⟨hrefs, hv⟩ := hab i hi (by rw [← hround]; omega)
     exact ⟨hrefs hj, hv.predecessor j hj⟩
-  unfold proofOf ProofHolds
-  rw [hσ, hdisk]
-  dsimp only
-  refine ⟨s.memory.window R, s.memory.windowView R, N, d, hdec, hkN, hdecU,
-    fun x hx => ⟨Finset.mem_filter.mpr ⟨Finset.mem_biUnion.mpr ⟨x, hx, mem_historyUptoFrom_self⟩,
-      (hwd x hx).1, by have := (hwd x hx).2; omega⟩, (hwd x hx).2⟩, fun x hx => ?_⟩
-  obtain ⟨hxh, hxd, hxr⟩ := Finset.mem_filter.mp hx
-  obtain ⟨w, hw, hxw⟩ := Finset.mem_biUnion.mp hxh
-  refine ⟨hxd, by omega, ?_, fun hxk => ?_⟩
-  · rw [hN]
-    exact Nat.sub_le_sub_right (decidable_mono (by
-      rw [s.disk.topRound_eq]; exact Finset.le_sup (f := fun i => (s.disk.blk i).round) hxd)) 1
-  · obtain ⟨hxV, hxr', hxc, hxb⟩ := hwin x hxd (by omega)
-    obtain ⟨hwD, hwr⟩ := hwd w hw
-    obtain ⟨-, -, -, hcl⟩ := historyUptoFrom_closed hQ _ w hwD (by rw [hround]; exact hwr)
-      (by rw [hround]) x hxw
-    obtain ⟨hrefs, hv⟩ := hab x hxd (by omega)
-    refine ⟨hxV, hxr', hxc, fun h => hxb (by omega), fun y hy => ?_, hv⟩
-    have hyh := hcl (by rw [hround]; exact hxk) (by rw [hround, hround]; omega) hy
-    have hyd := hrefs hy
-    have hyr := hv.predecessor y hy
-    rw [hround, hround] at hyr
-    exact Finset.mem_filter.mpr ⟨Finset.mem_biUnion.mpr ⟨w, hw, hyh⟩, hyd, by omega⟩
+  -- the proof's blocks: the witness's histories down to the round below the slot's
+  have hPeq : proofOf cfg s N k =
+      ((witnessAt (S := cfg.slots) cfg.p boundedSel (s.memory.window R) (s.memory.windowView R)
+        N k).biUnion fun w => historyUptoFrom s.disk.full ((s.disk.blk w).round + 1 - sk) w).filter
+          fun x => x ∈ s.disk.ids ∧ sk - 1 ≤ (s.disk.blk x).round := by
+    unfold proofOf; rw [hσ]
+  have hwitP : ∀ x ∈ witnessAt (S := cfg.slots) cfg.p boundedSel (s.memory.window R)
+      (s.memory.windowView R) N k, x ∈ proofOf cfg s N k ∧ sk ≤ (s.disk.blk x).round :=
+    fun x hx => ⟨by
+      rw [hPeq]
+      exact Finset.mem_filter.mpr ⟨Finset.mem_biUnion.mpr ⟨x, hx, mem_historyUptoFrom_self⟩,
+        (hwd x hx).1, by have := (hwd x hx).2; omega⟩, (hwd x hx).2⟩
+  have hPf : ∀ x ∈ proofOf cfg s N k, x ∈ s.disk.ids ∧ sk ≤ (s.disk.blk x).round + 1 ∧
+      decidable cfg (s.disk.blk x).round - 1 ≤ N ∧
+      (sk ≤ (s.disk.blk x).round →
+        x ∈ (s.memory.windowView R).ids ∧
+        ((s.memory.window R).block x).round = (s.disk.blk x).round ∧
+        ((s.memory.window R).block x).creator = (s.disk.blk x).creator ∧
+        (sk < (s.disk.blk x).round → (s.memory.window R).block x = s.disk.full x) ∧
+        (s.disk.full x).refs ⊆ proofOf cfg s N k ∧
+        rowValid cfg.q cfg.xp s.disk.full (s.disk.full x)) := by
+    intro x hx
+    rw [hPeq] at hx
+    obtain ⟨hxh, hxd, hxr⟩ := Finset.mem_filter.mp hx
+    obtain ⟨w, hw, hxw⟩ := Finset.mem_biUnion.mp hxh
+    refine ⟨hxd, by omega, ?_, fun hxk => ?_⟩
+    · rw [hN]
+      exact Nat.sub_le_sub_right (decidable_mono (by
+        rw [s.disk.topRound_eq]; exact Finset.le_sup (f := fun i => (s.disk.blk i).round) hxd)) 1
+    · obtain ⟨hxV, hxr', hxc, hxb⟩ := hwin x hxd (by omega)
+      obtain ⟨hwD, hwr⟩ := hwd w hw
+      obtain ⟨-, -, -, hcl⟩ := historyUptoFrom_closed hQ _ w hwD (by rw [hround]; exact hwr)
+        (by rw [hround]) x hxw
+      obtain ⟨hrefs, hv⟩ := hab x hxd (by omega)
+      refine ⟨hxV, hxr', hxc, fun h => hxb (by omega), fun y hy => ?_, hv⟩
+      have hyh := hcl (by rw [hround]; exact hxk) (by rw [hround, hround]; omega) hy
+      have hyd := hrefs hy
+      have hyr := hv.predecessor y hy
+      rw [hround, hround] at hyr
+      rw [hPeq]
+      exact Finset.mem_filter.mpr ⟨Finset.mem_biUnion.mpr ⟨w, hw, hyh⟩, hyd, by omega⟩
+  refine ⟨s.memory.window R, s.memory.windowView R, N, d, hdec,
+    fun hw hl hcm hc => verdictOn_listOf hσ hw hl hcm hc hh hkN hdecU hwitP hPf, hkN, hdecU,
+    fun x hx => ?_⟩
+  obtain ⟨hxd, hxr⟩ := hwd x hx
+  obtain ⟨-, hxr', hxc, -⟩ := hwin x hxd (hRk.trans hxr)
+  refine ⟨by rw [hxr']; exact hxr, fun _ => ?_⟩
+  rw [hdisk]
+  exact ⟨hxd, hxr'.symm, hxc.symm⟩
 
 omit [Fintype Validator] in
 /-- **Deciding keeps the proofs**, those it adds deciding their slots again,
-from a disk valid at the row from the floor up. -/
+from a disk valid at the row from the floor up and a state under its hash. -/
 theorem KeepsProofs.decideStep (hσ : cfg.σ = boundedSel) {s : State Validator BlockId Payload}
-    (hab : UpperValid cfg.q cfg.xp s.floor s.disk) :
+    (hab : UpperValid cfg.q cfg.xp s.floor s.disk) (hh : Hashed cfg s) :
     KeepsProofs cfg s (Node.decideStep cfg s).1 := by
   unfold Node.decideStep
   dsimp only
@@ -747,7 +986,7 @@ theorem KeepsProofs.decideStep (hσ : cfg.σ = boundedSel) {s : State Validator 
   · rename_i hc
     refine (KeepsProofs.trans ?_ (KeepsProofs.release _)).trans (KeepsProofs.drop _)
     refine ⟨fun x hx => List.mem_append_right _ hx, fun e he => List.mem_append_right _ he,
-      fun e he hn => ?_, fun _ _ x _ hx => ⟨hx, rfl⟩, fun h x hx => ?_⟩
+      fun e he hn => ?_, le_rfl, fun _ hx _ => ⟨hx, rfl⟩, fun h x hx => ?_⟩
     swap
     · rcases List.mem_append.mp hx with hx | hx
       · exact ⟨_, List.mem_append_left _ (List.mem_reverse.mpr
@@ -756,42 +995,46 @@ theorem KeepsProofs.decideStep (hσ : cfg.σ = boundedSel) {s : State Validator 
         exact ⟨P, List.mem_append_right _ hP⟩
     rcases List.mem_append.mp he with he | he
     · obtain ⟨x, hx, rfl⟩ := List.mem_map.mp (List.mem_reverse.mp he)
-      exact proofHolds_decide hσ hab hc.2.1 hx rfl rfl
+      exact proofHolds_decide hσ hab hc.2.1 hh.1 hx rfl rfl
         (List.mem_append_left _ (List.mem_reverse.mpr hx))
     · exact absurd he hn
   · exact KeepsProofs.refl s
 
 omit [Fintype Validator] in
 /-- **A pass keeps the proofs**, from a disk valid at the row from the floor
-up. -/
+up and a state under its hash. -/
 theorem KeepsProofs.advance (hσ : cfg.σ = boundedSel) {s : State Validator BlockId Payload}
-    (hab : UpperValid cfg.q cfg.xp s.floor s.disk) : KeepsProofs cfg s (Node.advance cfg s).1 := by
+    (hab : UpperValid cfg.q cfg.xp s.floor s.disk) (hh : Hashed cfg s) :
+    KeepsProofs cfg s (Node.advance cfg s).1 := by
   have h := ((KeepsProofs.progress (cfg := cfg) (s.disk.topRound + 2) s).trans
-    (KeepsProofs.decideStep hσ (UpperValid.progress _ hab))).trans (KeepsProofs.flushSyncs
-      ((Node.decideStep cfg (Node.progress cfg (s.disk.topRound + 2) s).1).1.syncs.length + 1) _)
+    (KeepsProofs.decideStep hσ (UpperValid.progress _ hab) (Hashed.progress _ hh))).trans
+      (KeepsProofs.flushSyncs
+        ((Node.decideStep cfg (Node.progress cfg (s.disk.topRound + 2) s).1).1.syncs.length + 1) _)
   obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) (Node.pass cfg s).1
   change KeepsProofs cfg s (Node.arm cfg (Node.pass cfg s).1).1
   rw [ha]
-  exact h.trans (KeepsProofs.of_grows (Grows.refl _) rfl rfl)
+  exact h.trans (KeepsProofs.of_rises (DiskRises.of_grows (Grows.refl _) le_rfl rfl) rfl rfl)
 
 omit [Fintype Validator] in
 /-- **The passes keep the proofs**, from a disk valid at the row from the
-floor up. -/
+floor up and a state under its hash. -/
 theorem KeepsProofs.quiesce (hσ : cfg.σ = boundedSel) : ∀ (n : ℕ)
     {s : State Validator BlockId Payload}, UpperValid cfg.q cfg.xp s.floor s.disk →
-    KeepsProofs cfg s (Node.quiesce cfg n s).1
-  | 0, s, _ => KeepsProofs.refl s
-  | n + 1, s, hab => by
+    Hashed cfg s → KeepsProofs cfg s (Node.quiesce cfg n s).1
+  | 0, s, _, _ => KeepsProofs.refl s
+  | n + 1, s, hab, hh => by
     rcases quiesce_succ_cases (cfg := cfg) n s with he | he <;> rw [he]
-    · exact KeepsProofs.advance hσ hab
-    · exact (KeepsProofs.advance hσ hab).trans (KeepsProofs.quiesce hσ n hab.advance)
+    · exact KeepsProofs.advance hσ hab hh
+    · exact (KeepsProofs.advance hσ hab hh).trans
+        (KeepsProofs.quiesce hσ n hab.advance hh.advance)
 
 omit [Fintype Validator] in
 /-- **Settling keeps the proofs**, from a disk valid at the row from the
-floor up. -/
+floor up and a state under its hash. -/
 theorem KeepsProofs.settle (hσ : cfg.σ = boundedSel) {s : State Validator BlockId Payload}
-    (hab : UpperValid cfg.q cfg.xp s.floor s.disk) : KeepsProofs cfg s (Node.settle cfg s).1 :=
-  KeepsProofs.quiesce hσ _ hab
+    (hab : UpperValid cfg.q cfg.xp s.floor s.disk) (hh : Hashed cfg s) :
+    KeepsProofs cfg s (Node.settle cfg s).1 :=
+  KeepsProofs.quiesce hσ _ hab hh
 
 omit [Fintype Validator] in
 /-- **A proof's verdict is the decision of the store it builds**, scanning
@@ -836,14 +1079,13 @@ theorem KeepsProofs.decideOn (hσ : cfg.σ = boundedSel) (hdr : cfg.drops = true
     { s with
       lo := k + 1
       decided := (k, d) :: s.decided
-      proofs := (k, st.ids) :: s.proofs }
+      proofs := (k, hashed cfg L) :: s.proofs }
   set l := (hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round) with hl
   have e : Node.decideOn cfg s k d L = Node.absorb cfg (Node.release cfg s₁) l := rfl
   have h₁ : KeepsProofs cfg s₁ (Node.decideOn cfg s k d L) := by
     rw [e]; exact (KeepsProofs.release s₁).trans (KeepsProofs.absorb _ _)
   refine ⟨fun x hx => h₁.decided x (List.mem_cons_of_mem _ hx),
-    fun e he => h₁.sub e (List.mem_cons_of_mem _ he), fun e he hn => ?_,
-    fun e he x hx hxs => h₁.disk e (List.mem_cons_of_mem _ he) x hx hxs,
+    fun e he => h₁.sub e (List.mem_cons_of_mem _ he), fun e he hn => ?_, h₁.floor, h₁.keeps,
     fun h => h₁.paired fun x hx => ?_⟩
   swap
   · rcases List.mem_cons.mp hx with rfl | hx
@@ -853,12 +1095,12 @@ theorem KeepsProofs.decideOn (hσ : cfg.σ = boundedSel) (hdr : cfg.drops = true
   by_cases hs : e ∈ s₁.proofs
   swap
   · exact h₁.fresh e he hs
-  obtain rfl : e = (k, st.ids) := (List.mem_cons.mp hs).resolve_right hn
+  obtain rfl : e = (k, hashed cfg L) := (List.mem_cons.mp hs).resolve_right hn
   -- the decision of the proof's store
   set N := max k (decidable cfg st.topRound - 1) with hN
   have hdec := decisionAt_of_verdictOn hσ hv
   -- the blocks of the proof, read under their hash
-  obtain ⟨hspec, hkept⟩ := proofStore_spec (cfg := cfg) k L
+  obtain ⟨hspec, -⟩ := proofStore_spec (cfg := cfg) k L
   have hup := proofStore_upperValid (cfg := cfg) k L
   have hhL : ∀ e ∈ hashed cfg L, e.1 = cfg.idOf e.2 := fun e he =>
     of_decide_eq_true (List.mem_filter.mp he).2
@@ -914,27 +1156,27 @@ theorem KeepsProofs.decideOn (hσ : cfg.σ = boundedSel) (hdr : cfg.drops = true
       ← ((Node.decideOn cfg s k d L).disk.full_fields x).2.1, hfull x hx,
       (st.full_fields x).1, (st.full_fields x).2.1]
     exact ⟨rfl, rfl⟩
-  unfold ProofHolds
-  dsimp only
-  refine ⟨st.toRecord, st.view, N, d, h₁.decided _ List.mem_cons_self, le_max_left _ _, hdec,
-    fun x hx => ?_, fun x hx => ?_⟩
-  · have hxs : x ∈ st.ids := witnessAt_subset (S := cfg.slots) N k hx
-    exact ⟨hxs, by rw [(hfr x hxs).1]; exact witnessAt_round (S := cfg.slots) N k x hx⟩
-  · rw [(hfr x hx).1]
-    have hlow := (hspec x hx).2
-    rw [hround] at hlow
-    refine ⟨hsub hx, by omega, ?_, fun hxk => ?_⟩
-    · exact Nat.sub_le_sub_right (decidable_mono (by
-        rw [st.topRound_eq]; exact Finset.le_sup (f := fun i => (st.blk i).round) hx)) 1 |>.trans
-        (le_max_right _ _)
-    obtain ⟨hrefs, hvx⟩ := hup x hx hxk
-    rw [(hfr x hx).2, hfull x hx]
-    refine ⟨hx, rfl, rfl, fun hlt => ?_, hrefs,
-      rowValid_congr (fun j hj => by rw [hfull j (hrefs hj)]; exact ⟨rfl, rfl, rfl⟩) hvx⟩
-    by_cases hk : st.kept[x]? = none
-    · exact (st.full_of_kept_none hk).symm
-    · have : (st.blk x).round + 1 = cfg.slots.slotRound k := hkept x hk
-      omega
+  refine ⟨st.toRecord, st.view, N, d, h₁.decided _ List.mem_cons_self,
+    fun _ _ _ _ => by rw [verdictOn_hashed]; exact hv, le_max_left _ _, hdec, fun x hx => ?_⟩
+  have hxs : x ∈ st.ids := witnessAt_subset (S := cfg.slots) N k hx
+  exact ⟨witnessAt_round (S := cfg.slots) N k x hx,
+    fun _ => ⟨hsub hxs, (hfr x hxs).1, (hfr x hxs).2⟩⟩
+
+omit [Fintype Validator] in
+theorem Hashed.tidy {s : State Validator BlockId Payload} (h : Hashed cfg s) :
+    Hashed cfg (Node.tidy s) :=
+  ⟨h.1, fun e he => h.2 e (List.mem_of_mem_filter he)⟩
+
+omit [Fintype Validator] in
+/-- **Deciding on a proof keeps the state under its hash.** -/
+theorem Hashed.decideOn {s : State Validator BlockId Payload} (h : Hashed cfg s) (k : ℕ)
+    (d : Option BlockId) (L : List (BlockId × Block Validator BlockId Payload)) :
+    Hashed cfg (Node.decideOn cfg s k d L) := by
+  unfold Node.decideOn
+  refine Hashed.absorb ⟨fun x hx => ?_, fun e he => ?_⟩ fun e he =>
+    of_decide_eq_true (List.mem_filter.mp (List.mem_mergeSort.mp he)).2
+  · rw [release_ids] at hx; rw [release_full]; exact h.1 x hx
+  · rw [release_syncs] at he; exact h.2 e he
 
 /-- **A step keeps the proofs**, at an injective hash, from the invariant
 against blocks under their hash. -/
@@ -944,13 +1186,16 @@ theorem KeepsProofs.step (hσ : cfg.σ = boundedSel) (hid : Function.Injective c
     (hK : ∀ e ∈ K, e.1 = cfg.idOf e.2) (i : Input Validator BlockId Payload) :
     KeepsProofs cfg s (Node.step cfg s i).1 := by
   have hab := hi.above
+  have hh : Hashed cfg s := ⟨fun x hx => hK _ (hi.known x hx), fun e he => hK _ (hi.pend e he)⟩
   -- a state the step keeps the proofs to, with other syncs, top or timers, then settling
   have hset : ∀ s₀ s₁ : State Validator BlockId Payload, KeepsProofs cfg s s₀ →
-      UpperValid cfg.q cfg.xp s₀.floor s₀.disk → s₁.disk = s₀.disk → s₁.floor = s₀.floor →
-      s₁.decided = s₀.decided → s₁.proofs = s₀.proofs →
-      KeepsProofs cfg s (Node.settle cfg s₁).1 := fun s₀ s₁ h h₀ hd hf hdc hp =>
-    (h.trans (KeepsProofs.of_grows (by rw [hd]; exact Grows.refl _) hdc hp)).trans
-      (KeepsProofs.settle hσ (by rw [hd, hf]; exact h₀))
+      UpperValid cfg.q cfg.xp s₀.floor s₀.disk → Hashed cfg s₁ → s₁.disk = s₀.disk →
+      s₁.floor = s₀.floor → s₁.decided = s₀.decided → s₁.proofs = s₀.proofs →
+      KeepsProofs cfg s (Node.settle cfg s₁).1 := fun s₀ s₁ h h₀ h₁ hd hf hdc hp =>
+    (h.trans ⟨fun _ hx => hdc ▸ hx, fun _ he => hp ▸ he, fun _ he hn => absurd (hp ▸ he) hn,
+      hf.ge, by rw [hd, hf]; exact fun _ hj _ => ⟨hj, rfl⟩,
+      fun h' x hx => hp ▸ h' x (hdc ▸ hx)⟩).trans
+      (KeepsProofs.settle hσ (by rw [hd, hf]; exact h₀) h₁)
   cases i with
   | start =>
     simp only [Node.step]
@@ -960,19 +1205,32 @@ theorem KeepsProofs.step (hσ : cfg.σ = boundedSel) (hid : Function.Injective c
         have hr₀ : cfg.genesis.refs ⊆ s.disk.ids := fun _ hj => absurd hj (Finset.notMem_empty _)
         have hp₀ : ∀ j ∈ cfg.genesis.refs, (s.disk.blk j).round + 1 = cfg.genesis.round :=
           fun j hj => absurd hj (Finset.notMem_empty j)
-        exact hset (keep s _ _ h₂.1 hr₀ hp₀) _
-          (KeepsProofs.of_grows (Grows.insert s.disk (hrefs := hr₀) (hpred := hp₀)) rfl rfl)
-          (hab.insert (hrefs := hr₀) (hpred := hp₀) h₂.2) rfl rfl rfl rfl
+        refine hset (keep s _ _ h₂.1 hr₀ hp₀) _
+          (KeepsProofs.of_rises (DiskRises.of_grows (Grows.insert s.disk (hrefs := hr₀)
+            (hpred := hp₀)) le_rfl rfl) rfl rfl)
+          (hab.insert (hrefs := hr₀) (hpred := hp₀) h₂.2) ⟨fun x hx => ?_, hh.2⟩ rfl rfl rfl rfl
+        change x ∈ (s.disk.insert _ _ h₂.1 hr₀ hp₀).ids at hx
+        change x = cfg.idOf ((s.disk.insert _ _ h₂.1 hr₀ hp₀).full x)
+        rw [Store.insert_ids] at hx
+        rw [Store.full_insert]
+        by_cases hx' : x = cfg.idOf cfg.genesis
+        · rw [if_pos hx', hx']
+        · rw [if_neg hx']; exact hh.1 x ((Finset.mem_insert.mp hx).resolve_left hx')
       · exact KeepsProofs.refl s
     · exact KeepsProofs.refl s
   | deliver u id b =>
     simp only [Node.step]
     split
-    · split
-      · exact hset (Node.accept cfg s id b) _ (KeepsProofs.accept s id b)
-          (hab.absorb [(id, b)]) rfl rfl rfl rfl
+    · rename_i hc
+      split
+      · exact hset (Node.accept cfg s id b) _ (KeepsProofs.absorb s [(id, b)])
+          (hab.absorb [(id, b)]) (Hashed.tidy (Hashed.absorb (L := [(id, b)]) hh fun e he => by
+            rw [List.mem_singleton] at he; subst he; exact hc.1)) rfl rfl rfl rfl
       · split
-        · exact hset s _ (KeepsProofs.refl s) hab rfl rfl rfl rfl
+        · refine hset s _ (KeepsProofs.refl s) hab ⟨hh.1, fun e he => ?_⟩ rfl rfl rfl rfl
+          rcases List.mem_cons.mp he with rfl | he
+          · exact hc.1
+          · exact hh.2 e (List.mem_of_mem_filter he)
         · exact KeepsProofs.refl s
     · exact KeepsProofs.refl s
   | stream u L =>
@@ -981,21 +1239,28 @@ theorem KeepsProofs.step (hσ : cfg.σ = boundedSel) (hid : Function.Injective c
     · exact KeepsProofs.refl s
     · rename_i e he
       set s₀ := Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 (aboveCut cfg s L)) with hs₀
-      have h₁ : KeepsProofs cfg s s₀ ∧ UpperValid cfg.q cfg.xp s₀.floor s₀.disk := by
+      have h₁ : KeepsProofs cfg s s₀ ∧ UpperValid cfg.q cfg.xp s₀.floor s₀.disk ∧
+          Hashed cfg s₀ := by
         rw [hs₀]
         unfold Node.takeIn
         split
-        · exact ⟨(KeepsProofs.absorb s _).trans (KeepsProofs.tidy _), hab.absorb _⟩
-        · exact ⟨KeepsProofs.refl s, hab⟩
+        · exact ⟨(KeepsProofs.absorb s _).trans (KeepsProofs.tidy _), hab.absorb _,
+            (hh.absorb fun x hx => (mem_of_mem_inHistory hx).2).tidy⟩
+        · exact ⟨KeepsProofs.refl s, hab, hh⟩
       split
-      · exact hset s₀ s₀ h₁.1 h₁.2 rfl rfl rfl rfl
-      · exact hset s₀ _ h₁.1 h₁.2 rfl rfl rfl rfl
+      · exact hset s₀ s₀ h₁.1 h₁.2.1 h₁.2.2 rfl rfl rfl rfl
+      · rename_i e₁ he₁
+        refine hset s₀ _ h₁.1 h₁.2.1 ⟨h₁.2.2.1, fun x hx => ?_⟩ rfl rfl rfl rfl
+        obtain ⟨y, hy, rfl⟩ := List.mem_map.mp hx
+        split
+        · exact h₁.2.2.2 e₁ (List.mem_of_find?_eq_some he₁)
+        · exact h₁.2.2.2 y hy
   | timer r =>
     simp only [Node.step]
-    split <;> exact hset s _ (KeepsProofs.refl s) hab rfl rfl rfl rfl
+    split <;> exact hset s _ (KeepsProofs.refl s) hab hh rfl rfl rfl rfl
   | syncRequest peer t fr ids => exact KeepsProofs.refl s
   | ask peer r => exact KeepsProofs.refl s
-  | restart => exact hset s _ (KeepsProofs.refl s) hab rfl rfl rfl rfl
+  | restart => exact hset s _ (KeepsProofs.refl s) hab hh rfl rfl rfl rfl
   | askProof peer k => exact KeepsProofs.refl s
   | proof u k L =>
     simp only [Node.step]
@@ -1010,7 +1275,7 @@ theorem KeepsProofs.step (hσ : cfg.σ = boundedSel) (hid : Function.Injective c
           exact UpperValid.release hab
         exact hset (Node.decideOn cfg s k d L) _
           (KeepsProofs.decideOn hσ hc.1 hid (fun x hx => hK _ (hi.known x hx)) hv) hd
-          rfl rfl rfl rfl
+          (Hashed.tidy (hh.decideOn k d L)) rfl rfl rfl rfl
       · exact KeepsProofs.refl s
     · exact KeepsProofs.refl s
 
@@ -1037,85 +1302,26 @@ theorem ProofsHold.run (hσ : cfg.σ = boundedSel) (hid : Function.Injective cfg
     · exact (hi₁.good e (List.mem_append_right _ he)).1
 
 omit [Fintype Validator] in
-/-- **A reply from kept proofs decides the slot as the node did**, from a disk
-under its hash. -/
-theorem verdictOn_reply (hσ : cfg.σ = boundedSel) (hw : 2 ≤ cfg.p.waveLength)
-    (hl : 1 ≤ cfg.p.linkSize) (hcm : 1 ≤ cfg.p.commitThreshold)
-    (hc : cfg.p.voteIsCert = false → 1 ≤ cfg.p.certThreshold)
-    {s : State Validator BlockId Payload} (hp : ProofsHold cfg s)
-    (hhash : ∀ x ∈ s.disk.ids, x = cfg.idOf (s.disk.full x)) {k : ℕ}
+/-- **A reply from kept proofs decides the slot as the node did.** -/
+theorem verdictOn_reply (hw : 2 ≤ cfg.p.waveLength) (hl : 1 ≤ cfg.p.linkSize)
+    (hcm : 1 ≤ cfg.p.commitThreshold) (hc : cfg.p.voteIsCert = false → 1 ≤ cfg.p.certThreshold)
+    {s : State Validator BlockId Payload} (hp : ProofsHold cfg s) {k : ℕ}
     {L : List (BlockId × Block Validator BlockId Payload)} (hL : proofReply cfg s k = some L) :
     ∃ d, (k, d) ∈ s.decided ∧ verdictOn cfg k L = some d := by
   letI := cfg.slots
   unfold proofReply at hL
   obtain ⟨p, hfind, hpL⟩ := Option.map_eq_some_iff.mp hL
   have hpk : p.1 = k := by simpa using List.find?_some hfind
-  obtain ⟨U, V, N, d, hdm, hkN, hdec, hwit, hP⟩ := hp p (List.mem_of_find?_eq_some hfind)
-  rw [hpk] at hdm hkN hdec hwit hP
+  obtain ⟨U, V, N, d, hdm, hv, -⟩ := hp p (List.mem_of_find?_eq_some hfind)
+  rw [hpk] at hdm hv
   refine ⟨d, hdm, ?_⟩
-  have hround : ∀ i, (s.disk.full i).round = (s.disk.blk i).round := fun i =>
-    (s.disk.full_fields i).1
-  -- the reply holds the disk's blocks of the proof and those the commit ordered below the proof
-  have hmemL : ∀ i b, (i, b) ∈ L → b = s.disk.full i ∧ i ∈ s.disk.ids ∧
-      (i ∈ p.2 ∨ (s.disk.blk i).round + 1 < cfg.slots.slotRound k) := fun i b he => by
-    rw [← hpL] at he
-    obtain ⟨j, hj, hje⟩ := List.mem_map.mp (List.mem_mergeSort.mp he)
-    simp only [Prod.mk.injEq] at hje
-    obtain ⟨rfl, rfl⟩ := hje
-    obtain ⟨hj, hjd⟩ := Finset.mem_filter.mp ((Finset.mem_sort _).mp hj)
-    refine ⟨rfl, hjd, ?_⟩
-    rcases Finset.mem_union.mp hj with h | h
-    · exact Or.inl h
-    · exact Or.inr (Finset.mem_filter.mp h).2
-  have hinL : ∀ i ∈ p.2, (i, s.disk.full i) ∈ L := fun i hi => by
-    rw [← hpL]
-    exact List.mem_mergeSort.mpr (List.mem_map.mpr ⟨i, (Finset.mem_sort _).mpr
-      (Finset.mem_filter.mpr ⟨Finset.mem_union_left _ hi, (hP i hi).1⟩), rfl⟩)
-  have hsort : L.Pairwise fun x y => x.2.round ≤ y.2.round := by
-    rw [← hpL]
-    exact (List.pairwise_mergeSort
-      (fun a b c h₁ h₂ => by simp only [decide_eq_true_eq] at *; omega)
-      (fun a b => by simp only [Bool.or_eq_true, decide_eq_true_eq]; omega) _).imp
-      (fun h => by simpa using h)
-  -- a block the store holds is one of the proof
-  obtain ⟨hspec, -⟩ := proofStore_spec (cfg := cfg) k L
-  have hstP : ∀ i ∈ (proofStore cfg k L).ids, i ∈ p.2 ∧
-      (proofStore cfg k L).full i = s.disk.full i := fun i hi => by
-    obtain ⟨hiL, hr⟩ := hspec i hi
-    obtain ⟨he, -, hor⟩ := hmemL i _ (List.mem_filter.mp hiL).1
-    refine ⟨hor.resolve_right fun h => ?_, he⟩
-    rw [he, hround] at hr
-    omega
-  -- the proof's blocks enter the store
-  have hheld : p.2 ⊆ (proofStore cfg k L).ids :=
-    proofStore_holds (g := s.disk.full) (F := p.2) (hsort.filter _)
-      (fun e he => by
-        obtain ⟨hb, -⟩ := hmemL e.1 e.2 (List.mem_filter.mp he).1
-        exact hb.symm)
-      (fun y hy => by
-        obtain ⟨hyd, hyr, -, -⟩ := hP y hy
-        exact ⟨List.mem_filter.mpr ⟨hinL y hy, by simpa using hhash y hyd⟩,
-          by rw [hround]; exact hyr⟩)
-      (fun y hy hyr => by
-        rw [hround] at hyr
-        obtain ⟨-, -, -, -, hrefs, hv⟩ := (hP y hy).2.2.2 hyr
-        refine ⟨hrefs, fun j hj => ?_, hv⟩
-        have := hv.predecessor j hj
-        rwa [hround, hround] at this ⊢)
-  refine verdictOn_of_decision hσ hw hl hcm hc hkN hdec (fun i hi hiR => ?_) (fun x hx => ?_)
-    (fun i hi => ?_)
-  · obtain ⟨hiP, he⟩ := hstP i hi
-    rw [he, hround] at hiR ⊢
-    obtain ⟨hV, hr, hcr, hb, -, -⟩ := (hP i hiP).2.2.2 hiR
-    exact ⟨hV, hr, hcr.trans (s.disk.full_fields i).2.1.symm, hb⟩
-  · obtain ⟨hxP, hxr⟩ := hwit x hx
-    refine ⟨hheld hxP, ?_⟩
-    rw [(hstP x (hheld hxP)).2, hround]
-    exact hxr
-  · obtain ⟨hiP, he⟩ := hstP i hi
-    have := (hP i hiP).2.2.1
-    rw [← ((proofStore cfg k L).full_fields i).1, he, hround]
-    exact this
+  rw [← hpL, verdictOn_append, hv hw hl hcm hc]
+  intro e he
+  unfold listOf at he
+  obtain ⟨i, hi, rfl⟩ := List.mem_map.mp (List.mem_mergeSort.mp he)
+  have := (Finset.mem_filter.mp (Finset.mem_filter.mp ((Finset.mem_sort _).mp hi)).1).2
+  rw [(s.disk.full_fields i).1]
+  exact this
 
 /-- **Two stores alike on what they hold**: the same identifiers, the same
 blocks there, and the same kept references. -/

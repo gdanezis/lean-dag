@@ -329,11 +329,12 @@ store closed, and needs none of this.
   3. *Dropping* (D13). Done, behind a switch (`Config.drops`). A
      decision keeps, for each slot it decides, the proof of its verdict:
      the blocks of the slot's witness (`witnessAt`) with their histories
-     down to the round below the slot's (`proofOf`, `State.proofs`). It
-     then lets go of each block below the round under its floor that is
-     not its own block, not ordered, in no proof, referenced by no block
-     the disk holds, and bypassed by ordered blocks of `q` authors one
-     round above it (`dropSet`, `drop`, `Store.eraseAll`). The disk then
+     down to the round below the slot's (`proofOf`), as a list of blocks
+     apart from the disk (`State.proofs`, `listOf`). It then lets go of
+     each block below the round under its floor that is not its own
+     block, not ordered, referenced by no block the disk holds, and
+     bypassed by ordered blocks of `q` authors one round above it
+     (`dropSet`, `drop`, `Store.eraseAll`). The disk then
      keeps some of its blocks, as accepted (`Store.Shrinks`,
      `decideStep_shrinks`), and the node's own block
      (`decideStep_own_mem`). With dropping on, the node's
@@ -348,14 +349,14 @@ store closed, and needs none of this.
      1. *Catch-up as messages.* Done, behind the switch. A node that
         drops asks every peer for the proof of its next undecided slot
         when it resends (`askProof`), and again after each slot it decides
-        on a proof. A peer answers from the proof it keeps for that slot
-        and the blocks the slot's commit ordered below the round under the
-        slot's (`proofReply`, with `State.proofs` now kept for each slot).
-        The node decides the slot by the loop on the store the proof's
-        blocks build, those of the round below the slot's without their
-        references (`proofStore`, `verdictOn`), keeps the verdict and, as
-        the proof, the blocks of that store, and takes the blocks in as it
-        accepts any block (`decideOn`, `Store.base`). Safety holds: a decision on a proof of
+        on a proof. A peer answers with the proof it keeps for that slot
+        and the blocks on its disk the slot's commit ordered below the
+        round under the slot's (`proofReply`). The node decides the slot by
+        the loop on the store the proof's blocks build, those of the round
+        below the slot's without their references (`proofStore`,
+        `verdictOn`), keeps the verdict and, as the proof, the blocks
+        under their hash, and takes the blocks in as it accepts any block
+        (`decideOn`, `Store.base`). Safety holds: a decision on a proof of
         known blocks is a verdict on the record padded below the round
         under the slot's (`verdict_proof`). A node that takes in blocks
         without their references holds, from its cut down, blocks whose
@@ -420,12 +421,16 @@ store closed, and needs none of this.
         node's disk is valid at the row from its floor up whether or not
         it drops (`Inv.above`, kept by each part of a step,
         `UpperValid.settle`); and, at an injective hash, every proof a
-        node keeps decides its slot again on the blocks it keeps
-        (`ProofsHold`, along a run `ProofsHold.run`): a proof it decided
-        on itself (`proofHolds_decide`) and a proof it took from a peer
+        node keeps decides its slot again, and the honest blocks of its
+        witness stay on the disk from the floor up (`ProofsHold`, along a
+        run `ProofsHold.run`): a proof it decided on itself
+        (`proofHolds_decide`, `verdictOn_listOf`, with the disk under its
+        hash, `Hashed.settle`) and a proof it took from a peer
         (`KeepsProofs.decideOn`), whose blocks all enter its disk
-        (`acceptOn_holds`). A reply from such proofs gives the peer the
-        node's verdict (`verdictOn_reply`). Evidence is kept apart from the
+        (`acceptOn_holds`). Proofs are kept apart from the disk (decided
+        with the user), so a reply from them, with blocks below the
+        round under the slot's added (`verdictOn_append`), gives the peer
+        the node's verdict (`verdictOn_reply`). Evidence is kept apart from the
         blocks it was extracted from (decided with the user), so an honest
         node never convicts an honest one with dropping on too
         (`not_detected`, from `Inv.evidence`). The catch-up lemma on

@@ -78,13 +78,14 @@ input `i` in the state `s`: the new state and the outputs.
   timer fires while its top lies more than a wave above the round of its
   next undecided slot (`askBehind`), the node asks every peer for the proof
   of that slot (`askProof`). A peer
-  that decided the slot answers with the blocks on its disk of the proof it
-  keeps for it and of those the slot's commit ordered (`proofReply`). The
-  node decides the slot by `tryDecide` on the store the proof's blocks
-  under their hash build, those of the round below the slot's without
-  their references (`proofStore`, `verdictOn`); it keeps the verdict and,
-  as the proof, the blocks of that store, takes the blocks in as it accepts
-  any block (`decideOn`), and asks for the next slot.
+  that decided the slot answers with the proof it keeps for it, apart from
+  its disk, and the blocks on its disk the slot's commit ordered below the
+  proof (`proofReply`). The node decides the slot by `tryDecide` on the
+  store the proof's blocks under their hash build, those of the round below
+  the slot's without their references (`proofStore`, `verdictOn`); it keeps
+  the verdict and, as the proof, the blocks under their hash, takes the
+  blocks in as it accepts any block (`decideOn`), and asks for the next
+  slot.
 * **Syncing** (`request`, `streamOf`, `inHistory`, `absorb`): a request
   names the sync's block, the node's frontier (for each author the least
   round at which its disk holds no block of it, `0` for a detected author,
@@ -159,8 +160,8 @@ structure State where
   /-- The decisions the node output, the latest first. -/
   decided : List (ℕ × Option BlockId)
   /-- The proofs of the decided slots, the latest first: each slot with the
-  blocks of its proof, which the node keeps. -/
-  proofs : List (ℕ × Finset BlockId)
+  blocks of its proof, kept apart from the disk. -/
+  proofs : List (ℕ × List (BlockId × Block Validator BlockId Payload))
   /-- The round whose timer is set. -/
   armed : Option ℕ
   /-- Restarted, and since neither built nor had a timer fire. -/
@@ -468,6 +469,13 @@ def State.ordered [S : Slots Validator] (q : ℕ) (s : State Validator BlockId P
     Finset BlockId :=
   ledgerOn s.disk.full q (verdictIn s.decided) n
 
+/-- **The blocks of a store under some identifiers**, as accepted, in order
+of round. -/
+def listOf (st : Store Validator BlockId Payload) (F : Finset BlockId) :
+    List (BlockId × Block Validator BlockId Payload) :=
+  ((((F.filter (· ∈ st.ids)).sort (· ≤ ·)).map fun i => (i, st.full i))).mergeSort
+    fun x y => decide (x.2.round ≤ y.2.round)
+
 /-- **The proof of slot `k`'s decision**, scanning to slot `N` on the memory's
 window at the round of the next undecided slot (D13): the blocks that decide
 it, with their histories down to the round below the slot's, walked only that
@@ -480,13 +488,13 @@ def proofOf (s : State Validator BlockId Payload) (N k : ℕ) : Finset BlockId :
       fun x => x ∈ s.disk.ids ∧ cfg.slots.slotRound k - 1 ≤ (s.disk.blk x).round
 
 /-- **The blocks the node lets go** (D13): below the round under its floor,
-not its own block, ordered by none of its commits, in none of its proofs,
-referenced by no block it stores, and bypassed by the blocks it ordered. -/
+not its own block, ordered by none of its commits, referenced by no block it
+stores, and bypassed by the blocks it ordered. -/
 def dropSet (s : State Validator BlockId Payload) : List BlockId :=
   letI := cfg.slots
   let ord := s.ordered cfg.q s.lo
   (s.disk.ids.sort (· ≤ ·)).filter fun x => decide ((s.disk.blk x).round + 1 < s.floor ∧
-    s.own ≠ some x ∧ x ∉ ord ∧ (∀ p ∈ s.proofs, x ∉ p.2) ∧
+    s.own ≠ some x ∧ x ∉ ord ∧
     (∀ i ∈ s.disk.ids, x ∉ (s.disk.blk i).refs) ∧
     cfg.q ≤ (bypassersOn s.disk.full ord x (s.disk.blk x).round).card)
 
@@ -516,7 +524,8 @@ def decideStep (s : State Validator BlockId Payload) :
   let N := decidable cfg s.disk.topRound
   let R := cfg.slots.slotRound s.lo
   let ds := Scheme.tryDecide cfg.p cfg.σ (s.memory.window R) (s.memory.windowView R) s.lo (N - 1)
-  let ps := (ds.map fun e => (e.1, proofOf cfg s (N - 1) e.1)).reverse ++ s.proofs
+  let ps :=
+    (ds.map fun e => (e.1, listOf s.disk (proofOf cfg s (N - 1) e.1))).reverse ++ s.proofs
   if s.lo < N ∧ s.floor ≤ R ∧ ds ≠ [] then
     (drop cfg (release cfg
       { s with lo := s.lo + ds.length, decided := ds.reverse ++ s.decided, proofs := ps }),
@@ -618,18 +627,16 @@ def verdictOn (k : ℕ) (L : List (BlockId × Block Validator BlockId Payload)) 
   ((Scheme.tryDecide cfg.p cfg.σ st.toRecord st.view k
     (max k (decidable cfg st.topRound - 1))).head?).map Prod.snd
 
-/-- **The reply to a request for the proof of slot `k`**: the blocks on disk,
-as accepted, of the proof the node keeps for `k` and of those its commit
-ordered below the round under the slot's, in order of round; the proof
-holds those the commit ordered from that round up. -/
+/-- **The reply to a request for the proof of slot `k`**: the proof the node
+keeps for `k`, then the blocks on disk, as accepted, that its commit ordered
+below the round under the slot's, in order of round; the proof holds those
+the commit ordered from that round up. -/
 def proofReply (s : State Validator BlockId Payload) (k : ℕ) :
     Option (List (BlockId × Block Validator BlockId Payload)) :=
   letI := cfg.slots
   (s.proofs.find? fun p => p.1 = k).map fun p =>
-    ((((p.2 ∪ ((s.ordered cfg.q (k + 1) \ s.ordered cfg.q k).filter fun i =>
-      (s.disk.blk i).round + 1 < cfg.slots.slotRound k)).filter (· ∈ s.disk.ids)).sort
-      (· ≤ ·)).map fun i => (i, s.disk.full i)).mergeSort
-        fun x y => decide (x.2.round ≤ y.2.round)
+    p.2 ++ listOf s.disk ((s.ordered cfg.q (k + 1) \ s.ordered cfg.q k).filter fun i =>
+      (s.disk.blk i).round + 1 < cfg.slots.slotRound k)
 
 /-- **The identifiers to ask for by name** after a stream piece: the
 references that neither the disk nor the piece holds of its blocks the node
@@ -647,16 +654,15 @@ def absorb (s : State Validator BlockId Payload)
   L.foldl (fun s e => accept cfg s e.1 e.2) s
 
 /-- **Decide slot `k` on a proof** (D16): keep the verdict, and under `k` the
-blocks of the store the proof builds, release the memory below the lowest
-round the node then reads, and take in the proof's blocks under their hash,
-in order of round. -/
+proof's blocks under their hash, release the memory below the lowest round
+the node then reads, and take in those blocks, in order of round. -/
 def decideOn (s : State Validator BlockId Payload) (k : ℕ) (d : Option BlockId)
     (L : List (BlockId × Block Validator BlockId Payload)) : State Validator BlockId Payload :=
   let s₁ : State Validator BlockId Payload :=
     { s with
       lo := k + 1
       decided := (k, d) :: s.decided
-      proofs := (k, (proofStore cfg k L).ids) :: s.proofs }
+      proofs := (k, hashed cfg L) :: s.proofs }
   absorb cfg (release cfg s₁) ((hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round))
 
 /-- **Take a stream piece in, header first**: its part `L` in the history

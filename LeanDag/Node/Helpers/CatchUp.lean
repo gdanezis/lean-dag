@@ -243,9 +243,8 @@ theorem caught_up (hσ : cfg.σ = boundedSel) (hw : 2 ≤ cfg.p.waveLength)
       (List.find?_isSome.mpr ⟨_, hP, by simp⟩ :
         ((stateBefore cfg tr j₁ v).proofs.find? fun p => p.1 = k).isSome)
     rw [hp]; exact ⟨_, rfl⟩
-  obtain ⟨d', -, hv'⟩ := verdictOn_reply (cfg := cfg.at v) hσ hw hl hcm hc
-    (proofsHold_before hσ hid v j₁)
-    (fun x hx => knownBefore_hashed ((Converge.inv_before j₁ v).known x hx)) hL
+  obtain ⟨d', -, hv'⟩ := verdictOn_reply (cfg := cfg.at v) hw hl hcm hc
+    (proofsHold_before hσ hid v j₁) hL
   -- `v` replies with it
   have hrep : Output.proof u k L ∈ outputsAt cfg tr j₁ := by
     have hnd := Converge.not_detected htime hev (hTH hu) (hTH hv) j₁

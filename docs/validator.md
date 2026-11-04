@@ -548,19 +548,19 @@ signed headers give. V3′, V11, V11′ and V12's timed parts assume it, so
 that no honest node convicts an honest one or leaves it out.
 
 **Dropping and catch-up.** A node whose configuration sets `drops` lets
-go of the bypassed blocks below its floor that it neither ordered nor
-keeps in a proof (D13, `docs/node-sync.md`), and catches up on proofs
-(D16). When it resends, and when a timer fires while its top lies more
+go of the bypassed blocks below its floor that it did not order (D13,
+`docs/node-sync.md`), keeps the proof of each verdict apart from its disk,
+as a list of blocks (`State.proofs`), and catches up on proofs (D16). When it resends, and when a timer fires while its top lies more
 than a wave above the round of its next undecided slot (`askBehind`), it
 asks every peer for the proof of that slot (`askProof`). A peer that
-decided the slot answers with the blocks of the proof it keeps and those
-the slot's commit ordered below the round under the slot's; the proof holds
-those the commit ordered from that round up (`proofReply`). The node checks
+decided the slot answers with the proof it keeps and the blocks on its
+disk the slot's commit ordered below the round under the slot's; the proof
+holds those the commit ordered from that round up (`proofReply`). The node checks
 a proof by the loop: it builds a store of the proof's blocks under their
 hash, those of the round below the slot's without their references
 (`proofStore`), and decides the slot by `tryDecide` on it, scanning to the
 last slot of the store's top round (`verdictOn`). It then keeps the verdict
-and, as the proof, the blocks of that store, takes the blocks in as it
+and, as the proof, the blocks under their hash, takes the blocks in as it
 accepts any block (`decideOn`), and asks for the next slot. A node that
 drops keeps its floor at the round of its next undecided slot `k`, or at
 `voteOffset − 1` above the round of slot `k − 1`, whichever is lower, one

@@ -164,7 +164,7 @@ theorem AllGood.decideOn (hg : Grounds cfg Good K) {s : State Validator BlockId 
     { s with
       lo := k + 1
       decided := (k, d) :: s.decided
-      proofs := (k, (proofStore cfg k L).ids) :: s.proofs }
+      proofs := (k, hashed cfg L) :: s.proofs }
   let l := (hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round)
   have e : Node.decideOn cfg s k d L = absorb cfg (release cfg s₁) l := rfl
   have hF₁ : (release cfg s₁).floor ≤ floorOf cfg s₁ := by
