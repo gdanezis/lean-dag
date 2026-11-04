@@ -10,7 +10,11 @@ references, at most two blocks of an author other than the node at one round
 above the floor are referenced by no block of the disk (`LooseAbove`): a part
 of a step that keeps the disk from its new floor up adds at most one such
 block of an author a round, and none of a convicted author
-(`LooseAbove.of_rises`).
+(`LooseAbove.of_rises`). Of a piece taken in, every block other than the
+sync's is referenced a round above (`pieceAt_held_above`,
+`SteadyAbove.takeIn`); of the blocks a decision on a proof brings, those of
+convicted authors stay only when referenced (`TameAbove.decideOn`). So an
+honest node that drops stays steady above its floor (`steadyAbove_before`).
 -/
 
 namespace LeanDag
@@ -281,6 +285,361 @@ omit [Fintype Validator] in
 theorem SteadyAbove.settle {s : State Validator BlockId Payload} (h : SteadyAbove cfg s) :
     SteadyAbove cfg (Node.settle cfg s).1 :=
   quiesce_ind (P := SteadyAbove cfg) (fun _ hs => hs.advance) _ s h
+
+/-! ## Taking a piece in, and deciding on a proof -/
+
+omit [Fintype Validator] in
+/-- **The walk through a piece from a held block**, on a store reading as a
+block map the piece agrees with, valid from `F` up, of a piece at or above
+the round below `F`: what it met is held, and is the block or a reference
+the piece gives a block it met. -/
+theorem pieceAt_held_above {q : ℕ} {E : Exposure Validator BlockId Payload}
+    {g : BlockId → Block Validator BlockId Payload}
+    {L : List (BlockId × Block Validator BlockId Payload)} {t : BlockId}
+    {st : Store Validator BlockId Payload} {F : ℕ} (hst : ReadsAs g st)
+    (hab : UpperValid q E F st) (hL : ∀ e ∈ L, e.2 = g e.1)
+    (hcut : ∀ e ∈ L, F ≤ e.2.round + 1) (ht : t ∈ st.ids) : ∀ k,
+    (∀ y ∈ (pieceAt L t k).1, y = t ∨ ∃ z ∈ (pieceAt L t k).2, y ∈ pieceRefs L z) ∧
+    (∀ x ∈ (pieceAt L t k).2, x ∈ st.ids ∧ (x = t ∨ ∃ z ∈ (pieceAt L t k).2, x ∈ pieceRefs L z))
+  | 0 => ⟨fun y hy => Or.inl (List.mem_singleton.mp hy), fun _ h => absurd h List.not_mem_nil⟩
+  | k + 1 => by
+    obtain ⟨h₁, h₂⟩ := pieceAt_held_above hst hab hL hcut ht k
+    rw [pieceAt_succ]
+    set w := pieceAt L t k
+    unfold pieceLevel
+    dsimp only
+    set front := (w.1.filter fun x => decide (x ∈ L.map Prod.fst) && decide (x ∉ w.2)).dedup
+    have hfront : ∀ x ∈ front, x ∈ w.1 ∧ x ∈ L.map Prod.fst := by
+      intro x hx
+      have := List.mem_filter.mp (List.mem_dedup.mp hx)
+      simp only [Bool.and_eq_true, decide_eq_true_eq] at this
+      exact ⟨this.1, this.2.1⟩
+    -- a reference the piece gives a held block is held: from the floor up by
+    -- validity, and below it the piece holds no block a round lower
+    have href : ∀ z ∈ w.2, ∀ y ∈ pieceRefs L z, y ∈ st.ids := by
+      intro z hz y hy
+      have hzL : z ∈ L.map Prod.fst := by
+        unfold pieceRefs at hy
+        cases hf : L.find? (fun e => decide (e.1 = z)) with
+        | none => rw [hf] at hy; exact absurd hy List.not_mem_nil
+        | some e =>
+          have := List.find?_some hf
+          simp only [decide_eq_true_eq] at this
+          exact this ▸ List.mem_map_of_mem (List.mem_of_find?_eq_some hf)
+      have hzs := (h₂ z hz).1
+      obtain ⟨hy', hyL, hyr⟩ := (pieceRefs_of_map L hL hzL).mp hy
+      by_cases hzF : F ≤ (st.blk z).round
+      · rw [← hst z hzs] at hy'
+        exact (hab z hzs hzF).1 hy'
+      · exfalso
+        obtain ⟨e, he, hez⟩ := List.mem_map.mp hzL
+        obtain ⟨e', he', hey⟩ := List.mem_map.mp hyL
+        have hc₁ := hcut e he
+        have hc₂ := hcut e' he'
+        rw [hL e he, hez] at hc₁
+        rw [hL e' he', hey] at hc₂
+        have hzr : (st.blk z).round = (g z).round := by
+          rw [← (st.full_fields z).1, hst z hzs]
+        omega
+    refine ⟨fun y hy => ?_, fun x hx => ?_⟩
+    · obtain ⟨z, hz, hyz⟩ := List.mem_flatMap.mp hy
+      exact Or.inr ⟨z, List.mem_append_right _ hz, hyz⟩
+    · rcases List.mem_append.mp hx with hx | hx
+      · obtain ⟨hxs, ho⟩ := h₂ x hx
+        refine ⟨hxs, ho.imp_right fun ⟨z, hz, hxz⟩ => ⟨z, List.mem_append_left _ hz, hxz⟩⟩
+      · rcases h₁ x (hfront x hx).1 with rfl | ⟨z, hz, hxz⟩
+        · exact ⟨ht, Or.inl rfl⟩
+        · exact ⟨href z hz x hxz, Or.inr ⟨z, List.mem_append_left _ hz, hxz⟩⟩
+
+omit [Fintype Validator] in
+/-- **A piece taken in header first keeps a state steady above the floor**,
+from a disk valid from the floor up and reading as a block map the piece and
+the sync's block agree with, of a piece at or above the round below the
+floor: every new block other than the sync's block is referenced a round
+above. -/
+theorem SteadyAbove.takeIn {g : BlockId → Block Validator BlockId Payload}
+    {s : State Validator BlockId Payload} (h : SteadyAbove cfg s)
+    (hab : UpperValid cfg.q cfg.xp s.floor s.disk) (hR : ReadsAs g s.disk) {u : Validator}
+    {t : BlockId × Block Validator BlockId Payload} {A : List BlockId} (he : (u, t, A) ∈ s.syncs)
+    {L : List (BlockId × Block Validator BlockId Payload)}
+    (hL : ∀ e ∈ hashed cfg L, g e.1 = e.2) (ht : g t.1 = t.2)
+    (hcut : ∀ e ∈ L, s.floor ≤ e.2.round + 1) :
+    SteadyAbove cfg (Node.takeIn cfg s t (inHistory cfg t L)) := by
+  unfold Node.takeIn
+  split
+  · rename_i hc
+    refine SteadyAbove.tidy ?_ (h.2.2.sublist (Thins.absorb (cfg := cfg) s _).sub)
+    set X := Node.absorb cfg s (inHistory cfg t L) with hX
+    have hd : X.disk =
+        (inHistory cfg t L).foldl (fun st e => acceptOn cfg s.floor st e.1 e.2) s.disk :=
+      absorb_disk _ _
+    have hg := Grows.absorb (cfg := cfg) s (inHistory cfg t L)
+    have hXf : X.floor = s.floor := (absorb_rest (cfg := cfg) s _).1
+    have hRX : ReadsAs g X.disk := by
+      rw [hd]
+      exact ReadsAs.foldl _ hR fun e he => hL e ((mem_inHistory L).mp he).1
+    have habX : UpperValid cfg.q cfg.xp s.floor X.disk := by
+      have := hab.absorb (inHistory cfg t L); rwa [hXf] at this
+    have hL' : ∀ e ∈ hashed cfg L, e.2 = g e.1 := fun e he => (hL e he).symm
+    have hcut' : ∀ e ∈ hashed cfg L, s.floor ≤ e.2.round + 1 := fun e he =>
+      hcut e ((mem_hashed L).mp he).1
+    -- every new block other than the sync's block, above the floor, is referenced
+    have href : ∀ i ∈ X.disk.ids, i ∉ s.disk.ids → i ≠ t.1 → s.floor < (X.disk.blk i).round →
+        ∃ z ∈ X.disk.ids, i ∈ (X.disk.blk z).refs := by
+      intro i hi hin hit hiF
+      have hi' := hi
+      rw [hd] at hi'
+      obtain ⟨e, he, rfl, -⟩ := foldl_new _ s.disk hi' hin
+      have hf := ((mem_inHistory L).mp he).2.2
+      have hw := pieceAt_held_above hRX habX hL' hcut' hc ((hashed cfg L).length + 1)
+      rcases (hw.2 e.1 hf).2 with het | ⟨z, hz, hez⟩
+      · exact absurd het hit
+      · have hzs := (hw.2 z hz).1
+        have hzL : z ∈ (hashed cfg L).map Prod.fst := by
+          unfold pieceRefs at hez
+          cases hf' : (hashed cfg L).find? (fun e => decide (e.1 = z)) with
+          | none => rw [hf'] at hez; exact absurd hez List.not_mem_nil
+          | some e' =>
+            have := List.find?_some hf'
+            simp only [decide_eq_true_eq] at this
+            exact this ▸ List.mem_map_of_mem (List.mem_of_find?_eq_some hf')
+        obtain ⟨hez', -, hr⟩ := (pieceRefs_of_map _ hL' hzL).mp hez
+        have hzr : (X.disk.blk z).round = (X.disk.blk e.1).round + 1 := by
+          rw [← (X.disk.full_fields z).1, ← (X.disk.full_fields e.1).1, hRX z hzs, hRX e.1 hi]
+          exact hr.symm
+        refine ⟨z, hzs, ?_⟩
+        rw [blk_refs_above (s := X) (by rw [hXf]; omega), hRX z hzs]
+        exact hez'
+    refine ⟨h.1.1.absorb _, h.1.2.of_rises h.1.1 hXf.ge (KeepsFrom.of_grows hg)
+      (fun i hi _ => hg.2.2 i hi) fun Y hY k hk => ⟨?_, fun hYd i hi => ?_⟩⟩
+    · refine Finset.card_le_one.mpr fun a ha b hb => ?_
+      obtain ⟨ha', han⟩ := Finset.mem_filter.mp ha
+      obtain ⟨hb', hbn⟩ := Finset.mem_filter.mp hb
+      obtain ⟨ha'', -, har, hau⟩ := Finset.mem_filter.mp ha'
+      obtain ⟨hb'', -, hbr, hbu⟩ := Finset.mem_filter.mp hb'
+      have hat : a = t.1 := by
+        by_contra hat
+        obtain ⟨z, hz, haz⟩ := href a ha'' han hat (by
+          rw [← (X.disk.full_fields a).1, har]; rw [hXf] at hk; exact hk)
+        exact hau z hz haz
+      have hbt : b = t.1 := by
+        by_contra hbt
+        obtain ⟨z, hz, hbz⟩ := href b hb'' hbn hbt (by
+          rw [← (X.disk.full_fields b).1, hbr]; rw [hXf] at hk; exact hk)
+        exact hbu z hz hbz
+      rw [hat, hbt]
+    · obtain ⟨hi', hic, hir, hiu⟩ := Finset.mem_filter.mp hi
+      by_contra hin
+      have hit : i = t.1 := by
+        by_contra hit
+        obtain ⟨z, hz, hiz⟩ := href i hi' hin hit (by
+          rw [← (X.disk.full_fields i).1, hir]; rw [hXf] at hk; exact hk)
+        exact hiu z hz hiz
+      subst hit
+      rw [hRX _ hi', ht, (h.2.2.2 _ he).2] at hic
+      exact h.2.1 _ he (hic ▸ hYd)
+  · exact h
+
+omit [Fintype Validator] in
+/-- **Deciding on a proof keeps a state tame above the floor**, at a node
+that drops: of the blocks it took in above the floor, those of convicted
+authors stay only when referenced (`eraseAll_referenced`), and twins
+convict the others. -/
+theorem TameAbove.decideOn (hdr : cfg.drops = true) {s : State Validator BlockId Payload}
+    (h : TameAbove cfg s) (k : ℕ) (d : Option BlockId)
+    (L : List (BlockId × Block Validator BlockId Payload)) :
+    TameAbove cfg (Node.decideOn cfg s k d L) := by
+  set s₁ : State Validator BlockId Payload :=
+    { s with
+      lo := k + 1
+      decided := (k, d) :: s.decided
+      proofs := (k, hashed cfg L) :: s.proofs } with hs₁
+  set l := (hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round) with hl
+  set X := Node.absorb cfg (Node.release cfg s₁) l with hX
+  set l' := spareSet cfg s X with hl'
+  have e : Node.decideOn cfg s k d L = letGo X l' := rfl
+  have hr := diskRises_decideOn (cfg := cfg) s k d L
+  have hgr := Grows.decideOn (cfg := cfg) s k d L
+  rw [e] at hr hgr ⊢
+  have hsh := letGo_disk X l'
+  have hcX : Caught cfg X :=
+    (Caught.of_same (s := s₁) h.1 (release_disk s₁) (by rw [release_detected])).absorb l
+  have hdX : s.detected ⊆ X.detected := by
+    have := (absorb_rest (cfg := cfg) (Node.release cfg s₁) l).2.2.2.2.2.2.2.2.2
+    rwa [release_detected] at this
+  -- a new block of a convicted author above the floor that stays is referenced
+  have hnd : l'.Nodup := (List.mergeSort_perm _ _).nodup_iff.mpr (Finset.sort_nodup _ _)
+  have hpw : l'.Pairwise fun x y => (X.disk.blk y).round ≤ (X.disk.blk x).round :=
+    (List.pairwise_mergeSort
+      (fun a b c h₁ h₂ => by simp only [decide_eq_true_eq] at *; omega)
+      (fun a b => by simp only [Bool.or_eq_true, decide_eq_true_eq]; omega) _).imp
+      (fun h => by simpa using h)
+  have hconv : ∀ i ∈ (letGo X l').disk.ids, i ∉ s.disk.ids →
+      X.floor < ((letGo X l').disk.blk i).round →
+      ((letGo X l').disk.blk i).creator ∈ X.detected →
+      ∃ z ∈ (letGo X l').disk.ids, i ∈ ((letGo X l').disk.blk z).refs := by
+    intro i hi hin hiF hic
+    have hiX := hsh.ids hi
+    rw [(hsh.fields i hi).1] at hiF
+    rw [(hsh.fields i hi).2.1] at hic
+    have hil : i ∈ l' := List.mem_mergeSort.mpr ((Finset.mem_sort _).mpr
+      (Finset.mem_filter.mpr ⟨Finset.mem_sdiff.mpr ⟨hiX, hin⟩, hdr, hiF, hic⟩))
+    exact X.disk.eraseAll_referenced l' hnd (fun x hx => (mem_spareSet hx).1) hpw i hil hi
+  refine ⟨hcX.shrinks hsh subset_rfl, h.2.of_rises h.1 hr.1.1 hr.2
+    (fun i hi hi' => hgr.2.2 i hi) fun Y hY k' hk' => ⟨?_, fun hYd i hi => ?_⟩⟩
+  · refine Finset.card_le_one.mpr fun a ha b hb => ?_
+    obtain ⟨ha', han⟩ := Finset.mem_filter.mp ha
+    obtain ⟨hb', hbn⟩ := Finset.mem_filter.mp hb
+    obtain ⟨ha'', hac, har, hau⟩ := Finset.mem_filter.mp ha'
+    obtain ⟨hb'', hbc, hbr, hbu⟩ := Finset.mem_filter.mp hb'
+    have hYX : Y ∉ X.detected := fun hYX => by
+      obtain ⟨z, hz, haz⟩ := hconv a ha'' han
+        (by rw [← ((letGo X l').disk.full_fields a).1, har]; exact hk')
+        (by rw [← ((letGo X l').disk.full_fields a).2.1, hac]; exact hYX)
+      exact hau z hz haz
+    rw [hsh.full a ha''] at hac har
+    rw [hsh.full b hb''] at hbc hbr
+    exact Finset.card_le_one.mp (hcX.card_le_one hYX hY k')
+      a (Finset.mem_filter.mpr ⟨hsh.ids ha'', hac, har⟩) b
+      (Finset.mem_filter.mpr ⟨hsh.ids hb'', hbc, hbr⟩)
+  · obtain ⟨hi', hic, hir, hiu⟩ := Finset.mem_filter.mp hi
+    by_contra hin
+    obtain ⟨z, hz, hiz⟩ := hconv i hi' hin
+      (by rw [← ((letGo X l').disk.full_fields i).1, hir]; exact hk')
+      (by rw [← ((letGo X l').disk.full_fields i).2.1, hic]; exact hdX hYd)
+    exact hiu z hz hiz
+
+/-! ## A step -/
+
+/-- **A step keeps a node that drops steady above the floor**, from a disk
+valid from the floor up and reading as a block map that what the step is
+given and the syncs' blocks agree with. -/
+theorem SteadyAbove.step {g : BlockId → Block Validator BlockId Payload}
+    {s : State Validator BlockId Payload} (h : SteadyAbove cfg s) (hdr : cfg.drops = true)
+    (hab : UpperValid cfg.q cfg.xp s.floor s.disk) (hR : ReadsAs g s.disk)
+    (inp : Input Validator BlockId Payload) (hP : ∀ e ∈ delivered cfg [inp], g e.1 = e.2)
+    (hS : ∀ e ∈ s.syncs, g e.2.1.1 = e.2.1.2) : SteadyAbove cfg (Node.step cfg s inp).1 := by
+  cases inp with
+  | start =>
+    rw [step_start_eq]
+    split_ifs with h₁ h₂
+    · exact SteadyAbove.settle (h.own (hrefs := fun _ hj => absurd hj (Finset.notMem_empty _))
+        (hpred := fun j hj => absurd hj (Finset.notMem_empty j)) (Store.Restrips.refl _ 0) le_rfl
+        rfl rfl rfl)
+    · exact h
+    · exact h
+  | deliver u id b =>
+    rw [step_deliver_eq]
+    split_ifs with hg hr hc
+    · refine SteadyAbove.settle
+        (SteadyAbove.tidy ?_ (h.2.2.sublist (Thins.accept (cfg := cfg) s id b).sub))
+      exact h.1.absorb (L := [(id, b)])
+        (fun e he e' he' _ _ => by
+          rw [List.mem_singleton] at he he'; rw [he, he'])
+        (fun e he _ => by
+          rw [List.mem_singleton] at he; rw [he, hg.2.1]; exact hg.2.2.2.1)
+    · refine SteadyAbove.settle ⟨h.1.of_shrinks (shrinks_refl _) le_rfl
+        (fun _ hj _ => ⟨hj, rfl⟩) subset_rfl, fun e he => ?_, h.2.2.fresh hg.2.1⟩
+      rcases List.mem_cons.mp he with rfl | he
+      · exact hg.2.2.2.1
+      · exact h.2.1 e (List.mem_of_mem_filter he)
+    · exact h
+    · exact h
+  | stream u L =>
+    have hL : ∀ e ∈ hashed cfg (aboveCut cfg s L), g e.1 = e.2 := fun e he => by
+      obtain ⟨heL, heh⟩ := (mem_hashed _).mp he
+      exact hP e (by simpa [delivered, hashed] using ⟨(List.mem_filter.mp heL).1, heh⟩)
+    have hcut : ∀ e ∈ aboveCut cfg s L, s.floor ≤ e.2.round + 1 := fun e he => by
+      have := of_decide_eq_true (List.mem_filter.mp he).2
+      unfold cutOf at this
+      rw [if_pos hdr] at this
+      omega
+    cases hf : s.syncs.find? fun e => decide (e.1 = u) with
+    | none =>
+      have : Node.step cfg s (.stream u L) = (s, []) := by simp only [Node.step, hf]
+      rw [this]; exact h
+    | some e =>
+      have he := List.mem_of_find?_eq_some hf
+      have hp := List.find?_some hf
+      simp only [decide_eq_true_eq] at hp
+      obtain ⟨w, t, A⟩ := e
+      simp only at hp
+      subst hp
+      have ht := hS _ he
+      rcases step_stream_cases (cfg := cfg) h.2.2 he L with ⟨-, hs⟩ | ⟨-, hs⟩
+      · rw [hs]
+        exact SteadyAbove.settle (h.takeIn hab hR he hL ht hcut)
+      · set s₁ := Node.takeIn cfg s t (inHistory cfg t (aboveCut cfg s L)) with hs₁
+        have hs' : (Node.step cfg s (.stream w L)).1 = (Node.settle cfg { s₁ with
+            syncs := s₁.syncs.map fun x => if x.1 = w then
+              (w, t, (A ++ missingIn cfg s₁ (t :: inHistory cfg t (aboveCut cfg s L))).dedup)
+              else x }).1 := by rw [hs]
+        rw [hs']
+        have h₁ := h.takeIn hab hR he hL ht hcut
+        refine SteadyAbove.settle ⟨h₁.1.of_shrinks (shrinks_refl _) le_rfl
+          (fun _ hj _ => ⟨hj, rfl⟩) subset_rfl, fun x hx => ?_,
+          h.2.2.extend (Thins.takeIn (cfg := cfg) s t _).sub he⟩
+        obtain ⟨x', hx', hxe⟩ := List.mem_map.mp hx
+        rw [← hxe]
+        split
+        · rename_i hxu
+          rw [← hxu]; exact h₁.2.1 x' hx'
+        · exact h₁.2.1 x' hx'
+  | timer r =>
+    rw [step_timer_fst]
+    exact SteadyAbove.settle (h.of_shrinks (shrinks_refl _) le_rfl (fun _ hj _ => ⟨hj, rfl⟩)
+      rfl rfl)
+  | syncRequest peer t fr ids => exact h
+  | ask peer r => exact h
+  | restart =>
+    rw [step_restart_fst]
+    exact SteadyAbove.settle (h.of_shrinks (shrinks_refl _) le_rfl (fun _ hj _ => ⟨hj, rfl⟩)
+      rfl rfl)
+  | askProof peer k => exact h
+  | proof u k L =>
+    simp only [Node.step]
+    split
+    · split
+      · rename_i d _
+        refine SteadyAbove.settle (SteadyAbove.tidy (h.1.decideOn hdr k d L)
+          (h.2.2.sublist ?_))
+        rw [(decideOn_rest (cfg := cfg) s k d L).1]
+      · exact h
+    · exact h
+
+/-! ## Along a trace -/
+
+section Trace
+
+variable {cfg : Config Validator BlockId Payload} {H : Finset Validator}
+variable {tr : Trace Validator BlockId Payload}
+
+/-- **An honest node that drops is steady above its floor** before every
+event, with an injective hash. -/
+theorem steadyAbove_before (hinj : Converge.HashInjective cfg H tr) (hdr : cfg.drops = true)
+    {v : Validator} (hv : v ∈ H) : ∀ i, SteadyAbove (cfg.at v) (stateBefore cfg tr i v)
+  | 0 => by
+    have hd : (stateBefore cfg tr 0 v).disk.ids = ∅ := by
+      simp [stateBefore, inputsBefore, run, State.init, Store.empty]
+    have hs : (stateBefore cfg tr 0 v).syncs = [] := by
+      simp [stateBefore, inputsBefore, run, State.init]
+    refine ⟨⟨fun i hi => by rw [hd] at hi; exact absurd hi (Finset.notMem_empty _),
+      fun X _ k _ => ?_⟩, fun e he => by rw [hs] at he; exact absurd he List.not_mem_nil,
+      Converge.syncsOn_before v 0⟩
+    have : looseAt (stateBefore cfg tr 0 v).disk X k = ∅ := by
+      unfold looseAt; rw [hd]; rfl
+    rw [this]; exact Nat.zero_le _
+  | i + 1 => by
+    by_cases he : ∃ inp, tr[i]? = some (v, inp)
+    · obtain ⟨inp, hi⟩ := he
+      rw [Converge.step_before hi]
+      exact (steadyAbove_before hinj hdr hv i).step hdr
+        (Converge.inv_before (cfg := cfg) (tr := tr) i v).above (Converge.reads_before hinj hv i)
+        inp (fun x hx => Converge.gT_of_known hinj (Or.inl ⟨i, v, inp, hi, hv, hx⟩))
+        (Converge.pend_before hinj hv i)
+    · rw [Converge.same_before fun inp h => he ⟨inp, h⟩]; exact steadyAbove_before hinj hdr hv i
+
+end Trace
 
 end Node
 

@@ -4,6 +4,7 @@ import LeanDag.Node.Helpers.Arrive
 import LeanDag.Node.Local.Proof
 import LeanDag.Common.Exclusion
 import LeanDag.Node.Helpers.Catch
+import LeanDag.Node.Helpers.BoundDrop
 /-!
 # The blocks a node holds a round — proof
 
@@ -18,7 +19,8 @@ each author other than `v` has at most two unreferenced blocks a round
 (`steady_before`), and `v`'s own blocks lie at distinct rounds
 (`Local.oneEach`, `own_known`). So each round from `m + 1` on holds one
 block of `v`, one of each other author not convicted, and two of each
-convicted.
+convicted. At a node that drops the argument runs above a floor at or below
+`m`, where every block is checked (`boundedAbove`, `steadyAbove_before`).
 -/
 
 namespace LeanDag
@@ -173,7 +175,102 @@ theorem spreads : Spreads := by
     (fun c hc hcr hcH X hX => exposes_spread hσ hadm hfa hf htime hinj hdr hsp hv i hc hcr hcH
       le_rfl X hX) hk
 
-theorem holds : Statement := ⟨bounded, spreads⟩
+/-- **At a node that drops, the bound holds above a floor at or below the
+round below the exposure**: the blocks there are checked, so from round
+`m + 2` on each references an honest block a round below, exposes the
+convicted authors and references none of them; their blocks from round
+`m + 1` on are then loose, at most two a round (`steadyAbove_before`). -/
+theorem boundedAbove : BoundedAbove := by
+  intro Validator BlockId Payload _ _ _ cfg H tr v i m k htime hinj hdr hv hq s hfm hexp hk
+  set st := s.disk with hst
+  have hC : SteadyAbove (cfg.at v) s := steadyAbove_before hinj hdr hv i
+  have hab : UpperValid cfg.q cfg.xp s.floor st :=
+    (Converge.inv_before (cfg := cfg) (tr := tr) i v).above
+  have hround : ∀ j, (st.full j).round = (st.blk j).round := fun j => (st.full_fields j).1
+  -- a block from round `m + 2` on references an honest block a round below, and exposes the
+  -- convicted authors
+  have hhon : ∀ b ∈ st.ids, m + 2 ≤ (st.blk b).round → ∃ c ∈ (st.full b).refs, c ∈ st.ids ∧
+      (st.blk c).creator ∈ H ∧ (st.blk c).round + 1 = (st.blk b).round := by
+    intro b hb hbr
+    obtain ⟨hrefs, hv'⟩ := hab b hb (by omega)
+    by_contra hno
+    push Not at hno
+    have hsub : creators st.full (st.full b) ⊆ Hᶜ := by
+      intro Y hY
+      obtain ⟨j, hj, rfl⟩ := mem_creatorsOf.mp hY
+      refine Finset.mem_compl.mpr fun hYH => hno j hj (hrefs hj) (by
+        rw [← (st.full_fields j).2.1]; exact hYH) ?_
+      have := hv'.predecessor j hj
+      rw [hround, hround] at this
+      exact this
+    have := (hv'.quorum (by rw [hround]; omega)).trans (Finset.card_le_card hsub)
+    change cfg.q ≤ Hᶜ.card at this
+    omega
+  have hexpo : ∀ X ∈ s.detected, ∀ n, ∀ b ∈ st.ids, (st.blk b).round = m + 2 + n →
+      X ∈ cfg.xp.ex (st.full b).payload := by
+    intro X hX n
+    induction n with
+    | zero =>
+      intro b hb hbr
+      obtain ⟨c, hc, hcs, hcH, hcr⟩ := hhon b hb (by omega)
+      rw [((hab b hb (by omega)).2.clause.2.1.1)]
+      refine Finset.mem_union_right _ (Finset.mem_biUnion.mpr ⟨c, hc, ?_⟩)
+      rw [(st.full_fields c).2.2]
+      exact hexp c hcs (by omega) hcH X hX
+    | succ n ih =>
+      intro b hb hbr
+      obtain ⟨c, hc, hcs, -, hcr⟩ := hhon b hb (by omega)
+      rw [((hab b hb (by omega)).2.clause.2.1.1)]
+      exact Finset.mem_union_right _ (Finset.mem_biUnion.mpr ⟨c, hc, ih c hcs (by omega)⟩)
+  -- from round `m + 1` on, no block references a block of a convicted author
+  have hfree : ∀ X ∈ s.detected, ∀ x ∈ st.ids, (st.full x).creator = X →
+      m + 1 ≤ (st.full x).round → ∀ z ∈ st.ids, x ∉ (st.blk z).refs := by
+    intro X hX x hx hxc hxr z hz hxz
+    have hzr : (st.blk x).round + 1 = (st.blk z).round := st.pred z hz x hxz
+    rw [hround] at hxr
+    rw [blk_refs_above (s := s) (j := z) (by rw [← hst]; omega)] at hxz
+    obtain ⟨n, hn⟩ : ∃ n, (st.blk z).round = m + 2 + n := ⟨(st.blk z).round - (m + 2), by omega⟩
+    exact (hab z hz (by omega)).2.clause.2.2 x hxz (by rw [hxc]; exact hexpo X hX n z hz hn)
+  -- each author's blocks of round `k`
+  set D := s.detected
+  set of := fun Y => st.ids.filter fun j => (st.full j).creator = Y ∧ (st.full j).round = k
+  have hper : ∀ Y, (of Y).card ≤ 1 + if Y ∈ D then 1 else 0 := by
+    intro Y
+    by_cases hYv : Y = v
+    · -- the node's own blocks lie at distinct rounds
+      subst hYv
+      refine (Finset.card_le_one.mpr fun a ha b hb => ?_).trans (Nat.le_add_right _ _)
+      obtain ⟨ha, hac, har⟩ := Finset.mem_filter.mp ha
+      obtain ⟨hb, hbc, hbr⟩ := Finset.mem_filter.mp hb
+      have hB := Local.oneEach _ _ _ (cfg.at Y) (inputsBefore tr i Y)
+      dsimp only at hB
+      have hnd := (hB.imp ne_of_lt)
+      have hpa := own_known htime hv hv le_rfl
+        ((Converge.inv_before (cfg := cfg) (tr := tr) i Y).known a ha) hac
+      have hpb := own_known htime hv hv le_rfl
+        ((Converge.inv_before (cfg := cfg) (tr := tr) i Y).known b hb) hbc
+      have := List.inj_on_of_nodup_map hnd hpa hpb (by simp only; rw [har, hbr])
+      exact (Prod.mk.inj this).1
+    · by_cases hY : Y ∈ D
+      · rw [if_pos hY]
+        refine (Finset.card_le_card fun j hj => ?_).trans (hC.1.2 Y hYv k (by omega))
+        obtain ⟨hj, hjc, hjr⟩ := Finset.mem_filter.mp hj
+        exact Finset.mem_filter.mpr ⟨hj, hjc, hjr, hfree Y hY j hj hjc (hjr ▸ hk)⟩
+      · rw [if_neg hY]
+        exact hC.1.1.card_le_one hY hYv k
+  have hsub : st.atRound k ⊆ Finset.univ.biUnion of := by
+    intro j hj
+    obtain ⟨hj, hjr⟩ := Store.mem_atRound.mp hj
+    exact Finset.mem_biUnion.mpr ⟨(st.full j).creator, Finset.mem_univ _,
+      Finset.mem_filter.mpr ⟨hj, rfl, by rw [(st.full_fields j).1]; exact hjr⟩⟩
+  calc (st.atRound k).card ≤ ∑ Y, (of Y).card :=
+        (Finset.card_le_card hsub).trans Finset.card_biUnion_le
+    _ ≤ ∑ Y, (1 + if Y ∈ D then 1 else 0) := Finset.sum_le_sum fun Y _ => hper Y
+    _ = Fintype.card Validator + D.card := by
+        rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, smul_eq_mul, mul_one,
+          Finset.sum_boole, Finset.filter_mem_eq_inter, Finset.univ_inter, Nat.cast_id]
+
+theorem holds : Statement := ⟨bounded, spreads, boundedAbove⟩
 
 end Bound
 

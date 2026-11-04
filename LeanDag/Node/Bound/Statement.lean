@@ -18,6 +18,10 @@ source and at most `f` nodes outside `H`, every honest block above `nE`
 exposes the authors an honest node convicted, so the bound holds from
 round `nE + 1` (`Spreads`).
 
+For a node that drops (`cfg.drops = true`), under the same premise read on
+the blocks of round `m + 1` and a floor at or below `m`, `v`'s disk holds at
+most `n + |D|` blocks of each round from `m + 1` on (`BoundedAbove`).
+
 Statements only; the proofs are `Proof.lean`.
 -/
 
@@ -52,8 +56,22 @@ def Spreads : Prop :=
     ((stateBefore cfg tr i v).disk.atRound k).card ≤
       Fintype.card Validator + (stateBefore cfg tr i v).detected.card
 
+/-- **At most `n + |D|` blocks a round from the exposure on, at a node that
+drops**, when its floor lies at or below the round below the exposure. -/
+def BoundedAbove : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
+    (tr : Trace Validator BlockId Payload) (v : Validator) (i m k : ℕ),
+    Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr → cfg.drops = true →
+    v ∈ H → Hᶜ.card < cfg.q →
+    let s := stateBefore cfg tr i v
+    s.floor ≤ m →
+    (∀ c ∈ s.disk.ids, (s.disk.blk c).round = m + 1 → (s.disk.blk c).creator ∈ H →
+      ∀ X ∈ s.detected, X ∈ cfg.xp.ex (s.disk.blk c).payload) →
+    m + 1 ≤ k → (s.disk.atRound k).card ≤ Fintype.card Validator + s.detected.card
+
 /-- The blocks a node holds a round. -/
-def Statement : Prop := Bounded ∧ Spreads
+def Statement : Prop := Bounded ∧ Spreads ∧ BoundedAbove
 
 end Bound
 

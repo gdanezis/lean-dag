@@ -642,7 +642,20 @@ store closed, and needs none of this.
      no other block references, and the witness of a verdict may itself
      hold twins (`blamersAt`, `certsAt`). The
      honest blocks of a kept proof's witness stay on the disk from the
-     floor up (`ProofHolds`), which the jump of V11″ reads.
+     floor up (`ProofHolds`), which the jump of V11″ reads. V13 with
+     dropping is proved (`Bound.BoundedAbove`): under the exposure
+     premise at round `m + 1` and a floor at or below `m`, a node that
+     drops holds at most `n + |D|` blocks of each round from `m + 1` on.
+     Above the floor every block is checked; counting the references
+     blocks hold with them, which dropping and stripping below the floor
+     leave as they were, at most two blocks of an author at one round
+     above the floor are referenced by none (`LooseAbove`,
+     `steadyAbove_before`): a piece's blocks other than the sync's are
+     referenced a round above (`SteadyAbove.takeIn`), and of the blocks
+     a decision on a proof brings, those of convicted authors stay only
+     when referenced (`TameAbove.decideOn`, `Store.eraseAll_referenced`).
+     Its form under spread evidence (`Spreads`) still assumes that no
+     node drops.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase
 3, from R1 to R5, V13 and the invariant of `BypassRun`. R6 is optional.
