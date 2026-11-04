@@ -13,8 +13,9 @@ from `f + 1` of those authors (`exists_correct_referenced`): a double count,
 since each references `n − 2f` or more correct blocks and correct authors
 have one block a round. So below a block `A`, every round two or more below
 it holds an anchored block of a correct author (`broad`); every block at
-round `r + 3` or above references a certificate of a directly committed
-round-`r` block, so the available sub-DAG below `A` holds one (`linked`);
+round `r + 3` references a certificate of a directly committed round-`r`
+block, so the available sub-DAG below `A` holds one with its references, at
+`K ≥ 3` (`linked`);
 and a certificate excludes a direct skip (`not_directSkip`).
 -/
 
@@ -197,18 +198,28 @@ theorem broad {K : ℕ} (hK : 2 ≤ K) {A : BlockId} (hA : A ∈ U.ids) :
     have := (U.valid v hv).predecessor z hz
     omega
 
+/-- A reference of a reference of a reference lies in the history to depth
+three or more. -/
+theorem ref_ref_ref_mem_historyUpto {K : ℕ} (hK : 3 ≤ K) {y w v x : BlockId}
+    (hw : w ∈ (U.block y).refs) (hv : v ∈ (U.block w).refs) (hx : x ∈ (U.block v).refs) :
+    x ∈ historyUpto U K y := by
+  obtain ⟨k, rfl⟩ : ∃ k, K = k + 1 := ⟨K - 1, by omega⟩
+  exact mem_historyUpto_succ.mpr (Or.inr ⟨w, hw, ref_ref_mem_historyUpto (by omega) hv hx⟩)
+
 /-- **A directly committed block is linked through the sub-DAG**: below a
-block `A` at round `r + 3` or above, at `K ≥ 2`, the available sub-DAG holds
-a certificate of a directly committed round-`r` block. A block of round
-`r + 3` whose references lie in the sub-DAG references a certificate of a
-correct author, since its references and the certificates come from two
-quorums. -/
-theorem linked {K : ℕ} (hK : 2 ≤ K) {A L : BlockId} {r : ℕ} (hA : A ∈ U.ids)
+block `A` at round `r + 3` or above, at `K ≥ 3`, the available sub-DAG holds
+a certificate of a directly committed round-`r` block and its references. A
+block of round `r + 3` whose references and theirs lie in the sub-DAG
+references a certificate of a correct author, since its references and the
+certificates come from two quorums. -/
+theorem linked {K : ℕ} (hK : 3 ≤ K) {A L : BlockId} {r : ℕ} (hA : A ∈ U.ids)
     (hr : r + 3 ≤ (U.block A).round) (hd : DirectCommit U L r) : AvailLinked U K A L r := by
   obtain ⟨v, hv, hvr, hvrefs⟩ : ∃ v ∈ U.ids, (U.block v).round = r + 3 ∧
-      ∀ z ∈ (U.block v).refs, z ∈ Avail U K A := by
+      ∀ z ∈ (U.block v).refs, z ∈ Avail U K A ∧ ∀ j ∈ (U.block z).refs, j ∈ Avail U K A := by
     by_cases h₃ : (U.block A).round = r + 3
-    · exact ⟨A, hA, h₃, fun z hz => ⟨A, AnchoredBelow.anchor, ref_mem_historyUpto (by omega) hz⟩⟩
+    · exact ⟨A, hA, h₃, fun z hz =>
+        ⟨⟨A, AnchoredBelow.anchor, ref_mem_historyUpto (K := K) (by omega) hz⟩,
+          fun j hj => ⟨A, AnchoredBelow.anchor, ref_ref_mem_historyUpto (K := K) (by omega) hz hj⟩⟩⟩
     by_cases h₄ : (U.block A).round = r + 4
     · have hq := (U.valid A hA).quorum (by omega)
       obtain ⟨c, hc⟩ : (creatorsOf U.block (U.block A).refs).Nonempty := by
@@ -216,11 +227,14 @@ theorem linked {K : ℕ} (hK : 2 ≤ K) {A L : BlockId} {r : ℕ} (hA : A ∈ U.
         exact Finset.card_pos.mp (lt_of_lt_of_le (by omega) hq)
       obtain ⟨w, hw, -⟩ := mem_creatorsOf.mp hc
       refine ⟨w, U.complete A hA w hw, ?_, fun z hz =>
-        ⟨A, AnchoredBelow.anchor, ref_ref_mem_historyUpto hK hw hz⟩⟩
+        ⟨⟨A, AnchoredBelow.anchor, ref_ref_mem_historyUpto (K := K) (by omega) hw hz⟩,
+          fun j hj => ⟨A, AnchoredBelow.anchor, ref_ref_ref_mem_historyUpto hK hw hz hj⟩⟩⟩
       have := (U.valid A hA).predecessor w hw
       omega
-    obtain ⟨y, hy, hyr, -, hya⟩ := broad hK hA ((U.block A).round - (r + 5)) (by omega)
-    exact ⟨y, hy, by omega, fun z hz => ⟨y, hya, ref_mem_historyUpto (by omega) hz⟩⟩
+    obtain ⟨y, hy, hyr, -, hya⟩ :=
+      broad (K := K) (by omega) hA ((U.block A).round - (r + 5)) (by omega)
+    exact ⟨y, hy, by omega, fun z hz => ⟨⟨y, hya, ref_mem_historyUpto (K := K) (by omega) hz⟩,
+      fun j hj => ⟨y, hya, ref_ref_mem_historyUpto (K := K) (by omega) hz hj⟩⟩⟩
   -- a correct author of a reference of `v` and of a certificate
   have hq : quorumCard Validator ≤ (creatorsOf U.block (U.block v).refs).card :=
     (U.valid v hv).quorum (by omega)
@@ -236,7 +250,8 @@ theorem linked {K : ℕ} (hK : 2 ≤ K) {A L : BlockId} {r : ℕ} (hA : A ∈ U.
   have hzi := U.complete v hv z hz
   have hzr := (U.valid v hv).predecessor z hz
   have hzC : z = C := U.eq_of_creator_eq hzi hCi (mem_correct.mpr hcB) hzc hCc (by omega)
-  exact ⟨C, hC, hzC ▸ hvrefs z hz⟩
+  subst hzC
+  exact ⟨z, hC, hvrefs z hz⟩
 
 /-- **A certificate excludes a direct skip**: its votes and the blames come
 from two quorums, so a correct author would have a round-`(r+1)` block that

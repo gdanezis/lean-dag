@@ -573,3 +573,7 @@ import LeanDag.KPartialDag.Avail.Proof
 import LeanDag.KPartialDag.Helpers.Rule
 import LeanDag.KPartialDag.Agreement.Statement
 import LeanDag.KPartialDag.Agreement.Proof
+import LeanDag.KPartialDag.Model.Node
+import LeanDag.KPartialDag.Helpers.Node
+import LeanDag.KPartialDag.Node.Statement
+import LeanDag.KPartialDag.Node.Proof

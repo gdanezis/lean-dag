@@ -30,7 +30,7 @@ theorem linked : Linked := by
 
 theorem exclusive : Exclusive := by
   intro Validator BlockId Payload _ _ _ _ U K A L r hl
-  obtain ⟨C, hC, -⟩ := hl
+  obtain ⟨C, hC, -, -⟩ := hl
   exact not_directSkip hC
 
 theorem holds : Statement := ⟨held, broad, linked, exclusive⟩

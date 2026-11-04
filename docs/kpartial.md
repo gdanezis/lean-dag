@@ -17,6 +17,9 @@ core DAG in two ways:
 2. an honest author that references a block has downloaded that block's
    history to depth `K` only, not its whole history.
 
+A correct node need not build a block at every round: nothing below assumes
+it.
+
 Hashes fix the whole history of every block, so the record of a run is an
 ordinary block record (`KRecord`, at the validity `KValid`: references one
 round below, from a quorum of distinct authors, at most one of each). What changes is what an
@@ -59,7 +62,8 @@ history to depth `K` of an anchored block (`AnchoredBelow`). The *available
 sub-DAG* below `A` is the union of the histories to depth `K` of the anchored
 blocks (`Avail`). It is a function of the record, so every node computes the
 same one. The indirect test reads it: the sub-DAG below the anchor holds a
-certificate for the slot's block (`AvailLinked`).
+certificate for the slot's block, with the certificate's references, which
+carry its votes (`AvailLinked`).
 
 The development proves, on any K-partial DAG (`Avail.Statement`):
 
@@ -73,11 +77,12 @@ The development proves, on any K-partial DAG (`Avail.Statement`):
   the round below from `f + 1` of those authors (`exists_correct_referenced`),
   by a double count: each references `n − 2f` or more correct blocks, and a
   correct author has one block a round;
-* **linked** (`Avail.Linked`): at `K ≥ 2`, if a round-`r` block is directly
+* **linked** (`Avail.Linked`): at `K ≥ 3`, if a round-`r` block is directly
   committed and `A` lies at round `r + 3` or above, the sub-DAG holds a
-  certificate for it. A block of round `r + 3` whose references lie in the
-  sub-DAG references a certificate of a correct author, since its
-  references and the certificates come from two quorums;
+  certificate for it, with its references. A block of round `r + 3` whose
+  references and theirs lie in the sub-DAG references a certificate of a
+  correct author, since its references and the certificates come from two
+  quorums;
 * **exclusive** (`Avail.Exclusive`): a block for which the sub-DAG holds a
   certificate is not directly skipped.
 
@@ -90,7 +95,7 @@ through the same anchor.
 The commit rule is Mysticeti's, read on the K-partial DAG, as an anchored rule
 of `Common/Anchored.lean` (`kRule`): the direct commit and the slot skip read
 on a view, at wave two, with one rung, whose link is `AvailLinked`. At
-`K ≥ 2` it satisfies the laws of an anchored rule (`Agreement.Laws`), so any
+`K ≥ 3` it satisfies the laws of an anchored rule (`Agreement.Laws`), so any
 two views of one record decide each slot alike (`Agreement.Agrees`), and the
 committed sequences and ledgers agree by the relation's own theorems.
 
@@ -105,17 +110,44 @@ committed sequences and ledgers agree by the relation's own theorems.
   anchors lie at round `r + 3` or above.
 
 The views of this framework are closed under whole histories, and the link
-is read on the record. So agreement holds between nodes that hold the
-available sub-DAG below each anchor they decide through; that a node holding
-only histories to depth `K` can fetch it is §3's `Held`, and deciding on such
-a node's view is the next step.
+is read on the record. §5 reads the rule on what a node holds.
 
-## 5. Next
+## 5. What a node reads
 
-* Views a node holds on a K-partial DAG: closed under histories to depth
-  `K`, not under whole histories; a decision taken on such a view, with the
-  available sub-DAG below the anchor fetched, is the decision on a closed
-  view, so `Agreement.Agrees` applies.
+A node holds a set `H` of blocks of the record, not closed under histories.
+It reads the available sub-DAG below an anchor on `H` (`AnchoredIn`,
+`AvailIn`): a block is anchored in `H` when its history to depth `K` is held
+and it is the anchor, or blocks of `f + 1` distinct authors of the sub-DAG
+read so far reference it. It links a candidate when it holds, in that
+sub-DAG, a certificate for it with its references (`LinkedIn`), and it has
+fetched the sub-DAG when the anchor's history and that of every block that
+blocks of `f + 1` distinct authors of it reference are held (`FetchedIn`).
+It decides by the commit rule read on what it holds (`NodeDecided`): the
+direct tests count the certificates and blamers it holds with their
+references, the indirect commit reads `LinkedIn`, and the indirect skip
+needs the sub-DAG below the anchor fetched.
+
+The development proves (`Node.Statement`):
+
+* **local** (`Node.Local`): the indirect test and the fetch test are the
+  same on every record whose blocks agree on `H`, so a node computes them
+  from what it holds. A history to depth `K` that it holds reads alike under
+  every block map agreeing on `H` (`historyUptoFrom_eq_of_subset`);
+* **fetchable** (`Node.Fetchable`): a node that holds the record's available
+  sub-DAG below an anchor has fetched it. By §3's `Held` it can fetch that
+  sub-DAG from correct nodes;
+* **sound** (`Node.Sound`): a decision a node takes on what it holds is a
+  decision of the commit rule on every view holding `H`. A link read on `H`
+  is the record's (`linkedIn_avail`); once the sub-DAG is fetched, the
+  record's link is read on `H` too (`avail_linkedIn`), so an indirect skip
+  on `H` is one on the record;
+* **agreement** (`Node.Agrees`): at `K ≥ 3`, two nodes decide each slot
+  alike, by soundness on the full view and §4's agreement.
+
+## 6. Next
+
 * Liveness: the cost of fetching the sub-DAG, how far below an anchor
   decisions reach, and how long honest nodes must keep the histories they
   downloaded.
+* The order: what a committed leader orders, read on the available sub-DAG
+  below it rather than its whole history.

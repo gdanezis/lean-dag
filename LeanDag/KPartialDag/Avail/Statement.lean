@@ -10,9 +10,9 @@ sub-DAG below it (`Avail`):
   references, which that author downloaded;
 * **broad** (`Broad`): at `K ≥ 2`, every round two or more below `A` holds an
   anchored block of a correct author;
-* **linked** (`Linked`): at `K ≥ 2`, if a round-`r` block is directly
+* **linked** (`Linked`): at `K ≥ 3`, if a round-`r` block is directly
   committed and `A` lies at round `r + 3` or above, the sub-DAG holds a
-  certificate for it;
+  certificate for it, with its references;
 * **exclusive** (`Exclusive`): if the sub-DAG holds a certificate for a
   block, that block is not directly skipped.
 
@@ -44,13 +44,13 @@ def Broad : Prop :=
     ∃ x ∈ U.ids, (U.block x).round = ρ ∧ (U.block x).creator ∈ (Correct : Finset Validator) ∧
       AnchoredBelow U K A x
 
-/-- **A direct commit is linked through the sub-DAG**: at `K ≥ 2`, below a
+/-- **A direct commit is linked through the sub-DAG**: at `K ≥ 3`, below a
 block at round `r + 3` or above, the sub-DAG holds a certificate for a
-directly committed round-`r` block. -/
+directly committed round-`r` block, with its references. -/
 def Linked : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [DecidableEq BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
-    (A L : BlockId) (r : ℕ), 2 ≤ K → A ∈ U.ids → r + 3 ≤ (U.block A).round →
+    (A L : BlockId) (r : ℕ), 3 ≤ K → A ∈ U.ids → r + 3 ≤ (U.block A).round →
     DirectCommit U L r → AvailLinked U K A L r
 
 /-- **A link excludes a direct skip**: a block for which the sub-DAG holds a

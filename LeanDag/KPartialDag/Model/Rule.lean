@@ -9,9 +9,10 @@ a round-`r` block `L` is a round-`(r+1)` block referencing it, and a
 certificate a round-`(r+2)` block carrying votes for `L` from a quorum
 (`certificatesAt`). The direct tests read rounds `r` to `r + 2`. The
 indirect test reads the available sub-DAG below the anchor instead of the
-anchor's whole history (`AvailLinked`). The commit rule is these tests as an
-anchored rule (`kRule`): the direct tests read on a view, at wave two, with
-one rung, the indirect test.
+anchor's whole history: a certificate there, with its votes
+(`AvailLinked`). The commit rule is these tests as an anchored rule
+(`kRule`): the direct tests read on a view, at wave two, with one rung, the
+indirect test.
 
 Definitions only.
 -/
@@ -35,10 +36,12 @@ def DirectSkip (U : KRecord Validator BlockId Payload) (L : BlockId) (r : ℕ) :
   quorumCard Validator ≤ (blames U L (r + 1)).card
 
 /-- **The indirect test**: the available sub-DAG below the anchor `A` holds a
-certificate for `L`. -/
+certificate for `L` and the certificate's references, which carry its
+votes. -/
 def AvailLinked (U : KRecord Validator BlockId Payload) (K : ℕ) (A L : BlockId) (r : ℕ) :
     Prop :=
-  ∃ C ∈ certificatesAt U (IsVote U) (quorumCard Validator) L (r + 2), C ∈ Avail U K A
+  ∃ C ∈ certificatesAt U (IsVote U) (quorumCard Validator) L (r + 2), C ∈ Avail U K A ∧
+    ∀ j ∈ (U.block C).refs, j ∈ Avail U K A
 
 /-- **The commit rule on a K-partial DAG**: Mysticeti's direct commit and
 slot skip read on a view, at wave two, with one rung, linked through the

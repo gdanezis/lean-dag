@@ -64,8 +64,8 @@ theorem directSkip_of_blameSkip {V : U.View} {k : ℕ} {L : BlockId}
   h.le.trans (Finset.card_le_card (Finset.image_subset_image (slotBlamers_subset_omissionsOf hL)))
 
 omit S in
-/-- **The laws of the commit rule**, at `K ≥ 2`. -/
-theorem kRule_laws {K : ℕ} (hK : 2 ≤ K) : (kRule (Validator := Validator) (BlockId := BlockId)
+/-- **The laws of the commit rule**, at `K ≥ 3`. -/
+theorem kRule_laws {K : ℕ} (hK : 3 ≤ K) : (kRule (Validator := Validator) (BlockId := BlockId)
     (Payload := Payload) K).Laws where
   commit_unique := by
     intro S U V₁ V₂ k L₁ L₂ _ hL₁ hL₂ h₁ h₂
@@ -86,16 +86,16 @@ theorem kRule_laws {K : ℕ} (hK : 2 ≤ K) : (kRule (Validator := Validator) (B
   commit_link_unique := by
     intro S U V k j i L₁ L₂ A _ hL₁ hL₂ h _ _ _ _ _ hlink _
     obtain ⟨C₁, hC₁⟩ := exists_certificate h.le
-    obtain ⟨C₂, hC₂, -⟩ := hlink
+    obtain ⟨C₂, hC₂, -, -⟩ := hlink
     exact eq_of_certificates hC₁ hC₂ (hL₁.2.2.trans hL₂.2.2.symm)
   skip_link := by
     intro S U V k i L A _ hskip hL _ _ hlink
-    obtain ⟨C, hC, -⟩ := hlink
+    obtain ⟨C, hC, -, -⟩ := hlink
     exact not_directSkip hC (directSkip_of_blameSkip hskip hL)
   link_unique := by
     intro S U k j i L₁ L₂ A _ hL₁ hL₂ _ _ _ _ _ hl₁ hl₂ _ _
-    obtain ⟨C₁, hC₁, -⟩ := hl₁
-    obtain ⟨C₂, hC₂, -⟩ := hl₂
+    obtain ⟨C₁, hC₁, -, -⟩ := hl₁
+    obtain ⟨C₂, hC₂, -, -⟩ := hl₂
     exact eq_of_certificates hC₁ hC₂ (hL₁.2.2.trans hL₂.2.2.symm)
   commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
   skip_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
