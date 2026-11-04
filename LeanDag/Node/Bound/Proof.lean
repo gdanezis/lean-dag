@@ -270,7 +270,103 @@ theorem boundedAbove : BoundedAbove := by
         rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, smul_eq_mul, mul_one,
           Finset.sum_boole, Finset.filter_mem_eq_inter, Finset.univ_inter, Nat.cast_id]
 
-theorem holds : Statement := ⟨bounded, spreads, boundedAbove⟩
+/-- **Under spread evidence, an honest block above `nE` exposes every author
+an honest node convicted**, with dropping or not, under a faithful payload
+source: those authors are in `D`, the block's builder convicted all of `D`
+when it built it, and its references avoid them, so its payload names them.
+The builder's state comes from the step that persisted the block, read on
+any record above every round the honest nodes knew (`step_witness`,
+`tryBuild_block`). -/
+theorem exposes_spread_above {Validator BlockId Payload : Type} [Fintype Validator]
+    [DecidableEq Validator] [LinearOrder BlockId] {cfg : Config Validator BlockId Payload}
+    {H : Finset Validator} {tr : Trace Validator BlockId Payload} {D : Finset Validator}
+    {nE : ℕ} (hfa : cfg.Faithful) (htime : Converge.TimelyAuthentic cfg H tr)
+    (hinj : Converge.HashInjective cfg H tr) (hsp : Live.Spread cfg H tr D nE) {v : Validator}
+    (hv : v ∈ H) (i : ℕ) {c : BlockId} {r : ℕ}
+    (hc : c ∈ (stateBefore cfg tr i v).disk.ids)
+    (hcr : ((stateBefore cfg tr i v).disk.blk c).round = r + 1)
+    (hcH : ((stateBefore cfg tr i v).disk.blk c).creator ∈ H) (hrE : nE ≤ r) :
+    ∀ X ∈ (stateBefore cfg tr i v).detected,
+      X ∈ cfg.xp.ex ((stateBefore cfg tr i v).disk.blk c).payload := by
+  intro X hX
+  set s := stateBefore cfg tr i v with hs
+  set w := (s.disk.blk c).creator with hw
+  have hi := Converge.inv_before (cfg := cfg) (tr := tr) i v
+  -- the author is in `D`
+  have hXD : X ∈ D := by
+    obtain ⟨e, he, he1⟩ := hi.evidence.1 X hX
+    exact excluded_before_spread hsp hv i s.floor (Or.inr ⟨hfa, le_rfl⟩)
+      (Finset.mem_union_left _ (Finset.mem_image.mpr
+        ⟨e, Finset.mem_filter.mpr ⟨he, (hi.evidence.2 e he).1⟩, he1⟩))
+  -- its author persisted it at an event before
+  obtain ⟨j, -, hjw, hjc⟩ := mem_persists_before (cfg := cfg) (tr := tr) w i
+    (own_known htime hv hcH le_rfl (hi.known c hc) (s.disk.full_fields c).2.1)
+  obtain ⟨inp, hj⟩ : ∃ inp, tr[j]? = some (w, inp) := by
+    rcases h : tr[j]? with _ | ⟨w', inp⟩
+    · rw [h] at hjw; cases hjw
+    · rw [h] at hjw
+      simp only [Option.map_some, Option.some.injEq] at hjw
+      exact ⟨inp, by rw [hjw]⟩
+  -- a round above every block the honest nodes knew
+  obtain ⟨Gk, hGk⟩ : ∃ G, ∀ x ∈ knownAll cfg H tr, x.2.round < G := by
+    refine ⟨H.sup (fun u => ((knownOf cfg tr u).map fun x => x.2.round).sum) + 1, ?_⟩
+    rintro x ⟨u, hu, hx⟩
+    have h₁ : x.2.round ≤ ((knownOf cfg tr u).map fun x => x.2.round).sum :=
+      List.le_sum_of_mem (List.mem_map_of_mem hx)
+    have h₂ := Finset.le_sup (f := fun u => ((knownOf cfg tr u).map fun x => x.2.round).sum) hu
+    omega
+  set G := max Gk (floorAt cfg (stateBefore cfg tr (j + 1) w).lo) with hG
+  have hvac : ∀ x ∈ knownAll cfg H tr, ¬ G ≤ x.2.round := fun x hx h => by
+    have := hGk x hx; omega
+  have hK : ∀ x ∈ knownOf cfg tr w, x ∈ knownAll cfg H tr := fun x hx => ⟨w, hcH, hx⟩
+  have hinvw := Converge.inv_before (cfg := cfg) (tr := tr) j w
+  obtain ⟨hd, hb⟩ := event_knownOf (cfg := cfg) hj
+  have hpe : (c, s.disk.full c) ∈
+      persists (Node.step (cfg.at w) (stateBefore cfg tr j w) inp).2 := by
+    rw [← outputsAt_eq hj]; exact hjc
+  -- the build of the block, on a record above every known round
+  rcases step_witness (cfg := cfg.at w)
+      (U := globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)) (G := G)
+      (F := G) ⟨fun _ _ x hx _ _ _ h => absurd h (hvac x hx),
+        fun _ x hx _ h => absurd h (hvac x hx)⟩
+      (hinvw.mono fun x hx => hK x (knownBefore_knownOf hx))
+      (fun x hx h => absurd h (hvac _ (hK _ (knownBefore_knownOf (hinvw.known x hx)))))
+      (ownTop_before (cfg := cfg) j)
+      (fun hfa' => Converge.kept_before (cfg := cfg) (tr := tr) hfa' w j)
+      (fun x hx => hK _ (knownBefore_knownOf (hinvw.pend x hx)))
+      (fun x hx => hK x (hd x hx)) (fun x hx => hK x (hb x hx)) (Nat.le_succ G)
+      (fun _ => by rw [← Converge.step_before hj]; exact le_max_right _ _) _ hpe with
+    h0 | ⟨x, y, o, hbs, hby, heo, -⟩
+  · change (s.disk.full c).round = 0 at h0
+    rw [(s.disk.full_fields c).1, hcr] at h0
+    omega
+  obtain ⟨B, hiX⟩ := hbs.inv
+  obtain ⟨r', ow, how, hout⟩ := tryBuild_block hbs.own hiX.floor hby
+  rw [hout, persists_built, List.mem_singleton] at heo
+  have her : nE < (s.disk.full c).round := by rw [(s.disk.full_fields c).1]; omega
+  -- its builder had convicted `X`, and references no block of it
+  obtain ⟨e, he, he1⟩ := hiX.evidence.1 X (hbs.det (hsp.2.2 j w inp hj hcH _ hjc her hXD))
+  have hne := (hiX.evidence.2 e he).1
+  rw [← (s.disk.full_fields c).2.2, (Prod.mk.inj heo).2]
+  change X ∈ cfg.xp.ex (payloadFor (cfg.at w) x.memory r'
+    (refsAt (cfg.at w) x.memory r' ow x.evidence) x.evidence)
+  unfold payloadFor
+  erw [(hfa _ _ _).2]
+  refine Finset.mem_union_left _ (Finset.mem_image.mpr ⟨e, Finset.mem_filter.mpr
+    ⟨Finset.mem_filter.mpr ⟨he, fun hm => ?_⟩, hne⟩, he1⟩)
+  obtain ⟨k, hk, hkc⟩ := mem_creatorsOf.mp hm
+  exact refsAt_avoids (cfg := cfg.at w) (fun j h => (how j h).2) k hk
+    (by rw [hkc, he1]; exact spread_sub_excluded hsp hj hcH hbs hjc her r' hXD)
+
+/-- **Under spread evidence the bound holds at a node that drops**, at each
+round above `nE` and above its floor. -/
+theorem spreadsAbove : SpreadsAbove := by
+  intro Validator BlockId Payload _ _ _ cfg H tr D nE v i k hfa hq htime hinj hdr hsp hv hk hfk
+  exact boundedAbove Validator BlockId Payload cfg H tr v i (k - 1) k htime hinj hdr hv hq
+    (by omega) (fun c hc hcr hcH X hX => exposes_spread_above hfa htime hinj hsp hv i hc hcr hcH
+      (by omega) X hX) (by omega)
+
+theorem holds : Statement := ⟨bounded, spreads, boundedAbove, spreadsAbove⟩
 
 end Bound
 

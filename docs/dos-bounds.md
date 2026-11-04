@@ -654,8 +654,14 @@ store closed, and needs none of this.
      referenced a round above (`SteadyAbove.takeIn`), and of the blocks
      a decision on a proof brings, those of convicted authors stay only
      when referenced (`TameAbove.decideOn`, `Store.eraseAll_referenced`).
-     Its form under spread evidence (`Spreads`) still assumes that no
-     node drops.
+     Under spread evidence with a faithful payload source, the bound
+     holds at a node that drops at each round above both `nE` and its
+     floor (`Bound.SpreadsAbove`): an honest block above `nE` exposes
+     every author an honest node convicted, since its builder convicted
+     them and its references avoid them (`exposes_spread_above`). The
+     builder's state is read from the step that built the block, on any
+     record above every round the honest nodes knew (`step_witness`,
+     `tryBuild_block`). Phase 3.2 is done.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase
 3, from R1 to R5, V13 and the invariant of `BypassRun`. R6 is optional.

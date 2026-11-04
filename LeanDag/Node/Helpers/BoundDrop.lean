@@ -1,4 +1,5 @@
 import LeanDag.Node.Helpers.Bound
+import LeanDag.Node.Helpers.Wait
 /-!
 # The blocks a node that drops holds a round
 
@@ -15,6 +16,8 @@ sync's is referenced a round above (`pieceAt_held_above`,
 `SteadyAbove.takeIn`); of the blocks a decision on a proof brings, those of
 convicted authors stay only when referenced (`TameAbove.decideOn`). So an
 honest node that drops stays steady above its floor (`steadyAbove_before`).
+A block a node builds is its block on its memory's references, its own
+among them only when held in memory (`tryBuild_block`).
 -/
 
 namespace LeanDag
@@ -640,6 +643,75 @@ theorem steadyAbove_before (hinj : Converge.HashInjective cfg H tr) (hdr : cfg.d
     · rw [Converge.same_before fun inp h => he ⟨inp, h⟩]; exact steadyAbove_before hinj hdr hv i
 
 end Trace
+
+/-! ## The block a node builds -/
+
+omit [Fintype Validator] in
+/-- **A block the node builds** is its block on its memory's references
+above some round, those of the round and, if any, its own block there, which
+its memory then holds. -/
+theorem tryBuild_block {s s' : State Validator BlockId Payload}
+    {out : List (Output Validator BlockId Payload)} (hown : OwnTop cfg s)
+    (hfl : s.floor ≤ floorOf cfg s) (h : tryBuild cfg s = some (s', out)) :
+    ∃ r o, (∀ j, o = some j → j ∈ s.memory.ids ∧ (s.memory.blk j).creator = cfg.me) ∧
+      out = built cfg [(cfg.idOf (blockOn cfg s.memory r (refsAt cfg s.memory r o s.evidence)
+        s.evidence), blockOn cfg s.memory r (refsAt cfg s.memory r o s.evidence) s.evidence)] := by
+  have hab : ∀ r o, buildAbove cfg s r o = some (s', out) →
+      (∀ j, o = some j → j ∈ s.memory.ids ∧ (s.memory.blk j).creator = cfg.me) →
+      ∃ r o, (∀ j, o = some j → j ∈ s.memory.ids ∧ (s.memory.blk j).creator = cfg.me) ∧
+        out = built cfg [(cfg.idOf (blockOn cfg s.memory r (refsAt cfg s.memory r o s.evidence)
+          s.evidence), blockOn cfg s.memory r (refsAt cfg s.memory r o s.evidence)
+            s.evidence)] := by
+    intro r o hb ho
+    refine ⟨r, o, ho, ?_⟩
+    unfold buildAbove at hb
+    dsimp only at hb
+    split at hb
+    · split at hb
+      · rw [Option.some.injEq, Prod.mk.injEq] at hb
+        rw [← hb.2]
+        simp [built, blockOn]
+      · cases hb
+    · cases hb
+  have hnone : ∀ j, (none : Option BlockId) = some j →
+      j ∈ s.memory.ids ∧ (s.memory.blk j).creator = cfg.me := fun _ h => by cases h
+  unfold tryBuild at h
+  split at h
+  · rename_i t ht
+    -- off the drop branch, the node's own block at its top lies at or above its floor
+    have hown' : ¬ (cfg.drops = true ∧ t < s.floor) → ∀ j, s.own = some j →
+        j ∈ s.memory.ids ∧ (s.memory.blk j).creator = cfg.me := by
+      intro hnd j hj
+      obtain ⟨j', hj', hjd, hjr, hjc⟩ := hown t ht
+      rw [hj, Option.some.injEq] at hj'
+      subst hj'
+      have hFt : s.floor ≤ t := by
+        cases hd : cfg.drops
+        · have := floorOf_le_top (cfg := cfg) hd s
+          rw [ht] at this
+          simp only [Option.getD_some] at this
+          omega
+        · by_contra hlt
+          exact hnd ⟨hd, by omega⟩
+      have hjm := s.mirrors.mem_of hjd (by rw [hjr]; exact hFt)
+      exact ⟨hjm, by rw [s.mirrors.creator hjm]; exact hjc⟩
+    split at h
+    · dsimp only at h
+      split at h
+      · exact hab _ _ h hnone
+      · cases h
+    · rename_i hnd
+      split at h
+      · dsimp only at h
+        split at h
+        · split at h
+          · exact hab _ _ h hnone
+          · cases h
+        · split at h
+          · exact hab _ _ h (hown' hnd)
+          · cases h
+      · exact hab _ _ h (hown' hnd)
+  · cases h
 
 end Node
 

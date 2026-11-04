@@ -20,7 +20,10 @@ round `nE + 1` (`Spreads`).
 
 For a node that drops (`cfg.drops = true`), under the same premise read on
 the blocks of round `m + 1` and a floor at or below `m`, `v`'s disk holds at
-most `n + |D|` blocks of each round from `m + 1` on (`BoundedAbove`).
+most `n + |D|` blocks of each round from `m + 1` on (`BoundedAbove`). Under
+spread evidence with a faithful payload source, the premise holds above
+`nE`, so the bound holds at each round above both `nE` and the floor
+(`SpreadsAbove`).
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -70,8 +73,21 @@ def BoundedAbove : Prop :=
       ∀ X ∈ s.detected, X ∈ cfg.xp.ex (s.disk.blk c).payload) →
     m + 1 ≤ k → (s.disk.atRound k).card ≤ Fintype.card Validator + s.detected.card
 
+/-- **At most `n + |D|` blocks a round above `nE` and above the floor, under
+spread evidence, at a node that drops.** -/
+def SpreadsAbove : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
+    (tr : Trace Validator BlockId Payload) (D : Finset Validator) (nE : ℕ) (v : Validator)
+    (i k : ℕ),
+    cfg.Faithful → Hᶜ.card < cfg.q → Converge.TimelyAuthentic cfg H tr →
+    Converge.HashInjective cfg H tr → cfg.drops = true → Live.Spread cfg H tr D nE → v ∈ H →
+    nE + 1 ≤ k → (stateBefore cfg tr i v).floor < k →
+    ((stateBefore cfg tr i v).disk.atRound k).card ≤
+      Fintype.card Validator + (stateBefore cfg tr i v).detected.card
+
 /-- The blocks a node holds a round. -/
-def Statement : Prop := Bounded ∧ Spreads ∧ BoundedAbove
+def Statement : Prop := Bounded ∧ Spreads ∧ BoundedAbove ∧ SpreadsAbove
 
 end Bound
 
