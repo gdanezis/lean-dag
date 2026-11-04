@@ -746,6 +746,32 @@ theorem lent_buildable_of {st : Store Validator BlockId Payload} {r : ℕ} {z : 
     exact Finset.mem_union_right _ hm
 
 omit [Fintype Validator] in
+/-- **A node that drops with its top below its floor jumps**, given a round
+above its top at which its memory holds `q` authors and it can build on the
+references `refsAt` takes, and no block on its disk with the identifier of a
+block of its own above its top. -/
+theorem tryBuild_drop_isSome {s : State Validator BlockId Payload} {t r : ℕ}
+    (ht : s.top = some t) (hdr : cfg.drops = true) (hF : t < s.floor) (htr : t < r)
+    (hr : r ≤ s.memory.topRound) (hq : cfg.q ≤ (s.memory.authorsAt r).card)
+    (hB : buildable cfg s.memory r (refsAt cfg s.memory r none s.evidence) s.evidence = true)
+    (hfresh : ∀ n, t < n → ∀ (P : Payload) R, cfg.idOf ⟨n, cfg.me, R, P⟩ ∉ s.disk.ids) :
+    (tryBuild cfg s).isSome := by
+  have hle : r ≤ dropRound cfg s t := le_foldr_max t (List.mem_filter.mpr
+    ⟨List.mem_range.mpr (by omega), by simp [htr, hq, hB]⟩)
+  rcases dropRound_cases (cfg := cfg) s t with h | ⟨hlt, hq', hB'⟩
+  · rw [h] at hle; omega
+  unfold tryBuild
+  rw [ht]
+  simp only
+  rw [if_pos ⟨hdr, hF⟩, if_pos hlt]
+  unfold buildAbove
+  dsimp only
+  rw [if_pos ⟨hq', Or.inr (Or.inr (Or.inr ⟨hdr, by rw [ht]; exact hF⟩))⟩]
+  unfold buildable at hB'
+  rw [dif_pos ⟨hfresh _ (by omega) _ _, of_decide_eq_true hB'⟩]
+  rfl
+
+omit [Fintype Validator] in
 /-- **A node not recovering whose round's timer fired, or that is behind
 the round above, builds**, given a quorum of the round, its own block there
 on disk, `refsFor`'s or a lent set it can build on, no block on disk with

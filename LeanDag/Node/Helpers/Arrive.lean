@@ -282,17 +282,19 @@ theorem own_le_top {H : Finset Validator} (htime : Converge.TimelyAuthentic cfg 
     rw [← hf.1]
     exact hR.2 _ hB
 
-/-- **No block on a node's disk has the identifier of its next block**, with
-an injective hash and its peers' blocks authenticated. -/
+/-- **No block on a node's disk has the identifier of a block of its own
+above its top**, with an injective hash and its peers' blocks
+authenticated. -/
 theorem fresh_before {H : Finset Validator} (hid : Function.Injective cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr) (hv : v ∈ H) {E t : ℕ}
-    (ht : (stateBefore cfg tr E v).top = some t) (P : Payload) (R : Finset BlockId) :
-    cfg.idOf ⟨t + 1, v, R, P⟩ ∉ (stateBefore cfg tr E v).disk.ids := by
+    (ht : (stateBefore cfg tr E v).top = some t) {n : ℕ} (hn : t < n) (P : Payload)
+    (R : Finset BlockId) :
+    cfg.idOf ⟨n, v, R, P⟩ ∉ (stateBefore cfg tr E v).disk.ids := by
   intro hin
   set st := (stateBefore cfg tr E v).disk
   have hk := (Converge.inv_before (cfg := cfg) (tr := tr) E v).known _ hin
   have hidk := Converge.id_of_knownIn (Converge.knownBefore_sub hv E hk)
-  have hraw : st.full _ = (⟨t + 1, v, R, P⟩ : Block Validator BlockId Payload) := hid hidk.symm
+  have hraw : st.full _ = (⟨n, v, R, P⟩ : Block Validator BlockId Payload) := hid hidk.symm
   have hB := own_known htime hv hv le_rfl hk (by change (st.full _).creator = v; rw [hraw])
   rcases (Converge.inv_before (cfg := cfg) (tr := tr) E v).rounds with ⟨h, -⟩ | ⟨t', ht', hR⟩
   · rw [h] at ht; cases ht
@@ -300,7 +302,8 @@ theorem fresh_before {H : Finset Validator} (hid : Function.Injective cfg.idOf)
     have := hR.2 _ hB
     change (st.full _).round ≤ t at this
     rw [hraw] at this
-    simp at this
+    change n ≤ t at this
+    omega
 
 /-- **A reliable node has started after its start event.** -/
 theorem started_after {H : Finset Validator} (hadm : cfg.Admissible) (hfa : cfg.Faithful)

@@ -505,6 +505,7 @@ four a round. It needs no bootstrap, since no block is collected.
 | V8 | The claims are about the program that runs: its disk and memory are ordered maps, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` (§6) |
 | V11 | **Liveness**: over a timed trace of nodes that do not drop, with delivery within `Δ` and synchronisation within `Δₛ` past GST, reliable nodes that do not restart, their timers on time, no honest node's timer early, timeouts above `2(Δ + Δₛ)`, authentic evidence, a faithful payload source, and evidence that has spread by a round every reliable node is at by GST, the reliable nodes produce a round per timeout and `Δ + Δₛ`, and a run of reliably led slots from a round that every reliable node was below at GST is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of a timeout and `Δ + Δₛ` per round. The honest nodes outside the reliable set need meet no other timing assumption. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy`, `Node.held_before` |
 | V11′ | **Liveness across crashes**: of nodes that do not drop, if the reliable nodes stay up from `t_r` to the horizon `t₁`, with delivery, synchronisation and timers assumed only from then on, and timers lost only to a restart, with authentic evidence, a faithful payload source, and evidence that has spread by a round every reliable node is at by `max t_r gst`, the conclusions of V11 hold with GST replaced by `max t_r gst + W`, for `W` twice the largest timeout of the round below the one a reliable node is at by `max t_r gst`. Crashes before GST are the case `t_r ≤ gst`. The honest nodes outside the reliable set may keep crashing and restarting; with every honest node reliable, after every node crashed and restarted, the nodes decide again. | `Node.Live.Recovers` (proved, §5.6): `Node.arrival_of_recovered`, `Node.sends_again`, `Node.retry_fires`, `Node.recovered_by`, `Node.topTimerBy_of_up`, `Node.top_arrives`, `Node.quorum_below` |
+| V11″ | **Liveness with dropping**: over an infinite run of nodes that drop, whose every prefix meets the assumptions of V11 with synchronisation from the blocks reliable nodes hold, with every honest node reliable and above round `0` by GST, skip and commit thresholds above `f`, and beyond every slot a run of slots led by honest nodes spanning the rule's eligibility, every honest node's next undecided slot grows without bound. | `Node.Live.Eventually` (proved, §5.8): `Live.eventually`, `Node.catchup_run`, `Node.floor_le_top_before`, `Live.steady_bounded` |
 | V12 | **Refinement**: for an admissible configuration at the bounded vote, over a trace with timely authentication, an injective hash and at most `f` nodes outside the honest set, of nodes that do not drop, there is a `BlockRecord` at quorum `q` of which every honest disk, before every event, is a cut; every honest node's decisions are none or `Scheme.tryDecide` from slot `0` on a view of it that the node's disk holds. Under the assumptions of V11 (no timer need fire) or of V11′, it has the scheme's `WaveFacts` over every window of rounds from one above every reliable node's round at GST, and every slot of a reliably led run is decided by every reliable node to a leader block. | `Node.Refines.HasRecord` (proved, §5.7): `Node.commitInv_before`, `Node.waveFacts_of_run`, `Node.run_commits`, `Refines.waves_leads` |
 
 Every claim depends only on the standard axioms (`propext`,
@@ -569,7 +570,8 @@ lets pass. V3 holds with dropping and catch-up: a decision on a
 proof is a verdict on the record of the slot's cut (`Cut.Cuts`). V3′, V11, V11′,
 V12, V13 and the order of `docs/dos-bounds.md` (`Order.Agrees`,
 `Order.Held`) assume that no node drops (`cfg.drops = false`); a node
-that does not drop neither asks for proofs nor decides on them.
+that does not drop neither asks for proofs nor decides on them. V11″ is
+liveness with dropping (§5.8).
 
 **Authentication.** A block delivered to an honest node in an honest
 author's name was broadcast by that author earlier in the trace
@@ -881,6 +883,42 @@ the run commits a leader block `L` (`run_commits`). By V11 the node has
 output a decision `d` for the slot. That decision is a verdict on some
 view of the record (`cut_before`), and verdicts on one slot agree
 (`AnchoredRule.decided_unique`), so `d = some L`.
+
+### 5.8 Dropping (V11″)
+
+With dropping, V11's timed bounds fail: a node may catch up on proofs,
+jump, and need blocks every reliable node let go of. V11″ is an eventual
+property of an infinite run (`Live.Eventually`): its events `ev`, timed
+without decrease and without bound, whose prefixes (`prefixOf`) meet the
+assumptions of V11 with `SyncedHeld` in place of `SyncedWithin`. Every
+honest node is reliable and at round `1` or above by GST, the skip and
+commit thresholds exceed `f`, and beyond every slot there are `c`
+consecutive slots led by honest nodes, with `c` spanning the rule's
+eligibility. Then for every slot `k`, after some number of events every
+honest node is past `k` (`Live.eventually`).
+
+* **Catch-up** (`catchup_run`). Once an honest node is past slot `k`,
+  every honest node is: each slot takes a request for its proof at a
+  retry timer and a reply (`moves_up`).
+* **Settling** (`stable_run`). If no honest node passes `k`, the honest
+  nodes' next undecided slots settle at one slot `L`.
+* **The floor** (`floor_le_top_before`, `floor_run`). Past GST, a node that
+  drops is at or above its floor at each of its events once no honest node
+  is past its next undecided slot. The proof it keeps of slot `L − 1` has a
+  witness holding an honest block at the round of slot `L − 1` plus
+  `voteOffset` or above (`witnessAt_author`), so one round above the floor
+  at `L` or higher. The block's references are ones the node can build on,
+  so a settled node below its floor would jump (`tryBuild_drop_isSome`).
+* **The window** (`steady_bounded`). The rest of the run is then a steady
+  window, read on the record padded below the floor at `L`
+  (`base_steady`). A reliably led run above the window's rounds is decided
+  within `Σ (timeout r + A) + A` of the window's arrival point, and moves
+  every honest node past `L`: a contradiction.
+
+The wave argument with dropping reads blocks above the base's round, and
+the base lies below the floor at `L`, which is round `0` for the first
+slots; hence the premise that every honest node is above round `0` by
+GST.
 
 ## 6. Testing
 

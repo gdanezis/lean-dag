@@ -565,23 +565,43 @@ store closed, and needs none of this.
         (`run_commits`, `AllGood.storeView`), and the node decides over any
         base while the round of its next undecided slot lies at or above
         the base's round (`decides_from`), the view agreeing with its disk
-        from that round up (`AllGood.viewsAbove`). (d) is proved
-        (`Live.steady_ends`): when every honest node drops and is reliable
-        and keeps its next undecided slot at `L ≥ 1` from `G` to `t₁`, the
-        honest nodes never all reach the decision round of a reliably led
-        run above round `slotRound L + voteOffset` by `t₁ − A`, given
-        arrival from some `G' ≥ G` (`arrival_steady`), the honest nodes
-        started there and at round `1` or above; read on the record padded
-        below `slotRound L − 1` (`base_steady`) each would decide the run
-        (`decides_from`) and move past `L`. So a steady window is short
+        from that round up (`AllGood.viewsAbove`). Two model faults came
+        to light and are fixed (item 2 above): with the floor at the round
+        of the next undecided slot, a decision set every floor above every
+        block yet built when slots lie a wave apart; and a node below its
+        floor jumped only once the reach and certificate tests passed, which
+        a leader with no block at its round never lets happen. The floor at
+        slot `k` is now the round of slot `k` or `voteOffset − 1` above the
+        round of slot `k − 1`, whichever is lower (`floorAt`), and the jump
+        waits for no test (`dropRound`). (d) is proved (`Live.steady_ends`):
+        when every honest node drops and is reliable and keeps its next
+        undecided slot at `L` from `G` to `t₁`, each at the floor at `L` or
+        above, the honest nodes never all reach the decision round of a
+        reliably led run above round `floorAt L + voteOffset` by `t₁ − A`,
+        given arrival from some `G' ≥ G` (`arrival_steady`), the honest
+        nodes started there and at round `1` or above; read on the record
+        padded below `floorAt L − 1` (`base_steady`) each would decide the
+        run (`decides_from`) and move past `L`. So a steady window is short
         (`Live.steady_bounded`): with the armed top round's timer firing
         from `G'`, once every honest node is at round `n₁ ≥ 1`, at or above
-        `slotRound L`, at `s₀ ≥ G'`, it ends before
+        `floorAt L`, at `s₀ ≥ G'`, it ends before
         `s₀ + ∑_{n₁ ≤ r < N} (timeout r + A) + A`, for `N` the decision
-        round of such a run (`produces_from`, `climbs`). Next: (e), the
-        potential argument over the next undecided slots: catch-up
-        (`decides_behind`) makes every window without a new decision a
-        steady one, entered with every honest top at or above the floor.
+        round of such a run (`produces_from`, `climbs`). (e) is proved, and
+        with it (ii) (`Live.eventually`, V11″ of `docs/validator.md`): over
+        an infinite run whose prefixes meet the assumptions, at skip and
+        commit thresholds above `f`, with every honest node reliable and
+        above round `0` by GST and honestly led runs spanning the rule's
+        eligibility beyond every slot, every honest node's next undecided
+        slot grows without bound. Catch-up holds along the run
+        (`catchup_run`); were the slots bounded, they would settle at one
+        slot `L` (`stable_run`); a node that drops is then at or above its
+        floor at each of its events past GST, since the witness of the
+        slot below holds an honest block it can build on above its top and
+        a settled node does not build (`witnessAt_author`,
+        `floor_le_top_before`, `floor_run`); and the rest of the run would
+        be a steady window, which is short. Left: relaxing every honest
+        node reliable, an explicit time bound, and the premise that every
+        honest node leaves round `0` by GST.
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase

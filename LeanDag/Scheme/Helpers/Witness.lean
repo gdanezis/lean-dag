@@ -371,6 +371,104 @@ theorem decisionAt_of_quiet {N' N k : ℕ} (hq : ∀ j, N' < j → tryDirect p �
   · rfl
   · exact tryIndirect_append (scan_none_above hq N _ (by omega)) _
 
+/-- **More than `f` held authors include one of any set missing at most
+`f`.** -/
+theorem exists_held_of_holdsAtLeast {A : Finset Validator} {f t : ℕ} (hA : Aᶜ.card ≤ f)
+    (ht : f < t) {s : Finset BlockId} (h : HoldsAtLeast U V t s) :
+    ∃ x ∈ s, x ∈ V.ids ∧ (U.block x).creator ∈ A := by
+  by_contra hno
+  push Not at hno
+  have hsub : heldAuthors U V s ⊆ Aᶜ := fun a ha => by
+    obtain ⟨b, hb, hbV, rfl⟩ := mem_heldAuthors.mp ha
+    exact Finset.mem_compl.mpr (hno b hb hbV)
+  have := Finset.card_le_card hsub
+  unfold HoldsAtLeast at h
+  omega
+
+omit [Fintype Validator] in
+/-- **A walk that decides stops at an anchor** whose witness its own holds. -/
+theorem anchor_of_tryIndirect {k : ℕ} {wit : ℕ → Finset BlockId} :
+    ∀ (l : List (ℕ × Option (Option BlockId))) (v : Option BlockId),
+      tryIndirect p σ U V k l = some v →
+      ∃ e ∈ l, (∃ A, e.2 = some (some A)) ∧
+        S.slotRound k + (p.waveLength - 1) + 1 ≤ S.slotRound e.1 ∧
+        wit e.1 ⊆ anchorWitness (S := S) p k wit l := by
+  intro l
+  induction l with
+  | nil => intro v hv; cases hv
+  | cons e rest ih =>
+    obtain ⟨j, s⟩ := e
+    intro v hv
+    unfold tryIndirect at hv
+    unfold anchorWitness
+    split at hv
+    · rename_i helig
+      rw [if_pos helig]
+      rcases s with _ | _ | A
+      · cases hv
+      · obtain ⟨e', he', hA, hr, hw⟩ := ih v hv
+        exact ⟨e', List.mem_cons_of_mem _ he', hA, hr, hw.trans Finset.subset_union_right⟩
+      · exact ⟨(j, some (some A)), List.mem_cons_self, ⟨A, rfl⟩, helig, subset_rfl⟩
+    · rename_i hne
+      rw [if_neg hne]
+      obtain ⟨e', he', hA, hr, hw⟩ := ih v hv
+      exact ⟨e', List.mem_cons_of_mem _ he', hA, hr, hw⟩
+
+/-- **A decided slot's witness holds a block of an author of any set missing
+at most `f`, at the slot's round plus `voteOffset` or above**, at skip and
+commit thresholds above `f`: a direct skip's blames lie at the vote round, a
+direct commit's certificates at the decision round, and an indirect
+decision's witness holds its anchor's. -/
+theorem witnessAt_author (hl : 1 ≤ p.linkSize) (hc : p.voteIsCert = false → 1 ≤ p.certThreshold)
+    (hw : 2 ≤ p.waveLength) {A : Finset Validator} {f : ℕ} (hA : Aᶜ.card ≤ f)
+    (hsk : f < p.skipThreshold) (hcm : f < p.commitThreshold) (N : ℕ) :
+    ∀ k v, decisionAt p σ U V N k = some v →
+      ∃ x ∈ witnessAt p σ U V N k, (U.block x).creator ∈ A ∧
+        S.slotRound k + p.voteOffset ≤ (U.block x).round := by
+  have hvo : p.voteOffset ≤ p.waveLength - 1 := by
+    unfold Params.voteOffset; split <;> omega
+  suffices h : ∀ n k, N + 1 - k = n → ∀ v, decisionAt p σ U V N k = some v →
+      ∃ x ∈ witnessAt p σ U V N k, (U.block x).creator ∈ A ∧
+        S.slotRound k + p.voteOffset ≤ (U.block x).round from fun k => h _ k rfl
+  intro n
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+    intro k hn v hv
+    rw [witnessAt]
+    simp only [decisionAt, decideSlot] at hv
+    cases hd : tryDirect p σ U V k with
+    | some w =>
+      have hd' := hd
+      unfold tryDirect at hd'
+      split at hd'
+      · rename_i hskip
+        obtain rfl : w = none := (Option.some.inj hd').symm
+        obtain ⟨x, hx, hxV, hxA⟩ := exists_held_of_holdsAtLeast hA hsk hskip
+        exact ⟨x, Finset.mem_inter.mpr ⟨hx, hxV⟩, hxA,
+          by rw [(mem_blocksAt.mp (Finset.mem_filter.mp hx).1).2]⟩
+      · rename_i hskip
+        obtain ⟨L, hL, hLw⟩ := Option.map_eq_some_iff.mp hd'
+        subst hLw
+        obtain ⟨hmem, -⟩ := leastOf_eq_some hL
+        obtain ⟨-, hcommit⟩ := Finset.mem_filter.mp hmem
+        obtain ⟨x, hx, hxV, hxA⟩ := exists_held_of_holdsAtLeast hA hcm hcommit
+        refine ⟨x, Finset.mem_inter.mpr ⟨hx, hxV⟩, hxA, ?_⟩
+        rw [(mem_blocksAt.mp (Finset.mem_filter.mp hx).1).2]
+        omega
+    | none =>
+      rw [hd] at hv
+      obtain ⟨hr, -⟩ := scan_sound (σ := σ) (U := U) (V := V) hl hc N (N - k) (by omega)
+      obtain ⟨e, he, ⟨B, hB⟩, helig, hwit⟩ := anchor_of_tryIndirect
+        (wit := fun j => if _ : k < j ∧ j ≤ N then witnessAt p σ U V N j else ∅) _ v hv
+      have hmem : e.1 ∈ List.range' (N + 1 - (N - k)) (N - k) := hr ▸ List.mem_map_of_mem he
+      rw [List.mem_range'_1] at hmem
+      have hkj : k < e.1 ∧ e.1 ≤ N := by omega
+      have hdec : decisionAt p σ U V N e.1 = some (some B) := by
+        rw [← scan_entry N (N - k) (by omega) e he, hB]
+      obtain ⟨x, hx, hxA, hxr⟩ := ih (N + 1 - e.1) (by omega) e.1 rfl _ hdec
+      refine ⟨x, hwit (by simpa [hkj] using hx), hxA, ?_⟩
+      omega
+
 variable [P.Mechanised]
 
 /-- **The witness's histories**, as a view. -/

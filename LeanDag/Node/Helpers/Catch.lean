@@ -875,11 +875,11 @@ theorem catches_up (hq : 2 ≤ cfg.q)
         have h₁ := Z.low z hk
         have h₃ : (Z.disk.blk z).round = m + 1 := hzr
         omega) hfa
-      (fresh_before hid htime (hTH hv) hm) _
+      (fresh_before hid htime (hTH hv) hm (Nat.lt_succ_self _)) _
       (fun j hj hjr => (Converge.kept_before hfa v E).exposed hj
         (hbase.valid (hTH hv) hE₁ hj (by
           cases hd : cfg.drops; exact Or.inl rfl; exact Or.inr (by have := hmV hd; omega))).2)).2⟩)
-    (fresh_before hid htime (hTH hv) hm) hFm
+    (fresh_before hid htime (hTH hv) hm (Nat.lt_succ_self _)) hFm
   rw [hSet.build] at hsome
   cases hsome
 

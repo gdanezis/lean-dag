@@ -39,6 +39,14 @@ theorem foldr_max_cases (t : ℕ) : ∀ l : List ℕ, l.foldr max t = t ∨ l.fo
       · exact Or.inl h'
       · exact Or.inr (List.mem_cons_of_mem _ h')
 
+omit [Fintype Validator] [DecidableEq Validator] in
+theorem le_foldr_max (t : ℕ) {a : ℕ} : ∀ {l : List ℕ}, a ∈ l → a ≤ l.foldr max t
+  | _ :: _, h => by
+    rw [List.foldr_cons]
+    rcases List.mem_cons.mp h with rfl | h
+    · exact le_max_left _ _
+    · exact (le_foldr_max t h).trans (le_max_right _ _)
+
 omit [Fintype Validator] in
 /-- **`jumpRound` is `t`**, or a round above `t` at which the store holds
 `q` authors and is behind. -/
@@ -497,6 +505,12 @@ theorem Grows.foldl (F : ℕ) : ∀ (l : List (BlockId × Block Validator BlockI
 omit [Fintype Validator] in
 /-- The floor at a slot lies at or below the slot's round. -/
 theorem floorAt_le (k : ℕ) : floorAt cfg k ≤ cfg.slots.slotRound k := min_le_left _ _
+
+omit [Fintype Validator] in
+/-- The floor at the first slot is round `0`. -/
+theorem floorAt_zero : floorAt cfg 0 = 0 := by
+  unfold floorAt
+  simp [Config.slots, Slots.uniform_slotRound]
 
 omit [Fintype Validator] in
 /-- The floor at a slot lies at or above the round of the slot before. -/

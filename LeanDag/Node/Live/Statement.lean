@@ -62,12 +62,15 @@ every honest node: after every node crashed and restarted, the nodes
 decide each reliably led run of slots above the rounds they reached by
 then.
 
-**With dropping** (`SyncedHeld`). For nodes that drop, synchronisation
-is assumed only when every block the receiver needs at its floor, the
-history of the block from that floor up (`Needs`), is held by a reliable
-node at the delivery (`docs/dos-bounds.md`, Phase 3.2 item 4.3). A
-steady window (`Steady`) is a stretch over which no node of `T` decides and
-each is at the floor at its next undecided slot (`floorAt`) or above.
+**With dropping** (`SyncedHeld`, `Eventually`). For nodes that drop,
+synchronisation is assumed only when every block the receiver needs at its
+floor, the history of the block from that floor up (`Needs`), is held by a
+reliable node at the delivery (`docs/dos-bounds.md`, Phase 3.2 item 4.3).
+A steady window (`Steady`) is a stretch over which no node of `T` decides
+and each is at the floor at its next undecided slot (`floorAt`) or above.
+Over an infinite run (`prefixOf`) whose prefixes meet the assumptions, with
+every honest node reliable and reliably led runs beyond every slot, every
+honest node's next undecided slot grows without bound (`Eventually`).
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -287,8 +290,48 @@ def Recovers : Prop :=
     Produces cfg T tr time G (Δ + Δₛ) t₁ ∧ Decides cfg T tr time G (Δ + Δₛ) t₁ ∧
       DecidesBy cfg T tr time G (Δ + Δₛ) t₁
 
-/-- The reliable nodes' liveness, without crashes and with them. -/
-def Statement : Prop := Progresses ∧ Recovers
+/-- **The first `N` events of an infinite run.** -/
+def prefixOf (ev : ℕ → Validator × Input Validator BlockId Payload) (N : ℕ) :
+    Trace Validator BlockId Payload :=
+  (List.range N).map ev
+
+/-- **The reliable nodes' next undecided slots grow without bound, with
+dropping**: over an infinite run whose events are timed without decrease
+and without bound, every prefix of which meets the assumptions of V11 up to
+a time before its end, with synchronisation from the blocks reliable nodes
+hold (`SyncedHeld`) in place of `SyncedWithin`, every honest node reliable
+and at round `1` or above by GST, skip and commit thresholds above `f`, and
+runs of `c` slots led by honest nodes, spanning the rule's eligibility,
+beyond every slot: for every slot `k`, after some number of events every
+honest node is past `k`. -/
+def Eventually : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] [Infinite BlockId] (cfg : Config Validator BlockId Payload)
+    (H : Finset Validator) (ev : ℕ → Validator × Input Validator BlockId Payload)
+    (time : ℕ → ℕ) (gst Δ Δₛ c : ℕ) (D : Finset Validator) (nE : ℕ),
+    letI := cfg.slots
+    cfg.σ = boundedSel → cfg.Admissible → cfg.Faithful → Hᶜ.card ≤ cfg.f → cfg.q ≤ H.card →
+    Fintype.card Validator - cfg.f - cfg.c ≤ H.card → 2 ≤ cfg.q →
+    cfg.f < cfg.p.skipThreshold → cfg.f < cfg.p.commitThreshold →
+    Function.Injective cfg.idOf → (∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) → cfg.drops = true →
+    Monotone time → (∀ t, ∃ N, t < time N) →
+    0 < c → (Scheme.schemeAnchored cfg.p
+      (boundedSel (BlockId := BlockId) (Payload := Payload) (P := ValidAt cfg.q Clause.none)
+        (honest := H))).SpansEligible c → FairRunOn H c →
+    (∀ N, Converge.TimelyAuthentic cfg H (prefixOf ev N) ∧
+      Converge.HashInjective cfg H (prefixOf ev N) ∧
+      Converge.EvidenceAuthentic cfg H (prefixOf ev N) ∧ Spread cfg H (prefixOf ev N) D nE ∧
+      TimersAfterSet cfg H (prefixOf ev N) time) →
+    (∀ N t₁, t₁ < time N → DeliveredWithin cfg H (prefixOf ev N) time gst Δ t₁ ∧
+      TimersFire cfg H (prefixOf ev N) time t₁ ∧ SyncedHeld cfg H (prefixOf ev N) time gst Δₛ t₁ ∧
+      UpFrom H (prefixOf ev N) time 0 t₁) →
+    (∀ N, gst < time N → StartedBy H (prefixOf ev N) time gst ∧
+      ∀ v ∈ H, max 1 nE ≤ topAt cfg (prefixOf ev N) time v gst) →
+    ∀ k, ∃ N, ∀ v ∈ H, k < (stateBefore cfg (prefixOf ev N) N v).lo
+
+/-- The reliable nodes' liveness, without crashes and with them, and with
+dropping. -/
+def Statement : Prop := Progresses ∧ Recovers ∧ Eventually
 
 end Live
 

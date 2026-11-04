@@ -4,6 +4,7 @@ import LeanDag.Node.Helpers.Recover
 import LeanDag.Node.Helpers.Run
 import LeanDag.Node.Helpers.SyncTrace
 import LeanDag.Node.Helpers.Dropping
+import LeanDag.Node.Helpers.Eventual
 import LeanDag.Scheme.Helpers.Reactive
 /-!
 # The reliable nodes produce rounds and decide — proof
@@ -201,7 +202,7 @@ theorem produces_from {cfg : Config Validator BlockId Payload} {H T : Finset Val
           have := Z.low z hk
           have : (Z.disk.blk z).round = n + 1 := hzr
           omega)
-        hfa (fresh_before hid htime (hTH hv) hZt) _
+        hfa (fresh_before hid htime (hTH hv) hZt (Nat.lt_succ_self _)) _
         fun j hj hjr => (Converge.kept_before hfa v E).exposed hj
           (hvalid j hj (by rw [hjr])).2).2⟩
     · push Not at hup
@@ -209,7 +210,7 @@ theorem produces_from {cfg : Config Validator BlockId Payload} {H T : Finset Val
         (fun j hj hjr => (Converge.kept_before hfa v E).exposed hj (hvalid j hj (by rw [hjr])).2)
         (fun j hj => by rw [hj₁] at hj; cases hj; exact ⟨hj₁i, hj₁r, hj₁c⟩)
         (hqT.trans (Finset.card_le_card fun w hw => ?_))
-        (fresh_before hid htime (hTH hv) hZt _ _))
+        (fresh_before hid htime (hTH hv) hZt (Nat.lt_succ_self _) _ _))
       refine Finset.mem_sdiff.mpr
         ⟨?_, Converge.not_excluded htime hev (hTH hw) (hTH hv) E n (Or.inr ⟨hfa, hZF⟩)⟩
       rw [mem_authorsIn]
@@ -230,7 +231,7 @@ theorem produces_from {cfg : Config Validator BlockId Payload} {H T : Finset Val
       (eventsBy_mono (by omega)))
     (Or.inl hfired) hcardE
     (fun j hj => by rw [hj₁] at hj; cases hj; exact ⟨hj₁i, hj₁r, hj₁c⟩) hB
-    (fresh_before hid htime (hTH hv) hZt) hZF
+    (fresh_before hid htime (hTH hv) hZt (Nat.lt_succ_self _)) hZF
   rcases settled_before (cfg := cfg) hq v E with h | h
   · rw [hZt] at h; cases h
   · rw [h.build] at hsome; cases hsome
@@ -450,7 +451,7 @@ theorem decidesBy {cfg : Config Validator BlockId Payload} {T : Finset Validator
 
 /-- **A steady window ends before the reliable nodes decide a reliably led
 run above it**: when every honest node drops and is reliable, and every one
-keeps its next undecided slot at `L ≥ 1` from `G` to `t₁`, the honest nodes
+keeps its next undecided slot at `L` from `G` to `t₁`, the honest nodes
 never all reach the decision round of a reliably led run above round
 `floorAt L + voteOffset` by `t₁ − A`. Read on the record padded below
 `floorAt L − 1` (`base_steady`), each would decide the run's slots
@@ -464,7 +465,7 @@ theorem steady_ends [Infinite BlockId] {cfg : Config Validator BlockId Payload}
     (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout r)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hev : Converge.EvidenceAuthentic cfg H tr) (hdr : cfg.drops = true)
-    (hst : Steady cfg H tr time G t₁ L) (hL : 1 ≤ L) (hGG : G ≤ G')
+    (hst : Steady cfg H tr time G t₁ L) (hGG : G ≤ G')
     (hmono : TimeMono tr time) (harr : Arrival cfg H tr time G' (Δ + Δₛ) t₁)
     (hwait : TimersAfterSet cfg H tr time) (hstart : StartedBy H tr time G')
     {D : Finset Validator} {nE : ℕ} (hsp : Spread cfg H tr D nE)
@@ -492,7 +493,7 @@ theorem steady_ends [Infinite BlockId] {cfg : Config Validator BlockId Payload}
     omega
   have hG₀ : eventsBy tr time G ≤ eventsBy tr time G' := eventsBy_mono hGG
   have hG₁ : eventsBy tr time G' ≤ eventsBy tr time t₁ := eventsBy_mono (by omega)
-  have hbase := base_steady hσ hadm hf htime hinj hqn hdr hst hL (by omega)
+  have hbase := base_steady hσ hadm hf htime hinj hqn hdr hst (by omega)
   have hlen := decides_from hσ hadm hfa hf (Finset.Subset.refl H) hqT hcT hq hid hto htime hinj
     hev hbase hG₀ le_rfl
     (fun w hw => by
@@ -531,7 +532,7 @@ theorem steady_bounded [Infinite BlockId] {cfg : Config Validator BlockId Payloa
     (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout r)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hev : Converge.EvidenceAuthentic cfg H tr) (hdr : cfg.drops = true)
-    (hst : Steady cfg H tr time G t₁ L) (hL : 1 ≤ L) (hGG : G ≤ G')
+    (hst : Steady cfg H tr time G t₁ L) (hGG : G ≤ G')
     (hmono : TimeMono tr time) (harr : Arrival cfg H tr time G' (Δ + Δₛ) t₁)
     (htop : TopTimerBy cfg H tr time G' t₁)
     (hwait : TimersAfterSet cfg H tr time) (hstart : StartedBy H tr time G')
@@ -548,13 +549,115 @@ theorem steady_bounded [Infinite BlockId] {cfg : Config Validator BlockId Payloa
       (cfg.timeout r + (Δ + Δₛ))) + (Δ + Δₛ) ≤ t₁ → False := by
   letI := cfg.slots
   intro b c n₀ n₁ s₀ hc hspan hlead hn₀ hbelow hLn hs₀ hLn₁ h1n₁ hall ht₁
-  have hbase := base_steady hσ hadm hf htime hinj hqn hdr hst hL (by omega)
-  exact steady_ends hσ hadm hfa hf hqT hcT hq hqn hid hto htime hinj hev hdr hst hL hGG hmono
+  have hbase := base_steady hσ hadm hf htime hinj hqn hdr hst (by omega)
+  exact steady_ends hσ hadm hfa hf hqT hcT hq hqn hid hto htime hinj hev hdr hst hGG hmono
     harr hwait hstart hsp hnE hT₁ b c n₀ hc hspan hlead hn₀ hbelow hLn _
     (climbs (fun s n hs hn ht hall' => produces_from hadm hfa hf (Finset.Subset.refl H) hqT hq
       hid htime hinj hev hbase hmono harr htop hstart hsp hnE (by omega) ht
       (eventsBy_mono (by omega)) (eventsBy_mono ht) (by omega) (fun _ => by omega) hall')
       hall (by omega)) ht₁
+
+/-- **The honest nodes' next undecided slots grow without bound, with
+dropping**: were no honest node ever past some slot, their next undecided
+slots would settle at one slot `L` (`stable_run`), each would be at the
+floor at `L` or above (`floor_run`), and the rest of the run would be a
+steady window, which a reliably led run above it ends (`steady_bounded`);
+once one honest node is past a slot, every one is (`catchup_run`). -/
+theorem eventually : Eventually := by
+  intro Validator BlockId Payload _ _ _ _ cfg H ev time gst Δ Δₛ c D nE hσ hadm hfa hf hqT hcT
+    hq hsk hcm hid hto hdr hmono hunb hc hspan hfair hless htimed hstarted k
+  letI := cfg.slots
+  have hrun : RunMeets cfg H ev time gst Δ Δₛ D nE := ⟨hmono, hunb, hless, htimed, hstarted⟩
+  have hH : H.Nonempty := Finset.card_pos.mp (by omega)
+  have hqn : cfg.q ≤ Fintype.card Validator := hadm.2.2.2.2
+  -- once one honest node is past `k`, every one is
+  suffices hsome : ∃ n, ∃ v ∈ H, k < (stateBefore cfg (prefixOf ev n) n v).lo by
+    obtain ⟨n, v, hv, hk⟩ := hsome
+    exact exists_forall_of_mono (P := fun u n => k < (stateBefore cfg (prefixOf ev n) n u).lo)
+      (fun u n n' h hp => lt_of_lt_of_le hp (rises_prefixOf h u).2.2) H
+      (fun u hu => catchup_run hrun hσ hadm hfa hf hid hdr hu hv hk)
+  by_contra hno
+  push Not at hno
+  -- the next undecided slots settle at `L`, and the tops reach the floor at `L`
+  obtain ⟨n₁, L, hle, heq⟩ := stable_run hrun hσ hadm hfa hf hid hdr hH (K := k) hno
+  obtain ⟨n₂, hn₁₂, hn₂⟩ := floor_run hrun hσ hadm hfa hf hid hq hdr hsk hcm hle heq
+  -- the window from `G` on, its arrival from `G'`, and a reliably led run above it
+  obtain ⟨G, hG⟩ : ∃ x, x = max gst (time n₂) := ⟨_, rfl⟩
+  obtain ⟨T₀, hT₀⟩ : ∃ x, x = max (G + 1) gst := ⟨_, rfl⟩
+  obtain ⟨N₀, hN₀⟩ := hunb T₀
+  obtain ⟨G', hG'⟩ : ∃ x, x = T₀ + H.sup fun u =>
+      2 * cfg.timeout (topAt cfg (prefixOf ev N₀) time u T₀ - 1) := ⟨_, rfl⟩
+  obtain ⟨N₁', hN₁'⟩ := hunb G'
+  obtain ⟨N₁, hN₁⟩ : ∃ x, x = max N₀ N₁' := ⟨_, rfl⟩
+  have hN₁t : G' < time N₁ := lt_of_lt_of_le hN₁' (hmono (by omega))
+  obtain ⟨n₀, hn₀⟩ : ∃ x, x = max (floorAt cfg L + cfg.p.voteOffset + 1)
+      ((H.sup fun v => topAt cfg (prefixOf ev N₁) time v G') + 1) := ⟨_, rfl⟩
+  obtain ⟨kk, hkk⟩ := cfg.slots.unbounded n₀
+  obtain ⟨b, hkb, hlead⟩ := hfair kk
+  have hbn₀ : n₀ ≤ cfg.slots.slotRound b := hkk.trans (cfg.slots.mono hkb)
+  obtain ⟨n₁', hn₁'⟩ : ∃ x, x = max (floorAt cfg L) 1 := ⟨_, rfl⟩
+  obtain ⟨t₁, ht₁⟩ : ∃ x, x = G' + (∑ r ∈ Finset.Ico n₁'
+      (cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1)), (cfg.timeout r + (Δ + Δₛ))) +
+      (Δ + Δₛ) := ⟨_, rfl⟩
+  obtain ⟨N', hN'⟩ := hunb t₁
+  obtain ⟨N, hN⟩ : ∃ x, x = max N₁ N' := ⟨_, rfl⟩
+  have hNt : t₁ < time N := lt_of_lt_of_le hN' (hmono (by omega))
+  have hN₀N : N₀ ≤ N := by omega
+  have hN₁N : N₁ ≤ N := by omega
+  have hGG' : G ≤ G' := by omega
+  have hG't₁ : G' ≤ t₁ := by omega
+  -- the assumptions on the prefix of `N` events
+  obtain ⟨htime, hinj, hev, hsp, hwait⟩ := hless N
+  obtain ⟨hdel, hfire, hsync, hup⟩ := htimed N t₁ hNt
+  obtain ⟨hstartg, hmax⟩ := hstarted N (by omega)
+  have hmonoN := timeMono_prefixOf hmono (ev := ev) N
+  have hfire' : TimersFireUp cfg H (prefixOf ev N) time t₁ :=
+    fun i w inp hi hw r a ha ht _ => hfire i w inp hi hw r a ha ht
+  have hlen : ∀ t, eventsBy (prefixOf ev N) time t ≤ N := fun t => by
+    have := eventsBy_le_length (tr := prefixOf ev N) (time := time) t
+    rwa [prefixOf_length] at this
+  -- the window's events lie past `n₂`
+  have hn₂N : n₂ < N := lt_of_time_lt hmono hNt (by omega)
+  have hn₂G : n₂ < eventsBy (prefixOf ev N) time G :=
+    (lt_eventsBy hmonoN (by rw [prefixOf_length]; exact hn₂N)).mpr (by omega)
+  have hst : Steady cfg H (prefixOf ev N) time G t₁ L := fun v hv k' h₁ h₂ => by
+    have hk'N : k' ≤ N := h₂.trans (hlen _)
+    rw [stateBefore_prefixOf hk'N]
+    exact ⟨heq v hv k' (by omega), (hn₂ v hv k' (by omega)).2⟩
+  -- tops at times before a prefix's end are those of the longer prefix
+  have htopAt : ∀ {M T}, T < time M → M ≤ N → ∀ v,
+      topAt cfg (prefixOf ev N) time v T = topAt cfg (prefixOf ev M) time v T :=
+    fun hT hM v => by unfold topAt; rw [stateAt_prefixOf hmono hT hM]
+  have hW : max (G + 1) gst +
+      (H.sup fun u => 2 * cfg.timeout (topAt cfg (prefixOf ev N) time u (max (G + 1) gst) - 1)) =
+      G' := by
+    rw [← hT₀, hG']
+    exact congrArg (T₀ + ·) (Finset.sup_congr rfl fun u _ => by rw [htopAt hN₀ hN₀N u])
+  have harr := arrival_steady hσ hadm hfa hf hid htime hinj (Finset.Subset.refl H) hmonoN hdr
+    hdel hsync hup hfire' hstartg hst (by omega) (by rw [hW]; exact hG't₁)
+  rw [hW] at harr
+  have htop := topTimerBy_of_up hmonoN hup hfire' (Nat.zero_le G')
+  have hstart' : StartedBy H (prefixOf ev N) time G' := fun v hv => by
+    obtain ⟨i, hi, hit⟩ := hstartg v hv
+    exact ⟨i, hi, hit.trans (by omega)⟩
+  have hgG' : ∀ v ∈ H, max 1 nE ≤ topAt cfg (prefixOf ev N) time v G' := fun v hv =>
+    (hmax v hv).trans (rises_before (cfg := cfg) (tr := prefixOf ev N) v
+      (eventsBy_mono (tr := prefixOf ev N) (time := time) (show gst ≤ G' by omega))).1
+  refine steady_bounded hσ hadm hfa hf hqT hcT hq hqn hid hto htime hinj hev hdr hst hGG' hmonoN
+    harr htop hwait hstart' hsp (fun v hv => (le_max_right _ _).trans (hgG' v hv))
+    (fun v hv => (le_max_left _ _).trans (hgG' v hv)) b c n₀ n₁' G' hc hspan hlead hbn₀
+    (fun v hv => ?_) (by omega) le_rfl (by omega) (by omega) (fun v hv => ?_)
+    (by rw [ht₁])
+  · rw [htopAt hN₁t hN₁N v]
+    have := Finset.le_sup (f := fun v => topAt cfg (prefixOf ev N₁) time v G') hv
+    omega
+  · rw [hn₁']
+    refine max_le ?_ ((le_max_left _ _).trans (hgG' v hv))
+    have hE : n₂ ≤ eventsBy (prefixOf ev N) time G' :=
+      hn₂G.le.trans (eventsBy_mono (by omega))
+    have := (hn₂ v hv _ hE).2
+    unfold topAt stateAt
+    rwa [stateBefore_prefixOf (hlen G')]
 
 /-- **The reliable nodes produce rounds and decide.** -/
 theorem progresses : Progresses := by
@@ -594,7 +697,7 @@ theorem recovers : Recovers := by
   exact ⟨hp, hd, decidesBy hp hd⟩
 
 /-- **The reliable nodes' liveness**, without crashes and with them. -/
-theorem holds : Statement := ⟨progresses, recovers⟩
+theorem holds : Statement := ⟨progresses, recovers, eventually⟩
 
 end Live
 
