@@ -19,10 +19,14 @@ read the verdicts and outputs of the slots `D` rounds below `s` and above
 (`entersIn_resume`). A block referencing a quorum is valid, and its
 obligation lies in the `K` rounds below it (`validAt_of_quorum`,
 `obliged_band`). Without equivocation a round holds at most `n` blocks
-(`card_between_le`); in general the history to depth `K` holds at most
-`1 + n + ⋯ + n^K` blocks (`card_historyUpto_le`), a round holds at most
-`|C| · n` anchored blocks besides the anchor (`card_anchored_le`), and so the
-available sub-DAG holds a bounded number of blocks per round
+(`card_between_le`). With no condition on equivocation, one layer of a
+history holds at most `|C|` correct blocks and `f` Byzantine blocks per block
+of the layer above (`card_layers_le`, `card_historyUpto_le`); every Byzantine
+block of the available sub-DAG hangs at most `K` rounds below a root, a
+correct or anchored block, through Byzantine blocks (`exists_root`); a round
+holds at most `|C|(f + 1) + 1` roots (`card_anchored_le`, `card_roots_le`);
+and so the available sub-DAG holds at most
+`|C| + (|C|(f + 1) + 1)(1 + f + ⋯ + f^K)` blocks per round
 (`card_avail_round_le`).
 -/
 
@@ -220,41 +224,196 @@ theorem historyUpto_subset_between {x : BlockId} (hx : x ∈ U.ids) :
   have := round_of_mem_historyUpto K hx hw
   exact Finset.mem_filter.mpr ⟨historyUpto_subset_ids K hx hw, by omega, this.1⟩
 
-/-- **A history to depth `K` holds at most `1 + n + ⋯ + n^K` blocks**, with no
-condition on equivocation: a block references at most one block per
-author. -/
-theorem card_historyUpto_le : ∀ (K : ℕ) {x : BlockId}, x ∈ U.ids →
-    (historyUpto U K x).card ≤ ∑ d ∈ Finset.range (K + 1), Fintype.card Validator ^ d
-  | 0, x, _ => by simp
-  | K + 1, x, hx => by
-    classical
-    have hrefs : (U.block x).refs.card ≤ Fintype.card Validator :=
-      Finset.card_le_card_of_injOn (fun b => (U.block b).creator)
-        (fun _ _ => Finset.mem_coe.mpr (Finset.mem_univ _))
-        fun i hi j hj hij => (U.valid x hx).clause i hi j hj hij
-    have hbu : ((U.block x).refs.biUnion (historyUpto U K)).card ≤
-        (U.block x).refs.card * ∑ d ∈ Finset.range (K + 1), Fintype.card Validator ^ d :=
-      Finset.card_biUnion_le_card_mul _ _ _ fun y hy =>
-        card_historyUpto_le K (U.complete x hx y hy)
-    rw [historyUpto_succ, Finset.sum_range_succ', pow_zero]
-    refine (Finset.card_insert_le _ _).trans (Nat.add_le_add_right (hbu.trans ?_) 1)
-    calc (U.block x).refs.card * ∑ d ∈ Finset.range (K + 1), Fintype.card Validator ^ d
-        ≤ Fintype.card Validator * ∑ d ∈ Finset.range (K + 1), Fintype.card Validator ^ d :=
-          Nat.mul_le_mul_right _ hrefs
-      _ = ∑ d ∈ Finset.range (K + 1), Fintype.card Validator ^ (d + 1) := by
-          rw [Finset.mul_sum]; exact Finset.sum_congr rfl fun d _ => (pow_succ' _ _).symm
+/-! ## Counting with equivocation -/
 
-/-- **One round holds at most `|C| · n` anchored blocks besides the anchor**:
-each has a correct referencer one round up, which has one block there and
-references one block per author. -/
-theorem card_anchored_le (hA : A ∈ U.ids) {ρ : ℕ} {X : Finset BlockId}
-    (hX : ∀ x ∈ X, AnchoredBelow U K A x ∧ (U.block x).round = ρ ∧ x ≠ A) :
-    X.card ≤ (Correct : Finset Validator).card * Fintype.card Validator := by
+/-- The blocks `d` references below the blocks of `s`. -/
+def layers (U : KRecord Validator BlockId Payload) (s : Finset BlockId) : ℕ → Finset BlockId
+  | 0 => s
+  | d + 1 => (layers U s d).biUnion fun w => (U.block w).refs
+
+/-- The Byzantine blocks reached from `r` by `s` references, each to a
+Byzantine block. -/
+def byzLayers (U : KRecord Validator BlockId Payload) (r : BlockId) : ℕ → Finset BlockId
+  | 0 => {r}
+  | s + 1 => (byzLayers U r s).biUnion fun w =>
+      (U.block w).refs.filter fun j => (U.block j).creator ∉ (Correct : Finset Validator)
+
+theorem layers_mono {s t : Finset BlockId} (h : s ⊆ t) :
+    ∀ d, layers U s d ⊆ layers U t d
+  | 0 => h
+  | d + 1 => Finset.biUnion_subset_biUnion_of_subset_left _ (layers_mono h d)
+
+theorem layers_ref {x j : BlockId} (hj : j ∈ (U.block x).refs) :
+    ∀ d, layers U {j} d ⊆ layers U {x} (d + 1)
+  | 0 => by
+    intro w hw
+    rw [Finset.mem_singleton.mp hw]
+    exact Finset.mem_biUnion.mpr ⟨x, Finset.mem_singleton_self x, hj⟩
+  | d + 1 => Finset.biUnion_subset_biUnion_of_subset_left _ (layers_ref hj d)
+
+/-- A history to depth `K` lies in its first `K + 1` layers. -/
+theorem historyUpto_subset_layers : ∀ (K : ℕ) (x : BlockId),
+    historyUpto U K x ⊆ (Finset.range (K + 1)).biUnion (layers U {x})
+  | 0, x => by
+    intro w hw
+    rw [historyUpto_zero] at hw
+    exact Finset.mem_biUnion.mpr ⟨0, by simp, hw⟩
+  | K + 1, x => by
+    intro w hw
+    rcases mem_historyUpto_succ.mp hw with rfl | ⟨j, hj, hwj⟩
+    · exact Finset.mem_biUnion.mpr ⟨0, by simp, Finset.mem_singleton_self _⟩
+    · obtain ⟨d, hd, hwd⟩ := Finset.mem_biUnion.mp (historyUpto_subset_layers K j hwj)
+      exact Finset.mem_biUnion.mpr ⟨d + 1, by simp at hd ⊢; omega, layers_ref hj d hwd⟩
+
+theorem layers_round {x : BlockId} (hx : x ∈ U.ids) :
+    ∀ d, ∀ w ∈ layers U {x} d, w ∈ U.ids ∧ (U.block w).round + d = (U.block x).round
+  | 0, w, hw => by rw [Finset.mem_singleton.mp hw]; exact ⟨hx, rfl⟩
+  | d + 1, w, hw => by
+    obtain ⟨p, hp, hwp⟩ := Finset.mem_biUnion.mp hw
+    obtain ⟨hpi, hpr⟩ := layers_round hx d p hp
+    have := (U.valid p hpi).predecessor w hwp
+    exact ⟨U.complete p hpi w hwp, by omega⟩
+
+omit [DecidableEq BlockId] in
+/-- A block references at most `f` Byzantine blocks. -/
+theorem card_byz_refs_le {w : BlockId} (hw : w ∈ U.ids) :
+    ((U.block w).refs.filter fun j => (U.block j).creator ∉ (Correct : Finset Validator)).card ≤
+      F.f := by
+  refine le_trans (Finset.card_le_card_of_injOn (fun j => (U.block j).creator)
+    (fun j hj => ?_) fun i hi j hj hij => ?_) F.card_byzantine
+  · have := (Finset.mem_filter.mp (Finset.mem_coe.mp hj)).2
+    exact Finset.mem_coe.mpr (by simpa [mem_correct] using this)
+  · exact (U.valid w hw).clause i (Finset.mem_filter.mp (Finset.mem_coe.mp hi)).1 j
+      (Finset.mem_filter.mp (Finset.mem_coe.mp hj)).1 hij
+
+omit [DecidableEq BlockId] in
+/-- Blocks of correct authors at one round number at most `|C|`. -/
+theorem card_correct_round_le {ρ : ℕ} {X : Finset BlockId}
+    (hX : ∀ x ∈ X, x ∈ U.ids ∧ (U.block x).round = ρ ∧
+      (U.block x).creator ∈ (Correct : Finset Validator)) :
+    X.card ≤ (Correct : Finset Validator).card :=
+  Finset.card_le_card_of_injOn (fun x => (U.block x).creator)
+    (fun x hx => Finset.mem_coe.mpr (hX x (Finset.mem_coe.mp hx)).2.2) fun i hi j hj hij =>
+      U.eq_of_creator_eq (hX i hi).1 (hX j hj).1 (hX i hi).2.2 rfl hij.symm
+        ((hX i hi).2.1.trans (hX j hj).2.1.symm)
+
+/-- **One layer of a history**: at most `|C|` blocks of correct authors, and
+at most `f` Byzantine blocks per block of the layer above. -/
+theorem card_layers_le {x : BlockId} (hx : x ∈ U.ids) :
+    ∀ d, (layers U {x} d).card ≤ layerBound (Correct : Finset Validator).card F.f d
+  | 0 => by simp [layers, layerBound]
+  | d + 1 => by
+    classical
+    have hsplit := Finset.card_filter_add_card_filter_not (s := layers U {x} (d + 1))
+      (fun w => (U.block w).creator ∈ (Correct : Finset Validator))
+    have hc : ((layers U {x} (d + 1)).filter
+        fun w => (U.block w).creator ∈ (Correct : Finset Validator)).card ≤
+        (Correct : Finset Validator).card := by
+      refine card_correct_round_le (U := U) (ρ := (U.block x).round - (d + 1)) fun w hw => ?_
+      obtain ⟨hwl, hwc⟩ := Finset.mem_filter.mp hw
+      obtain ⟨hwi, hwr⟩ := layers_round hx (d + 1) w hwl
+      exact ⟨hwi, by omega, hwc⟩
+    have hb : ((layers U {x} (d + 1)).filter
+        fun w => (U.block w).creator ∉ (Correct : Finset Validator)).card ≤
+        (layers U {x} d).card * F.f := by
+      refine (Finset.card_le_card fun w hw => ?_).trans
+        (Finset.card_biUnion_le_card_mul _ _ _ fun p hp =>
+          card_byz_refs_le (layers_round hx d p hp).1)
+      obtain ⟨hwl, hwc⟩ := Finset.mem_filter.mp hw
+      obtain ⟨p, hp, hwp⟩ := Finset.mem_biUnion.mp hwl
+      exact Finset.mem_biUnion.mpr ⟨p, hp, Finset.mem_filter.mpr ⟨hwp, hwc⟩⟩
+    have ih := card_layers_le hx d
+    have : (layers U {x} d).card * F.f ≤ F.f * layerBound (Correct : Finset Validator).card F.f d :=
+      by rw [mul_comm]; exact Nat.mul_le_mul_left _ ih
+    simp only [layerBound]
+    omega
+
+/-- **A history to depth `K` holds at most `N_0 + ⋯ + N_K` blocks**, with
+`N_0 = 1` and `N_{d+1} = |C| + f · N_d`, with no condition on
+equivocation. -/
+theorem card_historyUpto_le (K : ℕ) {x : BlockId} (hx : x ∈ U.ids) :
+    (historyUpto U K x).card ≤
+      ∑ d ∈ Finset.range (K + 1), layerBound (Correct : Finset Validator).card F.f d :=
+  (Finset.card_le_card (historyUpto_subset_layers K x)).trans
+    (Finset.card_biUnion_le.trans (Finset.sum_le_sum fun d _ => card_layers_le hx d))
+
+theorem byzLayers_subset_ids {r : BlockId} (hr : r ∈ U.ids) : ∀ s, ∀ w ∈ byzLayers U r s,
+    w ∈ U.ids ∧ (U.block w).round + s = (U.block r).round
+  | 0, w, hw => by rw [Finset.mem_singleton.mp hw]; exact ⟨hr, rfl⟩
+  | s + 1, w, hw => by
+    obtain ⟨p, hp, hwp⟩ := Finset.mem_biUnion.mp hw
+    obtain ⟨hpi, hpr⟩ := byzLayers_subset_ids hr s p hp
+    have hwp' := (Finset.mem_filter.mp hwp).1
+    have := (U.valid p hpi).predecessor w hwp'
+    exact ⟨U.complete p hpi w hwp', by omega⟩
+
+/-- At most `f^s` Byzantine blocks are reached from a block by `s` references
+through Byzantine blocks. -/
+theorem card_byzLayers_le {r : BlockId} (hr : r ∈ U.ids) :
+    ∀ s, (byzLayers U r s).card ≤ F.f ^ s
+  | 0 => by simp [byzLayers]
+  | s + 1 => by
+    refine (Finset.card_biUnion_le_card_mul _ _ _ fun p hp =>
+      card_byz_refs_le (byzLayers_subset_ids hr s p hp).1).trans ?_
+    rw [pow_succ]
+    exact Nat.mul_le_mul_right _ (card_byzLayers_le hr s)
+
+/-- A block of a history to depth `K`, other than its top, is referenced by a
+block of that history. -/
+theorem exists_parent : ∀ (K : ℕ) {y z : BlockId}, z ∈ historyUpto U K y → z ≠ y →
+    ∃ p ∈ historyUpto U K y, z ∈ (U.block p).refs
+  | 0, y, z, hz, hne => by
+    rw [historyUpto_zero, Finset.mem_singleton] at hz; exact absurd hz hne
+  | K + 1, y, z, hz, hne => by
+    rcases mem_historyUpto_succ.mp hz with h | ⟨j, hj, hzj⟩
+    · exact absurd h hne
+    by_cases hzj' : z = j
+    · exact ⟨y, mem_historyUpto_self, hzj' ▸ hj⟩
+    · obtain ⟨p, hp, hzp⟩ := exists_parent K hzj hzj'
+      exact ⟨p, mem_historyUpto_succ.mpr (Or.inr ⟨j, hj, hp⟩), hzp⟩
+
+/-- **Every Byzantine block of a history below an anchored block hangs below a
+root**: a block of a correct author or an anchored block, at most as many
+rounds above it as the history's top, reached through Byzantine blocks. -/
+theorem exists_root (hA : A ∈ U.ids) {y : BlockId} (hy : AnchoredBelow U K A y) :
+    ∀ d z, z ∈ historyUpto U K y → (U.block y).round = (U.block z).round + d →
+      (U.block z).creator ∉ (Correct : Finset Validator) →
+      ∃ s r, s ≤ d ∧ r ∈ U.ids ∧ (U.block r).round = (U.block z).round + s ∧
+        ((U.block r).creator ∈ (Correct : Finset Validator) ∨ AnchoredBelow U K A r) ∧
+        z ∈ byzLayers U r s := by
+  classical
+  have hyi := hy.mem hA
+  intro d
+  induction d using Nat.strong_induction_on with
+  | _ d ih =>
+    intro z hz hdr hzc
+    by_cases hzy : z = y
+    · subst hzy
+      exact ⟨0, z, Nat.zero_le _, hyi, rfl, Or.inr hy, Finset.mem_singleton_self _⟩
+    obtain ⟨p, hp, hzp⟩ := exists_parent K hz hzy
+    have hpi := historyUpto_subset_ids K hyi hp
+    have hpr := (U.valid p hpi).predecessor z hzp
+    have hpy := (round_of_mem_historyUpto K hyi hp).1
+    by_cases hroot : (U.block p).creator ∈ (Correct : Finset Validator) ∨ AnchoredBelow U K A p
+    · exact ⟨1, p, by omega, hpi, by omega, hroot, Finset.mem_biUnion.mpr
+        ⟨p, Finset.mem_singleton_self _, Finset.mem_filter.mpr ⟨hzp, hzc⟩⟩⟩
+    · push Not at hroot
+      obtain ⟨s, r, hs, hri, hrr, hrt, hpr'⟩ := ih (d - 1) (by omega) p hp (by omega) hroot.1
+      exact ⟨s + 1, r, by omega, hri, by omega, hrt, Finset.mem_biUnion.mpr
+        ⟨p, hpr', Finset.mem_filter.mpr ⟨hzp, hzc⟩⟩⟩
+
+/-- **One round holds at most `|C| · |B|` anchored blocks of authors in `B`
+besides the anchor**: each has a correct referencer one round up, which has
+one block there and references one block per author. -/
+theorem card_anchored_le (hA : A ∈ U.ids) {ρ : ℕ} {B : Finset Validator} {X : Finset BlockId}
+    (hX : ∀ x ∈ X, AnchoredBelow U K A x ∧ (U.block x).round = ρ ∧ x ≠ A ∧
+      (U.block x).creator ∈ B) :
+    X.card ≤ (Correct : Finset Validator).card * B.card := by
   classical
   have hex : ∀ x ∈ X, ∃ z, z ∈ U.ids ∧ (U.block z).creator ∈ (Correct : Finset Validator) ∧
       x ∈ (U.block z).refs := by
     intro x hx
-    obtain ⟨hxa, -, hxA⟩ := hX x hx
+    obtain ⟨hxa, -, hxA, -⟩ := hX x hx
     cases hxa with
     | anchor => exact absurd rfl hxA
     | referenced S y hy hz href hcard =>
@@ -262,9 +421,9 @@ theorem card_anchored_le (hA : A ∈ U.ids) {ρ : ℕ} {X : Finset BlockId}
       obtain ⟨z, hzS, hzc⟩ := mem_creatorsOf.mp hc
       exact ⟨z, historyUpto_subset_ids K ((hy z hzS).mem hA) (hz z hzS), hzc ▸ hcC, href z hzS⟩
   choose! zf hzf using hex
-  have hcard : X.card ≤ ((Correct : Finset Validator) ×ˢ (Finset.univ : Finset Validator)).card :=
+  have hcard : X.card ≤ ((Correct : Finset Validator) ×ˢ B).card :=
     Finset.card_le_card_of_injOn (fun x => ((U.block (zf x)).creator, (U.block x).creator))
-      (fun x hx => Finset.mem_coe.mpr (Finset.mem_product.mpr ⟨(hzf x hx).2.1, Finset.mem_univ _⟩))
+      (fun x hx => Finset.mem_coe.mpr (Finset.mem_product.mpr ⟨(hzf x hx).2.1, (hX x hx).2.2.2⟩))
       fun x hx x' hx' hxx => by
         obtain ⟨hz, hzC, hxz⟩ := hzf x hx
         obtain ⟨hz', -, hxz'⟩ := hzf x' hx'
@@ -275,41 +434,73 @@ theorem card_anchored_le (hA : A ∈ U.ids) {ρ : ℕ} {X : Finset BlockId}
           (by have := (hX x hx).2.1; have := (hX x' hx').2.1; omega)
         rw [← hzz] at hxz'
         exact (U.valid _ hz).clause x hxz x' hxz' h2
-  rwa [Finset.card_product, Finset.card_univ] at hcard
+  rwa [Finset.card_product] at hcard
 
-/-- **The available sub-DAG holds a bounded number of blocks per round**, with
-no condition on equivocation: those of round `ρ` lie in the histories to depth
-`K` of anchored blocks of rounds `ρ` to `ρ + K`. -/
+/-- One round holds at most `|C|(f + 1) + 1` roots: blocks of correct authors,
+and anchored blocks. -/
+theorem card_roots_le (hA : A ∈ U.ids) {ρ : ℕ} {X : Finset BlockId}
+    (hX : ∀ x ∈ X, x ∈ U.ids ∧ (U.block x).round = ρ ∧
+      ((U.block x).creator ∈ (Correct : Finset Validator) ∨ AnchoredBelow U K A x)) :
+    X.card ≤ (Correct : Finset Validator).card * (F.f + 1) + 1 := by
+  classical
+  have hsplit := Finset.card_filter_add_card_filter_not (s := X)
+    (fun x => (U.block x).creator ∈ (Correct : Finset Validator))
+  have hc := card_correct_round_le (U := U) (ρ := ρ) (X := X.filter
+    fun x => (U.block x).creator ∈ (Correct : Finset Validator)) fun x hx => by
+      obtain ⟨hxX, hxc⟩ := Finset.mem_filter.mp hx
+      exact ⟨(hX x hxX).1, (hX x hxX).2.1, hxc⟩
+  have h1 := Finset.pred_card_le_card_erase (s := X.filter
+    fun x => (U.block x).creator ∉ (Correct : Finset Validator)) (a := A)
+  have hb := card_anchored_le hA (ρ := ρ) (B := F.byzantine) (X := (X.filter
+    fun x => (U.block x).creator ∉ (Correct : Finset Validator)).erase A) fun x hx => by
+      obtain ⟨hxA, hxf⟩ := Finset.mem_erase.mp hx
+      obtain ⟨hxX, hxc⟩ := Finset.mem_filter.mp hxf
+      obtain ⟨-, hxr, hxa⟩ := hX x hxX
+      exact ⟨hxa.resolve_left hxc, hxr, hxA, by simpa [mem_correct] using hxc⟩
+  have := Nat.mul_le_mul_left (Correct : Finset Validator).card F.card_byzantine
+  rw [Nat.mul_add, Nat.mul_one]
+  omega
+
+/-- **The available sub-DAG holds at most `|C| + (|C|(f + 1) + 1)(1 + f + ⋯ +
+f^K)` blocks per round**, with no condition on equivocation: its correct
+blocks number at most `|C|`, and each Byzantine block hangs at most `K`
+rounds below a root through Byzantine blocks. -/
 theorem card_avail_round_le (hA : A ∈ U.ids) {ρ : ℕ} {Z : Finset BlockId}
     (hZ : ∀ z ∈ Z, z ∈ Avail U K A ∧ (U.block z).round = ρ) :
-    Z.card ≤ (K + 1) * ((Correct : Finset Validator).card * Fintype.card Validator + 1) *
-      ∑ d ∈ Finset.range (K + 1), Fintype.card Validator ^ d := by
+    Z.card ≤ (Correct : Finset Validator).card +
+      ((Correct : Finset Validator).card * (F.f + 1) + 1) *
+        ∑ s ∈ Finset.range (K + 1), F.f ^ s := by
   classical
-  let Y : ℕ → Finset BlockId := fun t =>
-    U.ids.filter fun y => AnchoredBelow U K A y ∧ (U.block y).round = t
-  have hsub : Z ⊆
-      (Finset.range (K + 1)).biUnion fun t => (Y (ρ + t)).biUnion (historyUpto U K) := by
+  have hsplit := Finset.card_filter_add_card_filter_not (s := Z)
+    (fun z => (U.block z).creator ∈ (Correct : Finset Validator))
+  have hc := card_correct_round_le (U := U) (ρ := ρ) (X := Z.filter
+    fun z => (U.block z).creator ∈ (Correct : Finset Validator)) fun z hz => by
+      obtain ⟨hzZ, hzc⟩ := Finset.mem_filter.mp hz
+      obtain ⟨⟨y, hy, hzy⟩, hzr⟩ := hZ z hzZ
+      exact ⟨historyUpto_subset_ids K (hy.mem hA) hzy, hzr, hzc⟩
+  let R : ℕ → Finset BlockId := fun t => U.ids.filter fun r => (U.block r).round = t ∧
+    ((U.block r).creator ∈ (Correct : Finset Validator) ∨ AnchoredBelow U K A r)
+  have hsub : Z.filter (fun z => (U.block z).creator ∉ (Correct : Finset Validator)) ⊆
+      (Finset.range (K + 1)).biUnion fun s => (R (ρ + s)).biUnion fun r => byzLayers U r s := by
     intro z hz
-    obtain ⟨⟨y, hy, hzy⟩, hzr⟩ := hZ z hz
-    have hyi := hy.mem hA
-    have := round_of_mem_historyUpto K hyi hzy
-    refine Finset.mem_biUnion.mpr ⟨(U.block y).round - ρ, Finset.mem_range.mpr (by omega), ?_⟩
-    exact Finset.mem_biUnion.mpr ⟨y, Finset.mem_filter.mpr ⟨hyi, hy, by omega⟩, hzy⟩
-  have hY : ∀ t, (Y t).card ≤ (Correct : Finset Validator).card * Fintype.card Validator + 1 := by
-    intro t
-    have h1 := Finset.pred_card_le_card_erase (s := Y t) (a := A)
-    have h2 := card_anchored_le hA (X := (Y t).erase A) (ρ := t) fun x hx => by
-      obtain ⟨hxA, hxY⟩ := Finset.mem_erase.mp hx
-      obtain ⟨-, hxa, hxr⟩ := Finset.mem_filter.mp hxY
-      exact ⟨hxa, hxr, hxA⟩
-    omega
-  refine (Finset.card_le_card hsub).trans ?_
-  refine (Finset.card_biUnion_le_card_mul _ _
-    (((Correct : Finset Validator).card * Fintype.card Validator + 1) *
-      ∑ d ∈ Finset.range (K + 1), Fintype.card Validator ^ d) fun t _ => ?_).trans
-    (by rw [Finset.card_range, mul_assoc])
-  exact (Finset.card_biUnion_le_card_mul _ _ _ fun y hy =>
-    card_historyUpto_le K (Finset.mem_filter.mp hy).1).trans (Nat.mul_le_mul_right _ (hY _))
+    obtain ⟨hzZ, hzc⟩ := Finset.mem_filter.mp hz
+    obtain ⟨⟨y, hy, hzy⟩, hzr⟩ := hZ z hzZ
+    have hyz := round_of_mem_historyUpto K (hy.mem hA) hzy
+    obtain ⟨s, r, hs, hri, hrr, hrt, hzr'⟩ := exists_root hA hy
+      ((U.block y).round - (U.block z).round) z hzy (by omega) hzc
+    exact Finset.mem_biUnion.mpr ⟨s, Finset.mem_range.mpr (by omega),
+      Finset.mem_biUnion.mpr ⟨r, Finset.mem_filter.mpr ⟨hri, by omega, hrt⟩, hzr'⟩⟩
+  have hb : (Z.filter fun z => (U.block z).creator ∉ (Correct : Finset Validator)).card ≤
+      ((Correct : Finset Validator).card * (F.f + 1) + 1) *
+        ∑ s ∈ Finset.range (K + 1), F.f ^ s := by
+    refine (Finset.card_le_card hsub).trans (Finset.card_biUnion_le.trans ?_)
+    rw [Finset.mul_sum]
+    refine Finset.sum_le_sum fun s _ => (Finset.card_biUnion_le_card_mul _ _ _ fun r hr =>
+      card_byzLayers_le (Finset.mem_filter.mp hr).1 s).trans (Nat.mul_le_mul_right _ ?_)
+    exact card_roots_le hA fun x hx => by
+      obtain ⟨hxi, hxr, hxt⟩ := Finset.mem_filter.mp hx
+      exact ⟨hxi, hxr, hxt⟩
+  omega
 
 variable [S : Slots Validator]
 

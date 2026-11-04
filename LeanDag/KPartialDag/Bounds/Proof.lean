@@ -51,7 +51,10 @@ theorem window : Window := by
 
 theorem availRound : AvailRound := by
   intro Validator BlockId Payload _ _ _ _ U K A ρ hA
-  exact ⟨fun X hX => card_anchored_le hA hX, fun Z hZ => card_avail_round_le hA hZ⟩
+  refine ⟨fun X hX => ?_, fun Z hZ => card_avail_round_le hA hZ⟩
+  have := card_anchored_le hA (B := Finset.univ) fun x hx =>
+    ⟨(hX x hx).1, (hX x hx).2.1, (hX x hx).2.2, Finset.mem_univ _⟩
+  rwa [Finset.card_univ] at this
 
 theorem holds : Statement := ⟨decides, progress, builds, resumes, counts, window, availRound⟩
 

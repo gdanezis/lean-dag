@@ -19,12 +19,13 @@ commit rule:
   slots `D` rounds below `s` and above, and fetched those slots' leaders down
   to `D` rounds below `s`, give each block the same entry slot from `s` on;
 * **counting** (`Counts`, `Window`): without equivocation the record holds at
-  most `n` blocks per round; a history to depth `K` lies in `K + 1` rounds
-  and holds at most `1 + n + ⋯ + n^K` blocks, with no condition on
-  equivocation;
-* **the available sub-DAG per round** (`AvailRound`): a round holds at most
-  `|C| · n` anchored blocks besides the anchor, and so a bounded number of
-  blocks of the available sub-DAG, with no condition on equivocation.
+  most `n` blocks per round; with no condition on equivocation, a history to
+  depth `K` lies in `K + 1` rounds and holds at most `N_0 + ⋯ + N_K` blocks,
+  with `N_0 = 1` and `N_{d+1} = |C| + f · N_d`;
+* **the available sub-DAG per round** (`AvailRound`): with no condition on
+  equivocation, a round holds at most `|C| · n` anchored blocks besides the
+  anchor, and at most `|C| + (|C|(f + 1) + 1)(1 + f + ⋯ + f^K)` blocks of the
+  available sub-DAG.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -105,17 +106,20 @@ def Counts : Prop :=
     (Between U lo hi).card ≤ (hi + 1 - lo) * Fintype.card Validator
 
 /-- **A history to depth `K`** lies in `K + 1` rounds and holds at most
-`1 + n + ⋯ + n^K` blocks. -/
+`N_0 + ⋯ + N_K` blocks, with `N_0 = 1` and `N_{d+1} = |C| + f · N_d`
+(`layerBound`), with no condition on equivocation. -/
 def Window : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [DecidableEq BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
     (x : BlockId), x ∈ U.ids →
     historyUpto U K x ⊆ Between U ((U.block x).round - K) (U.block x).round ∧
-      (historyUpto U K x).card ≤ ∑ d ∈ Finset.range (K + 1), Fintype.card Validator ^ d
+      (historyUpto U K x).card ≤
+        ∑ d ∈ Finset.range (K + 1),
+          layerBound (Correct : Finset Validator).card (Faults.f Validator) d
 
 /-- **The available sub-DAG per round**, with no condition on equivocation:
 below a block of the record, a round holds at most `|C| · n` anchored blocks
-besides the anchor, and at most `(K + 1)(|C| · n + 1)(1 + n + ⋯ + n^K)`
+besides the anchor, and at most `|C| + (|C|(f + 1) + 1)(1 + f + ⋯ + f^K)`
 blocks of the available sub-DAG. -/
 def AvailRound : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
@@ -124,8 +128,9 @@ def AvailRound : Prop :=
     (∀ X : Finset BlockId, (∀ x ∈ X, AnchoredBelow U K A x ∧ (U.block x).round = ρ ∧ x ≠ A) →
       X.card ≤ (Correct : Finset Validator).card * Fintype.card Validator) ∧
     ∀ Z : Finset BlockId, (∀ z ∈ Z, z ∈ Avail U K A ∧ (U.block z).round = ρ) →
-      Z.card ≤ (K + 1) * ((Correct : Finset Validator).card * Fintype.card Validator + 1) *
-        ∑ d ∈ Finset.range (K + 1), Fintype.card Validator ^ d
+      Z.card ≤ (Correct : Finset Validator).card +
+        ((Correct : Finset Validator).card * (Faults.f Validator + 1) + 1) *
+          ∑ s ∈ Finset.range (K + 1), Faults.f Validator ^ s
 
 /-- Bounds for deciding and restarting. -/
 def Statement : Prop := Decides ∧ Progress ∧ Builds ∧ Resumes ∧ Counts ∧ Window ∧ AvailRound

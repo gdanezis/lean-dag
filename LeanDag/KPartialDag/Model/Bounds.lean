@@ -6,7 +6,8 @@ import LeanDag.KPartialDag.Model.Order
 (`Band`), the record's blocks at rounds `lo` to `hi` (`Between`), the
 condition that no author has two blocks at one round from `lo` to `hi`
 (`EquivFree`), and the download obligation of a block: its author holds the
-history to depth `K` of each of its references (`Obliged`).
+history to depth `K` of each of its references (`Obliged`). The bound on the
+blocks `d` rounds below a block in its history is `layerBound`.
 
 Definitions only.
 -/
@@ -36,6 +37,12 @@ def EquivFree (U : KRecord Validator BlockId Payload) (lo hi : ℕ) : Prop :=
 def Obliged (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId)
     (b : Block Validator BlockId Payload) : Prop :=
   ∀ x ∈ b.refs, historyUpto U K x ⊆ H
+
+/-- **The bound on one layer of a history**: `N_0 = 1` and
+`N_{d+1} = c + f · N_d`, for `c` correct validators and `f` faults. -/
+def layerBound (c f : ℕ) : ℕ → ℕ
+  | 0 => 1
+  | d + 1 => c + f * layerBound c f d
 
 end KPartialDag
 

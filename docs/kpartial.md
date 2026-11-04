@@ -237,7 +237,7 @@ propose its payload again.
 | 6 Progress | a node decides from a band of bounded length | synchrony, fair runs |
 | 6 Builds | building needs the last `K + 1` rounds | — |
 | 6 Resumes | the ledger resumes from the band from `D + K` rounds below | `K ≥ 3` |
-| 6 Counts, Window, AvailRound | blocks per round: `n` without equivocation; bounded in `n`, `K` with it | — |
+| 6 Counts, Window, AvailRound | `n` blocks a round without equivocation; with it, `≈ |C| f^(K−1)` per history and `≈ |C| f^(K+1)` per round of the available sub-DAG | — |
 
 ## 9. Why a K-partial DAG
 
@@ -319,14 +319,35 @@ blocks. The blocks of `H` at round `ρ` or above are its *band from `ρ`*
   Without equivocation the record holds at most `n` blocks per round
   (`card_between_le`), so a band of `w` rounds holds at most `n w` blocks:
   `n (K + 1)` to build, `n (D + K + lag)` to restart. With equivocation and
-  no further mechanism, a history to depth `K` lies in `K + 1` rounds and
-  holds at most `1 + n + ⋯ + n^K` blocks, since a block references at most one
-  block per author (`card_historyUpto_le`); a round holds at most `|C| n`
-  anchored blocks besides the anchor, since each has a correct referencer one
-  round up (`card_anchored_le`); and so a round holds at most
-  `(K + 1)(|C| n + 1)(1 + n + ⋯ + n^K)` blocks of the available sub-DAG
-  (`card_avail_round_le`). These are finite and independent of how many
-  blocks the adversary builds, and polynomial in `n` for a fixed `K`.
+  no further mechanism:
+  - a history to depth `K` holds at most `N_0 + ⋯ + N_K` blocks, with
+    `N_0 = 1` and `N_{d+1} = |C| + f · N_d`: each layer holds at most `|C|`
+    blocks of correct authors, and a block references at most `f` Byzantine
+    blocks (`card_layers_le`, `card_historyUpto_le`);
+  - every Byzantine block of the available sub-DAG hangs at most `K` rounds
+    below a *root*, a block of a correct author or an anchored block,
+    through Byzantine blocks (`exists_root`), and a round holds at most
+    `|C|(f + 1) + 1` roots, since an anchored Byzantine block has a correct
+    referencer one round up (`card_anchored_le`, `card_roots_le`); so a round
+    of the available sub-DAG holds at most
+    `|C| + (|C|(f + 1) + 1)(1 + f + ⋯ + f^K)` blocks
+    (`card_avail_round_le`).
+
+  For `n = 100`, `f = 33`, `|C| = 67`:
+
+  | `K` | history to depth `K` | available sub-DAG per round |
+  |---|---|---|
+  | 3 | 114,646 | 84,459,807 |
+  | 4 | 3,783,587 | 2,787,173,766 |
+
+  The per-round bound is of order `|C| f^(K+1)`. An adversary appears able
+  to reach that order: in each of `|C|` partitions it makes every Byzantine
+  validator equivocate once per round, one correct validator references that
+  partition's blocks, and the Byzantine blocks of the partition reference
+  each other, so each is anchored by `f + 1` distinct authors, and each
+  anchored Byzantine block has up to `f^K` Byzantine blocks in its history to
+  depth `K`. This construction is not formalised. A bound near `n` per round
+  therefore needs a rule for equivocating authors.
 
 Not proved: that persisting the last round built before sending suffices
 to avoid equivocation after a restart, which needs a model of validators
