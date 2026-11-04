@@ -208,6 +208,12 @@ output (`LedgerIn`). A block enters the ledger at the first committed slot
 whose leader outputs it (`EntersIn`). As in the rest of the tree, the order
 within one slot's output is left open.
 
+The ledger carries no causal guarantee across slots. A leader outputs only
+its available sub-DAG within `D` rounds, so a block may enter the ledger
+before one of its ancestors, or without it. The order is still agreed, so
+replicas that execute it reach one state. A consumer that needs causal order
+drops the blocks whose references it has not seen in the ledger.
+
 The development proves (`Order.Statement`):
 
 * **available** (`Order.Available`): what a certified block outputs is held
