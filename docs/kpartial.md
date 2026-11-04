@@ -233,6 +233,11 @@ propose its payload again.
 | 5 Settled | a block not output within `D` rounds never is | — |
 | 5 Outputs | a leader of `T` outputs the blocks of `T` within `D` rounds | synchrony, `K ≥ 1` |
 | 5 Included | every block of `T` enters the ledger | synchrony, a `T` slot every `D` rounds, `K ≥ 3` |
+| 6 Decides | decisions read the band from `K − 1` rounds below the slot | — |
+| 6 Progress | a node decides from a band of bounded length | synchrony, fair runs |
+| 6 Builds | building needs the last `K + 1` rounds | — |
+| 6 Resumes | the ledger resumes from the band from `D + K` rounds below | `K ≥ 3` |
+| 6 Counts, Window, AvailRound | blocks per round: `n` without equivocation; bounded in `n`, `K` with it | — |
 
 ## 9. Why a K-partial DAG
 
@@ -245,9 +250,9 @@ K-partial DAG bounds the obligation: a reference states only that the
 history to depth `K` is held. What follows from the results above, and what
 is argued only:
 
-* *Bounded work to take part* (argued). A validator references, and so votes
-  and builds, after fetching `K` rounds of history; a validator returning
-  from an outage needs the last `K` rounds, not all it missed.
+* *Bounded work to take part* (proved, §10). A validator references, and so
+  votes and builds, after fetching `K + 1` rounds of history; a validator
+  returning from an outage needs those rounds, not all it missed.
 * *Bounded fetch to decide and to order* (proved). A decision from an anchor
   needs the sub-DAG from the anchor down to `K` rounds below the slot
   (Theorem 3), and a leader's output `D + K` rounds below it (Theorem 5).
@@ -262,62 +267,71 @@ is argued only:
 * *Weaker obligations* (argued). No reference to the author's own block is
   required, so a validator that crashed resumes without its own chain, and
   none must build at every round; no result uses either.
-* *Bounded state* (argued). A node keeps windows of depth `K` to build and
-  `D + K` rounds to order, which suggests a garbage collection rule.
+* *Bounded state* (proved in rounds, §10). A node decides from the rounds
+  from `K − 1` below its lowest undecided slot, and resumes the ledger from
+  `D + K` rounds below; how long others must retain these is open.
 
 The costs are the loss of causal order across slots, blocks that no leader
 outputs within `D` rounds and must be proposed again, a depth `D` set by the
 schedule, and `K ≥ 3` with one reference per author for safety.
 
-## 10. Storage and restart (notes, not formalised)
+## 10. Bounds for deciding and restarting
 
-*Building.* A node building at round `r + 1` references a quorum `Q` of
-round-`r` blocks and holds `W = ⋃_{x ∈ Q} historyUpto K x`, rounds `r − K` to
-`r`. Building needs no decision and nothing below `r − K`.
+No mechanism is added: no pruning and no exclusion of equivocators. The
+bounds are stated in rounds, as a band of rounds a node needs, and then in
+blocks. The blocks of `H` at round `ρ` or above are its *band from `ρ`*
+(`Band`).
 
-*Deciding and ordering.* A direct verdict for a slot at round `s` reads rounds
-`s` to `s + 2`. An indirect verdict from an anchor at round `a` reads the
-sub-DAG from `a` down to `s + 1 − K`; the distance `a − s` is bounded after
-synchrony by the run structure and not before. A leader's output reads
-`D + K` rounds below it.
+**Theorem 6 (bounds; `Bounds.Statement`).**
 
-*The bound.* With one block per author and round in the band, a node holds
-`n (K + 1)` blocks to build, and `n (max(Δ, D) + K + 1)` to decide and order,
-for `Δ` the largest distance from a pending slot to its anchor. Equivocation
-breaks the bound: with `N_d` the window's blocks at round `r − d`, a block
-references one block per author, so `N_0 ≤ n` and `N_d ≤ n + f N_{d−1}`, and
-the window may hold of the order of `n f^K` blocks. Three treatments:
-(a) a bound `n (K + 1) + E` charged to the `E` extra blocks per author and
-round in the window, with no rule change; (b) a cap of two blocks per author
-and round, the pair being evidence and the author excluded, giving about
-`2 n (K + 1)` but reopening `Avail.Held` and `Avail.Linked`; (c) refusing to
-reference blocks whose window holds an equivocation, which likely breaks
-liveness, since a Byzantine author can split correct nodes between two
-versions. Undecided.
+* *Decisions read a band* (`Bounds.Decides`). A node's decision of a slot at
+  round `ρ + K − 1` or above, and not below `ρ`, is the same on its band from
+  `ρ`. A block anchored at round `ρ + K` or above is anchored on the band,
+  since its derivation reads only blocks above it and their histories to depth
+  `K` (`AnchoredIn.band`), so the available sub-DAG, the indirect test and the
+  fetch test above round `ρ + K` read only the band (`availIn_band_iff`,
+  `linkedIn_band_iff`, `fetchedIn_band_iff`); the direct tests read rounds
+  `σ(k)` to `σ(k) + 2` (`heldWithRefs_band`), and every slot a decision
+  recurses to lies above (`nodeDecided_band_iff`).
+* *Progress from a band* (`Bounds.Progress`). After synchrony, a node holding
+  the blocks of `T` over a run with their references, and the available
+  sub-DAG below every certified leader up to the run's end from round `ρ`
+  up, decides every slot below the run's end at round `ρ + K − 1` or above.
+  So a node keeps only the rounds from `K − 1` below its lowest undecided
+  slot, and the length of that band is bounded after synchrony by the
+  distance to the next run (`nodeDecided_of_run_band`).
+* *Building* (`Bounds.Builds`). A block of round `r + 1` referencing a quorum
+  of distinct authors of round `r` is valid, and a node holding the
+  histories to depth `K` of that quorum meets its obligation (`Obliged`)
+  with its band from `r − K`. A restarting node therefore needs, to build,
+  the last round at which it built (so as not to build twice at a round)
+  and `K + 1` rounds of blocks.
+* *Resuming the ledger* (`Bounds.Resumes`). At `K ≥ 3`, two nodes that
+  decided every slot `D` rounds below `s` and above, and fetched those
+  slots' leaders down to `D` rounds below `s`, give each block the same entry
+  slot from `s` on. Neither needs a verdict of an earlier slot: a leader
+  outputs only blocks `D` rounds below it or above, and a block of the
+  available sub-DAG lies at or below its leader (`entersIn_resume`). By
+  §5's `Fetchable` and the first item, a restarting node resumes the ledger
+  at slot `s` from its band from `σ(s) − D − K`, with the executed state at
+  `s` from a checkpoint.
+* *Counting* (`Bounds.Counts`, `Bounds.Window`, `Bounds.AvailRound`).
+  Without equivocation the record holds at most `n` blocks per round
+  (`card_between_le`), so a band of `w` rounds holds at most `n w` blocks:
+  `n (K + 1)` to build, `n (D + K + lag)` to restart. With equivocation and
+  no further mechanism, a history to depth `K` lies in `K + 1` rounds and
+  holds at most `1 + n + ⋯ + n^K` blocks, since a block references at most one
+  block per author (`card_historyUpto_le`); a round holds at most `|C| n`
+  anchored blocks besides the anchor, since each has a correct referencer one
+  round up (`card_anchored_le`); and so a round holds at most
+  `(K + 1)(|C| n + 1)(1 + n + ⋯ + n^K)` blocks of the available sub-DAG
+  (`card_avail_round_le`). These are finite and independent of how many
+  blocks the adversary builds, and polynomial in `n` for a fixed `K`.
 
-*Restart.* A restarting node needs:
-
-1. on disk, the last round it built at, written before each block is sent,
-   so that it never builds twice at one round; it needs no chain of its own;
-2. to build again, a quorum of current blocks of distinct authors and their
-   windows to depth `K`, which the authors of correct blocks hold;
-3. to decide new slots, nothing older than the recent band and the anchor
-   distance;
-4. to resume the ledger at slot `s` without duplicates, the verdicts and
-   outputs of the slots in rounds `slotRound s − D` to `slotRound s`, since a
-   block output at round `ρ` could have been output earlier only by leaders
-   at rounds `ρ − D` to `ρ`; the executed state up to `s` comes from a
-   checkpoint;
-5. that some correct node still keeps these blocks, which is the retention
-   rule of §11.
-
-*Statements to prove later.* W1, the window holds at most `n (K + 1)` blocks
-without equivocation, or the recurrence in general; W2, holding `W` suffices
-to build a valid block meeting the obligation; W3, direct verdicts read only
-rounds `s` to `s + 2`; W4, entry and order from slot `s` on are fixed by the
-verdicts and outputs of the slots of the `D` rounds before `s` and the later
-verdicts; and, with a model of nodes over time, that a restarted node builds
-no second block at a round.
+Not proved: that persisting the last round built before sending suffices
+to avoid equivocation after a restart, which needs a model of validators
+over time; and how long correct nodes must retain a band, which needs a
+quantitative liveness bound or a state transfer.
 
 ## 11. Open questions
 
@@ -328,6 +342,8 @@ no second block at a round.
   the references of any block include `f + 1` blocks of `T`, which suggests
   that any committed leader outputs the blocks of `T` two rounds or more
   below it.
-* The treatment of equivocation in the storage bound (§10).
+* A storage bound linear in `K` under equivocation, which needs a rule for
+  equivocating authors (§10).
 * Quantitative liveness, which a retention bound needs.
-* Crash recovery without the author's own chain.
+* Crash recovery: that persisting the last round built suffices, with a
+  model of validators over time.

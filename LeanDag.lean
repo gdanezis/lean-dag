@@ -585,3 +585,7 @@ import LeanDag.KPartialDag.Model.Order
 import LeanDag.KPartialDag.Helpers.Order
 import LeanDag.KPartialDag.Order.Statement
 import LeanDag.KPartialDag.Order.Proof
+import LeanDag.KPartialDag.Model.Bounds
+import LeanDag.KPartialDag.Helpers.Bounds
+import LeanDag.KPartialDag.Bounds.Statement
+import LeanDag.KPartialDag.Bounds.Proof
