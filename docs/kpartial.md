@@ -9,8 +9,9 @@ the history of the blocks it references. The Lean development is
 
 A block carries a round, an author with its signature, a payload, and
 references to blocks of the round below, each committed by its hash. The
-references come from a quorum of `n − f` distinct authors. They differ from
-those of the core DAG in two ways:
+references come from a quorum of `n − f` distinct authors, and a block
+references at most one block of each author. They differ from those of the
+core DAG in two ways:
 
 1. a block need not reference its author's own block of the round below;
 2. an honest author that references a block has downloaded that block's
@@ -18,12 +19,15 @@ those of the core DAG in two ways:
 
 Hashes fix the whole history of every block, so the record of a run is an
 ordinary block record (`KRecord`, at the validity `KValid`: references one
-round below, from a quorum of distinct authors). What changes is what an
+round below, from a quorum of distinct authors, at most one of each). What changes is what an
 honest node holds of it: the history to depth `K` of each block it
 references or accepts, not the record's histories in full.
 
 Point 1 does not affect safety: the core's self-reference (`self_parent` of
-`ValidWrt`) is used by no safety or liveness result.
+`ValidWrt`) is used by no safety or liveness result. The rule of one
+reference per author is a validity condition (`Clause.distinct`), as in the
+core: without it a correct voter could reference both twins of a Byzantine
+leader, and both could be certified.
 
 ## 2. The commit rule on a K-partial DAG
 
@@ -81,14 +85,37 @@ So the indirect test through any anchor agrees with every direct decision,
 and, being a function of the record, with every other node's indirect test
 through the same anchor.
 
-## 4. Next
+## 4. Agreement
 
-* The commit rule as an anchored rule (`AnchoredRule` of
-  `Common/AnchoredBelow.lean`), with `AvailLinked` as its link, and agreement
-  across views from the rule's laws.
+The commit rule is Mysticeti's, read on the K-partial DAG, as an anchored rule
+of `Common/Anchored.lean` (`kRule`): the direct commit and the slot skip read
+on a view, at wave two, with one rung, whose link is `AvailLinked`. At
+`K ≥ 2` it satisfies the laws of an anchored rule (`Agreement.Laws`), so any
+two views of one record decide each slot alike (`Agreement.Agrees`), and the
+committed sequences and ledgers agree by the relation's own theorems.
+
+* Two certificates for blocks of one author at one round certify the same
+  block (`eq_of_certificates`): their votes come from two quorums, so a
+  correct author's one block of the round above references both, and it
+  references one block of each author.
+* A direct commit has a certificate, and a slot skip directly skips each
+  candidate (`directSkip_of_blameSkip`), so a commit and a skip exclude each
+  other, and so do a skip and a link (`not_directSkip`).
+* A direct commit is linked from every eligible anchor (`linked`): eligible
+  anchors lie at round `r + 3` or above.
+
+The views of this framework are closed under whole histories, and the link
+is read on the record. So agreement holds between nodes that hold the
+available sub-DAG below each anchor they decide through; that a node holding
+only histories to depth `K` can fetch it is §3's `Held`, and deciding on such
+a node's view is the next step.
+
+## 5. Next
+
 * Views a node holds on a K-partial DAG: closed under histories to depth
   `K`, not under whole histories; a decision taken on such a view, with the
-  available sub-DAG below the anchor fetched, is the record's.
+  available sub-DAG below the anchor fetched, is the decision on a closed
+  view, so `Agreement.Agrees` applies.
 * Liveness: the cost of fetching the sub-DAG, how far below an anchor
   decisions reach, and how long honest nodes must keep the histories they
   downloaded.

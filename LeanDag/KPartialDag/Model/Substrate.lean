@@ -3,8 +3,8 @@ import LeanDag.Common.History
 # K-partial DAG — the substrate
 
 `docs/kpartial.md` §1. A block references blocks of the round below from a
-quorum of distinct authors, committing to each by its hash; it need not
-reference its author's own previous block. An honest author that references
+quorum of distinct authors, at most one of each, committing to each by its
+hash; it need not reference its author's own previous block. An honest author that references
 a block has downloaded that block's history to depth `K` only. Hashes fix
 the whole history of every block, so the record of a run is an ordinary
 block record (`KRecord`); what an honest node holds of it is not.
@@ -27,10 +27,10 @@ variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
 
 variable (Validator BlockId Payload) in
 /-- **The substrate's validity**: references one round below, from a quorum
-of distinct authors, and no further clause, so no reference to the author's
-own block. -/
+of distinct authors, at most one of each author, and no reference to the
+author's own block required. -/
 abbrev KValid : Validity Validator BlockId Payload :=
-  ValidAt (quorumCard Validator) Clause.none
+  ValidAt (quorumCard Validator) Clause.distinct
 
 variable (Validator BlockId Payload) in
 /-- **A K-partial DAG**: a record at the substrate's validity, whose honest
