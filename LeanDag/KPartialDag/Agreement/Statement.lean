@@ -25,10 +25,10 @@ def Laws : Prop :=
 by the commit rule on two views of one record are equal. -/
 def Agrees : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] [S : Slots Validator] (K : ℕ)
-    (U : KRecord Validator BlockId Payload) (V₁ V₂ : U.View) (k : ℕ) (v₁ v₂ : Option BlockId),
-    3 ≤ K → (kRule K).Decided (S := S) U V₁ k v₁ → (kRule K).Decided (S := S) U V₂ k v₂ →
-    v₁ = v₂
+    [Faults Validator] [DecidableEq BlockId] [S : Slots Validator]
+    (U : KRecord Validator BlockId Payload) (K : ℕ) (V₁ V₂ : U.View) (k : ℕ)
+    (v₁ v₂ : Option BlockId), 3 ≤ K → (kRule K).Decided (S := S) U V₁ k v₁ →
+    (kRule K).Decided (S := S) U V₂ k v₂ → v₁ = v₂
 
 /-- Agreement of the commit rule. -/
 def Statement : Prop := Laws ∧ Agrees

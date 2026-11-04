@@ -18,7 +18,7 @@ theorem laws : Laws := by
   exact kRule_laws hK
 
 theorem agrees : Agrees := by
-  intro Validator BlockId Payload _ _ _ _ S K U V₁ V₂ k v₁ v₂ hK h₁ h₂
+  intro Validator BlockId Payload _ _ _ _ S U K V₁ V₂ k v₁ v₂ hK h₁ h₂
   exact (kRule K).decided_unique (kRule_laws hK) trivial h₁ V₂ v₂ h₂
 
 theorem holds : Statement := ⟨laws, agrees⟩

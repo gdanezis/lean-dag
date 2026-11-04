@@ -24,11 +24,11 @@ theorem fetchable : Fetchable := by
   exact fetchedIn_of_subset hA hρ hsub
 
 theorem sound : Sound := by
-  intro Validator BlockId Payload _ _ _ _ S K U H V k v hH hHV h
+  intro Validator BlockId Payload _ _ _ _ S U K H V k v hH hHV h
   exact h.decided hH hHV
 
 theorem agrees : Agrees := by
-  intro Validator BlockId Payload _ _ _ _ _ K U H₁ H₂ k v₁ v₂ hK hH₁ hH₂ h₁ h₂
+  intro Validator BlockId Payload _ _ _ _ _ U K H₁ H₂ k v₁ v₂ hK hH₁ hH₂ h₁ h₂
   exact h₁.agree hK hH₁ hH₂ h₂
 
 theorem holds : Statement := ⟨local_, fetchable, sound, agrees⟩

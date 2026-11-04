@@ -46,16 +46,16 @@ def Fetchable : Prop :=
 node holds. -/
 def Sound : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] [S : Slots Validator] (K : ℕ)
-    (U : KRecord Validator BlockId Payload) (H : Finset BlockId) (V : U.View) (k : ℕ)
+    [Faults Validator] [DecidableEq BlockId] [S : Slots Validator]
+    (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (V : U.View) (k : ℕ)
     (v : Option BlockId), H ⊆ U.ids → H ⊆ V.ids → NodeDecided U K H k v →
     (kRule K).Decided (S := S) U V k v
 
 /-- **Two nodes decide each slot alike**, at `K ≥ 3`. -/
 def Agrees : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] [Slots Validator] (K : ℕ)
-    (U : KRecord Validator BlockId Payload) (H₁ H₂ : Finset BlockId) (k : ℕ)
+    [Faults Validator] [DecidableEq BlockId] [Slots Validator]
+    (U : KRecord Validator BlockId Payload) (K : ℕ) (H₁ H₂ : Finset BlockId) (k : ℕ)
     (v₁ v₂ : Option BlockId), 3 ≤ K → H₁ ⊆ U.ids → H₂ ⊆ U.ids →
     NodeDecided U K H₁ k v₁ → NodeDecided U K H₂ k v₂ → v₁ = v₂
 

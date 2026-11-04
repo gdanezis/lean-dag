@@ -4,16 +4,18 @@ import LeanDag.Common.History
 
 `docs/kpartial.md` §1. A block references blocks of the round below from a
 quorum of distinct authors, at most one of each, committing to each by its
-hash; it need not reference its author's own previous block. An honest author that references
-a block has downloaded that block's history to depth `K` only. Hashes fix
-the whole history of every block, so the record of a run is an ordinary
-block record (`KRecord`); what an honest node holds of it is not.
+hash; it need not reference its author's own previous block. A correct
+author that references a block has downloaded that block's history to depth
+`K` only. Hashes fix the whole history of every block, so the record of a
+run is an ordinary block record (`KRecord`); what a correct node holds of it
+is not. A block is held by a correct node when it is a correct author's
+block, or lies in the history to depth `K` of a block that a correct
+author's block references (`CorrectHeld`).
 
-A block `A` that honest nodes referenced has its history to depth `K` held
-by them. Below `A`, a block referenced by blocks of `f + 1` distinct authors
-that are themselves held has an honest referencer, so its history to depth
-`K` is held too (`AnchoredBelow`). The union of those histories is the sub-DAG
-below `A` that honest nodes can fetch (`Avail`).
+Below a block `A`, a block referenced by blocks of `f + 1` distinct authors
+that lie in the history to depth `K` of anchored blocks is anchored
+(`AnchoredBelow`). The union of the histories to depth `K` of the anchored
+blocks is the available sub-DAG below `A` (`Avail`).
 
 Definitions only.
 -/
@@ -36,6 +38,12 @@ variable (Validator BlockId Payload) in
 /-- **A K-partial DAG**: a record at the substrate's validity, whose honest
 authors are the correct validators. -/
 abbrev KRecord := BlockRecord Validator BlockId Payload (KValid Validator BlockId Payload) Correct
+
+/-- **Held by a correct node**: a block of a correct author, or a block in the
+history to depth `K` of a block that a correct author's block references. -/
+def CorrectHeld (U : KRecord Validator BlockId Payload) (K : ℕ) : Set BlockId :=
+  {z | ∃ w ∈ U.ids, (U.block w).creator ∈ (Correct : Finset Validator) ∧
+    (z = w ∨ ∃ y ∈ (U.block w).refs, z ∈ historyUpto U K y)}
 
 /-- **The anchored blocks below `A`**: `A` itself, and every block that
 blocks of `f + 1` distinct authors reference, each `z` in the history to

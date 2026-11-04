@@ -5,9 +5,8 @@ import LeanDag.KPartialDag.Model.Rule
 `docs/kpartial.md` §3. On a K-partial DAG, for a block `A` and the available
 sub-DAG below it (`Avail`):
 
-* **held** (`Held`): each of its blocks lies in the history to depth `K` of
-  `A`, or of an anchored block that a correct author's block of the sub-DAG
-  references, which that author downloaded;
+* **held** (`Held`): below a block with a certificate, every block of the
+  sub-DAG is held by a correct node;
 * **broad** (`Broad`): at `K ≥ 2`, every round two or more below `A` holds an
   anchored block of a correct author;
 * **linked** (`Linked`): at `K ≥ 3`, if a round-`r` block is directly
@@ -25,15 +24,15 @@ namespace KPartialDag
 
 namespace Avail
 
-/-- **The sub-DAG is held by correct authors**: each of its blocks lies in the
-history to depth `K` of `A`, or of an anchored block that a correct author's
-block of the sub-DAG references. -/
+/-- **The sub-DAG is held by correct nodes**: below a block of the record with
+a certificate, every block of the available sub-DAG is held by a correct
+node. -/
 def Held : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [DecidableEq BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
-    (A z : BlockId), z ∈ Avail U K A → ∃ y, AnchoredBelow U K A y ∧ z ∈ historyUpto U K y ∧
-      (y = A ∨ ∃ w ∈ Avail U K A, (U.block w).creator ∈ (Correct : Finset Validator) ∧
-        y ∈ (U.block w).refs)
+    (A : BlockId) (r : ℕ), A ∈ U.ids →
+    (certificatesAt U (IsVote U) (quorumCard Validator) A r).Nonempty →
+    Avail U K A ⊆ CorrectHeld U K
 
 /-- **The sub-DAG is broad**: at `K ≥ 2`, every round two or more below `A`
 holds an anchored block of a correct author. -/

@@ -3,7 +3,7 @@ import LeanDag.KPartialDag.Helpers.Avail
 /-!
 # The available sub-DAG — proof
 
-Each claim is a helper of `Helpers/Avail.lean`: `held`; `broad`, by a double
+Each claim is a helper of `Helpers/Avail.lean`: `avail_correctHeld`; `broad`, by a double
 count over the references of a block two rounds up
 (`exists_correct_referenced`); `linked`, from a block of round `r + 3` whose
 references lie in the sub-DAG; and `not_directSkip`, by quorum intersection.
@@ -16,8 +16,8 @@ namespace KPartialDag
 namespace Avail
 
 theorem held : Held := by
-  intro Validator BlockId Payload _ _ _ _ U K A z hz
-  exact KPartialDag.held hz
+  intro Validator BlockId Payload _ _ _ _ U K A r hA hC z hz
+  exact avail_correctHeld hA hC hz
 
 theorem broad : Broad := by
   intro Validator BlockId Payload _ _ _ _ U K A ρ hK hA hρ
