@@ -234,7 +234,92 @@ propose its payload again.
 | 5 Outputs | a leader of `T` outputs the blocks of `T` within `D` rounds | synchrony, `K ≥ 1` |
 | 5 Included | every block of `T` enters the ledger | synchrony, a `T` slot every `D` rounds, `K ≥ 3` |
 
-## 9. Open questions
+## 9. Why a K-partial DAG
+
+In Mysticeti a validator references a block only once it holds that block's
+whole causal history. A validator that falls behind must fetch an unbounded
+history before it can vote again; a Byzantine author can publish blocks
+whose history is large or partly withheld, which correct validators then
+chase; and taking part in consensus is tied to replicating all data. A
+K-partial DAG bounds the obligation: a reference states only that the
+history to depth `K` is held. What follows from the results above, and what
+is argued only:
+
+* *Bounded work to take part* (argued). A validator references, and so votes
+  and builds, after fetching `K` rounds of history; a validator returning
+  from an outage needs the last `K` rounds, not all it missed.
+* *Bounded fetch to decide and to order* (proved). A decision from an anchor
+  needs the sub-DAG from the anchor down to `K` rounds below the slot
+  (Theorem 3), and a leader's output `D + K` rounds below it (Theorem 5).
+* *Availability without a certification round* (proved). The sub-DAG below
+  a certified block is held by correct nodes (Theorem 1); the rule of
+  `f + 1` distinct authors does the work of an availability certificate, and
+  a node never depends on Byzantine nodes for data.
+* *Mysticeti's guarantees* (proved). The direct rule, and so the commit
+  latency in rounds, is unchanged; agreement holds at `K ≥ 3`, liveness under
+  partial synchrony for every `K`, and the ledger is agreed, never retracted
+  and totally ordered.
+* *Weaker obligations* (argued). No reference to the author's own block is
+  required, so a validator that crashed resumes without its own chain, and
+  none must build at every round; no result uses either.
+* *Bounded state* (argued). A node keeps windows of depth `K` to build and
+  `D + K` rounds to order, which suggests a garbage collection rule.
+
+The costs are the loss of causal order across slots, blocks that no leader
+outputs within `D` rounds and must be proposed again, a depth `D` set by the
+schedule, and `K ≥ 3` with one reference per author for safety.
+
+## 10. Storage and restart (notes, not formalised)
+
+*Building.* A node building at round `r + 1` references a quorum `Q` of
+round-`r` blocks and holds `W = ⋃_{x ∈ Q} historyUpto K x`, rounds `r − K` to
+`r`. Building needs no decision and nothing below `r − K`.
+
+*Deciding and ordering.* A direct verdict for a slot at round `s` reads rounds
+`s` to `s + 2`. An indirect verdict from an anchor at round `a` reads the
+sub-DAG from `a` down to `s + 1 − K`; the distance `a − s` is bounded after
+synchrony by the run structure and not before. A leader's output reads
+`D + K` rounds below it.
+
+*The bound.* With one block per author and round in the band, a node holds
+`n (K + 1)` blocks to build, and `n (max(Δ, D) + K + 1)` to decide and order,
+for `Δ` the largest distance from a pending slot to its anchor. Equivocation
+breaks the bound: with `N_d` the window's blocks at round `r − d`, a block
+references one block per author, so `N_0 ≤ n` and `N_d ≤ n + f N_{d−1}`, and
+the window may hold of the order of `n f^K` blocks. Three treatments:
+(a) a bound `n (K + 1) + E` charged to the `E` extra blocks per author and
+round in the window, with no rule change; (b) a cap of two blocks per author
+and round, the pair being evidence and the author excluded, giving about
+`2 n (K + 1)` but reopening `Avail.Held` and `Avail.Linked`; (c) refusing to
+reference blocks whose window holds an equivocation, which likely breaks
+liveness, since a Byzantine author can split correct nodes between two
+versions. Undecided.
+
+*Restart.* A restarting node needs:
+
+1. on disk, the last round it built at, written before each block is sent,
+   so that it never builds twice at one round; it needs no chain of its own;
+2. to build again, a quorum of current blocks of distinct authors and their
+   windows to depth `K`, which the authors of correct blocks hold;
+3. to decide new slots, nothing older than the recent band and the anchor
+   distance;
+4. to resume the ledger at slot `s` without duplicates, the verdicts and
+   outputs of the slots in rounds `slotRound s − D` to `slotRound s`, since a
+   block output at round `ρ` could have been output earlier only by leaders
+   at rounds `ρ − D` to `ρ`; the executed state up to `s` comes from a
+   checkpoint;
+5. that some correct node still keeps these blocks, which is the retention
+   rule of §11.
+
+*Statements to prove later.* W1, the window holds at most `n (K + 1)` blocks
+without equivocation, or the recurrence in general; W2, holding `W` suffices
+to build a valid block meeting the obligation; W3, direct verdicts read only
+rounds `s` to `s + 2`; W4, entry and order from slot `s` on are fixed by the
+verdicts and outputs of the slots of the `D` rounds before `s` and the later
+verdicts; and, with a model of nodes over time, that a restarted node builds
+no second block at a round.
+
+## 11. Open questions
 
 * Bounds: the cost of fetching the sub-DAG, and how long correct nodes must
   keep the histories they downloaded.
@@ -243,3 +328,6 @@ propose its payload again.
   the references of any block include `f + 1` blocks of `T`, which suggests
   that any committed leader outputs the blocks of `T` two rounds or more
   below it.
+* The treatment of equivocation in the storage bound (§10).
+* Quantitative liveness, which a retention bound needs.
+* Crash recovery without the author's own chain.
