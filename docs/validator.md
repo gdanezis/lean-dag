@@ -1089,7 +1089,7 @@ and the bound on the blocks a node holds a round (V13), Stage 4. Open:
   latest, as a node that jumped, keeps its frontier at that round, so
   each stream carries its blocks above that round in the history of the
   stream's block, as it does a detected author's, whose frontier is `0`;
-* V11, V11′, V12 and V13's bound from `n_E + 1` assume that the evidence
+* V11, V11′, V11″, V12 and V13's bound from `n_E + 1` assume that the evidence
   spreads (§5.1): `n_E` is a round from which every honest builder has
   convicted every author the honest nodes saw equivocate. Nothing bounds
   `n_E`, since an author may equivocate first at any time, and the
@@ -1109,8 +1109,11 @@ and the bound on the blocks a node holds a round (V13), Stage 4. Open:
   since the node keeps no part of it;
 * a recovering node jumps only if the history it syncs arrives before a
   timer fires (§3.6);
-* only a node that restarted jumps: a node that falls behind without
-  crashing builds each round it missed, on being behind (§3.2);
+* without dropping, only a node that restarted jumps: a node that falls
+  behind without crashing builds each round it missed, on being behind
+  (§3.2);
+* V11″ assumes every honest node reliable and above round `0` by GST,
+  and gives no time bound (§5.8);
 * a node of `T` that restarts between `t_r` and `t₁` falls outside the
   claims for that interval, since a jump leaves it without a block at
   the rounds it jumped over, which the wave facts read (§5.6). A claim

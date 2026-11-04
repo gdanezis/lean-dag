@@ -510,7 +510,7 @@ omit [Fintype Validator] in
 /-- The floor at the first slot is round `0`. -/
 theorem floorAt_zero : floorAt cfg 0 = 0 := by
   unfold floorAt
-  simp [Config.slots, Slots.uniform_slotRound]
+  simp [Slots.uniform_slotRound]
 
 omit [Fintype Validator] in
 /-- The floor at a slot lies at or above the round of the slot before. -/

@@ -371,6 +371,7 @@ theorem decisionAt_of_quiet {N' N k : ℕ} (hq : ∀ j, N' < j → tryDirect p �
   · rfl
   · exact tryIndirect_append (scan_none_above hq N _ (by omega)) _
 
+omit S in
 /-- **More than `f` held authors include one of any set missing at most
 `f`.** -/
 theorem exists_held_of_holdsAtLeast {A : Finset Validator} {f t : ℕ} (hA : Aᶜ.card ≤ f)

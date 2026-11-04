@@ -68,12 +68,13 @@ theorem settles {f : ℕ → ℕ} (hf : Monotone f) {K : ℕ} (hK : ∀ n, f n �
       have : f m < f n := lt_of_le_of_ne (hf hmn) (Ne.symm hne)
       exact ih n (by have := hK n; omega)
 
-omit [Fintype Validator] [LinearOrder BlockId] in
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
 /-- **A property rising along `ℕ` that each node of a finite set reaches,
 all reach at once.** -/
 theorem exists_forall_of_mono {P : Validator → ℕ → Prop}
     (hP : ∀ u n n', n ≤ n' → P u n → P u n') (H : Finset Validator)
     (h : ∀ u ∈ H, ∃ n, P u n) : ∃ n, ∀ u ∈ H, P u n := by
+  classical
   induction H using Finset.induction_on with
   | empty => exact ⟨0, fun u hu => absurd hu (Finset.notMem_empty u)⟩
   | insert a s _ ih =>
