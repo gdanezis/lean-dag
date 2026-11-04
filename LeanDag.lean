@@ -565,3 +565,8 @@ import LeanDag.Scheme.Reactive.Statement
 import LeanDag.Scheme.Reactive.Proof
 import LeanDag.Scheme.AsyncLocal.Statement
 import LeanDag.Scheme.AsyncLocal.Proof
+import LeanDag.KPartialDag.Model.Substrate
+import LeanDag.KPartialDag.Model.Rule
+import LeanDag.KPartialDag.Helpers.Avail
+import LeanDag.KPartialDag.Avail.Statement
+import LeanDag.KPartialDag.Avail.Proof
