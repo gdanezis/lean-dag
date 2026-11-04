@@ -550,12 +550,22 @@ hash, those of the round below the slot's without their references
 (`proofStore`), and decides the slot by `tryDecide` on it, scanning to the
 last slot of the store's top round (`verdictOn`). It then keeps the verdict
 and, as the proof, the blocks of that store, takes the blocks in as it
-accepts any block (`decideOn`), and asks for the next slot. A node that drops keeps its floor at the round of its next
-undecided slot, one above its cut (`floorOf`); it accepts a new block below
-its floor on its header alone, keeping it without its references (D10,
-`accept`, `Store.base`); and a node whose top lies below its floor builds
-above the highest round its memory holds a quorum of, as a restarted node
-does (`tryBuild`). V3 holds with dropping and catch-up: a decision on a
+accepts any block (`decideOn`), and asks for the next slot. A node that
+drops keeps its floor at the round of its next undecided slot `k`, or at
+`voteOffset − 1` above the round of slot `k − 1`, whichever is lower, one
+above its cut (`floorAt`, `floorOf`): the blocks that decided slot `k − 1`
+lie at its round plus `voteOffset` or above, so the node holds a quorum of
+the round below them. It accepts a new block below its floor on its header
+alone, keeping it without its references (D10, `accept`, `Store.base`). A
+node whose top lies below its floor builds above the highest round at
+which its memory holds a quorum and it can build, with no block of its own
+among the references, without waiting for a timer, the tests, a peer's
+round, or its syncs (`dropRound`, `tryBuild`). The floor at the round of
+the next undecided slot alone, with a jump that waited for the tests, could
+stall: when slots lie a wave apart, a decision sets every node's floor
+above every block yet built; and a node that caught up on proofs, needed
+for a quorum, waited for tests a leader with no block at its round never
+lets pass. V3 holds with dropping and catch-up: a decision on a
 proof is a verdict on the record of the slot's cut (`Cut.Cuts`). V3′, V11, V11′,
 V12, V13 and the order of `docs/dos-bounds.md` (`Order.Agrees`,
 `Order.Held`) assume that no node drops (`cfg.drops = false`); a node

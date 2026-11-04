@@ -364,13 +364,16 @@ store closed, and needs none of this.
         that no node drops.
      2. *The floor above the cut, and the jump.* Done, behind the switch.
         A node that drops keeps its floor at the round of its next
-        undecided slot, one above its cut (`floorOf`), so that a node
-        deciding on a proof takes all its blocks in and can answer with it,
-        accepts a new block below its floor on its header alone, keeping
-        it without its references (D10; `accept`, `acceptOn`,
-        `Store.base`), and, while its top lies below its floor, builds as a
-        restarted node does, above the highest round its memory holds a
-        quorum of (`tryBuild`). Taking in a proof is accepting its blocks
+        undecided slot `k`, or `voteOffset − 1` above the round of slot
+        `k − 1` if lower, one above its cut (`floorAt`, `floorOf`), so that
+        a node deciding on a proof takes all its blocks in and can answer
+        with it, and holds a quorum of the round below the blocks that
+        decided slot `k − 1`; it accepts a new block below its floor on its
+        header alone, keeping it without its references (D10; `accept`,
+        `acceptOn`, `Store.base`), and, while its top lies below its floor,
+        builds above the highest round its memory holds a quorum of and it
+        can build on, waiting for no timer, test or sync (`dropRound`,
+        `tryBuild`). Taking in a proof is accepting its blocks
         (`decideOn`). Safety holds as in item 4.1: a block accepted on its
         header lies below the cut (`cutAbove_known`).
      3. *Liveness with dropping on.* With dropping, V11's timed bounds

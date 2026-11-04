@@ -764,7 +764,7 @@ theorem tryBuild_isSome {s : State Validator BlockId Payload} {r : ℕ} (ht : s.
   unfold tryBuild
   rw [ht]
   dsimp only
-  rw [if_neg (by simp [hrec, not_lt.mpr hF])]
+  rw [if_neg (by simp [not_lt.mpr hF]), if_neg (by simp [hrec])]
   unfold buildAbove
   dsimp only
   rw [if_pos ⟨by rw [s.mirrors.authorsAt_eq hF, Store.authorsAt_eq]; exact hq,

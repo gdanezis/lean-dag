@@ -67,7 +67,7 @@ is assumed only when every block the receiver needs at its floor, the
 history of the block from that floor up (`Needs`), is held by a reliable
 node at the delivery (`docs/dos-bounds.md`, Phase 3.2 item 4.3). A
 steady window (`Steady`) is a stretch over which no node of `T` decides and
-each is at the round of its next undecided slot or above.
+each is at the floor at its next undecided slot (`floorAt`) or above.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -143,12 +143,12 @@ def SyncedHeld (cfg : Config Validator BlockId Payload) (T : Finset Validator)
 
 /-- **A steady window from `G` to `t₁` at slot `L`**: at every event from `G`
 to `t₁`, the next undecided slot of every node of `T` is `L`, and its round
-is the round of slot `L` or above. -/
+is the floor at slot `L` (`floorAt`) or above. -/
 def Steady (cfg : Config Validator BlockId Payload) (T : Finset Validator)
     (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (G t₁ L : ℕ) : Prop :=
   ∀ v ∈ T, ∀ k, eventsBy tr time G ≤ k → k ≤ eventsBy tr time t₁ →
     (stateBefore cfg tr k v).lo = L ∧
-      cfg.slots.slotRound L ≤ (stateBefore cfg tr k v).top.getD 0
+      floorAt cfg L ≤ (stateBefore cfg tr k v).top.getD 0
 
 /-- **Delivery within `Δ` past GST, from `t_r` on**: a message one
 reliable node sends another at a time `t ≥ t_r` arrives by

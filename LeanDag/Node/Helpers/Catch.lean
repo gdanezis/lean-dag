@@ -504,19 +504,20 @@ theorem built_avoids_spread (hsp : Live.Spread cfg H tr D nE) {i : ℕ} {w : Val
     · have h₁ := hiX.floor
       unfold floorOf at h₁
       rw [if_pos (show (cfg.at w).drops = true from hd)] at h₁
-      have := hbs.slot hd
+      have h₂ : x.floor ≤ G + 1 := h₁.trans (hbs.slot hd)
       have := hGd hd
       omega
   change ∀ k ∈ refsAt (cfg.at w) x.memory r ow x.evidence, _
   -- the node's own block of round `r`, if it builds on it, is in memory
   have hown : ∀ j, ow = some j → j ∈ x.memory.ids ∧ (x.memory.blk j).creator = (cfg.at w).me :=
     fun j hj => by
-      rcases hsh with ⟨ht, hoe⟩ | ⟨-, hon, -⟩
+      rcases hsh with ⟨ht, hoe⟩ | ⟨-, hon, -⟩ | ⟨-, -, hon⟩
       · obtain ⟨j', hj', hjd, hjr, hjc⟩ := hbs.own r ht
         rw [hoe, hj', Option.some.injEq] at hj
         subst hj
         have hjm := x.mirrors.mem_of hjd (by rw [hjr]; omega)
         exact ⟨hjm, by rw [x.mirrors.creator hjm]; exact hjc⟩
+      · rw [hon] at hj; cases hj
       · rw [hon] at hj; cases hj
   intro k hk hD
   have hkx := refsAt_avoids (fun j hj => (hown j hj).2) k hk
@@ -524,11 +525,12 @@ theorem built_avoids_spread (hsp : Live.Spread cfg H tr D nE) {i : ℕ} {w : Val
     rcases mem_refsAt_of hk with hk | hk
     · exact Store.mem_atRound.mp hk
     · obtain ⟨hkm, -⟩ := hown k hk
-      rcases hsh with ⟨ht, hoe⟩ | ⟨-, hon, -⟩
+      rcases hsh with ⟨ht, hoe⟩ | ⟨-, hon, -⟩ | ⟨-, -, hon⟩
       · obtain ⟨j', hj', -, hjr, -⟩ := hbs.own r ht
         rw [hoe, hj', Option.some.injEq] at hk
         subst hk
         exact ⟨hkm, by rw [x.mirrors.round hkm]; exact hjr⟩
+      · rw [hon] at hk; cases hk
       · rw [hon] at hk; cases hk
   have hkd := x.mirrors.sub hkm.1
   have hkr : G ≤ (x.disk.blk k).round := by rw [← x.mirrors.round hkm.1, hkm.2]; omega

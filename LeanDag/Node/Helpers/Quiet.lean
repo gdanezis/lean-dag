@@ -117,7 +117,8 @@ theorem below_build {R : ℕ} (hq : 2 ≤ cfg.q) {s s' : State Validator BlockId
     ∃ r, s'.top = some (r + 1) ∧ s.top.getD 0 ≤ r ∧ r ≤ R := by
   obtain ⟨t, r, o, ht, hb, hro⟩ := tryBuild_cases hb
   obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, htop, -⟩ := buildAbove_some hb
-  refine ⟨r, htop, by rw [ht]; rcases hro with ⟨rfl, -⟩ | ⟨-, hlt, -⟩ <;> simp <;> omega, ?_⟩
+  refine ⟨r, htop, by
+    rw [ht]; rcases hro with ⟨rfl, -⟩ | ⟨-, -, hlt, -⟩ | ⟨-, hlt, -⟩ <;> simp <;> omega, ?_⟩
   unfold buildAbove at hb
   dsimp only at hb
   split at hb
@@ -381,7 +382,7 @@ theorem tryBuild_none_of {s s' : State Validator BlockId Payload}
   obtain ⟨st', mem', fl', mir', lw', pd', dt', ev', top', own', fired', lo', dc', ar', rc'⟩ := s'
   simp only at hst hm hfl ht ho hf hrc hp he
   subst hst hm hfl ht ho hf hrc hp he
-  unfold Node.tryBuild Node.buildAbove Node.syncTop at h ⊢
+  unfold Node.tryBuild Node.buildAbove Node.syncTop Node.dropRound at h ⊢
   cases top' with
   | none => rfl
   | some r =>

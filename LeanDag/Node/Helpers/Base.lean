@@ -8,8 +8,9 @@ honest disks up to an event `E₁`, from a round `B` up (`Base`): the record
 at a node that drops, a known block at or below `B` is read so too; its
 blocks above `B` are blocks the honest nodes knew; at every event up to
 `E₁` every honest disk is read as `R` reads it from `B` up (`CutAbove`) and
-is valid at the row above `B`, and, when the node drops, its next undecided
-slot lies at round `B + 1` or below; and from `E₀` on the disk only grows,
+is valid at the row above `B`, and, when the node drops, the floor at its
+next undecided slot (`floorAt`) lies at round `B + 1` or below; and from
+`E₀` on the disk only grows,
 the node's floor lies at or below its top, and its step is regular
 (`Regular`). Without dropping the record of the run is such a base from
 round `0` (`base_of_false`).
@@ -34,7 +35,7 @@ structure Base (R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.
   disk : ∀ v ∈ H, ∀ k, k ≤ E₁ →
     AllGood (CutAbove R B) (stateBefore cfg tr k v).disk ∧
       UpperValid cfg.q cfg.xp (B + 1) (stateBefore cfg tr k v).disk ∧
-      (cfg.drops = true → cfg.slots.slotRound (stateBefore cfg tr k v).lo ≤ B + 1)
+      (cfg.drops = true → floorAt cfg (stateBefore cfg tr k v).lo ≤ B + 1)
   window : ∀ v ∈ H, ∀ k, E₀ ≤ k → k ≤ E₁ →
     (∀ k', k ≤ k' → k' ≤ E₁ →
         Grows (stateBefore cfg tr k v).disk (stateBefore cfg tr k' v).disk) ∧

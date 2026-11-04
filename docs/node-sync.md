@@ -139,9 +139,11 @@ reference `x` come from at least `q` authors (`Bypassed U ordered q x`).
   slot it decides on a proof; the answer is `proof`, and the node checks
   it by the loop on the proof's own blocks (`verdictOn`) and takes the
   blocks in (`decideOn`), behind the switch `Config.drops`. Behind the
-  same switch the node's floor is the round of its next undecided slot, a
-  block below the floor is accepted on its header (D10), a node whose top
-  lies below its floor jumps as a restarted node does, and a node whose
+  same switch the node's floor is the round of its next undecided slot,
+  or `voteOffset − 1` above the round of the slot before if lower
+  (`floorAt`), a block below the floor is accepted on its header (D10), a
+  node whose top lies below its floor jumps to the highest round its
+  memory holds a quorum of and it can build on (`dropRound`), and a node whose
   next undecided slot lies more than a wave below its top asks for its
   proof at its round timers.
 * **Decisions** read a proof: the disk at or above `G`, a view of the

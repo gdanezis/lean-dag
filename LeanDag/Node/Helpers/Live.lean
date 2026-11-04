@@ -104,7 +104,8 @@ first event building its round**, from a state it builds from, whose
 disk grows into the disk after the event, by the build rule: its
 references are `refsAt`'s on that state's disk, held there, and pass
 the reach and certificate tests, or follow the round's timer with
-`refsFor`'s, or follow the node's being behind with `refsFor`'s. -/
+`refsFor`'s, or follow the node's being behind with `refsFor`'s, when, at a
+node that drops, it built no block of the round before `E₀`. -/
 theorem built_block (hσ : cfg.σ = boundedSel)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H} {B E₀ E₁ : ℕ}
@@ -112,7 +113,9 @@ theorem built_block (hσ : cfg.σ = boundedSel)
     (hcU : c ∈ R.ids) (hcv : (R.block c).creator = v) (hcr : (R.block c).round = r + 1)
     (hrB : B ≤ r) (hrV : cfg.drops = true → B + 1 + cfg.p.voteOffset ≤ r)
     (hwin : ∃ j, j + 1 ≤ E₁ ∧ (tr[j]?.map Prod.fst) = some v ∧
-      ∃ e ∈ persists (outputsAt cfg tr j), e.2.round = r + 1) :
+      ∃ e ∈ persists (outputsAt cfg tr j), e.2.round = r + 1)
+    (hE₀ : cfg.drops = true → ∀ k < E₀, (tr[k]?.map Prod.fst) = some v →
+      ∀ e ∈ persists (outputsAt cfg tr k), e.2.round ≠ r + 1) :
     ∃ i₀ inp x ow, tr[i₀]? = some (v, inp) ∧ builtAt cfg tr time v (r + 1) = time i₀ ∧
       BuildState (cfg.at v) R B (knownAll cfg H tr) (stateBefore cfg tr i₀ v) inp x ∧
         (x.top.isSome ∧ x.top.getD 0 ≤ r ∧
@@ -179,7 +182,30 @@ theorem built_block (hσ : cfg.σ = boundedSel)
     have h₃ := congrArg (fun e => e.2.round) heo'
     simp only at h₃
     omega
-  -- at a node that drops, its floor lies at the round of its next undecided slot
+  -- the step is regular, so the node builds at or above its floor
+  have hreg : ¬ (cfg.drops = true ∧ x'.top.getD 0 < x'.floor) := by
+    rintro ⟨hdr, hlt⟩
+    have hE : E₀ ≤ i₀ := by
+      by_contra h
+      exact hE₀ hdr i₀ (by omega) hi₀v e₀ he₀ he₀r
+    obtain ⟨-, hft, hrg⟩ := hbase.window v hv i₀ hE (by omega)
+    obtain ⟨-, -, -, hfl⟩ := hrg (by omega) hdr
+    have h₁ := hgx.1.1
+    have h₂ := hbs.top
+    rw [hfl] at h₁
+    omega
+  replace hro : (x'.top = some r' ∧ ow = x'.own) ∨
+      ((x'.recovering = true ∨ (cfg.drops = true ∧ x'.top.getD 0 < x'.floor)) ∧ ow = none ∧
+        reachReady (cfg.at v) x'.memory (refsAt (cfg.at v) x'.memory r' ow x'.evidence) r'
+          (excluded (cfg.at v) x'.memory r' x'.evidence) = true ∧
+        certReady (cfg.at v) x'.memory (refsAt (cfg.at v) x'.memory r' ow x'.evidence) r'
+          (excluded (cfg.at v) x'.memory r' x'.evidence) = true) := by
+    rcases hro with h | ⟨hrec, h⟩ | h
+    · exact Or.inl h
+    · exact Or.inr ⟨Or.inl hrec, h⟩
+    · exact absurd ⟨h.1, h.2.1⟩ hreg
+  replace hexit := hexit.imp_right fun h => h.resolve_right hreg
+  -- at a node that drops, its floor lies at or below the round above the base
   have hFl : cfg.drops = true → x'.floor ≤ B + 1 := fun hdr => by
     obtain ⟨Bs, hi⟩ := hbs.inv
     have h₁ := hi.floor

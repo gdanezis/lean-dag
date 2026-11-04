@@ -88,7 +88,7 @@ theorem advance_lo_ge (s : State Validator BlockId Payload) : s.lo ≤ (Node.adv
   exact (Grows.progress (cfg := cfg) _ s).2.symm.le.trans (decideStep_lo _)
 
 variable (hC : ∀ n n' : ℕ, n ≤ n' → C n' → C n)
-  (hbase : cfg.drops = true → ∀ n, C n → ∀ x ∈ K, x.2.round < cfg.slots.slotRound n →
+  (hbase : cfg.drops = true → ∀ n, C n → ∀ x ∈ K, x.2.round < floorAt cfg n →
     Good x.1 x.2)
 include hC hbase
 
@@ -97,7 +97,7 @@ omit [Fintype Validator] in
 decisions satisfy `Q`. -/
 theorem AllGood.advance (hg : Grounds cfg Good K) (hdec : DecidesWell cfg Good C Q)
     {s : State Validator BlockId Payload} (hc : C s.lo → AllGood Good s.disk)
-    (hF : s.floor ≤ cfg.slots.slotRound s.lo) (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K)
+    (hF : s.floor ≤ floorOf cfg s) (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K)
     (hb : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) :
     (C (Node.advance cfg s).1.lo → AllGood Good (Node.advance cfg s).1.disk) ∧
       ∀ e ∈ commitsOf (Node.advance cfg s).2, Q e := by
@@ -122,7 +122,7 @@ omit [Fintype Validator] in
 /-- **The passes from a disk good while `C` holds.** -/
 theorem AllGood.quiesce (hg : Grounds cfg Good K) (hdec : DecidesWell cfg Good C Q) :
     ∀ (n : ℕ) {s : State Validator BlockId Payload},
-    (C s.lo → AllGood Good s.disk) → s.floor ≤ cfg.slots.slotRound s.lo →
+    (C s.lo → AllGood Good s.disk) → s.floor ≤ floorOf cfg s →
     (∀ e ∈ s.syncs, e.2.1 ∈ K) →
     (∀ e ∈ persists (Node.quiesce cfg n s).2, e ∈ K) →
     (C (Node.quiesce cfg n s).1.lo → AllGood Good (Node.quiesce cfg n s).1.disk) ∧
@@ -145,7 +145,7 @@ omit [Fintype Validator] in
 /-- **Settling from a disk good while `C` holds.** -/
 theorem AllGood.settle (hg : Grounds cfg Good K) (hdec : DecidesWell cfg Good C Q)
     {s : State Validator BlockId Payload} (hc : C s.lo → AllGood Good s.disk)
-    (hF : s.floor ≤ cfg.slots.slotRound s.lo) (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K)
+    (hF : s.floor ≤ floorOf cfg s) (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K)
     (hb : ∀ e ∈ persists (Node.settle cfg s).2, e ∈ K) :
     (C (Node.settle cfg s).1.lo → AllGood Good (Node.settle cfg s).1.disk) ∧
       ∀ e ∈ commitsOf (Node.settle cfg s).2, Q e :=
@@ -153,13 +153,13 @@ theorem AllGood.settle (hg : Grounds cfg Good K) (hdec : DecidesWell cfg Good C 
 
 omit [Fintype Validator] in
 /-- **Deciding on a proof of known blocks keeps the disk good while `C`
-holds**, and the floor at or below the next undecided slot's round. -/
+holds**, and the floor at or below the lowest round the node reads. -/
 theorem AllGood.decideOn (hg : Grounds cfg Good K) {s : State Validator BlockId Payload}
-    (hc : C s.lo → AllGood Good s.disk) (hF : s.floor ≤ cfg.slots.slotRound s.lo) {k : ℕ}
+    (hc : C s.lo → AllGood Good s.disk) (hF : s.floor ≤ floorOf cfg s) {k : ℕ}
     (hk : s.lo ≤ k + 1) (d : Option BlockId) {L : List (BlockId × Block Validator BlockId Payload)}
     (hL : ∀ e ∈ hashed cfg L, e ∈ K) :
     (C (k + 1) → AllGood Good (Node.decideOn cfg s k d L).disk) ∧
-      (Node.decideOn cfg s k d L).floor ≤ cfg.slots.slotRound (k + 1) := by
+      (Node.decideOn cfg s k d L).floor ≤ floorOf cfg (Node.decideOn cfg s k d L) := by
   let s₁ : State Validator BlockId Payload :=
     { s with
       lo := k + 1
@@ -167,33 +167,41 @@ theorem AllGood.decideOn (hg : Grounds cfg Good K) {s : State Validator BlockId 
       proofs := (k, (proofStore cfg k L).ids) :: s.proofs }
   let l := (hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round)
   have e : Node.decideOn cfg s k d L = absorb cfg (release cfg s₁) l := rfl
-  have hF₁ : (release cfg s₁).floor ≤ cfg.slots.slotRound (k + 1) := by
+  have hF₁ : (release cfg s₁).floor ≤ floorOf cfg s₁ := by
     rw [release_floor]
-    exact max_le (hF.trans (cfg.slots.mono hk)) (floorOf_le _)
+    exact max_le (hF.trans (floorOf_mono hk le_rfl)) le_rfl
+  have hF₂ : cfg.drops = true → (release cfg s₁).floor ≤ floorAt cfg (k + 1) := fun hd => by
+    have := hF₁; unfold floorOf at this; rw [if_pos hd] at this; exact this
   rw [e]
-  refine ⟨fun hCk => ?_, by rw [(absorb_rest (cfg := cfg) _ _).1]; exact hF₁⟩
+  refine ⟨fun hCk => ?_, by
+    rw [(absorb_rest (cfg := cfg) _ _).1]
+    simpa only [floorOf, (absorb_rest (cfg := cfg) _ _).2.2.1,
+      (absorb_rest (cfg := cfg) _ _).2.2.2.2.2.1, release_top, release_lo] using hF₁⟩
   rw [absorb_disk]
-  exact AllGood.foldl hg (fun hd x hx hr => hbase hd (k + 1) hCk x hx (by omega)) l
+  exact AllGood.foldl hg (fun hd x hx hr => hbase hd (k + 1) hCk x hx
+    (lt_of_lt_of_le hr (hF₂ hd))) l
     ((hc (hC _ _ hk hCk)).restrips (release_disk s₁)) fun x hx => hL x (List.mem_mergeSort.mp hx)
 
 /-- **A step from a disk good while `C` holds of the next undecided slot**:
 the disk stays so, and the decisions satisfy `Q`. At a node that drops, the
-blocks below the next undecided slot's round are to be good, and a verdict a
+blocks below the floor at the next undecided slot are to be good, and a verdict a
 proof of known blocks gives is to satisfy `Q`. -/
 theorem AllGood.step (hg : Grounds cfg Good K) (hdec : DecidesWell cfg Good C Q)
     (hprf : cfg.drops = true → ∀ k L d, verdictOn cfg k L = some d →
       (∀ e ∈ hashed cfg L, e ∈ K) → Q (k, d))
     {s : State Validator BlockId Payload}
     (i : Input Validator BlockId Payload) (hc : C s.lo → AllGood Good s.disk)
-    (hF : s.floor ≤ cfg.slots.slotRound s.lo) (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K)
+    (hF : s.floor ≤ floorOf cfg s) (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K)
     (hd : ∀ e ∈ delivered cfg [i], e ∈ K)
     (hb : ∀ e ∈ persists (Node.step cfg s i).2, e ∈ K) :
     (C (Node.step cfg s i).1.lo → AllGood Good (Node.step cfg s i).1.disk) ∧
       ∀ e ∈ commitsOf (Node.step cfg s i).2, Q e := by
+  have hFd : cfg.drops = true → s.floor ≤ floorAt cfg s.lo := fun hd => by
+    have := hF; unfold floorOf at this; rw [if_pos hd] at this; exact this
   -- a step that settles a state `s₀`, after outputs without decisions
   have hset : ∀ (s₀ : State Validator BlockId Payload)
       (pre : List (Output Validator BlockId Payload)),
-      (C s₀.lo → AllGood Good s₀.disk) → s₀.floor ≤ cfg.slots.slotRound s₀.lo →
+      (C s₀.lo → AllGood Good s₀.disk) → s₀.floor ≤ floorOf cfg s₀ →
       (∀ e ∈ s₀.syncs, e.2.1 ∈ K) → commitsOf pre = [] →
       Node.step cfg s i = ((Node.settle cfg s₀).1, pre ++ (Node.settle cfg s₀).2) →
       (C (Node.step cfg s i).1.lo → AllGood Good (Node.step cfg s i).1.disk) ∧
@@ -226,7 +234,8 @@ theorem AllGood.step (hg : Grounds cfg Good K) (hdec : DecidesWell cfg Good C Q)
             (fun _ hj => absurd hj (Finset.notMem_empty _))
             (fun j hj => absurd hj (Finset.notMem_empty j)) with
             top := some 0, own := some gid, recovering := false }
-          (built cfg [(cfg.idOf cfg.genesis, cfg.genesis)]) hcst hF hp
+          (built cfg [(cfg.idOf cfg.genesis, cfg.genesis)]) hcst
+          (hF.trans (floorOf_mono le_rfl (by simp [h₁.1]))) hp
           (commitsOf_built _) (by simp only [Node.step, dif_pos h₂, if_pos h₁]; rfl)
       · exact hsame (by simp only [Node.step, dif_neg h₂, if_pos h₁])
     · exact hsame (by simp only [Node.step, if_neg h₁])
@@ -235,8 +244,10 @@ theorem AllGood.step (hg : Grounds cfg Good K) (hdec : DecidesWell cfg Good C Q)
       he | ⟨s₁, pre, hr, hpre, he⟩
     · exact hsame he
     · refine hset s₁ pre (fun h => (hr.good hg (fun hdr x hx hr' => hbase hdr s.lo
-          (by rwa [hr.lo] at h) x hx (lt_of_lt_of_le hr' hF)) (hc (by rwa [hr.lo] at h)) hp hd).1)
-        (by rw [hr.floor, hr.lo]; exact hF) (fun e he' => ?_)
+          (by rwa [hr.lo] at h) x hx (lt_of_lt_of_le hr' (hFd hdr))) (hc (by rwa [hr.lo] at h)) hp
+          hd).1)
+        (by rw [hr.floor]; exact hF.trans (floorOf_mono hr.lo.ge (by rw [hr.top])))
+        (fun e he' => ?_)
         (List.filterMap_eq_nil_iff.mpr fun o ho => by
           obtain ⟨_, _, _, _, rfl⟩ := hpre o ho; rfl) he
       rcases hr.syncs e he' with h | h
@@ -246,8 +257,10 @@ theorem AllGood.step (hg : Grounds cfg Good K) (hdec : DecidesWell cfg Good C Q)
     rcases step_receipt (cfg := cfg) (s := s) (Or.inr ⟨u, L, rfl⟩) with he | ⟨s₁, pre, hr, hpre, he⟩
     · exact hsame he
     · refine hset s₁ pre (fun h => (hr.good hg (fun hdr x hx hr' => hbase hdr s.lo
-          (by rwa [hr.lo] at h) x hx (lt_of_lt_of_le hr' hF)) (hc (by rwa [hr.lo] at h)) hp hd).1)
-        (by rw [hr.floor, hr.lo]; exact hF) (fun e he' => ?_)
+          (by rwa [hr.lo] at h) x hx (lt_of_lt_of_le hr' (hFd hdr))) (hc (by rwa [hr.lo] at h)) hp
+          hd).1)
+        (by rw [hr.floor]; exact hF.trans (floorOf_mono hr.lo.ge (by rw [hr.top])))
+        (fun e he' => ?_)
         (List.filterMap_eq_nil_iff.mpr fun o ho => by
           obtain ⟨_, _, _, _, rfl⟩ := hpre o ho; rfl) he
       rcases hr.syncs e he' with h | h
@@ -293,7 +306,7 @@ theorem AllGood.step (hg : Grounds cfg Good K) (hdec : DecidesWell cfg Good C Q)
         obtain ⟨hc₂, hv₂⟩ := AllGood.settle hC hbase hg hdec
           (s := Node.tidy (Node.decideOn cfg s s.lo d L))
           (fun h => hD (by rwa [← hlo]))
-          (by rw [(tidy_eq _).2.1, (tidy_eq _).2.2.2.2.2.1, hlo]; exact hFD)
+          hFD
           (fun e he => hp e (by
             rw [← (decideOn_rest (cfg := cfg) s s.lo d L).1]
             exact (tidy_eq _).2.2.2.2.2.2.2.2.2.2 he))

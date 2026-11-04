@@ -418,18 +418,19 @@ theorem AllGood.progress (hg : Grounds cfg Good K) :
         (List.mem_append_left _ he)) fun e he => hb e (List.mem_append_right _ he)
 
 omit [Fintype Validator] in
-/-- **A build keeps the floor at or below the next undecided slot's round.** -/
+/-- **A build keeps the floor at or below the lowest round the node reads.** -/
 theorem floor_le_tryBuild {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : Node.tryBuild cfg s = some (s', out))
-    (hF : s.floor ≤ cfg.slots.slotRound s.lo) : s'.floor ≤ cfg.slots.slotRound s'.lo := by
-  obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, -, hlo, -⟩ := tryBuild_some h
+    (hF : s.floor ≤ floorOf cfg s) : s'.floor ≤ floorOf cfg s' := by
+  obtain ⟨r, -, -, -, -, -, ⟨-, hr, -⟩, -, -, -, -, -, ht, -, hlo, -⟩ := tryBuild_some h
   rw [tryBuild_floor h]
-  exact max_le (by rw [hlo]; exact hF) (floorOf_le s')
+  refine max_le (hF.trans (floorOf_mono hlo.ge ?_)) le_rfl
+  rw [ht]; exact hr.trans (Nat.le_succ r)
 
 omit [Fintype Validator] in
 theorem floor_le_progress : ∀ (fuel : ℕ) {s : State Validator BlockId Payload},
-    s.floor ≤ cfg.slots.slotRound s.lo →
-      (Node.progress cfg fuel s).1.floor ≤ cfg.slots.slotRound (Node.progress cfg fuel s).1.lo
+    s.floor ≤ floorOf cfg s →
+      (Node.progress cfg fuel s).1.floor ≤ floorOf cfg (Node.progress cfg fuel s).1
   | 0, _, hF => hF
   | fuel + 1, s, hF => by
     rcases htb : Node.tryBuild cfg s with _ | ⟨s₁, out⟩
@@ -438,37 +439,40 @@ theorem floor_le_progress : ∀ (fuel : ℕ) {s : State Validator BlockId Payloa
       exact floor_le_progress fuel (floor_le_tryBuild htb hF)
 
 omit [Fintype Validator] in
-/-- **Deciding keeps the floor at or below the next undecided slot's round.** -/
+/-- **Deciding keeps the floor at or below the lowest round the node reads.** -/
 theorem floor_le_decideStep {s : State Validator BlockId Payload}
-    (hF : s.floor ≤ cfg.slots.slotRound s.lo) :
-    (Node.decideStep cfg s).1.floor ≤ cfg.slots.slotRound (Node.decideStep cfg s).1.lo := by
+    (hF : s.floor ≤ floorOf cfg s) :
+    (Node.decideStep cfg s).1.floor ≤ floorOf cfg (Node.decideStep cfg s).1 := by
   have hlo := decideStep_lo (cfg := cfg) s
-  revert hlo
+  have htop := decideStep_top (cfg := cfg) s
+  revert hlo htop
   unfold Node.decideStep
   dsimp only
   split
-  · intro hlo
-    rw [drop_floor, release_floor, drop_lo, release_lo]
-    rw [drop_lo, release_lo] at hlo
-    exact max_le (hF.trans (cfg.slots.mono hlo)) (floorOf_le _)
-  · exact fun _ => hF
+  · intro hlo htop
+    rw [drop_floor, release_floor]
+    refine max_le (hF.trans (floorOf_mono hlo (by rw [htop]))) ?_
+    simp only [floorOf, drop_lo, release_lo, drop_top, release_top]
+    exact le_rfl
+  · exact fun _ _ => hF
 
 omit [Fintype Validator] in
-/-- **A pass keeps the floor at or below the next undecided slot's round.** -/
+/-- **A pass keeps the floor at or below the lowest round the node reads.** -/
 theorem floor_le_advance {s : State Validator BlockId Payload}
-    (hF : s.floor ≤ cfg.slots.slotRound s.lo) :
-    (Node.advance cfg s).1.floor ≤ cfg.slots.slotRound (Node.advance cfg s).1.lo := by
-  rw [advance_floor, advance_lo]
-  simp only [Node.pass, flushSyncs_floor, flushSyncs_lo]
-  exact floor_le_decideStep (floor_le_progress _ hF)
+    (hF : s.floor ≤ floorOf cfg s) :
+    (Node.advance cfg s).1.floor ≤ floorOf cfg (Node.advance cfg s).1 := by
+  have h := floor_le_decideStep (floor_le_progress (cfg := cfg) (s.disk.topRound + 2) hF)
+  rw [advance_floor]
+  simp only [floorOf, advance_lo, advance_top] at h ⊢
+  simpa only [Node.pass, flushSyncs_floor, flushSyncs_lo, flushSyncs_top] using h
 
 omit [Fintype Validator] in
 /-- **A pass keeps the disk good**, when, at a node that drops, the floor
-lies at or below the next undecided slot's round and the known blocks below
-the round of the slot the pass ends at are good. -/
+lies at or below the lowest round the node reads and the known blocks below
+the floor at the slot the pass ends at (`floorAt`) are good. -/
 theorem AllGood.advanceStore (hg : Grounds cfg Good K) {s : State Validator BlockId Payload}
-    (hbase : cfg.drops = true → s.floor ≤ cfg.slots.slotRound s.lo ∧
-      ∀ x ∈ K, x.2.round < cfg.slots.slotRound (Node.advance cfg s).1.lo → Good x.1 x.2)
+    (hbase : cfg.drops = true → s.floor ≤ floorOf cfg s ∧
+      ∀ x ∈ K, x.2.round < floorAt cfg (Node.advance cfg s).1.lo → Good x.1 x.2)
     (hc : AllGood Good s.disk) (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K)
     (hb : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) :
     AllGood Good (Node.advance cfg s).1.disk := by
@@ -478,7 +482,11 @@ theorem AllGood.advanceStore (hg : Grounds cfg Good K) {s : State Validator Bloc
   have hbd : cfg.drops = true → ∀ x ∈ K,
       x.2.round < (Node.decideStep cfg (Node.progress cfg (s.disk.topRound + 2) s).1).1.floor →
       Good x.1 x.2 := fun hd x hx hr => (hbase hd).2 x hx (by
-    rw [hlo]; exact lt_of_lt_of_le hr (floor_le_decideStep (floor_le_progress _ (hbase hd).1)))
+    have h := floor_le_decideStep (floor_le_progress (cfg := cfg) (s.disk.topRound + 2)
+      (hbase hd).1)
+    unfold floorOf at h
+    rw [if_pos hd] at h
+    rw [hlo]; exact lt_of_lt_of_le hr h)
   have hp₁ := progress_syncs (cfg := cfg) (s.disk.topRound + 2) s
   rw [advance_snd, persists_append, persists_arm, List.append_nil] at hb
   rw [advance_disk]

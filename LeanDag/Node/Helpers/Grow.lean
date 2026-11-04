@@ -178,11 +178,11 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
 
 variable (cfg) in
 /-- **A regular stretch from `s` to `s'`**: when the node drops, its floor
-lies at or below its top and at or above the round of its next undecided
-slot, and neither the floor nor that slot changes; so it builds each round
-in turn. -/
+lies at or below its top and at or above the floor at its next undecided
+slot (`floorAt`), and neither the floor nor that slot changes; so it builds
+each round in turn. -/
 def Regular (s s' : State Validator BlockId Payload) : Prop :=
-  cfg.drops = true → s.floor ≤ s.top.getD 0 ∧ cfg.slots.slotRound s.lo ≤ s.floor ∧
+  cfg.drops = true → s.floor ≤ s.top.getD 0 ∧ floorAt cfg s.lo ≤ s.floor ∧
     s'.lo = s.lo ∧ s'.floor = s.floor
 
 omit [Fintype Validator] in
@@ -194,9 +194,9 @@ theorem Regular.of_false (hd : cfg.drops = false) {s s' : State Validator BlockI
 
 variable (cfg) in
 /-- **The floor rises**, and, when the node drops, lies at or above the
-round of the next undecided slot once that slot changes. -/
+floor at the next undecided slot (`floorAt`) once that slot changes. -/
 def FloorRises (s s' : State Validator BlockId Payload) : Prop :=
-  s.floor ≤ s'.floor ∧ (cfg.drops = true → s'.lo = s.lo ∨ cfg.slots.slotRound s'.lo ≤ s'.floor)
+  s.floor ≤ s'.floor ∧ (cfg.drops = true → s'.lo = s.lo ∨ floorAt cfg s'.lo ≤ s'.floor)
 
 /-- **`st'` keeps the blocks of `st` as accepted**, those from round `F` up,
 or all of them when the node does not drop (`d = false`). -/
@@ -309,7 +309,7 @@ theorem diskRises_progress : ∀ (fuel : ℕ) (s : State Validator BlockId Paylo
     · exact DiskRises.refl s
 
 omit [Fintype Validator] in
-/-- **Deciding raises the floor to the round of the next undecided slot**,
+/-- **Deciding raises the floor to the floor at the next undecided slot**,
 when the node drops, and keeps the disk from the floor up. -/
 theorem diskRises_decideStep (s : State Validator BlockId Payload) :
     DiskRises cfg s (Node.decideStep cfg s).1 := by
@@ -367,7 +367,7 @@ theorem diskRises_settle (s : State Validator BlockId Payload) :
   diskRises_quiesce _ s
 
 omit [Fintype Validator] in
-/-- **Deciding on a proof raises the floor to the round of the next
+/-- **Deciding on a proof raises the floor to the floor at the next
 undecided slot**, when the node drops, and keeps the disk. -/
 theorem diskRises_decideOn (s : State Validator BlockId Payload) (k : ℕ) (d : Option BlockId)
     (L : List (BlockId × Block Validator BlockId Payload)) :

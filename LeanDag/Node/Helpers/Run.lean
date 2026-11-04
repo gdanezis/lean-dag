@@ -92,7 +92,8 @@ theorem waveFacts_of_run (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf
     {D : Finset Validator} {nE : ℕ} (hsp : Live.Spread cfg H tr D nE)
     (hE : ∀ v ∈ T, nE ≤ topAt cfg tr time v gst)
     (hbelow : ∀ v ∈ T, topAt cfg tr time v gst < n₀) (hB₀ : B < n₀)
-    (hBV : B + 1 + cfg.p.voteOffset ≤ n₀ ∨ B = 0 ∧ cfg.drops = false)
+    (hBV : (B + 1 + cfg.p.voteOffset ≤ n₀ ∧ ∀ v ∈ H, topAt cfg tr time v gst < n₀) ∨
+      B = 0 ∧ cfg.drops = false)
     (hst : ∀ v ∈ T, (stateAt cfg tr time v t).top.isSome)
     (htop : ∀ v ∈ T, N ≤ topAt cfg tr time v t) (ht₁ : t + (Δ + Δₛ) ≤ t₁) :
     letI := cfg.slots
@@ -147,7 +148,8 @@ theorem run_commits (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hfa : c
         (honest := T))).SpansEligible c →
     (∀ i < c, cfg.slots.leader (b + i) ∈ T) → n₀ ≤ cfg.slots.slotRound b →
     (∀ v ∈ T, topAt cfg tr time v gst < n₀) → B < n₀ →
-    (B + 1 + cfg.p.voteOffset ≤ n₀ ∨ B = 0 ∧ cfg.drops = false) → ∀ {t : ℕ},
+    ((B + 1 + cfg.p.voteOffset ≤ n₀ ∧ ∀ v ∈ H, topAt cfg tr time v gst < n₀) ∨
+      B = 0 ∧ cfg.drops = false) → ∀ {t : ℕ},
     (∀ v ∈ T, cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1) ≤
       topAt cfg tr time v t) → t + (Δ + Δₛ) ≤ t₁ → ∀ {v : Validator}, v ∈ T →
     ∀ hc : AllGood (CutAbove R B) (stateAt cfg tr time v (t + (Δ + Δₛ))).disk,

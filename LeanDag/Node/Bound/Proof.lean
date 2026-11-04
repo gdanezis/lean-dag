@@ -142,6 +142,7 @@ theorem exposes_spread {Validator BlockId Payload : Type} [Fintype Validator]
     built_block (fun _ => 0) hσ htime hinj (base_of_false hσ hadm hf htime hinj hdr 0 i) hcH hcU
       hcc hcr' (Nat.zero_le _) (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true)
       ⟨j, by omega, hjw, _, hjc, by rw [(s.disk.full_fields c).1]; exact hcr⟩
+      (fun h => absurd (hdr.symm.trans h) Bool.false_ne_true)
   have ho : ∀ j, oww = some j →
       (xw.disk.blk j).creator = (cfg.at (s.disk.blk c).creator).me := fun j hj => by
     rcases hshw.2.2 with ⟨ht, hoe⟩ | ⟨-, hon, -⟩

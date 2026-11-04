@@ -284,7 +284,8 @@ theorem decides_from {cfg : Config Validator BlockId Payload} {H T : Finset Vali
         (honest := T))).SpansEligible c →
     (∀ i < c, cfg.slots.leader (b + i) ∈ T) → n₀ ≤ cfg.slots.slotRound b →
     (∀ v ∈ T, topAt cfg tr time v gst < n₀) → B < n₀ →
-    (B + 1 + cfg.p.voteOffset ≤ n₀ ∨ B = 0 ∧ cfg.drops = false) →
+    ((B + 1 + cfg.p.voteOffset ≤ n₀ ∧ ∀ v ∈ H, topAt cfg tr time v gst < n₀) ∨
+      B = 0 ∧ cfg.drops = false) →
     ∀ t, (∀ v ∈ T, cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1) ≤
         topAt cfg tr time v t) → t + (Δ + Δₛ) ≤ t₁ →
       ∀ v ∈ T, b + c ≤ (decisionsBy cfg tr time v (t + (Δ + Δₛ))).length := by
@@ -451,8 +452,8 @@ theorem decidesBy {cfg : Config Validator BlockId Payload} {T : Finset Validator
 run above it**: when every honest node drops and is reliable, and every one
 keeps its next undecided slot at `L ≥ 1` from `G` to `t₁`, the honest nodes
 never all reach the decision round of a reliably led run above round
-`slotRound L + voteOffset` by `t₁ − A`. Read on the record padded below
-`slotRound L − 1` (`base_steady`), each would decide the run's slots
+`floorAt L + voteOffset` by `t₁ − A`. Read on the record padded below
+`floorAt L − 1` (`base_steady`), each would decide the run's slots
 (`decides_from`), and so move past `L`. -/
 theorem steady_ends [Infinite BlockId] {cfg : Config Validator BlockId Payload}
     {H : Finset Validator} {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ}
@@ -473,7 +474,7 @@ theorem steady_ends [Infinite BlockId] {cfg : Config Validator BlockId Payload}
       (boundedSel (BlockId := BlockId) (Payload := Payload) (P := ValidAt cfg.q Clause.none)
         (honest := H))).SpansEligible c →
     (∀ i < c, cfg.slots.leader (b + i) ∈ H) → n₀ ≤ cfg.slots.slotRound b →
-    (∀ v ∈ H, topAt cfg tr time v G' < n₀) → cfg.slots.slotRound L + cfg.p.voteOffset < n₀ →
+    (∀ v ∈ H, topAt cfg tr time v G' < n₀) → floorAt cfg L + cfg.p.voteOffset < n₀ →
     ∀ t, (∀ v ∈ H, cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1) ≤
         topAt cfg tr time v t) → t + (Δ + Δₛ) ≤ t₁ → False := by
   letI := cfg.slots
@@ -500,23 +501,25 @@ theorem steady_ends [Infinite BlockId] {cfg : Config Validator BlockId Payload}
       change _ ≤ (stateBefore cfg tr (eventsBy tr time G') w).top.getD 0 at this
       exact ⟨by change _ ≤ (stateBefore cfg tr (eventsBy tr time G') w).top.getD 0; omega,
         fun _ => by change _ ≤ (stateBefore cfg tr (eventsBy tr time G') w).top.getD 0; omega⟩)
-    (fun w hw k h₁ h₂ => by rw [(hst w hw k h₁ h₂).1]; omega)
-    hmono harr hwait hstart hsp hnE b c n₀ hc hspan hlead hn₀ hbelow (by omega) (Or.inl (by omega))
-    t htop ht₁ v hv
+    (fun w hw k h₁ h₂ => by
+      rw [(hst w hw k h₁ h₂).1]; have := floorAt_le (cfg := cfg) L; omega)
+    hmono harr hwait hstart hsp hnE b c n₀ hc hspan hlead hn₀ hbelow (by omega)
+    (Or.inl ⟨by omega, hbelow⟩) t htop ht₁ v hv
   -- but the node's next undecided slot stays at `L`, below the run
   rw [decisionsBy_length] at hlen
   have hlo := (hst v hv (eventsBy tr time (t + (Δ + Δₛ))) (eventsBy_mono (by omega))
     (eventsBy_mono ht₁)).1
   change b + c ≤ (stateBefore cfg tr (eventsBy tr time (t + (Δ + Δₛ))) v).lo at hlen
   rw [hlo] at hlen
-  have := cfg.slots.mono (show b ≤ L by omega)
+  have := cfg.slots.mono (show b ≤ L - 1 by omega)
+  have := le_floorAt (cfg := cfg) L
   omega
 
 /-- **A steady window is short**: under the premises of `steady_ends`, with
 the armed top round's timer firing from `G'`, once every honest node is at
-round `n₁ ≥ 1`, at or above `slotRound L`, at `s₀ ≥ G'`, the window ends
+round `n₁ ≥ 1`, at or above `floorAt L`, at `s₀ ≥ G'`, the window ends
 before `s₀ + ∑_{n₁ ≤ r < N} (timeout r + A) + A`, for `N` the decision
-round of a reliably led run above round `slotRound L + voteOffset` and the
+round of a reliably led run above round `floorAt L + voteOffset` and the
 honest nodes' rounds at `G'`: they produce on the padded record
 (`produces_from`, `climbs`) and then decide (`steady_ends`). -/
 theorem steady_bounded [Infinite BlockId] {cfg : Config Validator BlockId Payload}
@@ -539,8 +542,8 @@ theorem steady_bounded [Infinite BlockId] {cfg : Config Validator BlockId Payloa
       (boundedSel (BlockId := BlockId) (Payload := Payload) (P := ValidAt cfg.q Clause.none)
         (honest := H))).SpansEligible c →
     (∀ i < c, cfg.slots.leader (b + i) ∈ H) → n₀ ≤ cfg.slots.slotRound b →
-    (∀ v ∈ H, topAt cfg tr time v G' < n₀) → cfg.slots.slotRound L + cfg.p.voteOffset < n₀ →
-    G' ≤ s₀ → cfg.slots.slotRound L ≤ n₁ → 1 ≤ n₁ → (∀ v ∈ H, n₁ ≤ topAt cfg tr time v s₀) →
+    (∀ v ∈ H, topAt cfg tr time v G' < n₀) → floorAt cfg L + cfg.p.voteOffset < n₀ →
+    G' ≤ s₀ → floorAt cfg L ≤ n₁ → 1 ≤ n₁ → (∀ v ∈ H, n₁ ≤ topAt cfg tr time v s₀) →
     s₀ + (∑ r ∈ Finset.Ico n₁ (cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1)),
       (cfg.timeout r + (Δ + Δₛ))) + (Δ + Δₛ) ≤ t₁ → False := by
   letI := cfg.slots

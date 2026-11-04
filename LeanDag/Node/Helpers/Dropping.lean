@@ -17,8 +17,8 @@ decided as far as another has a floor at or above the other's
 block when its floor is at or above the author's (`synced_from_author`).
 
 In a steady window (`Live.Steady`: no reliable node decides, each at the
-round of its next undecided slot `L ≥ 1` or above) the floors are the round
-of slot `L` (`Steady.floor`), every step is regular (`Steady.regular`), a
+floor at its next undecided slot `L ≥ 1` or above) the floors are the floor
+at slot `L` (`floorAt`, `Steady.floor`), every step is regular (`Steady.regular`), a
 reliable block delivered in it is synced (`syncedFrom_steady`), and so, as
 past a recovery, reliable blocks arrive (`arrival_steady`).
 -/
@@ -76,11 +76,11 @@ theorem Needs.le_round {F : ℕ} {b x : Block Validator BlockId Payload}
   | ref hr _ => exact hr
   | step _ _ _ ih => exact ih
 
-/-- **A node that drops has its floor at the round of its next undecided
-slot** once it decided a slot. -/
+/-- **A node that drops has its floor at the floor at its next undecided
+slot** (`floorAt`) once it decided a slot. -/
 theorem floor_eq_before (hdr : cfg.drops = true) (v : Validator) (i : ℕ)
     (hlo : 0 < (stateBefore cfg tr i v).lo) :
-    (stateBefore cfg tr i v).floor = cfg.slots.slotRound (stateBefore cfg tr i v).lo := by
+    (stateBefore cfg tr i v).floor = floorAt cfg (stateBefore cfg tr i v).lo := by
   have hdr' : (cfg.at v).drops = true := hdr
   refine le_antisymm ?_ ?_
   · have h := (Converge.inv_before (cfg := cfg) (tr := tr) i v).floor
@@ -105,7 +105,7 @@ theorem floor_le_floor (hdr : cfg.drops = true) (u v : Validator) (i : ℕ)
   unfold floorOf at hu
   rw [if_pos hdr'] at hu
   rw [floor_eq_before hdr v i hv]
-  exact hu.trans (cfg.slots.mono h)
+  exact hu.trans (floorAt_mono h)
 
 /-- **A reliable node syncs a reliable author's block when its floor is at
 or above the author's** at the delivery: the author keeps its block from
@@ -138,12 +138,12 @@ section Steady
 
 variable {T : Finset Validator} {time : ℕ → ℕ} {G t₁ L : ℕ}
 
-/-- **In a steady window a node's floor is the round of its slot**, at a
+/-- **In a steady window a node's floor is the floor at its slot**, at a
 node that drops, past the first slot. -/
 theorem Steady.floor (hdr : cfg.drops = true) (hst : Live.Steady cfg T tr time G t₁ L)
     (hL : 1 ≤ L) {v : Validator} (hv : v ∈ T) {k : ℕ} (h₁ : eventsBy tr time G ≤ k)
     (h₂ : k ≤ eventsBy tr time t₁) :
-    (stateBefore cfg tr k v).floor = cfg.slots.slotRound L := by
+    (stateBefore cfg tr k v).floor = floorAt cfg L := by
   obtain ⟨hlo, -⟩ := hst v hv k h₁ h₂
   rw [floor_eq_before hdr v k (by omega), hlo]
 
@@ -158,7 +158,7 @@ theorem Steady.regular (hdr : cfg.drops = true) (hst : Live.Steady cfg T tr time
   have hf := Steady.floor hdr hst hL hv h₁ (by omega)
   have hf' := Steady.floor hdr hst hL hv (by omega) h₂
   refine ⟨by rw [hf]; exact htop, ?_, by rw [hlo, hlo'], by rw [hf, hf']⟩
-  change cfg.slots.slotRound (stateBefore cfg tr k v).lo ≤ _
+  change floorAt cfg (stateBefore cfg tr k v).lo ≤ _
   rw [hlo, hf]
 
 /-- **In a steady window past GST a reliable author's block is synced**,
@@ -194,13 +194,13 @@ theorem syncedFrom_steady {H : Finset Validator} (hid : Function.Injective cfg.i
   · exact h
   · -- the block lies at the author's round at `G` or above, so at the floor or above
     exfalso
-    have hfτ : (stateAt cfg tr time v τ).floor = cfg.slots.slotRound L :=
+    have hfτ : (stateAt cfg tr time v τ).floor = floorAt cfg L :=
       Steady.floor hdr hst hL hv hEτ hτE
     have htG := (hst b.creator hc (eventsBy tr time G) le_rfl (eventsBy_mono (by omega))).2
     have hGm : topAt cfg tr time b.creator G ≤ topAt cfg tr time b.creator (max (G + 1) gst) :=
       (rises_before (cfg := cfg) (tr := tr) b.creator
         (eventsBy_mono (tr := tr) (time := time) (by omega))).1
-    change cfg.slots.slotRound L ≤ topAt cfg tr time b.creator G at htG
+    change floorAt cfg L ≤ topAt cfg tr time b.creator G at htG
     omega
 
 /-- **Reliable blocks arrive in a steady window**, at a node that drops: as
@@ -241,11 +241,11 @@ theorem UpperValid.mono {q : ℕ} {E : Exposure Validator BlockId Payload} {F F'
   fun j hj hr => h j hj (hF.trans hr)
 
 /-- **In a steady window of the honest nodes, the record padded below the
-round under slot `L`'s is a base from that round on**, at a node that
-drops: it takes in what the honest nodes knew (`grounds_padded`), and a
+round under the floor at slot `L` is a base from that round on**, at a node
+that drops: it takes in what the honest nodes knew (`grounds_padded`), and a
 known block at or below that round (`cutAbove_known`); every honest disk is
-read as it from there up (`cutAbove_before`), its floor is slot `L`'s round
-(`Steady.floor`), at or below its top, it grows while its next undecided
+read as it from there up (`cutAbove_before`), its floor is the floor at
+slot `L` (`Steady.floor`), at or below its top, it grows while its next undecided
 slot stays (`Converge.grows_of_lo`), and its steps are regular
 (`Steady.regular`). -/
 theorem base_steady {H : Finset Validator} [Infinite BlockId] (hσ : cfg.σ = boundedSel)
@@ -255,10 +255,10 @@ theorem base_steady {H : Finset Validator} [Infinite BlockId] (hσ : cfg.σ = bo
     (hGt : G ≤ t₁) :
     Base cfg H tr
       (padded (hashInjective_of_trace hinj) (authentic_of_timely htime) hq
-        (cfg.slots.slotRound L - 1))
-      (cfg.slots.slotRound L - 1) (eventsBy tr time G) (eventsBy tr time t₁) := by
+        (floorAt cfg L - 1))
+      (floorAt cfg L - 1) (eventsBy tr time G) (eventsBy tr time t₁) := by
   refine ⟨fun v _ => grounds_padded (hashInjective_of_trace hinj) (authentic_of_timely htime) hq
-      (cfg.slots.slotRound L - 1) v,
+      (floorAt cfg L - 1) v,
     fun _ x hx hle => cutAbove_known (hashInjective_of_trace hinj) (authentic_of_timely htime) hq
       hx hle, fun c hc hcr => ?_, fun v hv k h₂ => ?_, fun v hv k h₁ h₂ => ?_⟩
   · -- a block of the padded record above its padding is a known one
@@ -267,23 +267,25 @@ theorem base_steady {H : Finset Validator} [Infinite BlockId] (hσ : cfg.σ = bo
       obtain ⟨y, hy, rfl⟩ := exists_of_mem_knownIds hck
       have hcont := content_of_known (hashInjective_of_trace hinj) hy
       change (y.1, padBlk cfg H tr _ y.1) ∈ _
-      change cfg.slots.slotRound L - 1 < (padBlk cfg H tr _ y.1).round at hcr
+      change floorAt cfg L - 1 < (padBlk cfg H tr _ y.1).round at hcr
       rw [padBlk_known hck] at hcr ⊢
       rw [if_neg (by rw [hcont]; split_ifs at hcr with h <;> simp_all <;> omega), hcont]
       exact hy
     · exfalso
-      have := round_fresh_lt (cfg := cfg) (H := H) (tr := tr) (G := cfg.slots.slotRound L - 1) hx
-      change cfg.slots.slotRound L - 1 < (padBlk cfg H tr _ (fresh cfg H tr x)).round at hcr
+      have := round_fresh_lt (cfg := cfg) (H := H) (tr := tr) (G := floorAt cfg L - 1) hx
+      change floorAt cfg L - 1 < (padBlk cfg H tr _ (fresh cfg H tr x)).round at hcr
       omega
   · -- up to the window's end the next undecided slot is at most `L`
     have hle : (stateBefore cfg tr k v).lo ≤ L := by
       rw [← (hst v hv (eventsBy tr time t₁) (eventsBy_mono hGt) le_rfl).1]
       exact (rises_before (cfg := cfg) (tr := tr) v h₂).2.2
-    have hsl := cfg.slots.mono hle
-    have hF : (stateBefore cfg tr k v).floor ≤ cfg.slots.slotRound (stateBefore cfg tr k v).lo :=
-      (Converge.inv_before (cfg := cfg) (tr := tr) k v).floor.trans (floorOf_le _)
+    have hsl := floorAt_mono (cfg := cfg) hle
+    have hF : (stateBefore cfg tr k v).floor ≤ floorAt cfg (stateBefore cfg tr k v).lo := by
+      have := (Converge.inv_before (cfg := cfg) (tr := tr) k v).floor
+      unfold floorOf at this; rw [if_pos (show (cfg.at v).drops = true from hdr)] at this
+      exact this
     exact ⟨(cutAbove_before (hashInjective_of_trace hinj) (authentic_of_timely htime) hq hσ hadm
-        hf (cfg.slots.slotRound L - 1) k v hv).1 (by omega),
+        hf (floorAt cfg L - 1) k v hv).1 (by omega),
       ((Converge.inv_before (cfg := cfg) (tr := tr) k v).above).mono (by omega),
       fun _ => by omega⟩
   · obtain ⟨hlo, -⟩ := hst v hv k h₁ h₂

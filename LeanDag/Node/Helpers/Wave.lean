@@ -44,6 +44,20 @@ theorem eq_of_known (hid : Function.Injective cfg.idOf)
   obtain ⟨w, hw, hk'⟩ := hbase.real b hbU hbB
   exact hid ((Converge.id_of_knownIn hk).symm.trans (Converge.id_of_knownIn (knownOf_sub hw hk')))
 
+/-- **A node below a round at GST built no block of that round before**, at
+the events up to GST. -/
+theorem not_built_before (hmono : Live.TimeMono tr time) {E₀ : ℕ}
+    (hE₀ : E₀ ≤ eventsBy tr time gst) {v : Validator} {r : ℕ}
+    (hr : topAt cfg tr time v gst < r + 1) :
+    ∀ k < E₀, (tr[k]?.map Prod.fst) = some v →
+      ∀ e ∈ persists (outputsAt cfg tr k), e.2.round ≠ r + 1 := by
+  intro k hk hkv e he her
+  obtain ⟨inp, hkt⟩ := Converge.event_of_map hkv
+  have hkl : k < tr.length := (List.getElem?_eq_some_iff.mp hkt).1
+  have hkg : time k ≤ gst := (lt_eventsBy hmono hkl).mp (by omega)
+  have := (top_of_built hmono hkt he hkg).2
+  omega
+
 /-- **Within a base from GST to `t₁`, an honest node's steps past GST are
 regular.** -/
 theorem regular_past {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H}
@@ -157,7 +171,8 @@ variable {N n₀ t : ℕ} (hσ : cfg.σ = boundedSel)
   {R : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H} {B E₀ E₁ : ℕ}
   (hbase : Base cfg H tr R B E₀ E₁) (hE₀ : E₀ ≤ eventsBy tr time gst)
   (hE₁ : eventsBy tr time t₁ ≤ E₁) (hB₀ : B < n₀)
-  (hBV : B + 1 + cfg.p.voteOffset ≤ n₀ ∨ B = 0 ∧ cfg.drops = false)
+  (hBV : (B + 1 + cfg.p.voteOffset ≤ n₀ ∧ ∀ v ∈ H, topAt cfg tr time v gst < n₀) ∨
+      B = 0 ∧ cfg.drops = false)
   (hTB : ∀ v ∈ T, B ≤ topAt cfg tr time v gst ∧
     (cfg.drops = true → B + 1 ≤ topAt cfg tr time v gst))
 include hσ hadm hfa hf htime hinj hev hTH hmono harr hbelow hst hN ht₁ hbase hE₀ hE₁ hB₀ hBV hTB
@@ -241,10 +256,10 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
   have hj₀l : j < tr.length := (List.getElem?_eq_some_iff.mp hj₀).1
   have hjE : j < E₁ := ((lt_eventsBy hmono hj₀l).mpr (show time j ≤ t₁ by omega)).trans_le hE₁
   have hnV : cfg.drops = true → B + 1 + cfg.p.voteOffset ≤ n := fun hd => by
-    rcases hBV with h | ⟨-, h⟩
+    rcases hBV with ⟨h, -⟩ | ⟨-, h⟩
     · omega
     · exact absurd (h.symm.trans hd) Bool.false_ne_true
-  have hBn : B ≤ n - cfg.p.voteOffset := by rcases hBV with h | ⟨h, -⟩ <;> omega
+  have hBn : B ≤ n - cfg.p.voteOffset := by rcases hBV with ⟨h, -⟩ | ⟨h, -⟩ <;> omega
   rcases hexit with hfired | hbeh
   · -- it waited the round's timer, armed with a quorum of the round
     have hj : ∃ k ≤ j, tr[k]? = some (h, Input.timer n) := by
@@ -293,6 +308,10 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
     obtain ⟨iw, inpw, xw, oww, hiw, -, hbsw, hshw, hzxw, ⟨yw, ow, hbw, heow, hew⟩, hzrefs, hzsub,
       hgxw, hexitw, hzpay⟩ := built_block time hσ htime hinj hbase hw'H hzU hzc hzr' (by omega)
         hnV ⟨j', by omega, by rw [hj']; rfl, z, hz, hzr⟩
+        (fun hd => not_built_before hmono hE₀ (by
+          rcases hBV with ⟨-, h⟩ | ⟨-, h⟩
+          · have := h w' hw'H; omega
+          · exact absurd (h.symm.trans hd) Bool.false_ne_true))
     have hiwj : iw = j' := persist_events_eq hiw hj' hew hz (by rw [hzr', hzr])
     subst hiwj
     -- the earlier block did not pass the tests, else the node would have
@@ -455,7 +474,7 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
     omega
   have hi₀E : i₀ < E₁ := ((lt_eventsBy hmono hi₀l).mpr (show time i₀ ≤ t₁ by omega)).trans_le hE₁
   have hnV : cfg.drops = true → B + 1 + cfg.p.voteOffset ≤ n := fun hd => by
-    rcases hBV with h | ⟨-, h⟩
+    rcases hBV with ⟨h, -⟩ | ⟨-, h⟩
     · omega
     · exact absurd (h.symm.trans hd) Bool.false_ne_true
   have hxF := hbs.floor_le (show x.top.getD 0 ≤ n by rw [hxt]; rfl) hnV
@@ -571,7 +590,7 @@ theorem reach_or_refs_node (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < c
         (R.block b).round = cfg.slots.slotRound k + m →
         b ∈ (R.block c).refs := by
   have hnV : cfg.drops = true → B + 1 + cfg.p.voteOffset ≤ cfg.slots.slotRound k := fun hd => by
-    rcases hBV with h | ⟨-, h⟩
+    rcases hBV with ⟨h, -⟩ | ⟨-, h⟩
     · omega
     · exact absurd (h.symm.trans hd) Bool.false_ne_true
   obtain ⟨ie, inpe, e, hie, hee, hec, her, hbe⟩ :=
@@ -586,6 +605,7 @@ theorem reach_or_refs_node (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < c
       (fun hd => by have := hnV hd; omega)
       ⟨ie, ((lt_eventsBy hmono hiel).mpr (show time ie ≤ t₁ by omega)).trans_le hE₁,
         by rw [hie]; rfl, e, hee, by rw [her, hcr]⟩
+      (fun _ => not_built_before hmono hE₀ (by have := hbelow v hv; omega))
   -- the evidence the honest nodes knew names no honest author, so no honest
   -- leader is left out
   have hlX : cfg.slots.leader k ∉
@@ -660,7 +680,7 @@ theorem cert_or_refs_node (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cf
         boundedSel.Votes R b L →
         b ∈ (R.block c).refs := by
   have hnV : cfg.drops = true → B + 1 + cfg.p.voteOffset ≤ cfg.slots.slotRound k := fun hd => by
-    rcases hBV with h | ⟨-, h⟩
+    rcases hBV with ⟨h, -⟩ | ⟨-, h⟩
     · omega
     · exact absurd (h.symm.trans hd) Bool.false_ne_true
   obtain ⟨ie, inpe, e, hie, hee, hec, her, hbe⟩ :=
@@ -675,6 +695,7 @@ theorem cert_or_refs_node (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cf
       (fun hd => by have := hnV hd; omega)
       ⟨ie, ((lt_eventsBy hmono hiel).mpr (show time ie ≤ t₁ by omega)).trans_le hE₁,
         by rw [hie]; rfl, e, hee, by rw [her, hcr]⟩
+      (fun _ => not_built_before hmono hE₀ (by have := hbelow v hv; omega))
   -- the evidence the honest nodes knew names no honest author, so no honest
   -- leader is left out
   have hlX : cfg.slots.leader k ∉

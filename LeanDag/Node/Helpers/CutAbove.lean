@@ -22,10 +22,10 @@ blocks below its cut or never held them.
   record (`verdict_proof`). A known block at or below `G` is read so too
   (`cutAbove_known`), which covers the blocks a node takes in without their
   references below its new cut.
-* **Along a run** (`cutAbove_before`), every honest disk whose next
-  undecided slot's round is at most `G + 1` is read as the record padded
-  below `G` reads it from `G` up, and every decision of a slot of round `G`
-  or `G + 1` is a verdict on that record.
+* **Along a run** (`cutAbove_before`), every honest disk whose floor at its
+  next undecided slot (`floorAt`) is at most `G + 1` is read as the record
+  padded below `G` reads it from `G` up, and every decision of a slot of
+  round `G` or `G + 1` is a verdict on that record.
 -/
 
 namespace LeanDag
@@ -234,12 +234,12 @@ theorem verdict_proof (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
 
 include hinj hauth hq in
 /-- **A decision step from a disk read as the padded record reads it from `G`
-up, while the next undecided slot's round is at most `G + 1`,** outputs, for
-every slot of round `G` or `G + 1`, a verdict on that record. -/
+up, while the floor at the next undecided slot is at most `G + 1`,**
+outputs, for every slot of round `G` or `G + 1`, a verdict on that record. -/
 theorem decidesWell_padded (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     (hf : Hᶜ.card ≤ cfg.f) (G : ℕ) (v : Validator) :
     DecidesWell (cfg.at v) (CutAbove (padded hinj hauth hq G) G)
-      (fun n => cfg.slots.slotRound n ≤ G + 1)
+      (fun n => floorAt cfg n ≤ G + 1)
       (fun e => cfg.slots.slotRound e.1 ≤ G + 1 → G ≤ cfg.slots.slotRound e.1 →
         Verdict (cfg.at v) (padded hinj hauth hq G) e) := by
   letI := cfg.slots
@@ -267,7 +267,7 @@ theorem decidesWell_padded (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
       have := List.mem_map_of_mem (f := Prod.fst) he
       rw [hlo, List.mem_range'_1] at this
       exact this.1
-    have hc' := hc ((cfg.slots.mono hle).trans hke)
+    have hc' := hc ((floorAt_mono hle).trans ((floorAt_le _).trans hke))
     refine ⟨hc'.storeView,
       (hc'.viewsAbove (R := max G (cfg.slots.slotRound s.lo))
         (le_max_left _ _) fun i hi hR => ?_).decided_of_mem cfg.p hw hl hcv
@@ -283,12 +283,12 @@ section Run
 variable (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
 include hinj hauth hq hσ hadm hf
 
-/-- **Every honest disk whose next undecided slot's round is at most `G + 1`
-is read as the record padded below `G` reads it from `G` up, and every
+/-- **Every honest disk whose floor at the next undecided slot is at most
+`G + 1` is read as the record padded below `G` reads it from `G` up, and every
 decision of a slot of round `G` or `G + 1` is a verdict on that record**,
 before every event of the trace. -/
 theorem cutAbove_before (G t : ℕ) : ∀ v ∈ H,
-    (cfg.slots.slotRound (stateBefore cfg tr t v).lo ≤ G + 1 →
+    (floorAt cfg (stateBefore cfg tr t v).lo ≤ G + 1 →
       AllGood (CutAbove (padded hinj hauth hq G) G) (stateBefore cfg tr t v).disk) ∧
       ∀ e ∈ commitsOf (run (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr t v)).2,
         cfg.slots.slotRound e.1 ≤ G + 1 → G ≤ cfg.slots.slotRound e.1 →
@@ -315,13 +315,13 @@ theorem cutAbove_before (G t : ℕ) : ∀ v ∈ H,
         have hi := Converge.inv_before (cfg := cfg) (tr := tr) t w
         obtain ⟨hd, hb⟩ := event_knownOf (cfg := cfg) hj
         obtain ⟨hc', hv'⟩ := AllGood.step (cfg := cfg.at w)
-          (C := fun n => cfg.slots.slotRound n ≤ G + 1)
-          (fun _ _ h h' => (cfg.slots.mono h).trans h')
+          (C := fun n => floorAt cfg n ≤ G + 1)
+          (fun _ _ h h' => (floorAt_mono h).trans h')
           (fun _ n hn x hx hr => cutAbove_known hinj hauth hq hx
-            (by change x.2.round < cfg.slots.slotRound n at hr; omega))
+            (by change x.2.round < floorAt cfg n at hr; change floorAt cfg n ≤ G + 1 at hn; omega))
           (grounds_padded hinj hauth hq G w) (decidesWell_padded hinj hauth hq hσ hadm hf G w)
           (fun _ k L d hvd hL hk hGk => verdict_proof hinj hauth hq hσ hadm hf G w hvd hL hk hGk)
-          inp hc (hi.floor.trans (floorOf_le _))
+          inp hc hi.floor
           (fun e he => hK w hv _ (knownBefore_knownOf (hi.pend e he)))
           (fun e he => hK w hv e (hd e he))
           (fun e he => hK w hv e (hb e he))

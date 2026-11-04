@@ -40,7 +40,8 @@ theorem cuts : Cuts := by
   have hq : cfg.q ≤ Fintype.card Validator := hadm.2.2.2.2
   refine ⟨padded hinjR hauthR hq G, fun v hv i hlo j hj hjG => ?_, fun v hv i e he hG => ?_⟩
   · have hfl := (stateBefore cfg tr i v).disk.full_fields j
-    obtain ⟨h₁, h₂, h₃, h₄⟩ := (cutAbove_before hinjR hauthR hq hσ hadm hf G i v hv).1 hlo j hj
+    obtain ⟨h₁, h₂, h₃, h₄⟩ := (cutAbove_before hinjR hauthR hq hσ hadm hf G i v hv).1
+      ((floorAt_le _).trans hlo) j hj
       (by rw [hfl.1]; exact hjG)
     exact ⟨h₁, h₂.trans hfl.1, h₃.trans hfl.2.1, fun hlt => h₄ (by rw [hfl.1]; exact hlt)⟩
   · exact (cutAbove_before hinjR hauthR hq hσ hadm hf G i v hv).2 e he (by omega) (by omega)

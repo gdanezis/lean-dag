@@ -15,7 +15,8 @@ input `i` in the state `s`: the new state and the outputs.
   resends from the disk. When it builds or decides, it releases the
   memory below the lowest round it reads, the round of its next
   undecided slot and `voteOffset` below its top, or, when it drops, the
-  round of its next undecided slot alone (`floorOf`), and keeps the
+  round of its next undecided slot or `voteOffset − 1` above the round of
+  the slot before, whichever is lower (`floorAt`, `floorOf`), and keeps the
   disk's blocks below that round without their references, holding them
   apart (`Store.strip`); it sends, streams and orders the blocks as accepted
   (`Store.full`).
@@ -55,9 +56,11 @@ input `i` in the state `s`: the new state and the outputs.
   reference, and the authors it then exposes (`payloadFor`). It is
   persisted, then broadcast, and the retry timer is set: the timer of the
   round below it, for twice that round's timeout.
-* **The jump** (`jumpRound`): a node that restarted, until it builds or
-  a timer fires (`State.recovering`), or that drops and whose top lies
-  below its floor, builds above the highest round `r`
+* **The jump** (`dropRound`, `jumpRound`): a node that drops and whose top
+  lies below its floor builds above the highest round above its top at
+  which the memory holds `q` authors and it can build, with no block of
+  its own among the references. A node that restarted, until it builds or
+  a timer fires (`State.recovering`), builds above the highest round `r`
   above its top at which the memory holds `q` authors and is behind,
   with no block of its own among the references, once no sync's block
   lies above round `r + 1` and the references pass the reach and
@@ -337,11 +340,17 @@ def behind (st : Store Validator BlockId Payload) (r : ℕ) : Prop :=
 instance (st : Store Validator BlockId Payload) (r : ℕ) : Decidable (behind cfg st r) :=
   inferInstanceAs (Decidable (_ ≤ _))
 
+/-- **The lowest round a node that drops reads at next undecided slot `k`**:
+the round of slot `k`, and at most `voteOffset − 1` above the round of slot
+`k − 1`, one round below the blocks that decided it. -/
+def floorAt (k : ℕ) : ℕ :=
+  min (cfg.slots.slotRound k) (cfg.slots.slotRound (k - 1) + (cfg.p.voteOffset - 1))
+
 /-- **The lowest round the node reads**: the round of its next undecided
-slot, and `voteOffset` below its top; when the node drops, the round of its
+slot, and `voteOffset` below its top; when the node drops, `floorAt` of its
 next undecided slot, above its cut. -/
 def floorOf (s : State Validator BlockId Payload) : ℕ :=
-  if cfg.drops then cfg.slots.slotRound s.lo
+  if cfg.drops then floorAt cfg s.lo
   else min (cfg.slots.slotRound s.lo) (s.top.getD 0 - cfg.p.voteOffset)
 
 /-- **Release the memory below the lowest round the node reads**, and keep
@@ -368,15 +377,27 @@ def jumpRound (st : Store Validator BlockId Payload) (t : ℕ) : ℕ :=
   ((List.range (st.topRound + 1)).filter fun r =>
     decide (t < r ∧ cfg.q ≤ (st.authorsAt r).card ∧ behind cfg st r)).foldr max t
 
+/-- **The round a node that drops builds above while its top `t` lies below
+its floor**: the highest round above `t` at which the memory holds `q`
+authors and the node can build on the references `refsAt` takes, or `t`. -/
+def dropRound (s : State Validator BlockId Payload) (t : ℕ) : ℕ :=
+  ((List.range (s.memory.topRound + 1)).filter fun r =>
+    decide (t < r ∧ cfg.q ≤ (s.memory.authorsAt r).card) &&
+      buildable cfg s.memory r (refsAt cfg s.memory r none s.evidence) s.evidence).foldr max t
+
 /-- **Build the round above `r`**, referencing the node's own block `o`
 there, if the build rule allows it, and release the memory below the
-lowest round the node then reads. -/
+lowest round the node then reads. The rule: the memory holds `q` authors of
+round `r`, and the round's timer fired, the node is behind, the references
+pass the reach and certificate tests, or the node drops and its top lies
+below its floor. -/
 def buildAbove (s : State Validator BlockId Payload) (r : ℕ) (o : Option BlockId) :
     Option (State Validator BlockId Payload × List (Output Validator BlockId Payload)) :=
   let refs := refsAt cfg s.memory r o s.evidence
   if cfg.q ≤ (s.memory.authorsAt r).card ∧ (r ∈ s.fired ∨ behind cfg s.memory r ∨
       (reachReady cfg s.memory refs r (excluded cfg s.memory r s.evidence) ∧
-        certReady cfg s.memory refs r (excluded cfg s.memory r s.evidence))) then
+        certReady cfg s.memory refs r (excluded cfg s.memory r s.evidence)) ∨
+      (cfg.drops ∧ s.top.getD 0 < s.floor)) then
     let b := blockOn cfg s.memory r refs s.evidence
     let id := cfg.idOf b
     if h : id ∉ s.disk.ids ∧ s.memory.Checks cfg.q cfg.xp id b then
@@ -387,15 +408,19 @@ def buildAbove (s : State Validator BlockId Payload) (r : ℕ) (o : Option Block
   else none
 
 /-- **Build the next round**: above the node's top, referencing its own
-block there; while recovering, or dropping with its top below its floor,
-above `jumpRound` with no own reference if
-that round is above the top, and in either case only once no sync's block
-lies above the round built. -/
+block there; when the node drops and its top lies below its floor, above
+`dropRound` with no own reference, if that round is above the top; while
+recovering, above `jumpRound` with no own reference if that round is above
+the top, and in either case only once no sync's block lies above the round
+built. -/
 def tryBuild (s : State Validator BlockId Payload) :
     Option (State Validator BlockId Payload × List (Output Validator BlockId Payload)) :=
   match s.top with
   | some t =>
-    if s.recovering || (cfg.drops && decide (t < s.floor)) then
+    if cfg.drops ∧ t < s.floor then
+      let r := dropRound cfg s t
+      if t < r then buildAbove cfg s r none else none
+    else if s.recovering then
       let r := jumpRound cfg s.memory t
       if t < r then
         if syncTop s ≤ r + 1 ∧

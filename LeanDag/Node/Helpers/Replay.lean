@@ -878,9 +878,10 @@ theorem KeepsProofs.decideOn (hσ : cfg.σ = boundedSel) (hdr : cfg.drops = true
       l.foldl (fun t e => acceptOn cfg s₂.floor t e.1 e.2) s₂.disk := by rw [e, absorb_disk]
   have hfl : cfg.slots.slotRound k ≤ s₂.floor := by
     rw [hs₂, release_floor]
-    have : floorOf cfg s₁ = cfg.slots.slotRound (k + 1) := by
+    have : floorOf cfg s₁ = floorAt cfg (k + 1) := by
       unfold floorOf; rw [if_pos hdr]
-    have := cfg.slots.mono (Nat.le_add_right k 1)
+    have := le_floorAt (cfg := cfg) (k + 1)
+    simp only [Nat.add_sub_cancel] at this
     omega
   have hround : ∀ x, (st.full x).round = (st.blk x).round := fun x => (st.full_fields x).1
   have hgl : ∀ e ∈ l, g e.1 = e.2 := fun e he => hg e.1 e.2 (hhL e (List.mem_mergeSort.mp he))

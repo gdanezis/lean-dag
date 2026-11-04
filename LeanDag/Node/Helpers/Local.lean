@@ -52,41 +52,69 @@ theorem jumpRound_cases (st : Store Validator BlockId Payload) (t : ℕ) :
   · exact Or.inr (by simpa using (List.mem_filter.mp h).2)
 
 omit [Fintype Validator] in
-/-- **The two ways to build**: above the top `t`, referencing the node's
-own block there; or, while recovering or dropping with the top below the
-floor, above a higher round at which the memory holds `q` authors and is
-behind, referencing none of its own. -/
+/-- **`dropRound` is `t`**, or a round above `t` at which the memory holds
+`q` authors and the node can build on the references `refsAt` takes. -/
+theorem dropRound_cases (s : State Validator BlockId Payload) (t : ℕ) :
+    dropRound cfg s t = t ∨ (t < dropRound cfg s t ∧
+      cfg.q ≤ (s.memory.authorsAt (dropRound cfg s t)).card ∧
+      buildable cfg s.memory (dropRound cfg s t)
+        (refsAt cfg s.memory (dropRound cfg s t) none s.evidence) s.evidence = true) := by
+  unfold dropRound
+  rcases foldr_max_cases t ((List.range (s.memory.topRound + 1)).filter fun r =>
+      decide (t < r ∧ cfg.q ≤ (s.memory.authorsAt r).card) &&
+        buildable cfg s.memory r (refsAt cfg s.memory r none s.evidence) s.evidence) with h | h
+  · exact Or.inl h
+  · have := (List.mem_filter.mp h).2
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at this
+    exact Or.inr ⟨this.1.1, this.1.2, this.2⟩
+
+omit [Fintype Validator] in
+/-- **The three ways to build**: above the top `t`, referencing the node's
+own block there; when the node drops and its top lies below its floor,
+above a higher round at which the memory holds `q` authors and it can
+build; or, while recovering, above a higher round at which the memory holds
+`q` authors and is behind, referencing none of its own. -/
 theorem tryBuild_cases {s : State Validator BlockId Payload}
     {x : State Validator BlockId Payload × List (Output Validator BlockId Payload)}
     (h : tryBuild cfg s = some x) :
     ∃ t r o, s.top = some t ∧ buildAbove cfg s r o = some x ∧
-      ((r = t ∧ o = s.own) ∨ ((s.recovering = true ∨ (cfg.drops = true ∧ t < s.floor)) ∧
-        t < r ∧ o = none ∧
-        cfg.q ≤ (s.memory.authorsAt r).card ∧ behind cfg s.memory r ∧
-        reachReady cfg s.memory (refsAt cfg s.memory r none s.evidence) r
-          (excluded cfg s.memory r s.evidence) = true ∧
-        certReady cfg s.memory (refsAt cfg s.memory r none s.evidence) r
-          (excluded cfg s.memory r s.evidence) = true)) := by
+      ((r = t ∧ o = s.own) ∨
+        (cfg.drops = true ∧ t < s.floor ∧ t < r ∧ o = none ∧
+          cfg.q ≤ (s.memory.authorsAt r).card) ∨
+        (s.recovering = true ∧ t < r ∧ o = none ∧
+          cfg.q ≤ (s.memory.authorsAt r).card ∧ behind cfg s.memory r ∧
+          reachReady cfg s.memory (refsAt cfg s.memory r none s.evidence) r
+            (excluded cfg s.memory r s.evidence) = true ∧
+          certReady cfg s.memory (refsAt cfg s.memory r none s.evidence) r
+            (excluded cfg s.memory r s.evidence) = true)) := by
   unfold tryBuild at h
   split at h
   · rename_i t ht
     split at h
-    · rename_i hrec
-      replace hrec : s.recovering = true ∨ (cfg.drops = true ∧ t < s.floor) := by
-        simpa [Bool.or_eq_true, Bool.and_eq_true] using hrec
+    · rename_i hdr
       dsimp only at h
       split at h
       · rename_i hlt
+        rcases dropRound_cases s t with h' | h'
+        · exact absurd hlt (by rw [h']; omega)
+        · exact ⟨t, _, none, ht, h, Or.inr (Or.inl ⟨hdr.1, hdr.2, h'.1, rfl, h'.2.1⟩)⟩
+      · exact absurd h (by simp)
+    · split at h
+      · rename_i hrec
+        dsimp only at h
         split at h
-        · rename_i hc
-          rcases jumpRound_cases s.memory t with h' | h'
-          · exact absurd hlt (by rw [h']; omega)
-          · exact ⟨t, _, none, ht, h, Or.inr ⟨hrec, h'.1, rfl, h'.2.1, h'.2.2, hc.2.1, hc.2.2⟩⟩
-        · exact absurd h (by simp)
-      · split at h
-        · exact ⟨t, t, s.own, ht, h, Or.inl ⟨rfl, rfl⟩⟩
-        · exact absurd h (by simp)
-    · exact ⟨t, t, s.own, ht, h, Or.inl ⟨rfl, rfl⟩⟩
+        · rename_i hlt
+          split at h
+          · rename_i hc
+            rcases jumpRound_cases s.memory t with h' | h'
+            · exact absurd hlt (by rw [h']; omega)
+            · exact ⟨t, _, none, ht, h, Or.inr (Or.inr ⟨hrec, h'.1, rfl, h'.2.1, h'.2.2, hc.2.1,
+                hc.2.2⟩)⟩
+          · exact absurd h (by simp)
+        · split at h
+          · exact ⟨t, t, s.own, ht, h, Or.inl ⟨rfl, rfl⟩⟩
+          · exact absurd h (by simp)
+      · exact ⟨t, t, s.own, ht, h, Or.inl ⟨rfl, rfl⟩⟩
   · exact absurd h (by simp)
 
 omit [Fintype Validator] in
@@ -132,13 +160,14 @@ theorem tryBuild_some {s s' : State Validator BlockId Payload}
   refine ⟨r, id, b, hnew, hrefs, hpred, ⟨by rw [ht]; rfl, ?_, fun hrec hfl => ?_⟩, hbr, hbc,
     hid, hrv, hst, htop, hpend, hlo, hout⟩
   · rw [ht]
-    rcases hro with ⟨rfl, -⟩ | ⟨-, hlt, -⟩
+    rcases hro with ⟨rfl, -⟩ | ⟨-, -, hlt, -⟩ | ⟨-, hlt, -⟩
     · exact le_rfl
     · exact hlt.le
-  · rcases hro with ⟨rfl, -⟩ | ⟨hr | hr, -⟩
+    · exact hlt.le
+  · rcases hro with ⟨rfl, -⟩ | ⟨hr, hlt, -⟩ | ⟨hr, -⟩
     · exact ht
+    · have := hfl hr; rw [ht] at this; simp only [Option.getD_some] at this; omega
     · rw [hrec] at hr; cases hr
-    · have := hfl hr.1; rw [ht] at this; simp only [Option.getD_some] at this; omega
 
 omit [Fintype Validator] in
 /-- **A successful build step makes its block the node's own**, on its disk. -/
@@ -466,6 +495,20 @@ theorem Grows.foldl (F : ℕ) : ∀ (l : List (BlockId × Block Validator BlockI
   | e :: l, st => (Grows.accept F st e.1 e.2).trans (Grows.foldl F l _)
 
 omit [Fintype Validator] in
+/-- The floor at a slot lies at or below the slot's round. -/
+theorem floorAt_le (k : ℕ) : floorAt cfg k ≤ cfg.slots.slotRound k := min_le_left _ _
+
+omit [Fintype Validator] in
+/-- The floor at a slot lies at or above the round of the slot before. -/
+theorem le_floorAt (k : ℕ) : cfg.slots.slotRound (k - 1) ≤ floorAt cfg k :=
+  le_min (cfg.slots.mono (Nat.sub_le k 1)) (Nat.le_add_right _ _)
+
+omit [Fintype Validator] in
+/-- The floor at a slot does not fall as the slot rises. -/
+theorem floorAt_mono {k k' : ℕ} (h : k ≤ k') : floorAt cfg k ≤ floorAt cfg k' :=
+  min_le_min (cfg.slots.mono h) (Nat.add_le_add_right (cfg.slots.mono (Nat.sub_le_sub_right h 1)) _)
+
+omit [Fintype Validator] in
 /-- The lowest round the node reads does not fall as its next undecided
 slot and its top rise. -/
 theorem floorOf_mono {s s' : State Validator BlockId Payload} (hlo : s.lo ≤ s'.lo)
@@ -473,7 +516,7 @@ theorem floorOf_mono {s s' : State Validator BlockId Payload} (hlo : s.lo ≤ s'
   have hm := min_le_min (cfg.slots.mono hlo) (Nat.sub_le_sub_right ht cfg.p.voteOffset)
   unfold floorOf
   split
-  · exact cfg.slots.mono hlo
+  · exact floorAt_mono hlo
   · exact hm
 
 omit [Fintype Validator] in
@@ -482,7 +525,7 @@ theorem floorOf_le (s : State Validator BlockId Payload) :
     floorOf cfg s ≤ cfg.slots.slotRound s.lo := by
   unfold floorOf
   split
-  · exact le_rfl
+  · exact floorAt_le _
   · exact min_le_left _ _
 
 omit [Fintype Validator] in
