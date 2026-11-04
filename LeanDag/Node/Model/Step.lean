@@ -88,15 +88,16 @@ input `i` in the state `s`: the new state and the outputs.
 * **Syncing** (`request`, `streamOf`, `inHistory`, `absorb`): a request
   names the sync's block, the node's frontier (for each author the least
   round at which its disk holds no block of it, `0` for a detected author,
-  `frontierOf`), and the identifiers asked for by name. It is answered with
-  the blocks of the disk in the block's history that are the block, asked
-  for, or at or above their author's frontier, in order of round. Of a
-  stream piece the node reads the blocks under their hash reached from the
-  sync's block through such blocks (`hashed`, `inHistory`). It takes them
-  in, in order of round, each accepted if it is ready, only if the sync's
-  block is then held: all of them or none (`takeIn`). Otherwise the
-  references that neither the disk nor the piece holds are asked for by
-  name in the next request (`missingIn`).
+  and the node's cut if higher, `frontierOf`, `cutOf`, D15), and the
+  identifiers asked for by name. It is answered with the blocks of the disk
+  in the block's history that are the block, asked for, or at or above
+  their author's frontier, in order of round. Of a stream piece the node
+  reads the blocks under their hash reached from the sync's block through
+  such blocks (`hashed`, `inHistory`). It takes them in, in order of round,
+  each accepted if it is ready, only if the sync's block is then held: all
+  of them or none (`takeIn`). Otherwise the references that neither the
+  disk nor the piece holds are asked for by name in the next request, those
+  of the blocks whose references the node checks (`missingIn`).
 * **Resending** (`resend`): when the retry timer, or the top round's,
   fires and the node does not build, and when it restarts, before it
   settles, the node broadcasts its top block again, sets the retry timer
@@ -527,10 +528,17 @@ def gapOf (st : Store Validator BlockId Payload) (a : Validator) : ℕ :=
   ((List.range (st.topRound + 1)).find? fun r => decide (a ∉ st.authorsAt r)).getD
     (st.topRound + 1)
 
+/-- **The node's cut** (D15): the round below its floor when it drops, the
+lowest round it needs a block of, since it accepts a block below its floor
+on its header alone; `0` otherwise. -/
+def cutOf (s : State Validator BlockId Payload) : ℕ :=
+  if cfg.drops then s.floor - 1 else 0
+
 /-- **The frontier a request carries**: for each author, the least round
-at which the disk holds no block of it, and `0` for a detected author. -/
+at which the disk holds no block of it, `0` for a detected author, and the
+node's cut if higher. -/
 def frontierOf (s : State Validator BlockId Payload) (a : Validator) : ℕ :=
-  if a ∈ s.detected then 0 else gapOf s.disk a
+  max (cutOf cfg s) (if a ∈ s.detected then 0 else gapOf s.disk a)
 
 /-- **One level of the stream's walk**: the front's blocks on the store,
 not met already, that the stream carries, and their references next. -/
@@ -616,11 +624,13 @@ def proofReply (s : State Validator BlockId Payload) (k : ℕ) :
         fun x y => decide (x.2.round ≤ y.2.round)
 
 /-- **The identifiers to ask for by name** after a stream piece: the
-references of its blocks that neither the disk nor the piece holds. -/
+references that neither the disk nor the piece holds of its blocks the node
+checks references of, all but those below its floor when it drops. -/
 def missingIn (s : State Validator BlockId Payload)
     (L : List (BlockId × Block Validator BlockId Payload)) : List BlockId :=
-  ((L.flatMap fun e => e.2.refs.sort (· ≤ ·)).filter fun j =>
-    decide (j ∉ s.disk.ids) && decide (j ∉ L.map Prod.fst)).dedup
+  (((L.filter fun e => !(cfg.drops && decide (e.2.round < s.floor))).flatMap fun e =>
+    e.2.refs.sort (· ≤ ·)).filter fun j =>
+      decide (j ∉ s.disk.ids) && decide (j ∉ L.map Prod.fst)).dedup
 
 /-- **Take a stream piece in**: its blocks, in order, each accepted if it
 is new and ready. -/
@@ -661,11 +671,11 @@ def flushSyncs : ℕ → State Validator BlockId Payload → State Validator Blo
 def request (s : State Validator BlockId Payload)
     (e : Validator × (BlockId × Block Validator BlockId Payload) × List BlockId) :
     Output Validator BlockId Payload :=
-  .sync e.1 e.2.1.1 (frontierOf s) e.2.2
+  .sync e.1 e.2.1.1 (frontierOf cfg s) e.2.2
 
 /-- **Ask again** in every sync. -/
 def resync (s : State Validator BlockId Payload) : List (Output Validator BlockId Payload) :=
-  s.syncs.map (request s)
+  s.syncs.map (request cfg s)
 
 /-- **Send the node's top block again**: broadcast its block at its top
 round, set the retry timer again and ask every peer for its block of that
@@ -675,7 +685,7 @@ def resend (s : State Validator BlockId Payload) : List (Output Validator BlockI
   (match s.top, s.own with
     | some r, some id =>
       [.broadcast id (s.disk.full id), .setTimer (r - 1) (2 * cfg.timeout (r - 1)), .ask r]
-    | _, _ => []) ++ resync s ++ if cfg.drops then [.askProof s.lo] else []
+    | _, _ => []) ++ resync cfg s ++ if cfg.drops then [.askProof s.lo] else []
 
 /-- **Ask for the proof of the next undecided slot when the node lags in
 deciding it**: when the node drops and its top lies more than a wave above
@@ -773,7 +783,7 @@ def step (s : State Validator BlockId Payload) :
         let e := (u, (id, b), ([] : List BlockId))
         let s₁ := { s with syncs := e :: s.syncs.filter fun e => decide (e.1 ≠ u) }
         let r := settle cfg s₁
-        (r.1, request s₁ e :: r.2)
+        (r.1, request cfg s₁ e :: r.2)
       else (s, [])
     else (s, [])
   | .stream u L =>
@@ -785,12 +795,12 @@ def step (s : State Validator BlockId Payload) :
       match s₁.syncs.find? fun e => decide (e.1 = u) with
       | none => settle cfg s₁
       | some e₁ =>
-        let asked := (e₁.2.2 ++ missingIn s₁ (e₁.2.1 :: L')).dedup
+        let asked := (e₁.2.2 ++ missingIn cfg s₁ (e₁.2.1 :: L')).dedup
         let e₂ := (u, e₁.2.1, asked)
         let s₂ := { s₁ with syncs := s₁.syncs.map fun x => if x.1 = u then e₂ else x }
         let r := settle cfg s₂
         let moved := s₂.disk.ids.card ≠ s.disk.ids.card ∨ asked.length ≠ e₁.2.2.length
-        (r.1, (if moved then [request s₂ e₂] else []) ++ r.2)
+        (r.1, (if moved then [request cfg s₂ e₂] else []) ++ r.2)
   | .timer r =>
     let res := settle cfg { s with fired := fire s r, recovering := false }
     if res.1.top = s.top ∧ (s.top = some r ∨ s.top = some (r + 1)) then

@@ -302,7 +302,13 @@ its history and in the history of no single reference of it.
   past round `r` holds a clean block of round `r`, its own, so `clean`
   already refuses most such joins.
 * **D15. A request carries the requester's horizon.** *Decided.* A
-  responder then streams nothing below the requester's cut.
+  responder then streams nothing below the requester's cut. Done: a node
+  that drops raises each author's frontier in its requests to its cut,
+  the round below its floor (`cutOf`, `frontierOf`), and asks by name
+  only for references of blocks at or above its floor (`missingIn`).
+  Every request carries a frontier at or above the cut, and a stream
+  holds, besides the requested block and the blocks asked for by name,
+  only blocks at or above their author's frontier (`Local.Horizon`).
 * **D16. Catch-up by decision.** *Decided, on review.* Correct nodes have
   different cuts. A block `x` of round `r` with `G_B ≤ r < G_A` is
   bypassed at the node `A` and needed at the node `B`. If `x` is late,

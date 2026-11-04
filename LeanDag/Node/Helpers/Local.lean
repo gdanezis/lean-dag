@@ -1477,7 +1477,7 @@ theorem step_timer_snd (s : State Validator BlockId Payload) (r : ℕ) :
 omit [Fintype Validator] in
 /-- **Asking again is a request**: its outputs are requests. -/
 theorem mem_resync {s : State Validator BlockId Payload} {o : Output Validator BlockId Payload}
-    (h : o ∈ Node.resync s) : ∃ peer t fr ids, o = .sync peer t fr ids := by
+    (h : o ∈ Node.resync cfg s) : ∃ peer t fr ids, o = .sync peer t fr ids := by
   unfold Node.resync at h
   obtain ⟨e, -, rfl⟩ := List.mem_map.mp h
   exact ⟨_, _, _, _, rfl⟩
@@ -1775,7 +1775,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
         have he₁K : e₁.2.1 ∈ K' := hi₁.pend e₁ (List.mem_of_find?_eq_some he₁)
         have hi₂ : Inv cfg { Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 L) with
             syncs := (Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 L)).syncs.map fun x =>
-              if x.1 = u then (u, e₁.2.1, (e₁.2.2 ++ missingIn
+              if x.1 = u then (u, e₁.2.1, (e₁.2.2 ++ missingIn cfg
                 (Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 L))
                 (e₁.2.1 :: inHistory cfg e.2.1 L)).dedup) else x } K' B := by
           refine ⟨hi₁.known, fun x hx => ?_, hi₁.rounds, hi₁.good, hi₁.sub, hi₁.valid, hi₁.own,

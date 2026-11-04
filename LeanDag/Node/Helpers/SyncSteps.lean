@@ -343,7 +343,7 @@ theorem step_deliver_cases {s : State Validator BlockId Payload} (hs : SyncsOn s
         Node.step cfg s (.deliver u id b) =
           ((Node.settle cfg { s with syncs := (u, (id, b), ([] : List BlockId)) ::
               (s.syncs.filter fun e => decide (e.1 ≠ u)) }).1,
-            request { s with syncs := (u, (id, b), ([] : List BlockId)) ::
+            request cfg { s with syncs := (u, (id, b), ([] : List BlockId)) ::
               (s.syncs.filter fun e => decide (e.1 ≠ u)) } (u, (id, b), []) ::
             (Node.settle cfg { s with syncs := (u, (id, b), ([] : List BlockId)) ::
               (s.syncs.filter fun e => decide (e.1 ≠ u)) }).2)) := by
@@ -368,11 +368,11 @@ theorem step_stream_cases {s : State Validator BlockId Payload} (hs : SyncsOn s)
     ((u, t, A) ∈ (takeIn cfg s t (inHistory cfg t L)).syncs ∧
       Node.step cfg s (.stream u L) =
         let s₁ := takeIn cfg s t (inHistory cfg t L)
-        let asked := (A ++ missingIn s₁ (t :: inHistory cfg t L)).dedup
+        let asked := (A ++ missingIn cfg s₁ (t :: inHistory cfg t L)).dedup
         let s₂ := { s₁ with syncs := s₁.syncs.map fun x => if x.1 = u then (u, t, asked) else x }
         ((Node.settle cfg s₂).1,
           (if s₂.disk.ids.card ≠ s.disk.ids.card ∨ asked.length ≠ A.length then
-            [request s₂ (u, t, asked)] else []) ++ (Node.settle cfg s₂).2)) := by
+            [request cfg s₂ (u, t, asked)] else []) ++ (Node.settle cfg s₂).2)) := by
   have hf := hs.find he
   rw [step_stream_eq s u L hf]
   split
@@ -529,7 +529,7 @@ theorem step_form {s : State Validator BlockId Payload} (hs : SyncsOn s)
     (∃ u L t A, inp = .stream u L ∧ (u, t, A) ∈ s.syncs ∧
       (u, t, A) ∈ (takeIn cfg s t (inHistory cfg t L)).syncs ∧
       let s₁ := takeIn cfg s t (inHistory cfg t L)
-      let asked := (A ++ missingIn s₁ (t :: inHistory cfg t L)).dedup
+      let asked := (A ++ missingIn cfg s₁ (t :: inHistory cfg t L)).dedup
       let s₂ := { s₁ with syncs := s₁.syncs.map fun x => if x.1 = u then (u, t, asked) else x }
       Thins cfg s₂ (Node.step cfg s inp).1 ∧
       (∀ peer i fr ids, Output.sync peer i fr ids ∈ (Node.step cfg s inp).2 →
@@ -758,7 +758,7 @@ theorem step_ask {s : State Validator BlockId Payload} (hs : SyncsOn s) {w : Val
     exact this.2.2
   · obtain ⟨rfl, -, rfl⟩ := hask _ _ _ _ ho
     have hs₂ := hs.extend (s₁ := takeIn cfg s t₀ (inHistory cfg t₀ L))
-      (M := missingIn (takeIn cfg s t₀ (inHistory cfg t₀ L)) (t₀ :: inHistory cfg t₀ L))
+      (M := missingIn cfg (takeIn cfg s t₀ (inHistory cfg t₀ L)) (t₀ :: inHistory cfg t₀ L))
       (Thins.takeIn (cfg := cfg) s _ _).sub he₀
     have := hs₂.eq (ht.sub.subset he) (List.mem_map.mpr ⟨_, hin, if_pos rfl⟩) rfl
     simp only [Prod.mk.injEq] at this
@@ -822,14 +822,14 @@ theorem step_stream_stuck {s : State Validator BlockId Payload} (hs : SyncsOn s)
       exact this.1 hc
     have hs₁ : takeIn cfg s t (inHistory cfg t L) = s := by unfold takeIn; rw [if_neg hadm]
     rw [h, hs₁] at hno
-    have hnm : (A ++ missingIn s (t :: inHistory cfg t L)).dedup.length = A.length := by
+    have hnm : (A ++ missingIn cfg s (t :: inHistory cfg t L)).dedup.length = A.length := by
       by_contra hm
       exact hno _ _ (List.mem_append_left _
         (List.mem_ite_nil_right.mpr ⟨Or.inr hm, List.mem_singleton_self _⟩))
     refine ⟨hadm, fun x hx y hy hyn hyL => mem_of_dedup_length (hs.2 _ he).1 hnm ?_⟩
     unfold missingIn
     refine List.mem_dedup.mpr (List.mem_filter.mpr ⟨List.mem_flatMap.mpr
-      ⟨x, hx, (Finset.mem_sort _).mpr hy⟩, ?_⟩)
+      ⟨x, List.mem_filter.mpr ⟨hx, by simp [hd]⟩, (Finset.mem_sort _).mpr hy⟩, ?_⟩)
     simpa [hyn] using hyL
 
 /-- **No sync is with the node itself.** -/

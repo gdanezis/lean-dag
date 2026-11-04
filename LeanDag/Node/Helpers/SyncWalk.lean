@@ -5,10 +5,12 @@ import LeanDag.Node.Helpers.Flush
 The stream for a request holds, with each of its blocks, each reference of
 it that the store holds and the stream carries (`streamOf_closed`), and the
 requested block itself (`mem_streamOf_self`); its blocks are the store's
-(`mem_streamOf`). The walk through a stream piece from a block meets, with
-each block, each reference of it that the piece holds (`found_closed`),
-and the block itself when the piece holds it (`found_self`); a piece of a
-block map's blocks gives each block its references (`pieceRefs_of_map`).
+(`mem_streamOf`), each the requested block, asked for by name, or at or
+above its author's frontier (`carried_streamOf`). The walk through a
+stream piece from a block meets, with each block, each reference of it
+that the piece holds (`found_closed`), and the block itself when the piece
+holds it (`found_self`); a piece of a block map's blocks gives each block
+its references (`pieceRefs_of_map`).
 A block valid under a block map is ready on a store reading as it that
 holds its references (`ready_of_refs`), and a stream piece taken in
 without gaining a block was taken in block by block with each held or not
@@ -155,6 +157,17 @@ theorem mem_streamOf {fr : Validator → ℕ} {ids : List BlockId}
   unfold streamOf at he
   obtain ⟨i, hi, rfl⟩ := List.mem_map.mp (List.mem_mergeSort.mp he)
   exact ⟨(streamAt_met st _ t _ i hi).1, rfl⟩
+
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- **The stream's blocks are carried**: each is the requested block, asked
+for by name, or at or above its author's frontier. -/
+theorem carried_streamOf {fr : Validator → ℕ} {ids : List BlockId}
+    {e : BlockId × Block Validator BlockId Payload} (he : e ∈ streamOf st t fr ids) :
+    e.1 = t ∨ e.1 ∈ ids ∨ fr e.2.creator ≤ e.2.round := by
+  have hx := (mem_streamOf_iff st t).mp (List.mem_map_of_mem (f := Prod.fst) he)
+  have := (streamAt_met st _ t _ e.1 hx).2
+  rw [(mem_streamOf st t he).2, (st.full_fields e.1).1, (st.full_fields e.1).2.1]
+  simpa using this
 
 end Stream
 

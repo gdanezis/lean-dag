@@ -477,7 +477,7 @@ theorem step_deliver_eq (s : State Validator BlockId Payload) (u : Validator) (i
             (fun e => decide (e.2.1.2.round < b.round)) then
           ((Node.settle cfg { s with syncs := (u, (id, b), ([] : List BlockId)) ::
               (s.syncs.filter fun e => decide (e.1 ≠ u)) }).1,
-            request { s with syncs := (u, (id, b), ([] : List BlockId)) ::
+            request cfg { s with syncs := (u, (id, b), ([] : List BlockId)) ::
               (s.syncs.filter fun e => decide (e.1 ≠ u)) } (u, (id, b), []) ::
             (Node.settle cfg { s with syncs := (u, (id, b), ([] : List BlockId)) ::
               (s.syncs.filter fun e => decide (e.1 ≠ u)) }).2)
@@ -522,12 +522,12 @@ theorem step_stream_eq (s : State Validator BlockId Payload) (u : Validator)
       | none => Node.settle cfg (takeIn cfg s e.2.1 (inHistory cfg e.2.1 L))
       | some e₁ =>
         let s₁ := takeIn cfg s e.2.1 (inHistory cfg e.2.1 L)
-        let asked := (e₁.2.2 ++ missingIn s₁ (e₁.2.1 :: inHistory cfg e.2.1 L)).dedup
+        let asked := (e₁.2.2 ++ missingIn cfg s₁ (e₁.2.1 :: inHistory cfg e.2.1 L)).dedup
         let e₂ := (u, e₁.2.1, asked)
         let s₂ := { s₁ with syncs := s₁.syncs.map fun x => if x.1 = u then e₂ else x }
         let r := Node.settle cfg s₂
         let moved := s₂.disk.ids.card ≠ s.disk.ids.card ∨ asked.length ≠ e₁.2.2.length
-        (r.1, (if moved then [request s₂ e₂] else []) ++ r.2) := by
+        (r.1, (if moved then [request cfg s₂ e₂] else []) ++ r.2) := by
   simp only [Node.step, he]
   rfl
 

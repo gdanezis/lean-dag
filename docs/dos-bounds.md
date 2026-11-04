@@ -306,6 +306,7 @@ store closed, and needs none of this.
   the receiver's check: the loop on the proof.
 * **Sync with the horizon** (D15). A responder streams only blocks at or
   above the requester's cut; V3′ and `SyncsBound` are proved again.
+  Done (item 5 below).
 * **Staging.** Each increment keeps `lake build` green.
   1. *The disk read from the cut up.* Done. The chain that keeps a disk
      a cut along a run is generic in what each block of the disk
@@ -611,7 +612,18 @@ store closed, and needs none of this.
         relaxing every honest node reliable, which would admit `c` more
         nodes outside the reliable set than counting an untimely honest
         node among the `f` faulty ones does.
-  5. *Sync with the horizon* (D15); V11 and V13 on the new node.
+  5. *Sync with the horizon* (D15). Done. A node that drops raises each
+     author's frontier in its requests to its cut, the round below its
+     floor, below which it accepts blocks on their header alone (`cutOf`,
+     `frontierOf`), and asks by name only for references of blocks at or
+     above its floor (`missingIn`). Every request a step sends carries a
+     frontier at or above the cut before the step (`step_sync_cut`), and
+     a stream holds, besides the requested block and the blocks asked for
+     by name, only blocks at or above their author's frontier
+     (`carried_streamOf`; `Local.Horizon`). A node that does not drop has
+     cut `0`, so V3′, `SyncsBound`, V11, V11′, V12 and V13 stand as they
+     were, and V11″ rests on the sync premise `SyncedHeld`, which the
+     change does not touch.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase
 3, from R1 to R5, V13 and the invariant of `BypassRun`. R6 is optional.

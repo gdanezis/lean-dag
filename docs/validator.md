@@ -322,10 +322,16 @@ most (V1).
 node's frontier and the identifiers asked for by name. The frontier
 gives, for each author, the least round at which the disk holds no block
 of the author, and `0` for a detected author (`frontierOf`, `gapOf`):
-below it the node holds a block of the author at every round. The peer answers with the blocks of its
-disk in `t`'s history that are `t`, are asked for, or lie at or above
-their author's frontier, reached from `t` through such blocks, in order
-of round (`streamOf`), and with nothing if it holds none.
+below it the node holds a block of the author at every round. A node
+that drops raises each author's frontier to its cut, the round below its
+floor (`cutOf`, D15 of `docs/node-sync.md`): it accepts a block below its
+floor on its header alone, so it needs no block below its cut. The peer
+answers with the blocks of its disk in `t`'s history that are `t`, are
+asked for, or lie at or above their author's frontier, reached from `t`
+through such blocks, in order of round (`streamOf`), and with nothing if
+it holds none. So a request carries a frontier at or above the node's
+cut, and a stream holds, besides `t` and the blocks asked for, only
+blocks at or above their author's frontier (V1, `Local.Horizon`).
 
 **Taking a stream in, header first.** Of a stream piece from a peer with
 which it has a sync, the node reads the blocks of the piece under their
@@ -340,7 +346,9 @@ which check on arrival would have taken in first. The node then drops
 the syncs whose block it holds or whose peer it has convicted (`tidy`).
 If the sync stays, the references of its block and of the piece's blocks
 that neither the disk nor the piece holds are added to the names asked
-for (`missingIn`), and if a name was added, the node asks again. A piece
+for, at a node that drops only those of blocks at or above its floor,
+whose references it checks (`missingIn`), and if a name was added, the
+node asks again. A piece
 that adds nothing asks nothing, so streams cannot make two nodes loop.
 After each step the node accepts the syncs' blocks that have become
 ready, in passes (`flushSyncs`).
@@ -497,7 +505,7 @@ four a round. It needs no bootstrap, since no block is collected.
 
 | | Claim | Proof |
 |---|---|---|
-| V1 | Over any input sequence: the node's own blocks, those it persists, are its own and identified by their hash; they lie at strictly increasing rounds; each references only blocks it knew, and is valid at the row under every block map agreeing with what it knew; it broadcasts each block it persists, and only blocks it persists; it keeps the decisions it outputs, which are slots `0 … lo − 1`; it holds at most `n − 1` syncs. | `Node.Local.OneEach`, `Authored`, `Sends`, `ValidOut`, `Decisions`, `SyncsBound` (proved, `Local/Proof.lean`): `Node.syncsOn_run`, `Node.syncs_length_le` |
+| V1 | Over any input sequence: the node's own blocks, those it persists, are its own and identified by their hash; they lie at strictly increasing rounds; each references only blocks it knew, and is valid at the row under every block map agreeing with what it knew; it broadcasts each block it persists, and only blocks it persists; it keeps the decisions it outputs, which are slots `0 … lo − 1`; it holds at most `n − 1` syncs; each request it sends carries a frontier at or above its cut, and each stream it sends holds, besides the requested block and the blocks asked for by name, only blocks at or above their author's frontier (D15). | `Node.Local.OneEach`, `Authored`, `Sends`, `ValidOut`, `Decisions`, `SyncsBound`, `Horizon` (proved, `Local/Proof.lean`): `Node.syncsOn_run`, `Node.syncs_length_le`, `Node.step_sync_cut`, `Node.carried_streamOf` |
 | V2 | **The decisions are the scheme's**: at the bounded vote, a decision step of a node whose memory holds the round of its next undecided slot, as it always does (§3.1), outputs what `Scheme.tryDecide` decides on any record and view holding the disk's blocks, read alike; over successive views this is the scheme's loop. | `Node.Local.DecidesOnView` (proved): `Node.tryDecide_memory`, `Node.Store.Mirrors.viewsAbove`, `Node.tryDecide_window`, `Node.ViewsAbove.of_store`, `Node.ViewsAbove.tryDecide_eq` |
 | V3 | **Safety**: over a trace with timely authentication of blocks, an injective hash, injective identifiers and `Params.Tolerates`, any two honest nodes' decisions are prefix-comparable, whether or not the nodes drop bypassed blocks: each decides the slots `0, 1, …` in order, and two decide each slot alike, on the record of the slot's cut. | `Node.Runs.Safety` (proved): `Node.Local.decisions`, `Node.Cut.agrees`, `Node.Runs.prefix_of_agree` |
 | V3′ | **Convergence**: over a trace with delivery, timely authentication, an injective hash, and authentic evidence, of nodes that do not drop (`cfg.drops = false`), every block in the history of an honest node's own block at its top at the end is on every honest node's disk at the end. No fault bound is needed: an honest node given the block has a sync for it until it holds it, and the answer to the sync's last request leads to no request, which it would if the node still lacked the block (§3.4). | `Node.Converge.Converges` (proved): `Node.Converge.sync_made`, `Node.Converge.sync_stays`, `Node.Converge.last_ask`, `Node.step_stream_stuck`, `Node.foldl_all`, `Node.Converge.not_detected`, `Node.eq_of_persists` |
@@ -1105,7 +1113,8 @@ and the bound on the blocks a node holds a round (V13), Stage 4. Open:
   request (§7); and an author whose blocks skip a round below its
   latest, as a node that jumped, keeps its frontier at that round, so
   each stream carries its blocks above that round in the history of the
-  stream's block, as it does a detected author's, whose frontier is `0`;
+  stream's block, as it does a detected author's, whose frontier is `0`,
+  down to the requester's cut when it drops;
 * V11, V11′, V11″, V12 and V13's bound from `n_E + 1` assume that the evidence
   spreads (§5.1): `n_E` is a round from which every honest builder has
   convicted every author the honest nodes saw equivocate. Nothing bounds

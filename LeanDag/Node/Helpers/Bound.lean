@@ -568,7 +568,7 @@ theorem Steady.step {g : BlockId → Block Validator BlockId Payload}
       · set s₁ := Node.takeIn cfg s t (inHistory cfg t L) with hs₁
         set s₂ : State Validator BlockId Payload := { s₁ with
           syncs := s₁.syncs.map fun x =>
-            if x.1 = w then (w, t, (A ++ missingIn s₁ (t :: inHistory cfg t L)).dedup) else x }
+            if x.1 = w then (w, t, (A ++ missingIn cfg s₁ (t :: inHistory cfg t L)).dedup) else x }
           with hs₂
         have hs' : (Node.step cfg s (.stream w L)).1 = (Node.settle cfg s₂).1 := by rw [hs]
         rw [hs'] at hR ⊢

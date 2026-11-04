@@ -20,7 +20,11 @@ initial state:
 * **decisions are the scheme's on the view**: at the bounded vote, a
   decision step of a node whose memory holds the round of its next
   undecided slot decides what `tryDecide` decides on any record and view
-  holding the disk's blocks, read alike (`DecidesOnView`).
+  holding the disk's blocks, read alike (`DecidesOnView`);
+* **its requests and streams keep to the cut** (D15): a request carries a
+  frontier at or above the node's cut, and a stream holds, besides the
+  requested block and the blocks asked for by name, only blocks at or
+  above their author's frontier (`Horizon`).
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -102,9 +106,24 @@ def DecidesOnView : Prop :=
       if s.lo < N then Scheme.tryDecide (S := cfg.slots) cfg.p boundedSel U V s.lo (N - 1)
       else []
 
+/-- **Its requests and streams keep to the cut** (D15): every request a step
+sends carries a frontier at or above the node's cut before the step, and
+every stream it sends in answer to a request holds, besides the requested
+block and the blocks asked for by name, only blocks at or above their
+author's frontier. -/
+def Horizon : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (cfg : Config Validator BlockId Payload)
+    (s : State Validator BlockId Payload) (inp : Input Validator BlockId Payload),
+    (∀ peer t fr ids, Output.sync peer t fr ids ∈ (Node.step cfg s inp).2 →
+      ∀ a, cutOf cfg s ≤ fr a) ∧
+    ∀ peer t fr ids, inp = .syncRequest peer t fr ids →
+      ∀ u L, Output.stream u L ∈ (Node.step cfg s inp).2 →
+        ∀ e ∈ L, e.1 = t ∨ e.1 ∈ ids ∨ fr e.2.creator ≤ e.2.round
+
 /-- One node at a time. -/
 def Statement : Prop :=
-  OneEach ∧ Authored ∧ Sends ∧ Decisions ∧ SyncsBound ∧ ValidOut ∧ DecidesOnView
+  OneEach ∧ Authored ∧ Sends ∧ Decisions ∧ SyncsBound ∧ ValidOut ∧ DecidesOnView ∧ Horizon
 
 end Local
 
