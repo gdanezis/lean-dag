@@ -1,4 +1,5 @@
 import LeanDag.KPartialDag.Model.Live
+import Mathlib.Data.Prod.Lex
 /-!
 # K-partial DAG — what a committed leader outputs
 
@@ -6,7 +7,11 @@ import LeanDag.KPartialDag.Model.Live
 available sub-DAG at most `D` rounds below it (`Out`); a node reads them on
 what it holds (`OutIn`). A node's ledger after slots `0, …, n-1` is what the
 leaders it committed there output (`LedgerIn`), and a block enters it at the
-first committed slot whose leader outputs it (`EntersIn`).
+first committed slot whose leader outputs it (`EntersIn`). Within one slot,
+blocks are ordered by round, then author, then id (`slotKey`, `KeyLt`), so a
+block precedes another in the ledger when it enters at an earlier slot, or at
+the same slot and earlier in that order (`PrecedesIn`). The validators and
+the block ids carry linear orders for this.
 
 Definitions only.
 -/
@@ -40,6 +45,26 @@ def EntersIn (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset Block
     (g : ℕ → Option BlockId) (b : BlockId) (k : ℕ) : Prop :=
   (∃ L, g k = some L ∧ b ∈ OutIn U K H D L) ∧
     ∀ j, j < k → ∀ L, g j = some L → b ∉ OutIn U K H D L
+
+/-- **The position of a block within one slot's output**: its round, then
+its author, then its id, in lexicographic order. -/
+def slotKey [LinearOrder Validator] [LinearOrder BlockId] (U : KRecord Validator BlockId Payload)
+    (b : BlockId) : Lex (ℕ × Lex (Validator × BlockId)) :=
+  toLex ((U.block b).round, toLex ((U.block b).creator, b))
+
+/-- `b` comes before `b'` within one slot's output. -/
+def KeyLt [LinearOrder Validator] [LinearOrder BlockId] (U : KRecord Validator BlockId Payload)
+    (b b' : BlockId) : Prop :=
+  slotKey U b < slotKey U b'
+
+/-- **`b` precedes `b'` in a node's ledger** after slots `0, …, n-1`: it
+enters at an earlier slot, or at the same slot and before `b'` within the
+slot. -/
+def PrecedesIn [LinearOrder Validator] [LinearOrder BlockId]
+    (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (D : ℕ)
+    (g : ℕ → Option BlockId) (n : ℕ) (b b' : BlockId) : Prop :=
+  ∃ k k', k < n ∧ k' < n ∧ EntersIn U K H D g b k ∧ EntersIn U K H D g b' k' ∧
+    (k < k' ∨ k = k' ∧ KeyLt U b b')
 
 end KPartialDag
 

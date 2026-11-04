@@ -205,8 +205,11 @@ A committed leader `L` outputs the blocks of its available sub-DAG at most
 `D` rounds below it (`Out`). A node reads them on what it holds (`OutIn`).
 Its ledger after slots `0, …, n − 1` is what the leaders it committed there
 output (`LedgerIn`). A block enters the ledger at the first committed slot
-whose leader outputs it (`EntersIn`). As in the rest of the tree, the order
-within one slot's output is left open.
+whose leader outputs it (`EntersIn`). Within one slot's output, blocks are
+ordered by round, then author, then id (`slotKey`, `KeyLt`); the id separates
+the blocks of an equivocating author. A block precedes another in the ledger
+when it enters at an earlier slot, or at the same slot and earlier within it
+(`PrecedesIn`).
 
 The ledger carries no causal guarantee across slots. A leader outputs only
 its available sub-DAG within `D` rounds, so a block may enter the ledger
@@ -238,19 +241,34 @@ The development proves (`Order.Statement`):
   `mem_out_of_synchronisedOn`);
 * **entry** (`Order.Enters`): after synchrony, a node deciding a slot led by
   `T` has in its ledger every block of `T` at most `D` rounds below the
-  slot (`mem_ledgerIn_of_leader_mem`).
+  slot (`mem_ledgerIn_of_leader_mem`);
+* **inclusion under a gap** (`Order.Included`): when every `D` consecutive
+  rounds hold a slot led by `T`, after synchrony every block of `T` enters
+  the ledger of a node that has decided every slot up to `D` rounds above it
+  (`mem_ledgerIn_of_gap`);
+* **settled** (`Order.Settled`): a leader outputs only blocks at most `D`
+  rounds below it, so a block not in the ledger once every slot up to `D`
+  rounds above it is decided never enters (`mem_ledgerIn_settled`);
+* **no retraction** (`Order.Grows`): what a node outputs after `n` slots, it
+  and every other node output at the same slot, and in the same order, after
+  `n' ≥ n` slots (`ledgerIn_grows`, `precedesIn_grows`). This is agreement
+  on the slots both have settled, with `entersIn_unique`;
+* **a total order** (`Order.Total`): the ledger order is irreflexive,
+  transitive and total on the ledger, and a reference of a block entering at
+  the same slot precedes it, since it lies one round below
+  (`precedesIn_irrefl`, `precedesIn_trans`, `precedesIn_total`,
+  `precedesIn_of_ref`).
 
 The depth `D` sets what is output, and `K` sets how far below that a node
-fetches. A block not output by a committed leader within `D` rounds above it
-is never output. So once every slot up to `D` rounds above a block is
-decided, its author knows whether the block is in the ledger, and can
-propose its payload again if it is not. After synchrony a block of `T` is
-output when a slot led by `T` lies at most `D` rounds above it. So `D` is
-bounded below by the gap between such slots that the schedule allows, not
-by `K`: under round robin with one slot a round, `D ≥ f + 1` suffices.
+fetches. By `Order.Settled`, once every slot up to `D` rounds above a block
+is decided, its author knows whether the block is in the ledger, and can
+propose its payload again if it is not. By `Order.Included`, `D` is bounded
+below by the gap between slots led by `T` that the schedule allows, not by
+`K`. Under round robin with one slot a round, any `f + 1` consecutive slots
+hold one led by `T`, so `D = f + 1` suffices.
 
 ## 8. Next
 
 * Bounds: the cost of fetching the sub-DAG, and how long correct nodes must
   keep the histories they downloaded.
-* The order within one slot's output.
+* Chain quality: the share of correct blocks in a leader's output.

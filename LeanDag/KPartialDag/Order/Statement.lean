@@ -15,7 +15,16 @@ sub-DAG at most `D` rounds below it:
 * **inclusion** (`Includes`): after synchrony, a leader of `T` outputs every
   block of `T` at most `D` rounds below it;
 * **entry** (`Enters`): after synchrony, a node deciding a slot led by `T`
-  has in its ledger every block of `T` at most `D` rounds below the slot.
+  has in its ledger every block of `T` at most `D` rounds below the slot;
+* **inclusion under a gap** (`Included`): when every `D` rounds hold a slot
+  led by `T`, after synchrony every block of `T` enters the ledger of a node
+  that has decided the slots up to `D` rounds above it;
+* **settled** (`Settled`): a block not in the ledger once the slots up to `D`
+  rounds above it are decided never enters;
+* **no retraction** (`Grows`): what a node outputs, it and every other node
+  output at the same slot, and in the same order, after more slots;
+* **a total order** (`Total`): ordered within a slot by round, author and id,
+  the ledger is a strict total order, causal within a slot.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -86,8 +95,69 @@ def Enters : Prop :=
     (U.block x).round < S.slotRound k → S.slotRound k ≤ (U.block x).round + D →
     x ∈ LedgerIn U K H D g (k + 1)
 
+/-- **After synchrony, every block of `T` enters the ledger** of a node that
+has decided every slot at most `D` rounds above it, when every `D` rounds
+hold a slot led by `T`, at `K ≥ 3`. -/
+def Included : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [DecidableEq BlockId] [S : Slots Validator]
+    (U : KRecord Validator BlockId Payload) (K D : ℕ) (H : Finset BlockId)
+    (T : Finset Validator) (R : ℕ) (g : ℕ → Option BlockId) (n : ℕ) (x : BlockId),
+    3 ≤ K → quorumCard Validator ≤ T.card → SynchronisedOn U T R → H ⊆ U.ids →
+    (∀ r, ∃ k, r < S.slotRound k ∧ S.slotRound k ≤ r + D ∧ S.leader k ∈ T) →
+    (∀ k, k < n → NodeDecided U K H k (g k)) →
+    (∀ k L, k < n → g k = some L → FetchedIn U K H L ((U.block L).round - D)) →
+    x ∈ U.ids → (U.block x).creator ∈ T → R ≤ (U.block x).round →
+    (∀ k, S.slotRound k ≤ (U.block x).round + D → k < n) →
+    (∀ r, R ≤ r → r ≤ (U.block x).round + D + 2 → PopulatedOn U T r) →
+    WithRefs U T ((U.block x).round + 3) ((U.block x).round + D + 2) ⊆ ↑H →
+    x ∈ LedgerIn U K H D g n
+
+/-- **A block's fate is settled** once every slot at most `D` rounds above it
+is decided: if it is not in the ledger then, it never enters. -/
+def Settled : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [DecidableEq BlockId] [S : Slots Validator]
+    (U : KRecord Validator BlockId Payload) (K D : ℕ) (H : Finset BlockId)
+    (g : ℕ → Option BlockId) (n n' : ℕ) (b : BlockId), H ⊆ U.ids →
+    (∀ k, k < n' → NodeDecided U K H k (g k)) →
+    (∀ k, S.slotRound k ≤ (U.block b).round + D → k < n) →
+    b ∈ LedgerIn U K H D g n' → b ∈ LedgerIn U K H D g n
+
+/-- **No retraction**: what a node outputs after slots `0, …, n-1`, it and
+every other node output at the same slot, and in the same order, after `n'`
+slots, for `n ≤ n'`, at `K ≥ 3`, once each has fetched below the leaders it
+committed. -/
+def Grows : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder Validator] [Faults Validator] [DecidableEq BlockId] [LinearOrder BlockId]
+    [Slots Validator] (U : KRecord Validator BlockId Payload) (K D : ℕ)
+    (H₁ H₂ : Finset BlockId) (g₁ g₂ : ℕ → Option BlockId) (n n' : ℕ), 3 ≤ K →
+    H₁ ⊆ U.ids → H₂ ⊆ U.ids → n ≤ n' → (∀ k, k < n → NodeDecided U K H₁ k (g₁ k)) →
+    (∀ k, k < n' → NodeDecided U K H₂ k (g₂ k)) →
+    (∀ k L, k < n → g₁ k = some L → FetchedIn U K H₁ L ((U.block L).round - D)) →
+    (∀ k L, k < n' → g₂ k = some L → FetchedIn U K H₂ L ((U.block L).round - D)) →
+    LedgerIn U K H₁ D g₁ n ⊆ LedgerIn U K H₂ D g₂ n' ∧
+      (∀ b k, k < n → EntersIn U K H₁ D g₁ b k → EntersIn U K H₂ D g₂ b k) ∧
+      ∀ b b', PrecedesIn U K H₁ D g₁ n b b' → PrecedesIn U K H₂ D g₂ n' b b'
+
+/-- **The ledger is a strict total order**, causal within a slot. -/
+def Total : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder Validator] [Faults Validator] [DecidableEq BlockId] [LinearOrder BlockId]
+    (U : KRecord Validator BlockId Payload) (K D : ℕ) (H : Finset BlockId)
+    (g : ℕ → Option BlockId) (n : ℕ),
+    (∀ b, ¬ PrecedesIn U K H D g n b b) ∧
+    (∀ b b' b'', PrecedesIn U K H D g n b b' → PrecedesIn U K H D g n b' b'' →
+      PrecedesIn U K H D g n b b'') ∧
+    (∀ b ∈ LedgerIn U K H D g n, ∀ b' ∈ LedgerIn U K H D g n, b ≠ b' →
+      PrecedesIn U K H D g n b b' ∨ PrecedesIn U K H D g n b' b) ∧
+    ∀ b b' k, b ∈ U.ids → b' ∈ (U.block b).refs → k < n → EntersIn U K H D g b k →
+      EntersIn U K H D g b' k → PrecedesIn U K H D g n b' b
+
 /-- The order. -/
-def Statement : Prop := Available ∧ Local ∧ Agrees ∧ Includes ∧ Enters
+def Statement : Prop :=
+  Available ∧ Local ∧ Agrees ∧ Includes ∧ Enters ∧ Included ∧ Settled ∧ Grows ∧ Total
 
 end Order
 
