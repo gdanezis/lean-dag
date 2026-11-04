@@ -1,8 +1,8 @@
 # K-partial DAGs
 
-This document studies the safety and liveness of the Mysticeti commit rule on a
-*K-partial DAG*, a DAG substrate in which an honest node holds only part of
-the history of the blocks it references. The Lean development is
+This document studies the safety, liveness and order of the Mysticeti
+commit rule on a *K-partial DAG*, a DAG substrate in which an honest node
+holds only part of the history of the blocks it references. The Lean development is
 `LeanDag/KPartialDag`.
 
 ## 1. The substrate
@@ -119,13 +119,15 @@ It reads the available sub-DAG below an anchor on `H` (`AnchoredIn`,
 `AvailIn`): a block is anchored in `H` when its history to depth `K` is held
 and it is the anchor, or blocks of `f + 1` distinct authors of the sub-DAG
 read so far reference it. It links a candidate when it holds, in that
-sub-DAG, a certificate for it with its references (`LinkedIn`), and it has
-fetched the sub-DAG when the anchor's history and that of every block that
-blocks of `f + 1` distinct authors of it reference are held (`FetchedIn`).
-It decides by the commit rule read on what it holds (`NodeDecided`): the
-direct tests count the certificates and blamers it holds with their
-references, the indirect commit reads `LinkedIn`, and the indirect skip
-needs the sub-DAG below the anchor fetched.
+sub-DAG, a certificate for it with its references (`LinkedIn`). It has
+fetched the sub-DAG down to round `ρ` when the anchor's history is held, and
+so is the history of every block that blocks of `f + 1` distinct authors of
+the sub-DAG above round `ρ` reference (`FetchedIn`). It decides by the
+commit rule read on what it holds (`NodeDecided`): the direct tests count
+the certificates and blamers it holds with their references, the indirect
+commit reads `LinkedIn`, and the indirect skip of a slot at round `r` needs
+the sub-DAG below the anchor fetched down to round `r + 1`, where the
+certificate's references lie.
 
 The development proves (`Node.Statement`):
 
@@ -134,15 +136,21 @@ The development proves (`Node.Statement`):
   from what it holds. A history to depth `K` that it holds reads alike under
   every block map agreeing on `H` (`historyUptoFrom_eq_of_subset`);
 * **fetchable** (`Node.Fetchable`): a node that holds the record's available
-  sub-DAG below an anchor has fetched it. By §3's `Held` it can fetch that
-  sub-DAG from correct nodes;
+  sub-DAG below an anchor down to round `ρ − K` has fetched it down to `ρ`,
+  for `ρ` at most the anchor's round. A block of a history to depth `n` lies
+  at most `n` rounds below it (`round_of_mem_historyUpto`). By §3's `Held`
+  the node can fetch that part of the sub-DAG from correct nodes. To decide a
+  slot at round `r` from an anchor `A`, a node fetches the sub-DAG between
+  the rounds of `A` and `r + 1 − K`;
 * **sound** (`Node.Sound`): a decision a node takes on what it holds is a
   decision of the commit rule on every view holding `H`. A link read on `H`
-  is the record's (`linkedIn_avail`); once the sub-DAG is fetched, the
-  record's link is read on `H` too (`avail_linkedIn`), so an indirect skip
+  is the record's (`linkedIn_avail`). Once the sub-DAG is fetched down to
+  `ρ`, it is the record's sub-DAG above `ρ` (`avail_subset_availIn`), so the
+  record's link is read on `H` too (`avail_linkedIn`), and an indirect skip
   on `H` is one on the record;
 * **agreement** (`Node.Agrees`): at `K ≥ 3`, two nodes decide each slot
-  alike, by soundness on the full view and §4's agreement.
+  alike, by soundness on the full view and §4's agreement
+  (`NodeDecided.agree`).
 
 ## 6. Liveness
 
@@ -171,7 +179,8 @@ The development proves (`Live.Statement`):
   blocks with their references commits the slot directly;
 * **a committed run decides below it** (`Live.Descends`): a committed block
   has a certificate (`NodeDecided.certified`), so the node has fetched the
-  sub-DAG below each anchor it uses (§5's `Fetchable`). Its indirect test
+  sub-DAG below each anchor it uses down to the round above the slot
+  (§5's `Fetchable`). Its indirect test
   then returns a commit or a skip. Each slot below the run takes its nearest
   committed eligible anchor, and the slots between are skipped, by
   induction downward (`nodeDecided_below`);
@@ -190,9 +199,52 @@ With §5's agreement, every correct node eventually decides every slot, and
 all decide each slot alike. Under three-round spacing `c = 1`; with one slot
 a round, `c = 3`.
 
-## 7. Next
+## 7. The order
 
-* The order: what a committed leader orders, read on the available sub-DAG
-  below it rather than its whole history.
+A committed leader `L` outputs the blocks of its available sub-DAG at most
+`D` rounds below it (`Out`). A node reads them on what it holds (`OutIn`).
+Its ledger after slots `0, …, n − 1` is what the leaders it committed there
+output (`LedgerIn`). A block enters the ledger at the first committed slot
+whose leader outputs it (`EntersIn`). As in the rest of the tree, the order
+within one slot's output is left open.
+
+The development proves (`Order.Statement`):
+
+* **available** (`Order.Available`): what a certified block outputs is held
+  by correct nodes (`avail_correctHeld`), so a node orders only blocks it can
+  fetch;
+* **local** (`Order.Local`): what a node reads of a leader's output lies in
+  the output, and is all of it once the node has fetched the sub-DAG down to
+  `D` rounds below the leader (`outIn_eq`). By §5's `Fetchable`, the node
+  fetches the sub-DAG between the leader's round and `D + K` rounds below
+  it;
+* **agreement** (`Order.Agrees`): at `K ≥ 3`, two nodes that have fetched
+  below the leaders they committed have one ledger, and one entry slot per
+  block. Their verdicts agree (`NodeDecided.agree`), and so do their reads
+  of each leader's output (`ledgerIn_agree`);
+* **inclusion** (`Order.Includes`): after synchrony from round `R`, a leader
+  of `T` outputs every block of `T` from round `R` on at most `D` rounds
+  below it, at `K ≥ 1`. The leader references the blocks of `T` of the round
+  below, which lie in its history to depth `K`. Each block of `T` two rounds
+  below or more is referenced by the blocks of `T` of the round above, `n − f`
+  distinct authors whose blocks lie in the sub-DAG, so it is anchored, round
+  by round downward (`anchoredBelow_of_synchronisedOn`,
+  `mem_out_of_synchronisedOn`);
+* **entry** (`Order.Enters`): after synchrony, a node deciding a slot led by
+  `T` has in its ledger every block of `T` at most `D` rounds below the
+  slot (`mem_ledgerIn_of_leader_mem`).
+
+The depth `D` sets what is output, and `K` sets how far below that a node
+fetches. A block not output by a committed leader within `D` rounds above it
+is never output. So once every slot up to `D` rounds above a block is
+decided, its author knows whether the block is in the ledger, and can
+propose its payload again if it is not. After synchrony a block of `T` is
+output when a slot led by `T` lies at most `D` rounds above it. So `D` is
+bounded below by the gap between such slots that the schedule allows, not
+by `K`: under round robin with one slot a round, `D ≥ f + 1` suffices.
+
+## 8. Next
+
 * Bounds: the cost of fetching the sub-DAG, and how long correct nodes must
   keep the histories they downloaded.
+* The order within one slot's output.

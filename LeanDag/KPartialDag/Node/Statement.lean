@@ -9,7 +9,8 @@ closed under histories:
   the same on every record whose blocks agree on `H`, so the node computes
   them from what it holds;
 * **fetchable** (`Fetchable`): a node holding the record's available
-  sub-DAG below an anchor has fetched it;
+  sub-DAG below an anchor, down to `K` rounds below `ρ`, has fetched it down
+  to `ρ`;
 * **sound** (`Sound`): a decision the node takes on what it holds is a
   decision of the commit rule on every view holding `H`;
 * **agreement** (`Agrees`): at `K ≥ 3`, two nodes decide each slot alike.
@@ -29,14 +30,17 @@ alike. -/
 def Local : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [DecidableEq BlockId] (U U' : KRecord Validator BlockId Payload) (K : ℕ)
-    (H : Finset BlockId) (A L : BlockId) (r : ℕ), (∀ i ∈ H, U.block i = U'.block i) →
-    (LinkedIn U K H A L r ↔ LinkedIn U' K H A L r) ∧ (FetchedIn U K H A ↔ FetchedIn U' K H A)
+    (H : Finset BlockId) (A L : BlockId) (r ρ : ℕ), (∀ i ∈ H, U.block i = U'.block i) →
+    (LinkedIn U K H A L r ↔ LinkedIn U' K H A L r) ∧
+      (FetchedIn U K H A ρ ↔ FetchedIn U' K H A ρ)
 
-/-- **Holding the available sub-DAG fetches it.** -/
+/-- **Holding the available sub-DAG down to `K` rounds below `ρ` fetches it
+down to `ρ`**, for an anchor of the record at or above round `ρ`. -/
 def Fetchable : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [DecidableEq BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
-    (H : Finset BlockId) (A : BlockId), (∀ z ∈ Avail U K A, z ∈ H) → FetchedIn U K H A
+    (H : Finset BlockId) (A : BlockId) (ρ : ℕ), A ∈ U.ids → ρ ≤ (U.block A).round →
+    (∀ z ∈ Avail U K A, ρ ≤ (U.block z).round + K → z ∈ H) → FetchedIn U K H A ρ
 
 /-- **A node's decision is the commit rule's** on every view holding what the
 node holds. -/

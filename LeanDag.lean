@@ -581,3 +581,7 @@ import LeanDag.KPartialDag.Model.Live
 import LeanDag.KPartialDag.Helpers.Live
 import LeanDag.KPartialDag.Live.Statement
 import LeanDag.KPartialDag.Live.Proof
+import LeanDag.KPartialDag.Model.Order
+import LeanDag.KPartialDag.Helpers.Order
+import LeanDag.KPartialDag.Order.Statement
+import LeanDag.KPartialDag.Order.Proof

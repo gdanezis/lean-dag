@@ -8,14 +8,15 @@ anchored in `H` when its history to depth `K` is held and it is the anchor,
 or blocks of `f + 1` distinct authors of the sub-DAG read so far reference it
 (`AnchoredIn`, `AvailIn`). It links a candidate when it holds, in that
 sub-DAG, a certificate for it with the certificate's references
-(`LinkedIn`). It has fetched the sub-DAG when the anchor's history and the
-history of every block that blocks of `f + 1` distinct authors of it
-reference are held (`FetchedIn`).
+(`LinkedIn`). It has fetched the sub-DAG down to round `ρ` when the anchor's
+history is held, and so is the history of every block that blocks of `f + 1`
+distinct authors of the sub-DAG above round `ρ` reference (`FetchedIn`).
 
 The node decides by the commit rule read on what it holds
 (`NodeDecided`): the direct tests count the certificates and blamers it
 holds with their references, the indirect commit reads `LinkedIn`, and the
-indirect skip needs the sub-DAG below the anchor fetched.
+indirect skip needs the sub-DAG below the anchor fetched down to the round
+above the slot's.
 
 Definitions only.
 -/
@@ -54,12 +55,14 @@ def LinkedIn (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset Block
     (∀ j ∈ (U.block C).refs, j ∈ AvailIn U K H A) ∧
     CarriesVotes U (IsVote U) (quorumCard Validator) C L
 
-/-- **The sub-DAG below `A` is fetched into `H`**: `H` holds the history to
-depth `K` of `A`, and of every block that blocks of `f + 1` distinct authors
-of the sub-DAG read on `H` reference. -/
+/-- **The sub-DAG below `A` is fetched into `H` down to round `ρ`**: `H`
+holds the history to depth `K` of `A`, and of every block that blocks of
+`f + 1` distinct authors of the sub-DAG read on `H` above round `ρ`
+reference. -/
 def FetchedIn (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId)
-    (A : BlockId) : Prop :=
-  historyUpto U K A ⊆ H ∧ ∀ (S : Finset BlockId) (x : BlockId), (∀ z ∈ S, z ∈ AvailIn U K H A) →
+    (A : BlockId) (ρ : ℕ) : Prop :=
+  historyUpto U K A ⊆ H ∧ ∀ (S : Finset BlockId) (x : BlockId),
+    (∀ z ∈ S, z ∈ AvailIn U K H A ∧ ρ < (U.block z).round) →
     (∀ z ∈ S, x ∈ (U.block z).refs) → F.f + 1 ≤ (creatorsOf U.block S).card →
     historyUpto U K x ⊆ H
 
@@ -71,7 +74,8 @@ def heldWithRefs (U : KRecord Validator BlockId Payload) (H : Finset BlockId)
 /-- **The commit rule read on what a node holds.** The direct commit counts
 the certificates the node holds with their references, the direct skip the
 blamers it holds with theirs; the indirect commit links through `LinkedIn`,
-and the indirect skip finds no candidate linked in a fetched sub-DAG. -/
+and the indirect skip finds no candidate linked in the sub-DAG fetched down
+to the round above the slot's. -/
 inductive NodeDecided [S : Slots Validator] (U : KRecord Validator BlockId Payload) (K : ℕ)
     (H : Finset BlockId) : ℕ → Option BlockId → Prop
   | directCommit {k : ℕ} {L : BlockId} : IsLeaderBlock U k L →
@@ -88,7 +92,8 @@ inductive NodeDecided [S : Slots Validator] (U : KRecord Validator BlockId Paylo
   | indirectSkip {k j : ℕ} {A : BlockId} :
       k < j → EligibleAt (S := S) 2 k j → NodeDecided U K H j (some A) →
       (∀ m, k < m → m < j → EligibleAt (S := S) 2 k m → NodeDecided U K H m none) →
-      FetchedIn U K H A → (∀ L, IsLeaderBlock U k L → ¬ LinkedIn U K H A L (S.slotRound k)) →
+      FetchedIn U K H A (S.slotRound k + 1) →
+      (∀ L, IsLeaderBlock U k L → ¬ LinkedIn U K H A L (S.slotRound k)) →
       NodeDecided U K H k none
 
 end KPartialDag

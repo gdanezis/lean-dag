@@ -8,11 +8,15 @@ under every block map agreeing on what it holds
 (`historyUptoFrom_eq_of_subset`), so the sub-DAG read on `H`, the indirect
 test and the fetch test read only `H` (`linkedIn_congr`, `fetchedIn_congr`).
 Read on `H`, the sub-DAG lies in the record's (`availIn_subset`), so a link
-read on `H` is the record's (`linkedIn_avail`); once it is fetched it is the
-record's whole sub-DAG (`avail_subset_availIn`), so the record's link is read
-on `H` too (`avail_linkedIn`). Holding the record's sub-DAG fetches it
+read on `H` is the record's (`linkedIn_avail`). A block of a history to depth
+`n` lies at most `n` rounds below (`round_of_mem_historyUpto`), so once the
+sub-DAG is fetched down to round `ρ` it is the record's sub-DAG above `ρ`
+(`avail_subset_availIn`), and the record's link is read on `H` when it is
+fetched down to the round above the slot's (`avail_linkedIn`). Holding the
+record's sub-DAG down to `K` rounds below `ρ` fetches it down to `ρ`
 (`fetchedIn_of_subset`). So a decision a node takes on what it holds is a
-decision on every view holding it (`NodeDecided.decided`).
+decision on every view holding it (`NodeDecided.decided`), and two nodes
+decide each slot alike (`NodeDecided.agree`).
 -/
 
 namespace LeanDag
@@ -110,14 +114,13 @@ theorem linkedIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i) {L : BlockId} 
     rw [this]; exact hv
 
 /-- **The fetch test reads only `H`.** -/
-theorem fetchedIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i) :
-    FetchedIn U K H A → FetchedIn U' K H A := by
+theorem fetchedIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i) {ρ : ℕ} :
+    FetchedIn U K H A ρ → FetchedIn U' K H A ρ := by
   rintro ⟨hA, hall⟩
-  have hb' : ∀ i ∈ H, U'.block i = U.block i := fun i hi => (hb i hi).symm
   have hav := availIn_congr (K := K) (A := A) hb
   refine ⟨by rw [historyUpto_eq_of_subset hb hA]; exact hA, fun S x hS href hcard => ?_⟩
-  have hSH : ∀ z ∈ S, z ∈ H := fun z hz => availIn_subset_held (hav ▸ hS z hz)
-  have hx := hall S x (fun z hz => hav ▸ hS z hz)
+  have hSH : ∀ z ∈ S, z ∈ H := fun z hz => availIn_subset_held (hav ▸ (hS z hz).1)
+  have hx := hall S x (fun z hz => ⟨hav ▸ (hS z hz).1, by rw [hb z (hSH z hz)]; exact (hS z hz).2⟩)
     (fun z hz => by rw [hb z (hSH z hz)]; exact href z hz)
     (by
       have : creatorsOf U.block S = creatorsOf U'.block S :=
@@ -143,38 +146,73 @@ theorem linkedIn_avail (hH : H ⊆ U.ids) {L : BlockId} {r : ℕ} (h : LinkedIn 
   exact ⟨C, mem_certificatesAt.mpr ⟨hH (availIn_subset_held hC), hCr, hv⟩, availIn_subset hC,
     fun j hj => availIn_subset (hrefs j hj)⟩
 
-/-- **A fetched sub-DAG is the record's whole sub-DAG.** -/
-theorem avail_subset_availIn (hf : FetchedIn U K H A) {z : BlockId} (hz : z ∈ Avail U K A) :
-    z ∈ AvailIn U K H A := by
+/-- **A block of the history to depth `n` of a block of the record** lies at
+most `n` rounds below it. -/
+theorem round_of_mem_historyUpto : ∀ (n : ℕ) {y w : BlockId}, y ∈ U.ids →
+    w ∈ historyUpto U n y → (U.block w).round ≤ (U.block y).round ∧
+      (U.block y).round ≤ (U.block w).round + n
+  | 0, y, w, _, hw => by
+    rw [historyUpto_zero, Finset.mem_singleton] at hw
+    subst hw; omega
+  | n + 1, y, w, hy, hw => by
+    rcases mem_historyUpto_succ.mp hw with rfl | ⟨j, hj, hwj⟩
+    · omega
+    · have hr := (U.valid y hy).predecessor j hj
+      have := round_of_mem_historyUpto n (U.complete y hy j hj) hwj
+      omega
+
+/-- **A sub-DAG fetched down to round `ρ` is the record's above `ρ`.** -/
+theorem avail_subset_availIn (hH : H ⊆ U.ids) {ρ : ℕ} (hf : FetchedIn U K H A ρ) {z : BlockId}
+    (hz : z ∈ Avail U K A) (hρ : ρ ≤ (U.block z).round) : z ∈ AvailIn U K H A := by
+  have hA : A ∈ U.ids := hH (hf.1 mem_historyUpto_self)
   obtain ⟨y, hy, hzy⟩ := hz
-  suffices h : AnchoredIn U K H A y from ⟨y, h, hzy⟩
+  suffices h : ρ ≤ (U.block y).round → AnchoredIn U K H A y from
+    ⟨y, h (le_trans hρ (round_of_mem_historyUpto K (hy.mem hA) hzy).1), hzy⟩
   clear hzy
   induction hy with
-  | anchor => exact AnchoredIn.anchor hf.1
+  | anchor => exact fun _ => AnchoredIn.anchor hf.1
   | @referenced x S y hy hz href hcard ih =>
-    exact AnchoredIn.referenced S y ih hz href hcard
-      (hf.2 S x (fun z hzS => ⟨y z, ih z hzS, hz z hzS⟩) href hcard)
+    intro hρx
+    have hzr : ∀ z ∈ S, ρ < (U.block z).round ∧ ρ ≤ (U.block (y z)).round := fun z hzS => by
+      have hzi := historyUpto_subset_ids K ((hy z hzS).mem hA) (hz z hzS)
+      have := (U.valid z hzi).predecessor x (href z hzS)
+      have := (round_of_mem_historyUpto K ((hy z hzS).mem hA) (hz z hzS)).1
+      omega
+    have ih' : ∀ z ∈ S, AnchoredIn U K H A (y z) := fun z hzS => ih z hzS (hzr z hzS).2
+    exact AnchoredIn.referenced S y ih' hz href hcard
+      (hf.2 S x (fun z hzS => ⟨⟨y z, ih' z hzS, hz z hzS⟩, (hzr z hzS).1⟩) href hcard)
 
-/-- **On a fetched sub-DAG, the record's link is read on `H`.** -/
-theorem avail_linkedIn (hf : FetchedIn U K H A) {L : BlockId} {r : ℕ}
+/-- **Fetched down to the round above the slot's, the record's link is read on
+`H`.** -/
+theorem avail_linkedIn (hH : H ⊆ U.ids) {L : BlockId} {r : ℕ} (hf : FetchedIn U K H A (r + 1))
     (h : AvailLinked U K A L r) : LinkedIn U K H A L r := by
   obtain ⟨C, hC, hCa, hrefs⟩ := h
-  obtain ⟨-, hCr, hv⟩ := mem_certificatesAt.mp hC
-  exact ⟨C, avail_subset_availIn hf hCa, hCr, fun j hj => avail_subset_availIn hf (hrefs j hj),
-    hv⟩
+  obtain ⟨hCi, hCr, hv⟩ := mem_certificatesAt.mp hC
+  refine ⟨C, avail_subset_availIn hH hf hCa (by omega), hCr, fun j hj => ?_, hv⟩
+  have := (U.valid C hCi).predecessor j hj
+  exact avail_subset_availIn hH hf (hrefs j hj) (by omega)
 
-/-- **Holding the record's sub-DAG fetches it.** -/
-theorem fetchedIn_of_subset (hsub : ∀ z ∈ Avail U K A, z ∈ H) : FetchedIn U K H A := by
+/-- **Holding the record's sub-DAG to depth `K` below round `ρ` fetches it down
+to `ρ`**, for an anchor of the record at or above `ρ`. -/
+theorem fetchedIn_of_subset (hA : A ∈ U.ids) {ρ : ℕ} (hρ : ρ ≤ (U.block A).round)
+    (hsub : ∀ z ∈ Avail U K A, ρ ≤ (U.block z).round + K → z ∈ H) : FetchedIn U K H A ρ := by
   classical
-  refine ⟨fun z hz => hsub z ⟨A, AnchoredBelow.anchor, hz⟩, fun S x hS href hcard => ?_⟩
+  refine ⟨fun z hz => hsub z ⟨A, AnchoredBelow.anchor, hz⟩
+    (by have := (round_of_mem_historyUpto K hA hz).2; omega), fun S x hS href hcard => ?_⟩
   let y : BlockId → BlockId := fun z => if h : z ∈ Avail U K A then h.choose else A
   have hy : ∀ z ∈ S, AnchoredBelow U K A (y z) ∧ z ∈ historyUpto U K (y z) := fun z hz => by
-    have h := availIn_subset (hS z hz)
+    have h := availIn_subset (hS z hz).1
     simp only [y, dif_pos h]
     exact h.choose_spec
   have hx : AnchoredBelow U K A x :=
     AnchoredBelow.referenced S y (fun z hz => (hy z hz).1) (fun z hz => (hy z hz).2) href hcard
-  exact fun z hz => hsub z ⟨x, hx, hz⟩
+  obtain ⟨c, hc⟩ : (creatorsOf U.block S).Nonempty := Finset.card_pos.mp (by omega)
+  obtain ⟨z, hzS, -⟩ := mem_creatorsOf.mp hc
+  have hzi := historyUpto_subset_ids K ((hy z hzS).1.mem hA) (hy z hzS).2
+  have hxz := (U.valid z hzi).predecessor x (href z hzS)
+  have hρz := (hS z hzS).2
+  exact fun w hw => hsub w ⟨x, hx, hw⟩
+    (by have := (round_of_mem_historyUpto K (hx.mem hA) hw).2; omega)
 
 variable [S : Slots Validator]
 
@@ -200,7 +238,15 @@ theorem NodeDecided.decided (hH : H ⊆ U.ids) {V : U.View} (hHV : H ⊆ V.ids) 
       (linkedIn_avail hH hlink)
   | indirectSkip hkj helig _ _ hf hnone ihj ihm =>
     exact AnchoredRule.Decided.indirectSkip_single rfl hkj helig ihj ihm
-      (fun L hL hlink => hnone L hL (avail_linkedIn hf hlink))
+      (fun L hL hlink => hnone L hL (avail_linkedIn hH hf hlink))
+
+/-- **Two nodes decide each slot alike**, at `K ≥ 3`. -/
+theorem NodeDecided.agree (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
+    (hH₂ : H₂ ⊆ U.ids) {k : ℕ} {v₁ v₂ : Option BlockId} (h₁ : NodeDecided U K H₁ k v₁)
+    (h₂ : NodeDecided U K H₂ k v₂) : v₁ = v₂ :=
+  (kRule K).decided_unique (kRule_laws hK) trivial
+    (h₁.decided (V := View.full U) hH₁ hH₁) (View.full U) v₂
+    (h₂.decided (V := View.full U) hH₂ hH₂)
 
 end KPartialDag
 

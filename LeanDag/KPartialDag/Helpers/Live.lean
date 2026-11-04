@@ -13,7 +13,8 @@ each anchor it uses, and its indirect test returns a verdict either way.
 Below a committed run, the nearest committed anchor of each slot gives the
 slot a verdict, by induction downward (`nodeDecided_below`). A run led by `T`
 commits, so every slot up to its end is decided (`nodeDecided_of_run`). The
-blocks a node needs are held by correct nodes (`delivered`).
+blocks a node needs are held by correct nodes (`avail_correctHeld`,
+`delivered`).
 -/
 
 namespace LeanDag
@@ -53,6 +54,25 @@ theorem avail_subset_ids {A z : BlockId} (hA : A ∈ U.ids) (hz : z ∈ Avail U 
     z ∈ U.ids := by
   obtain ⟨y, hy, hzy⟩ := hz
   exact historyUpto_subset_ids K (hy.mem hA) hzy
+
+/-- **The available sub-DAG below a certified block is held by correct
+nodes**: it lies in the history to depth `K` of a block that a correct voter
+of the certificate, or a correct author's block of the sub-DAG, references. -/
+theorem avail_correctHeld {A z : BlockId} {r : ℕ} (hA : A ∈ U.ids)
+    (hC : (certificatesAt U (IsVote U) (quorumCard Validator) A r).Nonempty)
+    (hz : z ∈ Avail U K A) : z ∈ CorrectHeld U K := by
+  obtain ⟨C, hC⟩ := hC
+  obtain ⟨y, -, hzy, hyA | ⟨w, hw, hwc, hyw⟩⟩ := held hz
+  · obtain ⟨hCi, -, hv⟩ := mem_certificatesAt.mp hC
+    obtain ⟨u, hu, hucorr⟩ := exists_correct_of_card
+      (S := creatorsOf U.block (carriedVotes U (IsVote U) C A))
+      (by have := F.card_validators; unfold CarriesVotes at hv; omega)
+    obtain ⟨b, hb, hbc⟩ := mem_creatorsOf.mp hu
+    obtain ⟨hbC, hbA⟩ := mem_carriedVotes.mp hb
+    refine ⟨b, U.complete C hCi b hbC, by rw [hbc]; exact hucorr, Or.inr ⟨y, ?_, hzy⟩⟩
+    rw [hyA]
+    exact hbA
+  · exact ⟨w, avail_subset_ids hA hw, hwc, Or.inr ⟨y, hyw, hzy⟩⟩
 
 variable [S : Slots Validator]
 
@@ -123,8 +143,9 @@ theorem nodeDecided_below (hH : H ⊆ U.ids) {b n : ℕ} (hbn : b ≤ n)
           | none => exact hv
           | some A' => exact absurd ⟨A', hv⟩ hnot
       obtain ⟨hAL, hAc⟩ := hA.certified hH
-      have hf : FetchedIn U K H A :=
-        fetchedIn_of_subset fun z hz => hav ⟨Nat.find hex, A, hjn, hAL, hAc, hz⟩
+      have hf : FetchedIn U K H A (S.slotRound i + 1) :=
+        fetchedIn_of_subset hAL.1 (by rw [hAL.2.1]; have := eligibleAt_iff.mp helig; omega)
+          fun z hz _ => hav ⟨Nat.find hex, A, hjn, hAL, hAc, hz⟩
       by_cases hc : ∃ L, IsLeaderBlock U i L ∧ LinkedIn U K H A L (S.slotRound i)
       · obtain ⟨L, hL, hlink⟩ := hc
         exact ⟨some L, NodeDecided.indirectCommit hij helig hA hmid hL hlink⟩
@@ -164,25 +185,13 @@ theorem nodeDecided_of_run (hcard : quorumCard Validator ≤ T.card)
 
 /-- **What a node needs, a correct node holds**: the blocks of `T` are their
 correct authors', their references lie in those authors' windows, and the
-available sub-DAG below a certified block lies in the window of a block
-that a correct voter or a correct author's block of the sub-DAG
-references. -/
+available sub-DAG below a certified block is held by correct nodes. -/
 theorem delivered (hT : T ⊆ Correct) {lo hi n : ℕ} :
     WithRefs U T lo hi ∪ AvailBelow U K n ⊆ CorrectHeld U K := by
-  rintro z (⟨c, hc, hcT, -, -, hz | hz⟩ | ⟨j, A, -, hA, ⟨C, hC⟩, hz⟩)
+  rintro z (⟨c, hc, hcT, -, -, hz | hz⟩ | ⟨j, A, -, hA, hC, hz⟩)
   · exact ⟨c, hc, hT hcT, Or.inl hz⟩
   · exact ⟨c, hc, hT hcT, Or.inr ⟨z, hz, mem_historyUpto_self⟩⟩
-  · obtain ⟨y, -, hzy, hyA | ⟨w, hw, hwc, hyw⟩⟩ := held hz
-    · obtain ⟨hCi, -, hv⟩ := mem_certificatesAt.mp hC
-      obtain ⟨u, hu, hucorr⟩ := exists_correct_of_card
-        (S := creatorsOf U.block (carriedVotes U (IsVote U) C A))
-        (by have := F.card_validators; unfold CarriesVotes at hv; omega)
-      obtain ⟨b, hb, hbc⟩ := mem_creatorsOf.mp hu
-      obtain ⟨hbC, hbA⟩ := mem_carriedVotes.mp hb
-      refine ⟨b, U.complete C hCi b hbC, by rw [hbc]; exact hucorr, Or.inr ⟨y, ?_, hzy⟩⟩
-      rw [hyA]
-      exact hbA
-    · exact ⟨w, avail_subset_ids hA.1 hw, hwc, Or.inr ⟨y, hyw, hzy⟩⟩
+  · exact avail_correctHeld hA.1 hC hz
 
 end KPartialDag
 
