@@ -820,6 +820,47 @@ theorem Restrips.shrinks {F : ℕ} {st st' : Store Validator BlockId Payload}
   ⟨fun _ hi => h.ids ▸ hi, fun i _ => h.full i, fun i _ => h.fields i⟩
 
 omit [DecidableEq Validator] in
+/-- **Letting go of held blocks from the highest round down** leaves each of
+them it keeps referenced by a block it keeps: a block referencing one lies a
+round above it, so it was let go of first or not at all. -/
+theorem eraseAll_referenced : ∀ (l : List BlockId) (st : Store Validator BlockId Payload),
+    l.Nodup → (∀ x ∈ l, x ∈ st.ids) →
+    l.Pairwise (fun x y => (st.blk y).round ≤ (st.blk x).round) →
+    ∀ x ∈ l, x ∈ (st.eraseAll l).ids →
+      ∃ z ∈ (st.eraseAll l).ids, x ∈ ((st.eraseAll l).blk z).refs
+  | [], _, _, _, _, x, hx, _ => absurd hx List.not_mem_nil
+  | x₀ :: l, st, hnd, hin, hpw, x, hx, hxk => by
+    change x ∈ ((st.erase x₀).eraseAll l).ids at hxk
+    change ∃ z ∈ ((st.erase x₀).eraseAll l).ids, x ∈ (((st.erase x₀).eraseAll l).blk z).refs
+    obtain ⟨hx₀l, hnd'⟩ := List.nodup_cons.mp hnd
+    obtain ⟨hpw₀, hpw'⟩ := List.pairwise_cons.mp hpw
+    obtain ⟨e₁, e₂, e₃⟩ := st.erase_spec x₀
+    obtain ⟨g₁, g₂, g₃⟩ := eraseAll_spec l (st.erase x₀)
+    rcases List.mem_cons.mp hx with rfl | hxl
+    · -- `x` was kept, so a block of the store references it, a round above
+      have hkept : x ∈ (st.erase x).ids := g₁ hxk
+      have hne : ¬ (x ∈ st.ids ∧ ∀ i ∈ st.ids, x ∉ (st.blk i).refs) := fun hc => by
+        have : (st.erase x).ids = st.ids.erase x := by unfold erase; rw [dif_pos hc]
+        rw [this] at hkept
+        exact (Finset.notMem_erase x st.ids) hkept
+      push Not at hne
+      obtain ⟨z, hz, hxz⟩ := hne (hin x List.mem_cons_self)
+      have hzr : (st.blk x).round + 1 = (st.blk z).round := st.pred z hz x hxz
+      have hzx : z ≠ x := fun e => by rw [e] at hzr; omega
+      have hzl : z ∉ l := fun hzl => by have := hpw₀ z hzl; omega
+      have hz₁ := e₂ z hz hzx
+      have hz₂ := g₂ z hz₁ hzl
+      refine ⟨z, hz₂, ?_⟩
+      rw [(g₃ z hz₂).1, (e₃ z hz₁).1]
+      exact hxz
+    · have hin' : ∀ y ∈ l, y ∈ (st.erase x₀).ids := fun y hy =>
+        e₂ y (hin y (List.mem_cons_of_mem _ hy)) fun e => hx₀l (e ▸ hy)
+      refine eraseAll_referenced l (st.erase x₀) hnd' hin' ?_ x hxl hxk
+      refine hpw'.imp_of_mem fun {a b} ha hb h => ?_
+      rw [(e₃ a (hin' a ha)).1, (e₃ b (hin' b hb)).1]
+      exact h
+
+omit [DecidableEq Validator] in
 /-- Letting go of blocks keeps what an identifier outside the map denotes. -/
 theorem eraseAll_junk : ∀ (l : List BlockId) (st : Store Validator BlockId Payload),
     (st.eraseAll l).junk = st.junk

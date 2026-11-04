@@ -1090,7 +1090,7 @@ theorem KeepsProofs.decideOn (hσ : cfg.σ = boundedSel) (hdr : cfg.drops = true
       proofs := (k, hashed cfg L) :: s.proofs }
   set l := (hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round) with hl
   set X := Node.absorb cfg (Node.release cfg s₁) l with hX
-  set l' := spareSet cfg s X d with hl'
+  set l' := spareSet cfg s X with hl'
   have e : Node.decideOn cfg s k d L = letGo X l' := rfl
   have h₁ : KeepsProofs cfg s₁ X := (KeepsProofs.release s₁).trans (KeepsProofs.absorb _ _)
   have hXp : X.proofs = s₁.proofs := by rw [hX, absorb_proofs, release_proofs]
@@ -1177,7 +1177,7 @@ theorem KeepsProofs.decideOn (hσ : cfg.σ = boundedSel) (hdr : cfg.drops = true
   refine ⟨witnessAt_round (S := cfg.slots) N k x hx, fun hc _ => ?_⟩
   -- a block of an author the node has not convicted is not let go
   have hxl : x ∉ l' := fun h => hc (by
-    have := (mem_spareSet h).2.2.2.1
+    have := (mem_spareSet h).2.2.2.2
     rw [(hfr x hxs).2] at this
     exact this)
   have hxg := letGo_keeps X l' (hsub hxs) hxl

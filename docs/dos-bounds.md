@@ -636,11 +636,11 @@ store closed, and needs none of this.
      below, so a block kept on its header alone below the floor leads it
      nowhere (`pieceLevel`); a node keeps the proof of each verdict apart
      from its disk (`State.proofs`); and a node deciding on a proof lets
-     go of the blocks it took in with it of authors it convicted, other
-     than the committed leader, that no block it keeps references
-     (`spareSet`, `letGo`), since a Byzantine peer may add to a proof any
-     number of valid blocks no other block references, and the witness
-     of a verdict may itself hold twins (`blamersAt`, `certsAt`). The
+     go of the blocks it took in with it above its floor of authors it
+     convicted that no block it keeps references (`spareSet`, `letGo`),
+     since a Byzantine peer may add to a proof any number of valid blocks
+     no other block references, and the witness of a verdict may itself
+     hold twins (`blamersAt`, `certsAt`). The
      honest blocks of a kept proof's witness stay on the disk from the
      floor up (`ProofHolds`), which the jump of V11″ reads.
 

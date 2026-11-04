@@ -403,13 +403,13 @@ omit [Fintype Validator] [DecidableEq Validator] in
 end LetGo
 
 omit [Fintype Validator] in
-/-- **A block a decision on a proof spares the node** is one `s'` holds and
-`s` does not, of an author `s'` convicted, other than the committed leader,
-at a node that drops. -/
-theorem mem_spareSet {s s' : State Validator BlockId Payload} {d : Option BlockId}
-    {i : BlockId} (h : i ∈ spareSet cfg s s' d) :
-    i ∈ s'.disk.ids ∧ i ∉ s.disk.ids ∧ cfg.drops = true ∧
-      (s'.disk.blk i).creator ∈ s'.detected ∧ d ≠ some i := by
+/-- **A block a decision on a proof spares the node** is one `s'` holds
+above its floor and `s` does not, of an author `s'` convicted, at a node that
+drops. -/
+theorem mem_spareSet {s s' : State Validator BlockId Payload}
+    {i : BlockId} (h : i ∈ spareSet cfg s s') :
+    i ∈ s'.disk.ids ∧ i ∉ s.disk.ids ∧ cfg.drops = true ∧ s'.floor < (s'.disk.blk i).round ∧
+      (s'.disk.blk i).creator ∈ s'.detected := by
   unfold spareSet at h
   obtain ⟨h₁, h₂⟩ := Finset.mem_filter.mp ((Finset.mem_sort _).mp (List.mem_mergeSort.mp h))
   obtain ⟨h₃, h₄⟩ := Finset.mem_sdiff.mp h₁
@@ -417,8 +417,8 @@ theorem mem_spareSet {s s' : State Validator BlockId Payload} {d : Option BlockI
 
 omit [Fintype Validator] in
 /-- **A decision on a proof spares a node that does not drop nothing.** -/
-theorem spareSet_of_false (hd : cfg.drops = false) (s s' : State Validator BlockId Payload)
-    (d : Option BlockId) : spareSet cfg s s' d = [] := by
+theorem spareSet_of_false (hd : cfg.drops = false) (s s' : State Validator BlockId Payload) :
+    spareSet cfg s s' = [] := by
   rw [List.eq_nil_iff_forall_not_mem]
   intro i hi
   have := (mem_spareSet hi).2.2.1

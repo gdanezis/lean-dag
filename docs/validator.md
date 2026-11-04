@@ -563,11 +563,12 @@ hash, those of the round below the slot's without their references
 (`proofStore`), and decides the slot by `tryDecide` on it, scanning to the
 last slot of the store's top round (`verdictOn`). It then keeps the verdict
 and, as the proof, the blocks under their hash, takes the blocks in as it
-accepts any block, lets go of those of authors it convicted, other than the
-committed leader, that no block it keeps references (`decideOn`,
-`spareSet`, `letGo`), and asks for the next slot. A Byzantine peer may add
-to a proof any number of valid blocks no other block references; those of
-a convicted author do not stay on the disk, and the proof is kept apart. A node that
+accepts any block, lets go of those above its floor of authors it
+convicted that no block it keeps references (`decideOn`, `spareSet`,
+`letGo`), and asks for the next slot; the blocks the commit orders lie at or
+below the floor. A Byzantine peer may add to a proof any number of valid
+blocks no other block references; those of a convicted author above the
+floor do not stay on the disk, and the proof is kept apart. A node that
 drops keeps its floor at the round of its next undecided slot `k`, or at
 `voteOffset − 1` above the round of slot `k − 1`, whichever is lower, one
 above its cut (`floorAt`, `floorOf`): the blocks that decided slot `k − 1`

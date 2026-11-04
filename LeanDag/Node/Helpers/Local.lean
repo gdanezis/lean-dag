@@ -1131,7 +1131,7 @@ theorem Inv.decideOn {s : State Validator BlockId Payload}
   refine Inv.letGo (Inv.absorb ?_ fun e he => hL e (List.mem_mergeSort.mp he))
     (fun j hj hjl => (mem_spareSet hjl).2.1 (hi.own j (by
       rw [(absorb_rest (cfg := cfg) _ _).2.2.2.1, release_own] at hj; exact hj)).1)
-    fun hdr => spareSet_of_false hdr _ _ _
+    fun hdr => spareSet_of_false hdr _ _
   exact (hi.of_eq (s' :=
       { s with
         lo := k + 1

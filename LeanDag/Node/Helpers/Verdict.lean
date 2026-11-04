@@ -167,7 +167,7 @@ theorem AllGood.decideOn (hg : Grounds cfg Good K) {s : State Validator BlockId 
       proofs := (k, hashed cfg L) :: s.proofs }
   let l := (hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round)
   have e : Node.decideOn cfg s k d L = letGo (absorb cfg (release cfg s₁) l)
-      (spareSet cfg s (absorb cfg (release cfg s₁) l) d) := rfl
+      (spareSet cfg s (absorb cfg (release cfg s₁) l)) := rfl
   have hF₁ : (release cfg s₁).floor ≤ floorOf cfg s₁ := by
     rw [release_floor]
     exact max_le (hF.trans (floorOf_mono hk le_rfl)) le_rfl

@@ -100,7 +100,7 @@ theorem Grows.decideOn (s : State Validator BlockId Payload) (k : ℕ) (d : Opti
   have hs := letGo_disk (Node.absorb cfg (Node.release cfg s₁)
       ((hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round)))
     (spareSet cfg s (Node.absorb cfg (Node.release cfg s₁)
-      ((hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round))) d)
+      ((hashed cfg L).mergeSort fun x y => decide (x.2.round ≤ y.2.round))))
   have hk : ∀ i ∈ s.disk.ids, i ∈ (Node.decideOn cfg s k d L).disk.ids := fun i hi =>
     letGo_keeps _ _ (hg.1 hi) fun h => (mem_spareSet h).2.1 hi
   refine ⟨hk, ?_, fun i hi => ?_⟩
