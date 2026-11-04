@@ -338,7 +338,9 @@ above its cut (below).
 **Taking a stream in, header first.** Of a stream piece from a peer with
 which it has a sync, the node reads the blocks of the piece at or above its
 cut under their hash reached from the sync's block through such blocks,
-other than its own (`aboveCut`, `hashed`, `inHistory`). It takes them in, in order of round, each
+each a reference of one a round above it, other than its own (`aboveCut`,
+`hashed`, `inHistory`). A block the node keeps on its header alone below its
+floor therefore leads the walk to nothing above it. It takes them in, in order of round, each
 accepted if it is ready then (`absorb`), only if the sync's block is
 then held; otherwise it takes none of them (`takeIn`).
 So a block of a stream enters the disk only with the whole history of

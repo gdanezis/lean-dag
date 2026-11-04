@@ -176,9 +176,11 @@ section Piece
 variable (L : List (BlockId × Block Validator BlockId Payload)) (t : BlockId)
 
 /-- The references the piece gives an identifier: those of its first block
-under it. -/
+under it that the piece holds one round below it. -/
 def pieceRefs (x : BlockId) : List BlockId :=
-  ((L.find? fun e => decide (e.1 = x)).map fun e => e.2.refs.sort (· ≤ ·)).getD []
+  ((L.find? fun e => decide (e.1 = x)).map fun e =>
+    (e.2.refs.sort (· ≤ ·)).filter fun y => (L.find? fun e' => decide (e'.1 = y)).any
+      fun e' => decide (e'.2.round + 1 = e.2.round)).getD []
 
 /-- The piece's walk after `k` levels. -/
 def pieceAt (k : ℕ) : List BlockId × List BlockId :=
@@ -291,18 +293,40 @@ theorem mem_hashed {e : BlockId × Block Validator BlockId Payload} :
 
 omit [Fintype Validator] [DecidableEq Validator] in
 /-- **A piece of a block map's blocks** gives each identifier it holds the
-references of its block. -/
+references of its block that it holds one round below it. -/
 theorem pieceRefs_of_map {g : BlockId → Block Validator BlockId Payload}
     (hL : ∀ e ∈ L, e.2 = g e.1) {x : BlockId} (hx : x ∈ L.map Prod.fst) {y : BlockId} :
-    y ∈ pieceRefs L x ↔ y ∈ (g x).refs := by
-  have : ∃ e, (L.find? fun e' => decide (e'.1 = x)) = some e := by
-    obtain ⟨e, heL, rfl⟩ := List.mem_map.mp hx
-    exact Option.isSome_iff_exists.mp
+    y ∈ pieceRefs L x ↔
+      y ∈ (g x).refs ∧ y ∈ L.map Prod.fst ∧ (g y).round + 1 = (g x).round := by
+  have hfind : ∀ z ∈ L.map Prod.fst, ∃ e, (L.find? fun e' => decide (e'.1 = z)) = some e ∧
+      e.1 = z ∧ e.2 = g z := fun z hz => by
+    obtain ⟨e, heL, rfl⟩ := List.mem_map.mp hz
+    obtain ⟨e', hf⟩ := Option.isSome_iff_exists.mp
       ((List.find?_isSome (p := fun e' => decide (e'.1 = e.1))).mpr ⟨e, heL, by simp⟩)
-  obtain ⟨e, hf⟩ := this
-  have hex : e.1 = x := by simpa using List.find?_some hf
-  have heg := hL e (List.mem_of_find?_eq_some hf)
-  simp [pieceRefs, hf, Finset.mem_sort, heg, hex]
+    have hex : e'.1 = e.1 := by simpa using List.find?_some hf
+    exact ⟨e', hf, hex, by rw [hL e' (List.mem_of_find?_eq_some hf), hex]⟩
+  obtain ⟨e, hf, hex, heg⟩ := hfind x hx
+  simp only [pieceRefs, hf, Option.map_some, Option.getD_some, List.mem_filter,
+    Finset.mem_sort, heg]
+  constructor
+  · rintro ⟨hy, hr⟩
+    cases hfy : L.find? fun e' => decide (e'.1 = y) with
+    | none => rw [hfy] at hr; simp at hr
+    | some e' =>
+      rw [hfy] at hr
+      have hey : e'.1 = y := by simpa using List.find?_some hfy
+      have heg' := hL e' (List.mem_of_find?_eq_some hfy)
+      refine ⟨hy, hey ▸ List.mem_map_of_mem (List.mem_of_find?_eq_some hfy), ?_⟩
+      simp only [Option.any_some, decide_eq_true_eq] at hr
+      rw [heg', hey] at hr
+      exact hr
+  · rintro ⟨hy, hyL, hr⟩
+    obtain ⟨e', hfy, hey, heg'⟩ := hfind y hyL
+    refine ⟨hy, ?_⟩
+    rw [hfy]
+    simp only [Option.any_some, decide_eq_true_eq]
+    rw [heg']
+    exact hr
 
 end Piece
 

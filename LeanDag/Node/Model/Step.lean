@@ -94,7 +94,8 @@ input `i` in the state `s`: the new state and the outputs.
   in the block's history that are the block, asked for, or at or above
   their author's frontier, in order of round. Of a stream piece the node
   reads the blocks at or above its cut under their hash reached from the
-  sync's block through such blocks (`aboveCut`, `hashed`, `inHistory`). It
+  sync's block through such blocks, each a reference of one a round above
+  it (`aboveCut`, `hashed`, `inHistory`). It
   takes them in, in order of round, each accepted if it is ready, only if
   the sync's block is then held: all of them or none (`takeIn`). Otherwise
   the references that neither the disk nor the piece holds are asked for by
@@ -568,12 +569,14 @@ def streamOf (st : Store Validator BlockId Payload) (t : BlockId) (fr : Validato
   (found.map fun i => (i, st.full i)).mergeSort fun x y => decide (x.2.round ≤ y.2.round)
 
 /-- **One level of the walk through a stream piece**: the front's
-identifiers the piece holds, not met already, and their references next. -/
+identifiers the piece holds, not met already, and next their references that
+the piece holds one round below them. -/
 def pieceLevel (L : List (BlockId × Block Validator BlockId Payload))
     (w : List BlockId × List BlockId) : List BlockId × List BlockId :=
   let front := (w.1.filter fun x => decide (x ∈ L.map Prod.fst) && decide (x ∉ w.2)).dedup
   (front.flatMap fun x => ((L.find? fun e => decide (e.1 = x)).map fun e =>
-    e.2.refs.sort (· ≤ ·)).getD [], w.2 ++ front)
+    (e.2.refs.sort (· ≤ ·)).filter fun y => (L.find? fun e' => decide (e'.1 = y)).any
+      fun e' => decide (e'.2.round + 1 = e.2.round)).getD [], w.2 ++ front)
 
 /-- **The blocks of a stream piece under their hash.** -/
 def hashed (L : List (BlockId × Block Validator BlockId Payload)) :

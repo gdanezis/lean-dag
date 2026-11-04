@@ -428,7 +428,7 @@ theorem pieceAt_held {g : BlockId → Block Validator BlockId Payload}
           simp only [decide_eq_true_eq] at this
           exact this ▸ List.mem_map_of_mem (List.mem_of_find?_eq_some hf)
       have hzs := (h₂ z hz).1
-      have hy' := (pieceRefs_of_map L hL hzL).mp hy
+      have hy' := ((pieceRefs_of_map L hL hzL).mp hy).1
       rw [← hst z hzs] at hy'
       exact (hcl z hzs y hy').1
     refine ⟨fun y hy => ?_, fun x hx => ?_⟩
@@ -476,7 +476,7 @@ theorem takeIn_referenced {g : BlockId → Block Validator BlockId Payload}
         exact this ▸ List.mem_map_of_mem (List.mem_of_find?_eq_some hf)
     refine ⟨z, hzs, ?_⟩
     rw [hst z hzs]
-    exact (pieceRefs_of_map _ hL' hzL).mp hez
+    exact ((pieceRefs_of_map _ hL' hzL).mp hez).1
 
 omit [Fintype Validator] in
 /-- **A piece taken in header first keeps the state steady**, on a store

@@ -169,7 +169,8 @@ theorem converges : Converges := by
     (mem_hashed Lu).mpr ⟨hyLu', id_of_knownIn (stored_known hu hyst)⟩
   have hyP' : (y', st.full y') ∈ P := by
     refine (mem_inHistory Lu).mpr ⟨hyLh, fun hcv => ?_,
-      found_closed Lh j hxf ((pieceRefs_of_map Lh hLhmap hxi').mpr hy')
+      found_closed Lh j hxf ((pieceRefs_of_map Lh hLhmap hxi').mpr ⟨hy',
+        List.mem_map_of_mem (f := Prod.fst) hyLh, hclu.refs_round xi hxst y' hy'⟩)
         (List.mem_map_of_mem (f := Prod.fst) hyLh)⟩
     exact hyn (own_stored hdr (own_known (v := v) htime hu hv (show R' ≤ R'' by omega)
       ((inv_before R' u).known y' hyst) hcv)).1
