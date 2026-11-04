@@ -70,7 +70,9 @@ A steady window (`Steady`) is a stretch over which no node of `T` decides
 and each is at the floor at its next undecided slot (`floorAt`) or above.
 Over an infinite run (`prefixOf`) whose prefixes meet the assumptions, with
 every honest node reliable and reliably led runs beyond every slot, every
-honest node's next undecided slot grows without bound (`Eventually`).
+honest node's next undecided slot grows without bound (`Eventually`); on a
+timed trace, once every honest node is at slot `L` or above, every one is
+past `L` within an explicit time (`Bounded`).
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -329,9 +331,52 @@ def Eventually : Prop :=
       ∀ v ∈ H, nE ≤ topAt cfg (prefixOf ev N) time v gst) →
     ∀ k, ∃ N, ∀ v ∈ H, k < (stateBefore cfg (prefixOf ev N) N v).lo
 
+/-- **The time bound with dropping**: over a timed trace meeting the
+assumptions of `Eventually` up to `t₁`, once every honest node's next
+undecided slot is `L` or above at `s ≥ gst`, every honest node is past `L`
+by `t + R`. Here `G` is `max (s + 1) gst` plus twice the largest timeout of
+the round below one an honest node is at then, the slots `b … b + c − 1`
+are led by honest nodes, span the rule's eligibility, and lie at or above
+`n₀`, above every honest node's round at `G` and `voteOffset` above the
+floor at `L`; `t` is `G + Σ (timeout r + A) + A`, the sum over the rounds
+`r` from the floor at `L` to below the decision round of slot `b + c − 1`;
+and `R` is the catch-up time of one slot at rounds up to `M`, a wave above
+slot `L`'s round or more, which no honest node passes by `t + R`. -/
+def Bounded : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] [Infinite BlockId] (cfg : Config Validator BlockId Payload)
+    (H : Finset Validator) (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ)
+    (gst Δ Δₛ t₁ : ℕ) (D : Finset Validator) (nE : ℕ),
+    letI := cfg.slots
+    cfg.σ = boundedSel → cfg.Admissible → cfg.Faithful → Hᶜ.card ≤ cfg.f → cfg.q ≤ H.card →
+    Fintype.card Validator - cfg.f - cfg.c ≤ H.card → 2 ≤ cfg.q →
+    cfg.f < cfg.p.skipThreshold → cfg.f < cfg.p.commitThreshold →
+    Function.Injective cfg.idOf → (∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) → cfg.drops = true →
+    Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr →
+    Converge.EvidenceAuthentic cfg H tr → TimeMono tr time →
+    Spread cfg H tr D nE → (∀ v ∈ H, nE ≤ topAt cfg tr time v gst) →
+    DeliveredWithin cfg H tr time gst Δ t₁ → TimersFire cfg H tr time t₁ →
+    TimersAfterSet cfg H tr time → SyncedHeld cfg H tr time gst Δₛ t₁ →
+    StartedBy H tr time gst → UpFrom H tr time 0 t₁ →
+    ∀ L s, gst ≤ s → (∀ v ∈ H, L ≤ (stateAt cfg tr time v s).lo) →
+    let G := max (s + 1) gst +
+      H.sup fun u => 2 * cfg.timeout (topAt cfg tr time u (max (s + 1) gst) - 1)
+    ∀ b c n₀, 0 < c → (Scheme.schemeAnchored cfg.p
+      (boundedSel (BlockId := BlockId) (Payload := Payload) (P := ValidAt cfg.q Clause.none)
+        (honest := H))).SpansEligible c →
+    (∀ i < c, cfg.slots.leader (b + i) ∈ H) → n₀ ≤ cfg.slots.slotRound b →
+    (∀ v ∈ H, topAt cfg tr time v G < n₀) → floorAt cfg L + cfg.p.voteOffset < n₀ →
+    let t := G + (∑ r ∈ Finset.Ico (floorAt cfg L)
+      (cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1)), (cfg.timeout r + (Δ + Δₛ))) +
+      (Δ + Δₛ)
+    ∀ M, cfg.slots.slotRound L + cfg.p.waveLength ≤ M →
+    let R := (∑ r ∈ Finset.range (M + 1), 2 * cfg.timeout (r - 1)) + 2 * Δ
+    (∀ v ∈ H, topAt cfg tr time v (t + R) ≤ M) → t + R ≤ t₁ →
+    ∀ v ∈ H, L < (stateAt cfg tr time v (t + R)).lo
+
 /-- The reliable nodes' liveness, without crashes and with them, and with
 dropping. -/
-def Statement : Prop := Progresses ∧ Recovers ∧ Eventually
+def Statement : Prop := Progresses ∧ Recovers ∧ Eventually ∧ Bounded
 
 end Live
 

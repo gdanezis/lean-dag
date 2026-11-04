@@ -656,6 +656,105 @@ theorem eventually : Eventually := by
     unfold topAt stateAt
     rwa [stateBefore_prefixOf (hlen G')]
 
+/-- **The time bound with dropping**: were an honest node not past `L` by
+`t + R`, either an honest node is past `L` at `t`, and catch-up moves the
+node past `L` within `R` (`decides_behind`); or none is, and from `s` to `t`
+every honest node keeps its next undecided slot at `L`, at or above its
+floor at each event (`floor_le_top_before`), a steady window too long to be
+one (`steady_bounded`). -/
+theorem bounded : Bounded := by
+  intro Validator BlockId Payload _ _ _ _ cfg H tr time gst Δ Δₛ t₁ D nE hσ hadm hfa hf hqT hcT
+    hq hsk hcm hid hto hdr htime hinj hev hmono hsp hnE hdel hfire hwait hsync hstart hup L s hgs
+    hLs G b c n₀ hc hspan hlead hn₀ hbelow hLn t M hLM R hM ht₁ v hv
+  letI := cfg.slots
+  have hqn : cfg.q ≤ Fintype.card Validator := hadm.2.2.2.2
+  have hsG : s ≤ G := by omega
+  have hGt : G ≤ t := by omega
+  have hfire' : TimersFireUp cfg H tr time t₁ :=
+    fun i w inp hi hw r a ha ht _ => hfire i w inp hi hw r a ha ht
+  -- every honest node's next undecided slot is `L` or above from `s` on
+  have hLk : ∀ u ∈ H, ∀ k, eventsBy tr time s ≤ k → L ≤ (stateBefore cfg tr k u).lo :=
+    fun u hu k hk => (hLs u hu).trans (rises_before (cfg := cfg) (tr := tr) u hk).2.2
+  by_contra hno
+  by_cases hpast : ∃ w ∈ H, L < (stateAt cfg tr time w t).lo
+  · -- an honest node is past `L` at `t`: the node catches up within `R`
+    obtain ⟨w, hw, hwL⟩ := hpast
+    haveI : Validity.Quorate (ValidAt (Validator := Validator) (BlockId := BlockId)
+        (Payload := Payload) cfg.q Clause.none) cfg.q :=
+      Validity.Quorate.of_validAt hadm.2.2.2.1 fun _ _ => Iff.rfl
+    have htol : cfg.p.Tolerates H cfg.f cfg.q := ⟨hf, hadm.2.2.2.2, hadm.1⟩
+    have hwl : 2 ≤ cfg.p.waveLength := by
+      rcases htol.2.2 with ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ <;> omega
+    obtain ⟨hl, hcm', hcv, -⟩ := Scheme.coveredLaws (boundedSel (P := ValidAt
+      (Validator := Validator) (BlockId := BlockId) (Payload := Payload) cfg.q Clause.none)
+      (honest := H)) htol
+    have htR : ∀ τ, τ ≤ t + R → (stateAt cfg tr time v τ).lo ≤ (stateAt cfg tr time v (t + R)).lo :=
+      fun τ hτ => (rises_before (cfg := cfg) (tr := tr) v (eventsBy_mono hτ)).2.2
+    have hvw : v ≠ w := by
+      rintro rfl
+      exact hno (lt_of_lt_of_le hwL (htR t (Nat.le_add_right _ _)))
+    set E := eventsBy tr time t with hE
+    have hLE : L ≤ (stateBefore cfg tr E v).lo := hLk v hv E (eventsBy_mono (by omega))
+    have hg : (L + 1 - (stateBefore cfg tr E v).lo) * R ≤ R := by
+      have h₁ : L + 1 - (stateBefore cfg tr E v).lo ≤ 1 := by omega
+      calc (L + 1 - (stateBefore cfg tr E v).lo) * R ≤ 1 * R := Nat.mul_le_mul_right _ h₁
+        _ = R := one_mul R
+    have hX : max t gst + (L + 1 - (stateBefore cfg tr E v).lo) * R ≤ t + R := by
+      rw [max_eq_left (by omega)]; omega
+    have hk := decides_behind hσ hwl hl hcm' hcv hid hdr htime hev (Finset.Subset.refl H) hmono
+      hdel hup hfire' hv hw hvw.symm hLM (E := E) (τ := t) (eventsBy_le_length _)
+      ((rises_before (cfg := cfg) (tr := tr) v (eventsBy_mono (show s ≤ t by omega))).2.1
+        (started_at hadm hfa hid htime (Finset.Subset.refl H) hmono hstart hv hgs)) hwL
+      (fun a ha hal => (lt_eventsBy hmono hal).mp ha)
+      ((rises_before (cfg := cfg) (tr := tr) v (eventsBy_mono hX)).1.trans (hM v hv))
+      (hX.trans ht₁)
+    exact hno (lt_of_lt_of_le hk (htR _ hX))
+  -- no honest node is past `L` at `t`: a steady window from `s` to `t`
+  push Not at hpast
+  have hst : Steady cfg H tr time s t L := fun u hu k h₁ h₂ => by
+    have hlo : (stateBefore cfg tr k u).lo = L :=
+      le_antisymm (((rises_before (cfg := cfg) (tr := tr) u h₂).2.2).trans (hpast u hu))
+        (hLk u hu k h₁)
+    refine ⟨hlo, ?_⟩
+    rcases Nat.eq_zero_or_pos L with hL0 | hLpos
+    · rw [hL0, floorAt_zero]; exact Nat.zero_le _
+    obtain ⟨t', ht'⟩ := Option.isSome_iff_exists.mp
+      ((rises_before (cfg := cfg) (tr := tr) u h₁).2.1
+        (started_at hadm hfa hid htime (Finset.Subset.refl H) hmono hstart hu hgs))
+    have hnE' : nE ≤ t' := by
+      have := (rises_before (cfg := cfg) (tr := tr) u
+        ((eventsBy_mono (tr := tr) (time := time) hgs).trans h₁)).1
+      change topAt cfg tr time u gst ≤ _ at this
+      rw [ht'] at this
+      exact (hnE u hu).trans this
+    have h := floor_le_top_before hσ hadm hfa hf hid htime hinj hq hdr hsk hcm hsp hu ht' hnE'
+      (by rw [hlo]; exact hLpos) (fun w hw k' hk' => by
+        rw [hlo]
+        exact ((rises_before (cfg := cfg) (tr := tr) w (hk'.trans h₂)).2.2).trans (hpast w hw))
+    rw [floor_eq_before hdr u k, hlo] at h
+    rw [ht']
+    exact h
+  have hdel' : DeliveredWithin cfg H tr time gst Δ t :=
+    fun i u inp hi hu m hm hmH ht => hdel i u inp hi hu m hm hmH (ht.trans (by omega))
+  have hsync' : SyncedHeld cfg H tr time gst Δₛ t :=
+    fun j u w id b hj hu hb hid' hr hN τ hτ hτt => hsync j u w id b hj hu hb hid' hr hN τ hτ
+      (hτt.trans (by omega))
+  have hup' : UpFrom H tr time 0 t := fun k u hk hu ht => hup k u hk hu (ht.trans (by omega))
+  have hfire'' : TimersFireUp cfg H tr time t :=
+    fun i w inp hi hw r a ha ht _ => hfire i w inp hi hw r a ha (ht.trans (by omega))
+  have harr := arrival_steady hσ hadm hfa hf hid htime hinj (Finset.Subset.refl H) hmono hdr
+    hdel' hsync' hup' hfire'' hstart hst hgs hGt
+  have hstart' : StartedBy H tr time G := fun u hu => by
+    obtain ⟨i, hi, hit⟩ := hstart u hu
+    exact ⟨i, hi, hit.trans (by omega)⟩
+  have hnEG : ∀ u ∈ H, nE ≤ topAt cfg tr time u G := fun u hu =>
+    (hnE u hu).trans (rises_before (cfg := cfg) (tr := tr) u
+      (eventsBy_mono (tr := tr) (time := time) (show gst ≤ G by omega))).1
+  exact steady_bounded hσ hadm hfa hf hqT hcT hq hqn hid hto htime hinj hev hdr hst hsG hmono
+    harr (topTimerBy_of_up hmono hup' hfire'' (Nat.zero_le G)) hwait hstart' hsp hnEG b c n₀
+    (floorAt cfg L) G hc hspan hlead hn₀ hbelow hLn le_rfl le_rfl
+    (fun u hu => (hst u hu _ (eventsBy_mono hsG) (eventsBy_mono hGt)).2) le_rfl
+
 /-- **The reliable nodes produce rounds and decide.** -/
 theorem progresses : Progresses := by
   intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t₁ D nE hσ hadm hfa hf hTH hqT
@@ -693,8 +792,9 @@ theorem recovers : Recovers := by
     hstart' hsp hnE'
   exact ⟨hp, hd, decidesBy hp hd⟩
 
-/-- **The reliable nodes' liveness**, without crashes and with them. -/
-theorem holds : Statement := ⟨progresses, recovers, eventually⟩
+/-- **The reliable nodes' liveness**, without crashes and with them, and
+with dropping. -/
+theorem holds : Statement := ⟨progresses, recovers, eventually, bounded⟩
 
 end Live
 

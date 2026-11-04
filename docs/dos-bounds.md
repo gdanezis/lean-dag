@@ -602,8 +602,13 @@ store closed, and needs none of this.
         be a steady window, which is short. The wave argument reads the
         floor at each honest node's next undecided slot in place of the
         round above the base (`BuildState`, `lent_avoids_before`,
-        `produces_from`, `catches_up`), so it holds from round `0`. Left:
-        relaxing every honest node reliable, and an explicit time bound.
+        `produces_from`, `catches_up`), so it holds from round `0`. The
+        time bound is proved (`Live.bounded`): once every honest node is at
+        slot `L` or above at `s ≥ gst`, every one is past `L` by
+        `G + Σ (timeout r + A) + A + R`, the sum as in `steady_bounded`
+        from the arrival point `G` after `s`, and `R` the catch-up time of
+        one slot (`decides_behind`) at the rounds the nodes reach. Left:
+        relaxing every honest node reliable.
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase
