@@ -1129,7 +1129,13 @@ and the bound on the blocks a node holds a round (V13), Stage 4. Open:
 * without dropping, only a node that restarted jumps: a node that falls
   behind without crashing builds each round it missed, on being behind
   (§3.2);
-* V11″ assumes every honest node reliable (§5.8);
+* V11″ assumes every honest node reliable (§5.8). An honest node
+  without timing guarantees may be counted among the `f` faulty ones, so
+  V11″ covers every run with at most `f` nodes outside the reliable set;
+  V11 and V11′ admit `f + c`, and V11″ with `T ⊂ H` would add the `c`
+  further nodes. An honest node ahead of the reliable ones has its floor
+  above the base the wave argument reads, so its disk is not read from
+  that base (`Base`);
 * a node of `T` that restarts between `t_r` and `t₁` falls outside the
   claims for that interval, since a jump leaves it without a block at
   the rounds it jumped over, which the wave facts read (§5.6). A claim

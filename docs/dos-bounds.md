@@ -608,7 +608,9 @@ store closed, and needs none of this.
         `G + Σ (timeout r + A) + A + R`, the sum as in `steady_bounded`
         from the arrival point `G` after `s`, and `R` the catch-up time of
         one slot (`decides_behind`) at the rounds the nodes reach. Left:
-        relaxing every honest node reliable.
+        relaxing every honest node reliable, which would admit `c` more
+        nodes outside the reliable set than counting an untimely honest
+        node among the `f` faulty ones does.
   5. *Sync with the horizon* (D15); V11 and V13 on the new node.
 
 **Phase 4. The bounds.** R4 and R5, and B2 to B6 on the node of Phase
