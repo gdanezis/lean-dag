@@ -555,9 +555,16 @@ held its quorum for `γ`, and one building on the timer for `τ`; with
 them. A node building behind holds a block of `T` of the round above built
 earlier, which references them, by induction on build times.
 
-A witness (`LeanDagTest/KPartialDag/Reactive.lean`), one validator building a
-chain at delay `0`, shows the rules are consistent; it exercises no timing
-and no restart.
+A witness (`LeanDagTest/KPartialDag/Reactive.lean`) shows the rules are
+consistent with time and restarts. Four validators, of which one is
+Byzantine and silent, take leaders in rotation, at `δ = 1`, `γ = 2`, `τ = 4`,
+`μ = 1` and `G = 3`. A round takes `δ + γ` when the leaders of the round and
+the round below are correct, and `δ + τ` otherwise, the bound of `Slow`; no
+node ever holds blocks of all four, so the grace period runs out every
+round. One validator restarts before `G` and holds only its disk. The
+timeline is a reactive run from round `2`, keeps the histories on disk,
+fetches within `δ` and builds above the disk; `Commits` decides slot `5` by
+time `27`, and `Persisted`, `Synchronised` and `Ledger` apply.
 
 ## 12. Open questions
 
