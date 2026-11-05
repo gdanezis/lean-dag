@@ -85,18 +85,20 @@ theorem waitsFor_chain {N r : ℕ} (hr : r < N) :
 /-- **The chain is a reactive run** from round `0` to round `N`. -/
 theorem chain_run (N : ℕ) : ReactiveRun (chain N) (chainTimeline N) 0 0 0 0 0 0 N where
   held_ids _ _ := Finset.Subset.refl _
-  mono _ _ _ _ _ := Finset.Subset.refl _
+  mono _ _ _ _ _ _ := Finset.Subset.refl _
   delivers _ hb _ _ _ _ _ _ := hb
   closed _ _ _ b hb j hj := (chain N).complete b hb j hj
   causal _ _ _ _ _ _ := Nat.zero_le _
   prior _ _ _ _ _ _ hne := absurd rfl hne
   late _ _ _ _ := le_rfl
   start := ⟨0, fun _ _ => ⟨0, Finset.mem_range.mpr (by omega), rfl, rfl, le_rfl⟩⟩
-  waits b hb _ r hbr _ := Or.inl ⟨le_rfl, waitsFor_chain (by
-    have : (chain N).block b = chainBlock b := rfl
-    simp only [Finset.mem_range, chain] at hb
-    simp only [this, chainBlock] at hbr
-    omega)⟩
+  waits b hb _ r hbr _ := by
+    have hW : WaitsFor (chain N) (Finset.range (N + 1)) r := waitsFor_chain (by
+      have : (chain N).block b = chainBlock b := rfl
+      simp only [Finset.mem_range, chain] at hb
+      simp only [this, chainBlock] at hbr
+      omega)
+    exact Or.inl ⟨le_rfl, hW, hW⟩
   prompt _ _ r _ _ hr _ := ⟨r + 1, Finset.mem_range.mpr (by omega), rfl, rfl, Nat.zero_le _⟩
   covers b hb _ x hx hxb := by
     have hb' : (chain N).block b = chainBlock b := rfl

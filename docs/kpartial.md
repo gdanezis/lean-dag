@@ -270,6 +270,7 @@ built before.
 | 6 Builds | building needs the last `K + 1` rounds | — |
 | 6 Resumes | the ledger resumes from the band from `D + K` rounds below | `K ≥ 3` |
 | 6 Counts, Window, AvailRound | `n` blocks a round without equivocation; with it, `≈ |C| f^(K−1)` per history and `≈ |C| f^(K+1)` per round of the available sub-DAG | — |
+| 7 Persisted | a node persisting its last round builds once a round | the stored round grows |
 | 7 Built | every round is built | reactive rules |
 | 7 CatchesUp | blocks of `f + 1` correct validators at a round bring all to it within `δ` | reactive rules |
 | 7 Starts | the round after the last one reached before `G + τ` starts a reactive run | reactive rules |
@@ -389,10 +390,10 @@ blocks. The blocks of `H` at round `ρ` or above are its *band from `ρ`*
   depth `K`. This construction is not formalised. A bound near `n` per round
   therefore needs a rule for equivocating authors.
 
-Not proved: that persisting the last round built before sending suffices
-to avoid equivocation after a restart, which needs a model of validators
-over time; and how long correct nodes must retain a band, which needs a
-quantitative liveness bound or a state transfer.
+That persisting the last round built before sending suffices to avoid
+equivocation after a restart is Theorem 7's `Persisted` (§11). Not proved:
+how long correct nodes must retain a band, which needs a quantitative
+liveness bound or a state transfer.
 
 ## 11. Reactive nodes in time
 
@@ -415,8 +416,8 @@ authors other than itself (`BehindIn`), so a correct node has built that
 round.
 
 A timeline follows the *reactive rules* from round `R` to round `N`
-(`ReactiveRules`) when correct nodes follow these rules there, keep what they
-hold with its references, hold a correct block only once it is built, and
+(`ReactiveRules`) when correct nodes follow these rules there, hold the
+references of what they hold, hold a correct block only once it is built, and
 another author's correct block only after it is built; every correct
 validator has a block at round `R`. From a time `G` on, every correct node
 holds a correct block `δ` after it is built. Nodes pass on only correct
@@ -426,6 +427,19 @@ when, in addition, its correct blocks from round `R` on are built at `G + τ`
 or later. The delay `δ` covers the downloads to depth `K`; nodes do not know
 it, and only `τ`, `γ` and `μ` are configured. The minimum wait bounds the
 rate of rounds; the proofs use it only as a delay.
+
+Before `G` a correct node may crash and restart any number of times. A
+restart loses what the node held and resets its timers, and a node builds
+nothing while it is down. So a correct node keeps what it holds only from
+`G` on, and is obliged to build only on what it has held since `G`; the wait
+on the grace period holds what the node waits for both when the period
+starts and when it builds. A node keeps on disk the last round it built
+(`Persists`): its builds are numbered in order, the stored round never
+decreases, it builds only above the stored round, and it stores a block's
+round before it sends the block. Nothing else it holds needs to survive a
+restart. From `G` on it holds every correct block `δ` after it is built,
+those it lost included, and builds every round above its stored round, so
+a node that was down walks up through the rounds it missed.
 
 A quorum spreads. A quorum holds blocks of `f + 1` correct authors, so once
 a correct node holds a quorum of round `s` at a time `t ≥ G`, every correct
@@ -440,8 +454,13 @@ earlier correct block of its round, and eventually on one built on the wait
 or the timer, whose author referenced the leader block and carried the
 certificate it held; the node holds these references.
 
-**Theorem 7 (reactive nodes; `Reactive.Statement`).** Under the reactive
-rules from round `R` to round `N`:
+**Theorem 7 (reactive nodes; `Reactive.Statement`).** A correct validator
+that persists the last round it built builds at most one block a round
+(`Reactive.Persisted`): its builds are at increasing rounds, whatever else
+it loses in a restart.
+
+Under the reactive rules from round `R` to round `N`, with restarts before
+`G`:
 
 * *Every round is built* (`Reactive.Built`). Every correct validator has a
   block at every round from `R` to `N`.
@@ -501,7 +520,12 @@ A witness (`LeanDagTest/KPartialDag/Reactive.lean`) shows that the premise is
 consistent: one correct validator building a chain of blocks, all held at
 time `0`, is a reactive run, and `Reactive.Commits` decides its slots and
 `Reactive.Synchronised` applies. It exercises none of the timing, since its
-delay is `0`.
+delay is `0`, and no restart.
+
+All bounds hold unchanged with restarts before `G`, and `Starts` covers a
+run in which every node crashed and restarted before `G`. Crashes after `G`
+are not modelled: a node that is down then breaks the obligation to build,
+and would count against `f`.
 
 ## 12. Open questions
 
@@ -515,5 +539,10 @@ delay is `0`.
 * A storage bound linear in `K` under equivocation, which needs a rule for
   equivocating authors (§10).
 * Quantitative liveness, which a retention bound needs.
-* Crash recovery: that persisting the last round built suffices, with a
-  model of validators over time.
+* Crashes after `G`: the correct validators that are up vary with time, and
+  those down count against `f`.
+* Jumping on restart: a node that was down walks up through the rounds it
+  missed, and so fetches them, although the other correct nodes have
+  usually passed those rounds and do not reference its blocks there; building only above the latest quorum needs only
+  `K + 1` rounds (Theorem 6), but `Built` then holds only for nodes not
+  behind.

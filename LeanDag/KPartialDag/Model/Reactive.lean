@@ -26,6 +26,13 @@ references of blocks they hold. It is a reactive
 run (`ReactiveRun`) when, in addition, the blocks of correct nodes from
 round `R` on are built at `G + τ` or later.
 
+Before `G` a correct node may crash and restart: it loses what it held and
+builds nothing while down. The rules therefore keep what a node holds only
+from `G` on (`mono`), and oblige it to build only on what it has held since
+`G` (`prompt`). A node keeps on disk the last round it built, and builds
+only above it (`Persists`); that is all it needs to build at most one block
+a round.
+
 Definitions only.
 -/
 
@@ -87,8 +94,9 @@ structure ReactiveRules (U : KRecord Validator BlockId Payload)
     (tl : Timeline Validator BlockId) (G δ τ γ μ R N : ℕ) : Prop where
   /-- Nodes hold blocks of the record. -/
   held_ids : ∀ v t, tl.held v t ⊆ U.ids
-  /-- A correct node keeps what it holds. -/
-  mono : ∀ v ∈ (Correct : Finset Validator), ∀ t t', t ≤ t' → tl.held v t ⊆ tl.held v t'
+  /-- From `G` on, a correct node keeps what it holds. -/
+  mono : ∀ v ∈ (Correct : Finset Validator), ∀ t t', G ≤ t → t ≤ t' →
+    tl.held v t ⊆ tl.held v t'
   /-- From `G` on, a correct block built by `t` is held by every correct node
   by `t + δ`. -/
   delivers : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) →
@@ -107,12 +115,13 @@ structure ReactiveRules (U : KRecord Validator BlockId Payload)
   /-- Every correct validator has a block at round `R`. -/
   start : ∃ t, BuiltBy U tl R t
   /-- **The wait**: a correct block above round `r ≥ R` is built once its
-  author has held what it waits for for `γ`, holds it with blocks of every
-  validator at round `r`, has held a quorum of round `r` for `τ`, or is
-  behind round `r + 1`. -/
+  author has held what it waits for for `γ` and still holds it, holds it with
+  blocks of every validator at round `r`, has held a quorum of round `r` for
+  `τ`, or is behind round `r + 1`. -/
   waits : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) → ∀ r,
     (U.block b).round = r + 1 → R ≤ r →
-    (γ ≤ tl.built b ∧ WaitsFor U (tl.held (U.block b).creator (tl.built b - γ)) r) ∨
+    (γ ≤ tl.built b ∧ WaitsFor U (tl.held (U.block b).creator (tl.built b - γ)) r ∧
+        WaitsFor U (tl.held (U.block b).creator (tl.built b)) r) ∨
       (WaitsFor U (tl.held (U.block b).creator (tl.built b)) r ∧
         AllIn U (tl.held (U.block b).creator (tl.built b)) r) ∨
       (τ ≤ tl.built b ∧ QuorumIn U (tl.held (U.block b).creator (tl.built b - τ)) r) ∨
@@ -120,14 +129,14 @@ structure ReactiveRules (U : KRecord Validator BlockId Payload)
   /-- **No later than the wait**: a correct node that has held a quorum of
   round `r`, from `R` to below `N`, for `μ`, and has held what it waits for
   above `r` for `γ`, holds it with blocks of every validator at round `r`, or
-  has held the quorum for `τ`, has built its block of round `r + 1`; so has
-  a correct node behind round `r + 1`. -/
+  has held the quorum for `τ`, all since `G`, has built its block of round
+  `r + 1`; so has a correct node behind round `r + 1` from `G` on. -/
   prompt : ∀ v ∈ (Correct : Finset Validator), ∀ r t, R ≤ r → r < N →
-    (μ ≤ t ∧ QuorumIn U (tl.held v (t - μ)) r ∧
-      ((γ ≤ t ∧ WaitsFor U (tl.held v (t - γ)) r) ∨
+    (G + μ ≤ t ∧ QuorumIn U (tl.held v (t - μ)) r ∧
+      ((G + γ ≤ t ∧ WaitsFor U (tl.held v (t - γ)) r) ∨
         (WaitsFor U (tl.held v t) r ∧ AllIn U (tl.held v t) r) ∨
-        (τ ≤ t ∧ QuorumIn U (tl.held v (t - τ)) r)) ∨
-      BehindIn U (tl.held v t) v r) →
+        (G + τ ≤ t ∧ QuorumIn U (tl.held v (t - τ)) r)) ∨
+      G ≤ t ∧ BehindIn U (tl.held v t) v r) →
     ∃ b ∈ U.ids, (U.block b).creator = v ∧ (U.block b).round = r + 1 ∧ tl.built b ≤ t
   /-- A correct block references a block of every author whose block of the
   round below its author holds. -/
@@ -149,6 +158,25 @@ structure ReactiveRun (U : KRecord Validator BlockId Payload) (tl : Timeline Val
   /-- Correct blocks from round `R` on are built at `G + τ` or later. -/
   late : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) →
     R ≤ (U.block b).round → G + τ ≤ tl.built b
+
+/-- **Persisting the last round built**: the builds of each correct
+validator are numbered in order (`order`), and the round it has stored on
+disk before its `i`-th build (`stored v i`) never decreases, across restarts
+too. It builds only above the round it has stored, stores the block's round
+before it sends the block, and numbers no two builds alike. -/
+structure Persists (ids : Finset BlockId) (block : BlockId → Block Validator BlockId Payload)
+    (order : BlockId → ℕ) (stored : Validator → ℕ → ℕ) : Prop where
+  /-- The stored round never decreases. -/
+  grows : ∀ v ∈ (Correct : Finset Validator), ∀ i j, i ≤ j → stored v i ≤ stored v j
+  /-- A correct block is above the round its author stored before it. -/
+  above : ∀ b ∈ ids, (block b).creator ∈ (Correct : Finset Validator) →
+    stored (block b).creator (order b) < (block b).round
+  /-- A correct block's round is stored before its author's next build. -/
+  stores : ∀ b ∈ ids, (block b).creator ∈ (Correct : Finset Validator) →
+    (block b).round ≤ stored (block b).creator (order b + 1)
+  /-- No two builds of a correct validator have the same number. -/
+  single : ∀ b ∈ ids, ∀ c ∈ ids, (block b).creator ∈ (Correct : Finset Validator) →
+    (block b).creator = (block c).creator → order b = order c → b = c
 
 end KPartialDag
 

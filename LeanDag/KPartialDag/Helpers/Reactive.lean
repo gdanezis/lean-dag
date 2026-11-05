@@ -109,6 +109,38 @@ theorem leaderBlock_eq {k : ℕ} {L L' : BlockId} (hL : IsLeaderBlock U k L)
     (hL' : IsLeaderBlock U k L') (hc : S.leader k ∈ (Correct : Finset Validator)) : L = L' :=
   U.eq_of_creator_eq hL.1 hL'.1 hc hL.2.2 hL'.2.2 (hL.2.1.trans hL'.2.1.symm)
 
+namespace Persists
+
+variable {ids : Finset BlockId} {block : BlockId → Block Validator BlockId Payload}
+variable {order : BlockId → ℕ} {stored : Validator → ℕ → ℕ}
+variable (h : Persists ids block order stored)
+include h
+
+omit [DecidableEq BlockId] S in
+/-- A correct validator's later builds are at higher rounds. -/
+theorem round_lt {i j : BlockId} (hi : i ∈ ids) (hj : j ∈ ids)
+    (hc : (block i).creator ∈ (Correct : Finset Validator))
+    (hij : (block i).creator = (block j).creator) (hlt : order i < order j) :
+    (block i).round < (block j).round := by
+  have h1 := h.stores i hi hc
+  have h2 := h.grows _ hc (order i + 1) (order j) hlt
+  have h3 := h.above j hj (hij ▸ hc)
+  rw [← hij] at h3
+  omega
+
+omit [DecidableEq BlockId] S in
+/-- **A correct validator builds at most one block a round.** -/
+theorem eq_of_round {i j : BlockId} (hi : i ∈ ids) (hj : j ∈ ids)
+    (hc : (block i).creator ∈ (Correct : Finset Validator))
+    (hij : (block i).creator = (block j).creator) (hr : (block i).round = (block j).round) :
+    i = j := by
+  rcases lt_trichotomy (order i) (order j) with hlt | heq | hgt
+  · exact absurd hr (h.round_lt hi hj hc hij hlt).ne
+  · exact h.single i hi j hj hc hij heq
+  · exact absurd hr (h.round_lt hj hi (hij ▸ hc) hij.symm hgt).ne'
+
+end Persists
+
 namespace ReactiveRules
 
 variable (h : ReactiveRules U tl G δ τ γ μ R N)
@@ -129,7 +161,7 @@ theorem mem_held {b : BlockId} (hb : b ∈ U.ids)
     (hbc : (U.block b).creator ∈ (Correct : Finset Validator))
     {v : Validator} (hv : v ∈ (Correct : Finset Validator)) {t₀ t : ℕ} (hG : G ≤ t₀)
     (h0 : tl.built b ≤ t₀) (ht : t₀ + δ ≤ t) : b ∈ tl.held v t :=
-  h.mono v hv _ _ ht (h.delivers b hb hbc v hv t₀ hG h0)
+  h.mono v hv _ _ (by omega) ht (h.delivers b hb hbc v hv t₀ hG h0)
 
 /-- **A correct node votes for the leader blocks it holds**: a correct block
 references a leader block of each slot one round below whose leader block
@@ -145,28 +177,28 @@ theorem votes {b : BlockId} (hb : b ∈ U.ids)
   exact ⟨y, hy, U.complete b hb y hy, by omega, hyc.trans hLc⟩
 
 /-- A correct node that holds a quorum of round `r`, from `R` to below `N`,
-at `t` has built at round `r + 1` by `t + max τ μ`. -/
+at a time `t ≥ G` has built at round `r + 1` by `t + max τ μ`. -/
 theorem built_of_quorumIn {v : Validator} (hv : v ∈ (Correct : Finset Validator)) {r t : ℕ}
-    (hr : R ≤ r) (hrN : r < N) (hQ : QuorumIn U (tl.held v t) r) :
+    (hr : R ≤ r) (hrN : r < N) (hG : G ≤ t) (hQ : QuorumIn U (tl.held v t) r) :
     ∃ b ∈ U.ids, (U.block b).creator = v ∧ (U.block b).round = r + 1 ∧
       tl.built b ≤ t + max τ μ := by
   have := le_max_left τ μ
   have := le_max_right τ μ
   exact h.prompt v hv r _ hr hrN (Or.inl ⟨by omega,
-    quorumIn_mono (h.mono v hv t _ (by omega)) hQ,
-    Or.inr (Or.inr ⟨by omega, quorumIn_mono (h.mono v hv t _ (by omega)) hQ⟩)⟩)
+    quorumIn_mono (h.mono v hv t _ hG (by omega)) hQ,
+    Or.inr (Or.inr ⟨by omega, quorumIn_mono (h.mono v hv t _ hG (by omega)) hQ⟩)⟩)
 
 /-- A correct node that holds what it waits for above round `r`, from `R` to
-below `N`, at `t` has built at round `r + 1` by `t + max γ μ`. -/
+below `N`, at a time `t ≥ G` has built at round `r + 1` by `t + max γ μ`. -/
 theorem built_of_waitsFor {v : Validator} (hv : v ∈ (Correct : Finset Validator)) {r t : ℕ}
-    (hr : R ≤ r) (hrN : r < N) (hW : WaitsFor U (tl.held v t) r) :
+    (hr : R ≤ r) (hrN : r < N) (hG : G ≤ t) (hW : WaitsFor U (tl.held v t) r) :
     ∃ b ∈ U.ids, (U.block b).creator = v ∧ (U.block b).round = r + 1 ∧
       tl.built b ≤ t + max γ μ := by
   have := le_max_left γ μ
   have := le_max_right γ μ
   exact h.prompt v hv r _ hr hrN (Or.inl ⟨by omega,
-    quorumIn_mono (h.mono v hv t _ (by omega)) hW.1,
-    Or.inl ⟨by omega, waitsFor_mono (h.mono v hv t _ (by omega)) hW⟩⟩)
+    quorumIn_mono (h.mono v hv t _ hG (by omega)) hW.1,
+    Or.inl ⟨by omega, waitsFor_mono (h.mono v hv t _ hG (by omega)) hW⟩⟩)
 
 /-- **Induction behind**: a property of the correct blocks of round `s + 1`,
 `s ≥ R`, that holds for those built on the wait or the timer, and passes to a
@@ -175,7 +207,8 @@ correct block of round `s + 1`. -/
 theorem induction_behind {s : ℕ} (hR : R ≤ s) (P : BlockId → Prop)
     (hwait : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) →
       (U.block b).round = s + 1 →
-      (γ ≤ tl.built b ∧ WaitsFor U (tl.held (U.block b).creator (tl.built b - γ)) s) ∨
+      (γ ≤ tl.built b ∧ WaitsFor U (tl.held (U.block b).creator (tl.built b - γ)) s ∧
+          WaitsFor U (tl.held (U.block b).creator (tl.built b)) s) ∨
         (WaitsFor U (tl.held (U.block b).creator (tl.built b)) s ∧
           AllIn U (tl.held (U.block b).creator (tl.built b)) s) ∨
         (τ ≤ tl.built b ∧ QuorumIn U (tl.held (U.block b).creator (tl.built b - τ)) s) → P b)
@@ -211,8 +244,8 @@ theorem builtBy_of_behind {s t : ℕ} (hR : R ≤ s) (hN : s < N) (hG : G ≤ t)
   by_cases hwA : w ∈ A
   · obtain ⟨b, hb, hbw, hbr, hbt⟩ := hb w hwA
     exact ⟨b, hb, hbw, hbr, by omega⟩
-  refine h.prompt w hw s _ hR hN (Or.inr (le_trans hcard
-    (Finset.card_le_card fun v hv => ?_)))
+  refine h.prompt w hw s _ hR hN (Or.inr ⟨by omega, le_trans hcard
+    (Finset.card_le_card fun v hv => ?_)⟩)
   obtain ⟨b, hb', hbv, hbr, hbt⟩ := hb v hv
   refine Finset.mem_erase.mpr ⟨fun hvw => hwA (hvw ▸ hv), mem_creatorsOf.mpr ⟨b,
     Finset.mem_filter.mpr ⟨h.mem_held hb' (hbv ▸ hA hv) hw hG hbt le_rfl, hbr⟩, hbv⟩⟩
@@ -243,7 +276,7 @@ theorem quorumIn_of_builtBy {s t : ℕ} (hG : G ≤ t) (hb : BuiltBy U tl s t) {
 from `G` on. -/
 theorem builtBy_succ {s t : ℕ} (hs : R ≤ s) (hsN : s < N) (hG : G ≤ t)
     (hb : BuiltBy U tl s t) : BuiltBy U tl (s + 1) (t + δ + max τ μ) := fun _ hv =>
-  h.built_of_quorumIn hv hs hsN (h.quorumIn_of_builtBy hG hb hv)
+  h.built_of_quorumIn hv hs hsN (by omega) (h.quorumIn_of_builtBy hG hb hv)
 
 /-- Every round from `R` to `N` is built by some time. -/
 theorem exists_builtBy {s : ℕ} (hs : R ≤ s) (hsN : s ≤ N) : ∃ t, BuiltBy U tl s t := by
@@ -279,7 +312,7 @@ theorem exists_run : ∃ R', R ≤ R' ∧ (R' = R ∨ ∃ x ∈ U.ids,
         have hxw := h.mem_held hx hxc hw (t₀ := G + τ) (by omega) hxt.le le_rfl
         have hQ : QuorumIn U (tl.held w (G + τ + δ)) ((U.block x).round - 1) :=
           quorumIn_mono (h.closed w hw _ x hxw) (quorumIn_refs hx (by omega))
-        obtain ⟨b, hb, hbw, hbr, hbt⟩ := h.built_of_quorumIn hw (by omega) (by omega) hQ
+        obtain ⟨b, hb, hbw, hbr, hbt⟩ := h.built_of_quorumIn hw (by omega) (by omega) (by omega) hQ
         exact ⟨b, hb, hbw, by omega, by omega⟩
       exact builtBy_mono (h.builtBy_succ hxR (by omega) (by omega) hm) (by omega)
     obtain ⟨t₀, ht₀⟩ := h.start
@@ -321,9 +354,8 @@ theorem leader_mem_held (hτ : 2 * δ ≤ τ) {k : ℕ} (hk : R + 1 ≤ S.slotRo
   refine h.induction_behind (by omega)
     (fun b => ∃ L ∈ tl.held (U.block b).creator (tl.built b), IsLeaderBlock U k L)
     (fun b hb hbc hbr hW => ?_) (fun b hb hbc hbr y hyH hyc hyr hy => ?_) hb hbc hbr
-  · rcases hW with ⟨-, hW⟩ | ⟨hW, -⟩ | ⟨hτb, hQ⟩
-    · obtain ⟨L, hL, hl⟩ := hW.2.1 k rfl
-      exact ⟨L, h.mono _ hbc _ _ (Nat.sub_le _ _) hL, hl⟩
+  · rcases hW with ⟨-, -, hW⟩ | ⟨hW, -⟩ | ⟨hτb, hQ⟩
+    · exact hW.2.1 k rfl
     · exact hW.2.1 k rfl
     have hlb := h.late b hb hbc (by omega)
     obtain ⟨L, hL, hLc, hLr, hLt⟩ := h.builtBy_of_quorumIn (s := S.slotRound k - 1)
@@ -363,9 +395,8 @@ theorem certIn_held (hτ : 2 * δ ≤ τ) {k : ℕ} (hk : R + 1 ≤ S.slotRound 
       CertIn U (tl.held (U.block c).creator (tl.built c)) (S.slotRound k + 1) L)
     (fun c hc hcc hcr hW => ?_) (fun c hc hcc hcr y hyH hyc hyr hy => ?_) hc hcc
     (by omega)
-  · rcases hW with ⟨-, hW⟩ | ⟨hW, -⟩ | ⟨hτc, hQ⟩
-    · obtain ⟨L, hl, hL⟩ := hW.2.2 k rfl
-      exact ⟨L, hl, certIn_mono (h.mono _ hcc _ _ (Nat.sub_le _ _)) hL⟩
+  · rcases hW with ⟨-, -, hW⟩ | ⟨hW, -⟩ | ⟨hτc, hQ⟩
+    · exact hW.2.2 k rfl
     · exact hW.2.2 k rfl
     have hlc := h.late c hc hcc (by omega)
     have hB := h.builtBy_of_quorumIn (t := tl.built c - τ) (by omega) (by omega) (by omega) hcc hQ
@@ -407,7 +438,7 @@ theorem builtBy_succ_fast (hτ : 2 * δ ≤ τ) {s t : ℕ} (hs : R + 2 ≤ s) (
     BuiltBy U tl (s + 1) (t + δ + max γ μ) := by
   have hG := h.le_of_builtBy (by omega) hb
   intro v hv
-  refine h.built_of_waitsFor hv (by omega) hsN ⟨h.quorumIn_of_builtBy (by omega) hb hv,
+  refine h.built_of_waitsFor hv (by omega) hsN (by omega) ⟨h.quorumIn_of_builtBy (by omega) hb hv,
     fun k hk => ?_, fun k hk => ?_⟩
   · obtain ⟨L, hL, hLc, hLr, hLt⟩ := hb _ (hlead k (Or.inl hk))
     exact ⟨L, h.mem_held hL (hLc ▸ hlead k (Or.inl hk)) hv (by omega) hLt le_rfl, hL,
@@ -486,7 +517,7 @@ theorem mem_held_below (hγ : 2 * δ ≤ γ) (hγτ : γ ≤ τ) {r : ℕ} (hr :
     (fun b => x ∈ tl.held (U.block b).creator (tl.built b))
     (fun b hb hbc hbr hW => ?_) (fun b hb hbc hbr y hyH hyc hyr hy => ?_) hb hbc hbr
   · have hlb := h.late b hb hbc (by omega)
-    rcases hW with ⟨hγb, hW⟩ | ⟨-, hA⟩ | ⟨hτb, hQ⟩
+    rcases hW with ⟨hγb, hW, -⟩ | ⟨-, hA⟩ | ⟨hτb, hQ⟩
     · exact hquorum b hbc _ (by omega) (by omega) hW.1
     · obtain ⟨x', hx'H, hx'r, hx'c⟩ := hA (U.block x).creator
       obtain rfl : x' = x :=

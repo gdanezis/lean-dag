@@ -2,9 +2,13 @@ import LeanDag.KPartialDag.Model.Reactive
 /-!
 # Reactive nodes in time — statement
 
-`docs/kpartial.md` §11. Under the reactive rules from round `R` to round
-`N`, with message delay `δ` from time `G`, timeout `τ`, grace period `γ` and
-minimum wait `μ` (`ReactiveRules`):
+`docs/kpartial.md` §11. A correct validator that keeps on disk the last
+round it built, and builds only above it (`Persists`), builds at most one
+block a round, whatever it loses in a restart (`Persisted`).
+
+Under the reactive rules from round `R` to round `N`, with message delay `δ`
+from time `G`, timeout `τ`, grace period `γ` and minimum wait `μ`, and
+restarts before `G` (`ReactiveRules`):
 
 * **every round is built** (`Built`): every correct validator builds at every
   round from `R` to `N`;
@@ -42,6 +46,18 @@ namespace LeanDag
 namespace KPartialDag
 
 namespace Reactive
+
+/-- **Persisting the last round built avoids equivocation**: a correct
+validator that persists the last round it built builds at most one block a
+round. -/
+def Persisted : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [DecidableEq BlockId] [Slots Validator]
+    (ids : Finset BlockId) (block : BlockId → Block Validator BlockId Payload)
+    (order : BlockId → ℕ) (stored : Validator → ℕ → ℕ),
+    Persists ids block order stored → ∀ i ∈ ids, ∀ j ∈ ids,
+      (block i).creator ∈ (Correct : Finset Validator) → (block i).creator = (block j).creator →
+      (block i).round = (block j).round → i = j
 
 /-- **Every round is built**: under the reactive rules from round `R` to
 round `N`, every correct validator has a block at every round from `R` to
@@ -152,7 +168,8 @@ def Synchronised : Prop :=
 
 /-- Reactive nodes in time. -/
 def Statement : Prop :=
-  Built ∧ CatchesUp ∧ Starts ∧ Slow ∧ Fast ∧ Responsive ∧ Commits ∧ Synchronised
+  Persisted ∧ Built ∧ CatchesUp ∧ Starts ∧ Slow ∧ Fast ∧ Responsive ∧ Commits ∧
+    Synchronised
 
 end Reactive
 

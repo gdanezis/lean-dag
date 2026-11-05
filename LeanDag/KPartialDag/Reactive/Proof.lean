@@ -3,6 +3,7 @@ import LeanDag.KPartialDag.Helpers.Reactive
 /-!
 # Reactive nodes in time — proof
 
+Persisting the last round built avoids equivocation by `Persists.eq_of_round`.
 Every round is built by `ReactiveRules.exists_builtBy`; nodes behind catch
 up by `ReactiveRules.builtBy_of_behind`, and a reactive run starts by
 `ReactiveRules.exists_run`. Each round is built within `δ + max τ μ` by
@@ -18,6 +19,10 @@ namespace LeanDag
 namespace KPartialDag
 
 namespace Reactive
+
+theorem persisted : Persisted := by
+  intro Validator BlockId Payload _ _ _ _ _ ids block order stored h i hi j hj hc hij hr
+  exact h.eq_of_round hi hj hc hij hr
 
 theorem built : Built := by
   intro Validator BlockId Payload _ _ _ _ _ U tl G δ τ γ μ R N h s hs hsN
@@ -52,7 +57,7 @@ theorem synchronised : Synchronised := by
   exact h.syncFrom hγ hγτ
 
 theorem holds : Statement :=
-  ⟨built, catchesUp, starts, slow, fast, responsive, commits, synchronised⟩
+  ⟨persisted, built, catchesUp, starts, slow, fast, responsive, commits, synchronised⟩
 
 end Reactive
 
