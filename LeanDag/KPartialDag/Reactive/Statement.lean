@@ -2,61 +2,12 @@ import LeanDag.KPartialDag.Model.Reactive
 /-!
 # Reactive nodes in time — statement
 
-`docs/kpartial.md` §11. A correct validator that keeps on disk the last
-round it built, and builds only above it (`Persists`), builds at most one
-block a round, whatever it loses in a restart (`Persisted`). A validator
-that builds above the blocks of its own on its disk does so
-(`OnDisk`).
+`docs/kpartial.md` §11, Theorem 7: nodes that wait for a quorum, the leaders
+and a certificate, with a timeout `τ`, a grace period `γ` and a minimum wait
+`μ`, under message delay `δ` from time `G` and any crashes and restarts,
+build at most one block a round, resume after crashes, and from some round
+on produce a responsive and synchronous run in which the ledger grows.
 
-Under the rules for nodes from round `R` to round `N`, with message delay `δ`
-from time `G`, timeout `τ`, grace period `γ` and minimum wait `μ`, a set `T`
-of at least `n − f` correct nodes up from `G` on, and any other crashes and
-restarts (`NodeRules`):
-
-* **operations resume** (`Resumes`): once a validator of `T` has built
-  above round `R` by `G`, a reactive run starts above `R`, and every validator
-  of `T` reaches it within `3δ + 3 max τ μ` of `G`.
-
-Under the reactive rules, with every validator of `T` at round `R`
-(`ReactiveRules`):
-
-* **every round is reached** (`Built`): every validator of `T` builds at
-  every round from `R` to `N` or above it;
-* **nodes behind catch up within `δ`** (`CatchesUp`): once `f + 1`
-  validators of `T` have built at a round, from `G` on, by `t`, every validator
-  of `T` has reached the round by `t + δ`;
-* **a reactive run starts** (`Starts`): `R`, or one above a round a node of
-  `T` reached before `G + τ`, starts a reactive run (`ReactiveRun`), reached
-  within `2δ + 2 max τ μ` of `G + τ`.
-
-On a reactive run from round `R` to round `N`, at `δ < γ ≤ τ`, where no
-node of `T` skips a round:
-
-* **each round is built within `δ + max τ μ`** (`Slow`) of the round below;
-* **rounds led by `T` are built within `δ + max γ μ`**
-  (`Fast`): at `τ ≥ 2δ`, when the slots of a round and of the round below
-  have leaders of `T`, no node of `T` waits for its timeout;
-* **the run is responsive** (`Responsive`): at `τ ≥ 2δ`, the record is
-  responsive among `T` from round `R + 1` to `N`, so
-  `Live.Progress` applies;
-* **a slot led by `T` commits within `3δ + 2 max γ μ`**
-  (`Commits`): at `τ ≥ 2δ`, when the slots from one round below a slot to
-  one round above it have leaders of `T`, every node of `T` commits the
-  slot directly within that time of the last block of `T` at the slot's
-  round;
-* **the run is synchronous** (`Synchronised`): at `2δ ≤ γ`, every block of `T`
-  from round `R + 1` to `N` references every block of `T` of the
-  round below, so the inclusion results of `Order` apply;
-* **the ledger grows** (`Ledger`): when nodes of `T` fetch the available sub-DAG of
-  the certified leaders they hold, every node of `T` eventually decides
-  every slot up to a run of leaders of `T` and fetches below the leaders
-  it commits, so its ledger is defined there and agrees by `Order.Agrees`.
-
-When correct nodes keep on disk the histories to depth `K` of their blocks'
-references, nothing a leader outputs is lost: it stays on the disk of a
-node of `T`, through any crash (`Durable`).
-
-No bound depends on `K`: the downloads to depth `K` are inside `δ`.
 Statements only; the proofs are `Proof.lean`.
 -/
 

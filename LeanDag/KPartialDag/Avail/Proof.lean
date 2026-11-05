@@ -3,10 +3,7 @@ import LeanDag.KPartialDag.Helpers.Avail
 /-!
 # The available sub-DAG — proof
 
-Each claim is a helper of `Helpers/Avail.lean`: `avail_correctHeld`; `broad`, by a double
-count over the references of a block two rounds up
-(`exists_correct_referenced`); `linked`, from a block of round `r + 3` whose
-references lie in the sub-DAG; and `not_directSkip`, by quorum intersection.
+Each result is a helper of `Helpers/Avail.lean`.
 -/
 
 namespace LeanDag

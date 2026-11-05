@@ -3,12 +3,8 @@ import LeanDag.KPartialDag.Helpers.Avail
 # The commit rule's laws
 
 `docs/kpartial.md` §4. Two certificates for blocks of one author at one
-round certify the same block: their votes come from two quorums, so a
-correct author's one block of the round above references both, and it
-references one block of each author (`eq_of_certificates`). A direct commit
-yields a certificate, a slot skip a direct skip of each candidate, and the
-link one certificate; with the visibility of `linked` and the exclusion of
-`not_directSkip`, these are the laws of the anchored rule (`kRule_laws`).
+round certify one block (`eq_of_certificates`), and the commit rule obeys
+the laws of an anchored rule at `K ≥ 3` (`kRule_laws`).
 -/
 
 namespace LeanDag

@@ -3,18 +3,9 @@ import LeanDag.KPartialDag.Helpers.Node
 /-!
 # Liveness — helpers
 
-`docs/kpartial.md` §6. After synchrony, a block of `T` two rounds above a
-block of `T` carries votes for it from all of `T`
-(`carriesVotes_of_synchronisedOn`), so synchrony implies responsiveness
-(`respondsFrom_of_syncFrom`). On a responsive slot, a node holding the blocks
-of `T` two rounds above it with their references commits it directly
-(`nodeDecided_of_responds`). A committed block has a
-certificate (`NodeDecided.certified`), so a node holding the available
-sub-DAG below every certified leader block has fetched the sub-DAG below
-each anchor it uses, and its indirect test returns a verdict either way.
-Below a committed run, the nearest committed anchor of each slot gives the
-slot a verdict, by induction downward (`nodeDecided_below`). A responsive run
-commits, so every slot up to its end is decided (`nodeDecided_of_run`).
+`docs/kpartial.md` §6. Synchrony implies responsiveness, a responsive slot
+commits, and a committed run decides every slot below it
+(`nodeDecided_of_run`).
 -/
 
 namespace LeanDag

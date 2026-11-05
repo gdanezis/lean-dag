@@ -4,30 +4,10 @@ import Mathlib.Order.Interval.Finset.Nat
 /-!
 # Bands of rounds — helpers
 
-`docs/kpartial.md` §10. Anchoring read on `H` grows with `H`
-(`AnchoredIn.mono`), and a block anchored at round `ρ + K` or above is
-anchored on the blocks of `H` at round `ρ` or above, since its derivation
-reads only blocks above it and their histories to depth `K`
-(`AnchoredIn.band`). So the available sub-DAG, the indirect test and the
-fetch test above round `ρ + K` read only that band (`availIn_band_iff`,
-`linkedIn_band_iff`, `fetchedIn_band_iff`), and so does a decision of a slot
-at round `ρ + K − 1` or above (`nodeDecided_band_iff`). A node holding the
-blocks of `T` over a run and the available sub-DAG above round `ρ` decides
-every slot at round `ρ + K − 1` or above up to the run's end
-(`nodeDecided_of_run_band`). The entry slots of a ledger from slot `s` on
-read the verdicts and outputs of the slots `D` rounds below `s` and above
-(`entersIn_resume`). A block referencing a quorum is valid, and its
-obligation lies in the `K` rounds below it (`validAt_of_quorum`,
-`obliged_band`). Without equivocation a round holds at most `n` blocks
-(`card_between_le`). With no condition on equivocation, one layer of a
-history holds at most `|C|` correct blocks and `f` Byzantine blocks per block
-of the layer above (`card_layers_le`, `card_historyUpto_le`); every Byzantine
-block of the available sub-DAG hangs at most `K` rounds below a root, a
-correct or anchored block, through Byzantine blocks (`exists_root`); a round
-holds at most `|C|(f + 1) + 1` roots (`card_anchored_le`, `card_roots_le`);
-and so the available sub-DAG holds at most
-`|C| + (|C|(f + 1) + 1)(1 + f + ⋯ + f^K)` blocks per round
-(`card_avail_round_le`).
+`docs/kpartial.md` §10. Decisions read a band of rounds
+(`nodeDecided_band_iff`), the counts of a history and of a round of the
+available sub-DAG (`card_historyUpto_le`, `card_avail_round_le`), and
+resuming the ledger (`entersIn_resume`).
 -/
 
 namespace LeanDag

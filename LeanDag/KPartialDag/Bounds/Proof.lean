@@ -3,13 +3,7 @@ import LeanDag.KPartialDag.Helpers.Bounds
 /-!
 # Bounds for deciding and restarting — proof
 
-Decisions read a band by `nodeDecided_band_iff`; progress from a band is
-`nodeDecided_of_run_band` on the schedule's run past any slot and round
-(`Slots.exists_run_past`); building is `validAt_of_quorum` and
-`obliged_band`; resuming is `entersIn_resume` both ways, the verdicts agreeing
-by `NodeDecided.agree`; counting is `card_between_le`,
-`historyUpto_subset_between`, `card_historyUpto_le`, `card_anchored_le` and
-`card_avail_round_le`.
+Each result is a helper of `Helpers/Bounds.lean`.
 -/
 
 namespace LeanDag

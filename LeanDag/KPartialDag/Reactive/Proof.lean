@@ -3,20 +3,7 @@ import LeanDag.KPartialDag.Helpers.Reactive
 /-!
 # Reactive nodes in time — proof
 
-Persisting the last round built avoids equivocation by `Persists.eq_of_round`,
-and building above the disk persists it by `BuildsAboveDisk.persists`.
-Operations resume by `NodeRules.exists_resumed`. Every round is reached by
-`ReactiveRules.exists_reachedBy`; nodes behind catch up by
-`NodeRules.reachedBy_of_behind`, and a reactive run starts by
-`ReactiveRules.exists_run`. In a run no correct node skips a round
-(`ReactiveRun.builtBy_of_reachedBy`); each round is built within
-`δ + max τ μ` by `NodeRules.reachedBy_succ`, and within `δ + max γ μ` under
-correct leaders by `ReactiveRun.builtBy_succ_fast`; the run is responsive by
-`ReactiveRun.respondsFrom`, and a slot led by correct validators commits
-within `3δ + 2 max γ μ` by `ReactiveRun.nodeDecided_fast`; the run is
-synchronous by `ReactiveRun.syncFrom`. Nothing a leader outputs is lost by
-`NodeRules.exists_disk_of_avail`, and the ledger grows by
-`ReactiveRun.exists_ledger`.
+Each result is a helper of `Helpers/Reactive.lean`.
 -/
 
 namespace LeanDag

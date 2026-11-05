@@ -3,24 +3,9 @@ import LeanDag.Common.Participation
 /-!
 # K-partial DAG — what a node needs to decide
 
-`docs/kpartial.md` §6. Partial synchrony is read on the record as in the rest
-of the tree, up to a round `N`: from round `R` to round `N`, every block of
-an author in a quorum `T` references every block of an author in `T` of the
-round below (`SynchronisedTo`), and `T` has a block at every round
-(`SyncFrom`).
-
-A responsive node waits for less: before building two rounds above a slot it
-waits for a certificate of the slot's leader block, and builds as soon as it
-holds one. The record then has, for each slot led by `T`, blocks of `T` two
-rounds above, each carrying votes from a quorum for one leader block
-(`Responds`, `RespondsFrom`).
-
-A node decides the slots up to `n` once it holds two sets of blocks. The
-first is the blocks of authors in `T` at rounds `lo` to `hi`, with their
-references (`WithRefs`). The second is the available sub-DAG below every
-leader block of a slot up to `n` that has a certificate (`AvailBelow`).
-
-Definitions only.
+`docs/kpartial.md` §6. Synchrony and responsiveness among a set `T`
+(`SyncFrom`, `RespondsFrom`), and what a node holds to decide a run
+(`WithRefs`, `AvailBelow`).
 -/
 
 namespace LeanDag

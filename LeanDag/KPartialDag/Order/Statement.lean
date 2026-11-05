@@ -2,28 +2,9 @@ import LeanDag.KPartialDag.Model.Order
 /-!
 # The order — statement
 
-`docs/kpartial.md` §7. A committed leader outputs the blocks of its available
-sub-DAG at most `D` rounds below it, and a node's ledger is the outputs of
-the leaders it committed, ordered by slot and, within a slot, by round,
-author and id:
-
-* **local** (`Local`): a node reads a leader's output on what it holds, and
-  reads all of it once it has fetched the sub-DAG down to `D` rounds below
-  the leader;
-* **agreement** (`Agrees`): at `K ≥ 3`, what a node outputs after `n` slots,
-  it and every other node output at the same slot and in the same order
-  after `n' ≥ n` slots;
-* **a total order** (`Total`): the ledger is strictly and totally ordered,
-  causally within a slot;
-* **settled** (`Settled`): a block not in the ledger once the slots up to `D`
-  rounds above it are decided never enters;
-* **excluded** (`Excluded`): at `K ≥ 3`, such a block enters no node's
-  ledger, so its author may propose its payload again;
-* **output** (`Outputs`): after synchrony, a leader of `T` outputs every
-  block of `T` at most `D` rounds below it;
-* **inclusion** (`Included`): when every `D` rounds hold a slot led by `T`,
-  after synchrony every block of `T` enters the ledger of a node that has
-  decided the slots up to `D` rounds above it.
+`docs/kpartial.md` §7, Theorem 5: the ledger, the outputs of the committed
+leaders ordered by slot and within a slot, is agreed, totally ordered and
+never retracted, and after synchrony includes every block of `T`.
 
 Statements only; the proofs are `Proof.lean`.
 -/

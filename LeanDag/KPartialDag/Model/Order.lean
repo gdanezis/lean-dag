@@ -3,17 +3,9 @@ import Mathlib.Data.Prod.Lex
 /-!
 # K-partial DAG — what a committed leader outputs
 
-`docs/kpartial.md` §7. A committed leader `L` outputs the blocks of its
-available sub-DAG at most `D` rounds below it (`Out`); a node reads them on
-what it holds (`OutIn`). A node's ledger after slots `0, …, n-1` is what the
-leaders it committed there output (`LedgerIn`), and a block enters it at the
-first committed slot whose leader outputs it (`EntersIn`). Within one slot,
-blocks are ordered by round, then author, then id (`slotKey`, `KeyLt`), so a
-block precedes another in the ledger when it enters at an earlier slot, or at
-the same slot and earlier in that order (`PrecedesIn`). The validators and
-the block ids carry linear orders for this.
-
-Definitions only.
+`docs/kpartial.md` §7. A committed leader's output (`Out`, `OutIn`), a
+node's ledger and entry slots (`LedgerIn`, `EntersIn`), and the ledger order
+(`PrecedesIn`).
 -/
 
 namespace LeanDag

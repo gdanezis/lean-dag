@@ -3,28 +3,10 @@ import LeanDag.KPartialDag.Helpers.Live
 /-!
 # The order — helpers
 
-`docs/kpartial.md` §7. What a node reads of a leader's output lies in the
-leader's output, and is all of it once the sub-DAG is fetched down to `D`
-rounds below the leader (`outIn_eq`). So two nodes that agree on their
-verdicts, and have fetched below the leaders they committed, have one ledger
-and one entry slot per block (`ledgerIn_agree`). After synchrony, the blocks
-of `T` at least two rounds below a leader of `T` are anchored, round by round
-downward (`anchoredBelow_of_synchronisedOn`), and the round just below lies
-in the leader's history to depth `K`; so the leader outputs every block of
-`T` at most `D` rounds below it (`mem_out_of_synchronisedOn`), and a node
-deciding a slot led by `T` outputs them (`mem_ledgerIn_of_leader_mem`); when
-every `D` rounds hold a slot led by `T`, every block of `T` enters
-(`mem_ledgerIn_of_gap`). A block a node has settled out of its ledger is in
-no node's ledger (`notMem_ledgerIn_of_settled`).
-
-A block enters a ledger at one slot (`entersIn_unique`), and two nodes, or
-one node at two times, agree on the slots settled by both
-(`ledgerIn_grows`). A block output by a leader lies at most `D` rounds below
-it, so its fate is settled once the slots up to `D` rounds above it are
-decided (`mem_ledgerIn_settled`). Ordered within a slot by round, author and
-id, the ledger is a strict total order (`precedesIn_irrefl`,
-`precedesIn_trans`, `precedesIn_total`), causal within a slot
-(`precedesIn_of_ref`) and kept as slots settle (`precedesIn_grows`).
+`docs/kpartial.md` §7. What a node reads of a leader's output (`outIn_eq`),
+the agreement and growth of ledgers (`ledgerIn_grows`), the ledger order,
+settled blocks, and the output and inclusion of the blocks of `T` after
+synchrony (`mem_ledgerIn_of_gap`).
 -/
 
 namespace LeanDag

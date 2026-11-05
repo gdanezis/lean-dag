@@ -4,17 +4,9 @@ import LeanDag.Common.Rules
 /-!
 # K-partial DAG — the commit rule's tests
 
-`docs/kpartial.md` §2. Mysticeti's tests read on a K-partial DAG. A vote for
-a round-`r` block `L` is a round-`(r+1)` block referencing it, and a
-certificate a round-`(r+2)` block carrying votes for `L` from a quorum
-(`certificatesAt`). The direct tests read rounds `r` to `r + 2`. The
-indirect test reads the available sub-DAG below the anchor instead of the
-anchor's whole history: a certificate there, with its votes
-(`AvailLinked`). The commit rule is these tests as an anchored rule
-(`kRule`): the direct tests read on a view, at wave two, with one rung, the
-indirect test.
-
-Definitions only.
+`docs/kpartial.md` §2. The direct tests (`DirectCommit`, `DirectSkip`), the
+indirect test read on the available sub-DAG (`AvailLinked`), and the commit
+rule (`kRule`).
 -/
 
 namespace LeanDag

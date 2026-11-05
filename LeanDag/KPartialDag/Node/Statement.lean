@@ -2,18 +2,9 @@ import LeanDag.KPartialDag.Model.Node
 /-!
 # What a node reads — statement
 
-`docs/kpartial.md` §5. A node holds a set `H` of blocks of the record, not
-closed under histories:
-
-* **local** (`Local`): the indirect test and the fetch test read on `H` are
-  the same on every record whose blocks agree on `H`, so the node computes
-  them from what it holds;
-* **fetchable** (`Fetchable`): a node holding the record's available
-  sub-DAG below an anchor, down to `K` rounds below `ρ`, has fetched it down
-  to `ρ`;
-* **sound** (`Sound`): a decision the node takes on what it holds is a
-  decision of the commit rule on every view holding `H`;
-* **agreement** (`Agrees`): at `K ≥ 3`, two nodes decide each slot alike.
+`docs/kpartial.md` §5, Theorem 3: a node's tests read only what it holds,
+holding the sub-DAG to depth `K` fetches it, and a node's decisions are
+decisions of the commit rule and agree across nodes.
 
 Statements only; the proofs are `Proof.lean`.
 -/

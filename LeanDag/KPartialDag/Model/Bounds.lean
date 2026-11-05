@@ -2,14 +2,10 @@ import LeanDag.KPartialDag.Model.Order
 /-!
 # K-partial DAG — bands of rounds
 
-`docs/kpartial.md` §10. The blocks a node holds at round `ρ` or above
-(`Band`), the record's blocks at rounds `lo` to `hi` (`Between`), the
-condition that no author has two blocks at one round from `lo` to `hi`
-(`EquivFree`), and the download obligation of a block: its author holds the
-history to depth `K` of each of its references (`Obliged`). The bound on the
-blocks `d` rounds below a block in its history is `layerBound`.
-
-Definitions only.
+`docs/kpartial.md` §10. The band of rounds from `ρ` (`Band`), the blocks
+between two rounds (`Between`), equivocation-free records (`EquivFree`), a
+node's obligation when it builds (`Obliged`), and the layer bound
+(`layerBound`).
 -/
 
 namespace LeanDag

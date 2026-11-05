@@ -2,22 +2,9 @@ import LeanDag.Common.History
 /-!
 # K-partial DAG — the substrate
 
-`docs/kpartial.md` §1. A block references blocks of the round below from a
-quorum of distinct authors, at most one of each, committing to each by its
-hash; it need not reference its author's own previous block. A correct
-author that references a block has downloaded that block's history to depth
-`K` only. Hashes fix the whole history of every block, so the record of a
-run is an ordinary block record (`KRecord`); what a correct node holds of it
-is not. A block is held by a correct node when it is a correct author's
-block, or lies in the history to depth `K` of a block that a correct
-author's block references (`CorrectHeld`).
-
-Below a block `A`, a block referenced by blocks of `f + 1` distinct authors
-that lie in the history to depth `K` of anchored blocks is anchored
-(`AnchoredBelow`). The union of the histories to depth `K` of the anchored
-blocks is the available sub-DAG below `A` (`Avail`).
-
-Definitions only.
+`docs/kpartial.md` §1. The substrate's validity and record (`KValid`,
+`KRecord`), what correct nodes hold of it (`CorrectHeld`), and the available
+sub-DAG below a block (`AnchoredBelow`, `Avail`).
 -/
 
 namespace LeanDag

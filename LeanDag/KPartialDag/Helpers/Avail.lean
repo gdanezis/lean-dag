@@ -7,20 +7,10 @@ import Mathlib.Tactic.Linarith
 /-!
 # The available sub-DAG — helpers
 
-`docs/kpartial.md` §3. Blocks of a quorum of distinct authors at one round
-reference, between them, some correct author's block of the round below
-from `f + 1` of those authors (`exists_correct_referenced`): a double count,
-since each references `n − 2f` or more correct blocks and correct authors
-have one block a round. So below a block `A`, every round two or more below
-it holds an anchored block of a correct author (`broad`); every block at
-round `r + 3` references a certificate of a directly committed round-`r`
-block, so the available sub-DAG below `A` holds one with its references, at
-`K ≥ 3` (`linked`); and a certificate excludes a direct skip
-(`not_directSkip`). Each block of the sub-DAG lies in the history to depth
-`K` of `A`, or of an anchored block that a correct author's block of the
-sub-DAG references (`held`); a correct voter of a certificate for `A`
-references `A`, so below a certified block the sub-DAG is held by correct
-nodes (`avail_correctHeld`).
+`docs/kpartial.md` §3. Histories to depth `K` and anchored blocks, and the
+properties of the available sub-DAG: held by correct nodes
+(`avail_correctHeld`), broad (`broad`), linked (`linked`), and exclusive of a
+direct skip (`not_directSkip`).
 -/
 
 namespace LeanDag

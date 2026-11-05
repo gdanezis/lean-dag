@@ -2,18 +2,9 @@ import LeanDag.KPartialDag.Model.Rule
 /-!
 # The available sub-DAG — statement
 
-`docs/kpartial.md` §3. On a K-partial DAG, for a block `A` and the available
-sub-DAG below it (`Avail`):
-
-* **held** (`Held`): below a block with a certificate, every block of the
-  sub-DAG is held by a correct node;
-* **broad** (`Broad`): at `K ≥ 2`, every round two or more below `A` holds an
-  anchored block of a correct author;
-* **linked** (`Linked`): at `K ≥ 3`, if a round-`r` block is directly
-  committed and `A` lies at round `r + 3` or above, the sub-DAG holds a
-  certificate for it, with its references;
-* **exclusive** (`Exclusive`): if the sub-DAG holds a certificate for a
-  block, that block is not directly skipped.
+`docs/kpartial.md` §3, Theorem 1: the available sub-DAG below a certified
+block is held by correct nodes and broad; a direct commit below it is linked
+through it, and a link excludes a direct skip.
 
 Statements only; the proofs are `Proof.lean`.
 -/

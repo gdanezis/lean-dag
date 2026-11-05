@@ -3,33 +3,12 @@ import LeanDag.KPartialDag.Helpers.Live
 /-!
 # Reactive nodes in time — helpers
 
-`docs/kpartial.md` §11. What a node waits for grows with what it holds
-(`waitsFor_mono`). A block of `T` built at time `t` shows that its author held
-what it waits for at `t`, or a quorum at `t − τ`, or a block of `T` of its
-round built before `t` (`induction_behind`). Blocks of `f + 1` authors of `T`
-at a round bring every node of `T` to the round within `δ`
-(`reachedBy_of_behind`), and so does a quorum that a node of `T` holds
-(`reachedBy_of_quorumIn`); a node of `T` then builds above once its timeout
-runs out (`reachedBy_succ`). A node's timer starts at a quorum, so with
-`τ ≥ 2δ` a leader's block of `T` reaches every voter of `T` before its timeout
-(`leader_mem_held`), and the votes of `T` reach every node of `T` before its
-timeout two rounds above (`certIn_held`); a node of `T` builds at once when
-the leaders it waits for are in `T` (`builtBy_succ_fast`). The round after
-the last one a node of `T` reached before `G + τ` starts a reactive run
-(`exists_run`).
-
-A correct node that holds a correct block above round `k` holds a quorum at
-`k` (`quorumIn_of_held`), and a correct node holds a block of its own as high
-as any it built, from its disk (`exists_held_of_built`); so after crashes
-before `G` every node of `T` reaches the highest round built in `T` by `G`
-(`reachedBy_of_built`), and operations resume (`exists_resumed`). In a run,
-at `δ < γ ≤ τ`, no node of `T` skips a round (`builtBy_below`).
-
-The available sub-DAG of a certified block stays on the disk of a node of
-`T` (`exists_disk_of_avail`). Every certified leader is referenced by a vote
-of `T` that its author keeps on disk, so every node of `T` holds it and
-fetches its available sub-DAG; with the run responsive, every node of `T`
-decides every slot up to a run of leaders of `T` (`exists_ledger`).
+`docs/kpartial.md` §11. Persisting the last round built, recovery after
+crashes (`exists_resumed`), the spread of rounds through `T`
+(`reachedBy_of_quorumIn`), the start of a reactive run (`exists_run`), no
+skipped round in it (`builtBy_below`), its timing, responsiveness and
+synchrony, the disk (`exists_disk_of_avail`), and the ledger
+(`exists_ledger`).
 -/
 
 namespace LeanDag

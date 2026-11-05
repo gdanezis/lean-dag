@@ -3,29 +3,9 @@ import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 /-!
 # Bounds for deciding and restarting — statement
 
-`docs/kpartial.md` §10. With no mechanism beyond the K-partial DAG and its
-commit rule:
-
-* **decisions read a band** (`Decides`): a node's decision of a slot at
-  round `ρ + K − 1` or above, and not below `ρ`, is the same on its blocks at
-  round `ρ` or above;
-* **progress from a band** (`Progress`): on a responsive run, a node holding
-  the blocks of `T` over a run and the available sub-DAG above round `ρ` decides
-  every slot up to the run's end at round `ρ + K − 1` or above;
-* **building** (`Builds`): a block referencing a quorum of distinct authors of
-  the round below is valid, and its obligation is met by the node's blocks
-  `K` rounds below the quorum's round or above;
-* **resuming the ledger** (`Resumes`): at `K ≥ 3`, two nodes that decided the
-  slots `D` rounds below `s` and above, and fetched those slots' leaders down
-  to `D` rounds below `s`, give each block the same entry slot from `s` on;
-* **counting** (`Counts`, `Window`): without equivocation the record holds at
-  most `n` blocks per round; with no condition on equivocation, a history to
-  depth `K` lies in `K + 1` rounds and holds at most `N_0 + ⋯ + N_K` blocks,
-  with `N_0 = 1` and `N_{d+1} = |C| + f · N_d`;
-* **the available sub-DAG per round** (`AvailRound`): with no condition on
-  equivocation, a round holds at most `|C| · n` anchored blocks besides the
-  anchor, and at most `|C| + (|C|(f + 1) + 1)(1 + f + ⋯ + f^K)` blocks of the
-  available sub-DAG.
+`docs/kpartial.md` §10, Theorem 6: deciding, building and resuming the
+ledger read a band of rounds of bounded length, and the blocks of a history
+and of a round of the available sub-DAG are counted.
 
 Statements only; the proofs are `Proof.lean`.
 -/

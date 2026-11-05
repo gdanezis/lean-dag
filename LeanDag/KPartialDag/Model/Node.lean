@@ -2,23 +2,9 @@ import LeanDag.KPartialDag.Model.Rule
 /-!
 # K-partial DAG — what a node reads
 
-`docs/kpartial.md` §5. A node holds a set `H` of blocks, not closed under
-histories. It reads the available sub-DAG below an anchor on `H`: a block is
-anchored in `H` when its history to depth `K` is held and it is the anchor,
-or blocks of `f + 1` distinct authors of the sub-DAG read so far reference it
-(`AnchoredIn`, `AvailIn`). It links a candidate when it holds, in that
-sub-DAG, a certificate for it with the certificate's references
-(`LinkedIn`). It has fetched the sub-DAG down to round `ρ` when the anchor's
-history is held, and so is the history of every block that blocks of `f + 1`
-distinct authors of the sub-DAG above round `ρ` reference (`FetchedIn`).
-
-The node decides by the commit rule read on what it holds
-(`NodeDecided`): the direct tests count the certificates and blamers it
-holds with their references, the indirect commit reads `LinkedIn`, and the
-indirect skip needs the sub-DAG below the anchor fetched down to the round
-above the slot's.
-
-Definitions only.
+`docs/kpartial.md` §5. The available sub-DAG and the commit rule's tests as
+read on the blocks `H` a node holds (`AvailIn`, `LinkedIn`, `FetchedIn`,
+`heldWithRefs`), and the node's decisions (`NodeDecided`).
 -/
 
 namespace LeanDag

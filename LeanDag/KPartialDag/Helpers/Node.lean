@@ -3,20 +3,9 @@ import LeanDag.KPartialDag.Helpers.Rule
 /-!
 # What a node reads — helpers
 
-`docs/kpartial.md` §5. A history to depth `K` that a node holds is the same
-under every block map agreeing on what it holds
-(`historyUptoFrom_eq_of_subset`), so the sub-DAG read on `H`, the indirect
-test and the fetch test read only `H` (`linkedIn_congr`, `fetchedIn_congr`).
-Read on `H`, the sub-DAG lies in the record's (`availIn_subset`), so a link
-read on `H` is the record's (`linkedIn_avail`). A block of a history to depth
-`n` lies at most `n` rounds below (`round_of_mem_historyUpto`), so once the
-sub-DAG is fetched down to round `ρ` it is the record's sub-DAG above `ρ`
-(`avail_subset_availIn`), and the record's link is read on `H` when it is
-fetched down to the round above the slot's (`avail_linkedIn`). Holding the
-record's sub-DAG down to `K` rounds below `ρ` fetches it down to `ρ`
-(`fetchedIn_of_subset`). So a decision a node takes on what it holds is a
-decision on every view holding it (`NodeDecided.decided`), and two nodes
-decide each slot alike (`NodeDecided.agree`).
+`docs/kpartial.md` §5. A node's tests read only what it holds, holding the
+sub-DAG fetches it (`fetchedIn_of_subset`), and a node's decision is one on
+every view holding what it holds (`NodeDecided.decided`).
 -/
 
 namespace LeanDag

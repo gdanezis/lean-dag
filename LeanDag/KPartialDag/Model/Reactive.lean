@@ -2,44 +2,12 @@ import LeanDag.KPartialDag.Model.Live
 /-!
 # K-partial DAG — reactive nodes in time
 
-`docs/kpartial.md` §11. A timeline gives, for each validator and time, the
-blocks it holds (`held`) and the blocks it keeps on disk (`disk`), and for
-each block the time it was built (`built`). A correct node builds above
-round `r` once it holds what it waits for (`WaitsFor`): blocks of a quorum of
-distinct authors at round `r` (`QuorumIn`), a leader block of every slot at
-round `r`, and a certificate for a leader block of every slot at round
-`r − 1` (`CertIn`), and then, for a grace period `γ`, for blocks of every
-validator at round `r` (`AllIn`). It also builds once it has held a quorum
-of round `r` for a timeout `τ`. In either case it builds no earlier than a
-minimum wait `μ` after it first held a quorum of round `r`. It references a
-block of every author whose block of round `r` it holds.
-
-A node behind builds above round `r` at once when it holds blocks of round
-`r + 1` by `f + 1` authors other than itself (`BehindIn`): one of them is
-correct, so a correct node has built the round. A node builds above the
-highest round it can, and may skip rounds.
-
-Correct nodes may crash and restart, all at once too. A restart loses what
-a node held, except what it keeps on disk: every block it built, with the
-block's references, and with their histories to depth `K` (`KeepsHistory`).
-A set `T` of at least `n − f` correct nodes is up from a time `G` on: its
-nodes keep what they hold, and pass on the correct blocks they hold within
-`δ`; the other correct nodes may crash and restart at any time. A correct
-node holds the references of the correct blocks it holds, and a node of `T`
-holds, from `G` on, the available sub-DAG of a certified leader block it
-holds `Δ` later (`Fetches`).
-
-The timeline follows the rules for nodes from round `R` to round `N`
-(`NodeRules`) when correct nodes follow these rules there; it follows the
-reactive rules (`ReactiveRules`) when, in addition, every node of `T` has
-reached round `R`. It is a reactive run (`ReactiveRun`) when, in addition,
-the blocks of `T` from round `R` on are built at `G + τ` or later.
-A node keeps on disk the last round it built, and builds only above it
-(`Persists`); that is all it needs to build at most one block a round. A
-node that builds above the blocks of its own on its disk (`BuildsAboveDisk`)
-does so, numbering its builds by time.
-
-Definitions only.
+`docs/kpartial.md` §11. What a node waits for (`WaitsFor`), timelines of held
+blocks, disks and build times (`Timeline`), progress (`BuiltBy`,
+`ReachedBy`), the rules for nodes (`NodeRules`, `ReactiveRules`,
+`ReactiveRun`), histories kept on disk and fetching (`KeepsHistory`,
+`Fetches`), and persisting the last round built (`Persists`,
+`BuildsAboveDisk`).
 -/
 
 namespace LeanDag

@@ -2,28 +2,10 @@ import LeanDag.KPartialDag.Model.Live
 /-!
 # Liveness — statement
 
-`docs/kpartial.md` §6. Responsiveness among a quorum `T` from round `R`
-(`RespondsFrom`): every slot led by `T` has blocks of `T` two rounds above it,
-each carrying votes from a quorum for its leader block. A node that waits for
-a certificate of the leader before building two rounds above produces it.
+`docs/kpartial.md` §6, Theorem 4: synchrony implies responsiveness, and on a
+record responsive among a quorum `T`, a node holding what a run of slots led
+by `T` needs decides every slot below the run's end.
 
-* **synchrony implies responsiveness** (`Weaker`): partial synchrony among
-  `T` (`SyncFrom`) gives responsiveness among `T`;
-* **a responsive slot commits** (`Commits`): a node holding the blocks of `T`
-  two rounds above the slot, with their references, commits the slot
-  directly;
-* **a committed run decides below it** (`Descends`): a node holding the
-  available sub-DAG below every certified leader block up to slot `n`, which
-  has committed every slot from `b` to `n`, decides every slot below `b`
-  when `n` may anchor each of them;
-* **every slot is decided** (`Progress`): past any slot and any round, the
-  schedule names a run of `c` slots led by `T`, and on every record
-  responsive among `T` a node holding what the run needs decides every slot
-  up to the run's end.
-
-What the node needs is held by correct nodes: the blocks of `T` and their
-references by their authors, and the sub-DAG by `Avail.Held`. No bound on
-`K` is needed.
 Statements only; the proofs are `Proof.lean`.
 -/
 

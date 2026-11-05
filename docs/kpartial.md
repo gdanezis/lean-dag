@@ -137,10 +137,9 @@ slot (`Responds`). A node produces this by waiting, before it builds two
 rounds above a slot, until it holds a certificate for the slot's leader
 block. It needs no timer when the leader is correct and the network is
 timely: the voters of `T` are a quorum, so no wait depends on a Byzantine
-validator. Partial synchrony as it is read elsewhere in the tree implies
-responsiveness: from `R` to some round `N`, every block of `T` references
-every block of `T` of the round below (`SynchronisedTo`), and `T` has a block
-at every round (`SyncFrom`).
+validator. *Synchrony* from `R` to `N` means that every block of `T`
+references every block of `T` of the round below (`SynchronisedTo`), and `T`
+has a block at every round (`SyncFrom`).
 
 The schedule offers runs: past any slot, `c` consecutive slots led by `T`
 (`FairRunOn`), each run spanning eligibility. A node decides once it holds
@@ -171,13 +170,6 @@ not change as the record grows.
 With Theorem 3, every correct node eventually decides every slot, and all
 decide each slot alike. Under three-round spacing `c = 1`; with one slot a
 round, `c = 3`.
-
-The order's inclusion results (Theorem 5) still assume synchrony: they need
-every block of `T` to be referenced, which a node that builds as soon as it
-holds a certificate does not ensure.
-
-Theorem 7 (§11) shows that nodes following a waiting rule produce
-responsiveness after synchrony.
 
 ## 7. The order
 
@@ -303,23 +295,13 @@ is argued only:
 * *Bounded work to take part* (proved, §10). A validator references, and so
   votes and builds, after fetching `K + 1` rounds of history; a validator
   returning from an outage needs those rounds, not all it missed.
-* *Bounded fetch to decide and to order* (proved). A decision from an anchor
-  needs the sub-DAG from the anchor down to `K` rounds below the slot
-  (Theorem 3), and a leader's output `D + K` rounds below it (Theorem 5).
 * *Availability without a certification round* (proved). The sub-DAG below
   a certified block is held by correct nodes (Theorem 1); the rule of
   `f + 1` distinct authors does the work of an availability certificate, and
   a node never depends on Byzantine nodes for data.
 * *Mysticeti's guarantees* (proved). The direct rule, and so the commit
-  latency in rounds, is unchanged; agreement holds at `K ≥ 3`, liveness on a
-  responsive record for every `K`, and the ledger is agreed, never retracted
-  and totally ordered.
-* *Weaker obligations* (argued). No reference to the author's own block is
-  required, so a validator that crashed resumes without its own chain; no
-  result uses one.
-* *Bounded state* (proved in rounds, §10). A node decides from the rounds
-  from `K − 1` below its lowest undecided slot, and resumes the ledger from
-  `D + K` rounds below; how long others must retain these is open.
+  latency in rounds, is unchanged; the other guarantees are the results of
+  §8.
 
 The costs are the loss of causal order across slots, blocks that no leader
 outputs within `D` rounds and must be proposed again, a depth `D` set by the
@@ -337,19 +319,17 @@ blocks. The blocks of `H` at round `ρ` or above are its *band from `ρ`*
 * *Decisions read a band* (`Bounds.Decides`). A node's decision of a slot at
   round `ρ + K − 1` or above, and not below `ρ`, is the same on its band from
   `ρ`. A block anchored at round `ρ + K` or above is anchored on the band,
-  since its derivation reads only blocks above it and their histories to depth
-  `K` (`AnchoredIn.band`), so the available sub-DAG, the indirect test and the
-  fetch test above round `ρ + K` read only the band (`availIn_band_iff`,
-  `linkedIn_band_iff`, `fetchedIn_band_iff`); the direct tests read rounds
-  `σ(k)` to `σ(k) + 2` (`heldWithRefs_band`), and every slot a decision
-  recurses to lies above (`nodeDecided_band_iff`).
+  since its derivation reads only blocks above it and their histories to
+  depth `K`, so the available sub-DAG, the indirect test and the fetch test
+  above round `ρ + K` read only the band; the direct tests read rounds `σ(k)`
+  to `σ(k) + 2`, and every slot a decision recurses to lies above.
 * *Progress from a band* (`Bounds.Progress`). On a responsive run, a node holding
   the blocks of `T` over a run with their references, and the available
   sub-DAG below every certified leader up to the run's end from round `ρ`
   up, decides every slot below the run's end at round `ρ + K − 1` or above.
   So a node keeps only the rounds from `K − 1` below its lowest undecided
   slot, and the length of that band is bounded after synchrony by the
-  distance to the next run (`nodeDecided_of_run_band`).
+  distance to the next run.
 * *Building* (`Bounds.Builds`). A block of round `r + 1` referencing a quorum
   of distinct authors of round `r` is valid, and a node holding the
   histories to depth `K` of that quorum meets its obligation (`Obliged`)
@@ -361,28 +341,25 @@ blocks. The blocks of `H` at round `ρ` or above are its *band from `ρ`*
   slots' leaders down to `D` rounds below `s`, give each block the same entry
   slot from `s` on. Neither needs a verdict of an earlier slot: a leader
   outputs only blocks `D` rounds below it or above, and a block of the
-  available sub-DAG lies at or below its leader (`entersIn_resume`). By
-  §5's `Fetchable` and the first item, a restarting node resumes the ledger
+  available sub-DAG lies at or below its leader. By §5's `Fetchable` and the
+  first item, a restarting node resumes the ledger
   at slot `s` from its band from `σ(s) − D − K`, with the executed state at
   `s` from a checkpoint.
 * *Counting* (`Bounds.Counts`, `Bounds.Window`, `Bounds.AvailRound`).
-  Without equivocation the record holds at most `n` blocks per round
-  (`card_between_le`), so a band of `w` rounds holds at most `n w` blocks:
-  `n (K + 1)` to build, `n (D + K + ℓ)` to restart, with `ℓ` the rounds
-  from the lowest undecided slot up to the current round. With equivocation and
-  no further mechanism:
+  Without equivocation the record holds at most `n` blocks per round, so a
+  band of `w` rounds holds at most `n w` blocks: `n (K + 1)` to build, and
+  `n (D + K + ℓ)` to restart, with `ℓ` the rounds from the lowest undecided
+  slot up to the current round. With equivocation and no further mechanism:
   - a history to depth `K` holds at most `N_0 + ⋯ + N_K` blocks, with
     `N_0 = 1` and `N_{d+1} = |C| + f · N_d`: each layer holds at most `|C|`
     blocks of correct authors, and a block references at most `f` Byzantine
-    blocks (`card_layers_le`, `card_historyUpto_le`);
+    blocks;
   - every Byzantine block of the available sub-DAG hangs at most `K` rounds
     below a *root*, a block of a correct author or an anchored block,
-    through Byzantine blocks (`exists_root`), and a round holds at most
-    `|C|(f + 1) + 1` roots, since an anchored Byzantine block has a correct
-    referencer one round up (`card_anchored_le`, `card_roots_le`); so a round
-    of the available sub-DAG holds at most
-    `|C| + (|C|(f + 1) + 1)(1 + f + ⋯ + f^K)` blocks
-    (`card_avail_round_le`).
+    through Byzantine blocks, and a round holds at most `|C|(f + 1) + 1`
+    roots, since an anchored Byzantine block has a correct referencer one
+    round up; so a round of the available sub-DAG holds at most
+    `|C| + (|C|(f + 1) + 1)(1 + f + ⋯ + f^K)` blocks.
 
   For `n = 100`, `f = 33`, `|C| = 67`:
 
@@ -399,14 +376,6 @@ blocks. The blocks of `H` at round `ρ` or above are its *band from `ρ`*
   anchored Byzantine block has up to `f^K` Byzantine blocks in its history to
   depth `K`. This construction is not formalised. A bound near `n` per round
   therefore needs a rule for equivocating authors.
-
-That persisting the last round built before sending suffices to avoid
-equivocation after a restart is Theorem 7's `Persisted` (§11). A node needs
-only its band, but others must keep the blocks it may still fetch: correct
-nodes keep on disk, for ever, the histories to depth `K` of their blocks'
-references, and Theorem 7's `Durable` shows that nothing a leader outputs is
-then lost. A bound on how long they must keep them would need a quantitative
-liveness bound or a state transfer.
 
 ## 11. Reactive nodes in time
 
@@ -434,9 +403,7 @@ memory and resets its timers, and a node builds nothing while it is down.
 What survives is its disk: a correct node keeps on disk, for ever, every
 block it has built with the block's references (`stores`), and the histories
 to depth `K` of those references (`KeepsHistory`), and holds what is on its
-disk (`disk_held`). These histories are what a correct node must hold to
-build (§10), so every block of the available sub-DAG of a certified block,
-which lies in them (Theorem 1), survives any crash. A correct node holds the
+disk (`disk_held`). A correct node holds the
 references of the correct blocks it holds (`closed`).
 
 *Crashes after `G`.* A set `T` of at least `n − f` correct nodes is up from
@@ -451,7 +418,10 @@ quorum holds blocks of `f + 1` authors of `T`, which is what the arguments
 below use: the liveness results speak of `T`. With no crash after `G`, `T`
 is the set of correct validators. Nodes pass on only correct blocks: a
 Byzantine block reaches a node only among the references of a block it
-holds, which it fetches from the node that sent it. A correct node is
+holds, which it fetches from the node that sent it. A single block built on
+the timer does not bring other nodes to its round, since its quorum may
+include Byzantine blocks that reached its author alone; its `f + 1` blocks
+of `T` do, through the rule for nodes behind. A correct node is
 obliged, if in `T`, to build only on what it has held since `G`, and the wait on the
 grace period holds what the node waits for both when the period starts and
 when it builds.
@@ -468,13 +438,9 @@ configured. The minimum wait bounds the rate of rounds; the proofs use it
 only as a delay.
 
 To build at most one block a round across restarts, a node keeps on disk
-the last round it built (`Persists`): its builds are numbered in order, the
-round it keeps, one above the last round built, never decreases, it builds
-only at or above that round, and it raises it before it sends a block. The
-block it keeps on disk gives that round: a node that keeps its highest block
-on disk, builds at most one block at a time, and builds only above the
-blocks of its own on its disk the time before (`BuildsAboveDisk`) persists
-the last round it built, with its builds numbered by time.
+one above the last round it built, never lowers it, builds only at or above
+it, and raises it before it sends a block (`Persists`). Its own blocks on
+disk give that round (`BuildsAboveDisk`).
 
 *Recovery.* Suppose every node crashed before `G`, and let `r` be the
 highest round on the disk of a node of `T`. That node holds its block of
@@ -495,8 +461,9 @@ leader of `T` is built within `δ` of the start of the timer of every node of
 `τ ≥ 2δ`. The same holds for the votes of `T` two rounds above. A node that
 waited, or was behind, needs no timing argument: by induction on build
 times, a block of `T` built behind rests on an earlier block of `T` of its
-round, and eventually on one built on the wait or the timer, whose author referenced the leader block and carried the
-certificate it held; the node holds these references.
+round, and eventually on one built on the wait or the timer, whose author
+referenced the leader block and carried the certificate it held; the node
+holds these references.
 
 **Theorem 7 (reactive nodes; `Reactive.Statement`).** A correct validator
 that persists the last round it built builds at most one block a round
@@ -521,8 +488,9 @@ Under the reactive rules from round `R` to round `N`:
   validator of `T` has reached the round by `t + δ`.
 * *A reactive run starts* (`Reactive.Starts`). There is a round `R' ≥ R`,
   either `R` or one above the round of a block of `T` built before `G + τ`,
-  such that, if `R' ≤ N`, the timeline is a reactive run from `R'` to `N`, and every validator of `T` has reached `R'` within
-  `2δ + 2 max(τ, μ)` of `G + τ` and of the time all reached `R`.
+  such that, if `R' ≤ N`, the timeline is a reactive run from `R'` to `N`,
+  and every validator of `T` has reached `R'` within `2δ + 2 max(τ, μ)` of
+  `G + τ` and of the time all reached `R`.
 
 On a reactive run from round `R` to round `N`, at `δ < γ ≤ τ`, no node
 of `T` skips a round from `R + 1` on (`builtBy_below`): by the time a block of `T`
@@ -579,39 +547,23 @@ slots decided before the crash are decided again, alike, on the blocks the
 disks kept. No single theorem states this.
 
 The bounds depend on the actual delay `δ` and the configured `γ` and `μ`,
-not on `τ`, except where a slot next to the round has a Byzantine leader;
-there a round costs at most `δ + max(τ, μ)`. When all `n` validators send
-their blocks, a node does not wait out the grace period. No bound depends on
-`K`.
+not on `τ`, except where a slot next to the round has a Byzantine leader.
 
-The rule for nodes behind is what lets nodes pass on only correct blocks. A
-single correct block built on the timer does not bring other nodes to its
-round within `δ`: its author's quorum may include Byzantine blocks that
-reached it alone. Its `f + 1` blocks of `T` do, through the rule.
+The grace period makes the run synchronous. A node building on the wait has
+held its quorum for `γ`, and one building on the timer for `τ`; with
+`γ, τ ≥ 2δ` every block of `T` of the round has reached it, and it references
+them. A node building behind holds a block of `T` of the round above built
+earlier, which references them, by induction on build times.
 
-The grace period makes the run synchronous. A node of `T` that holds a
-quorum of round `r` at `t ≥ G` holds blocks of `f + 1` authors of `T`, so
-every node of `T` has built at round `r` by `t + δ`, and its block reaches
-the node by `t + 2δ`. A node building on the wait has held its quorum for
-`γ`, and one building on the timer for `τ`; with `γ, τ ≥ 2δ` it holds every
-block of `T` of round `r`, and references it. A node building behind holds a
-block of `T` of round `r + 1` built earlier, which references every block of
-`T` of round `r`, by induction on build times.
-
-A witness (`LeanDagTest/KPartialDag/Reactive.lean`) shows that the premise is
-consistent: one correct validator building a chain of blocks, all held at
-time `1`, is a reactive run, and `Reactive.Commits` decides its slots and
-`Reactive.Synchronised` applies. It exercises none of the timing, since its
-delay is `0`, and no restart.
-
-Crashes after `G` are covered for the nodes outside `T`. Rolling restarts
-that in time reach every node are covered only by taking `G` after the last
-crash of a node of `T`.
+A witness (`LeanDagTest/KPartialDag/Reactive.lean`), one validator building a
+chain at delay `0`, shows the rules are consistent; it exercises no timing
+and no restart.
 
 ## 12. Open questions
 
 * Bounds: the cost of fetching the sub-DAG, and how long correct nodes must
-  keep the histories on disk; they keep them for ever here.
+  keep the histories on disk; they keep them for ever here, and a bound
+  needs the time bound for the ledger below.
 * Chain quality: the share of correct blocks in a leader's output.
 * Inclusion counted on every committed leader rather than leaders of `T`:
   the references of any block include `f + 1` blocks of `T`, which suggests
@@ -619,7 +571,6 @@ crash of a node of `T`.
   below it.
 * A storage bound linear in `K` under equivocation, which needs a rule for
   equivocating authors (§10).
-* Quantitative liveness, which a retention bound needs.
 * Crashes of every node over time: a set `T` up during a bounded window
   only, with every result stated inside the window, so that rolling restarts
   of all nodes keep the protocol live.

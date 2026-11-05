@@ -3,13 +3,7 @@ import LeanDag.KPartialDag.Helpers.Order
 /-!
 # The order — proof
 
-A node reads a leader's output by `outIn_subset` and `outIn_eq`; ledgers
-agree and grow by `ledgerIn_grows` and `precedesIn_grows`; the order is total
-by `precedesIn_irrefl`, `precedesIn_trans`, `precedesIn_total` and
-`precedesIn_of_ref`; a block's fate is settled by `mem_ledgerIn_settled`,
-for every node by `notMem_ledgerIn_of_settled`; a leader of `T` outputs the
-blocks of `T` below it by `mem_out_of_synchronisedOn`; and every block of `T`
-enters by `mem_ledgerIn_of_gap`.
+Each result is a helper of `Helpers/Order.lean`.
 -/
 
 namespace LeanDag

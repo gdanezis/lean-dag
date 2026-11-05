@@ -3,9 +3,7 @@ import LeanDag.KPartialDag.Helpers.Node
 /-!
 # What a node reads — proof
 
-Locality is `linkedIn_congr` and `fetchedIn_congr` both ways; holding the
-sub-DAG fetches it by `fetchedIn_of_subset`; soundness is
-`NodeDecided.decided`; and two nodes agree by `NodeDecided.agree`.
+Each result is a helper of `Helpers/Node.lean`.
 -/
 
 namespace LeanDag

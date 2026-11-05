@@ -3,11 +3,7 @@ import LeanDag.KPartialDag.Helpers.Live
 /-!
 # Liveness — proof
 
-Synchrony implies responsiveness by `respondsFrom_of_syncFrom`; a responsive
-slot commits by `nodeDecided_of_responds`; a committed run decides below it
-by `nodeDecided_below`; and the schedule's run past any slot and round
-(`Slots.exists_run_past`), which responds by `responds_of_run`, decides every
-slot up to its end by `nodeDecided_of_run`.
+Each result is a helper of `Helpers/Live.lean`.
 -/
 
 namespace LeanDag
