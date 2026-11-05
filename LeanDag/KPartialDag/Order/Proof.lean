@@ -6,10 +6,10 @@ import LeanDag.KPartialDag.Helpers.Order
 A node reads a leader's output by `outIn_subset` and `outIn_eq`; ledgers
 agree and grow by `ledgerIn_grows` and `precedesIn_grows`; the order is total
 by `precedesIn_irrefl`, `precedesIn_trans`, `precedesIn_total` and
-`precedesIn_of_ref`; a block's fate is settled by `mem_ledgerIn_settled`; a
-leader of `T` outputs the blocks of `T` below it by
-`mem_out_of_synchronisedOn`; and every block of `T` enters by
-`mem_ledgerIn_of_gap`.
+`precedesIn_of_ref`; a block's fate is settled by `mem_ledgerIn_settled`,
+for every node by `notMem_ledgerIn_of_settled`; a leader of `T` outputs the
+blocks of `T` below it by `mem_out_of_synchronisedOn`; and every block of `T`
+enters by `mem_ledgerIn_of_gap`.
 -/
 
 namespace LeanDag
@@ -37,6 +37,10 @@ theorem settled : Settled := by
   intro Validator BlockId Payload _ _ _ _ S U K D H g n n' b hH hdec hn hb
   exact mem_ledgerIn_settled hH hdec hn hb
 
+theorem excluded : Excluded := by
+  intro Validator BlockId Payload _ _ _ _ S U K D H₁ H₂ g₁ g₂ n n' b hK hH₁ hH₂ h₁ h₂ hf₁ hf₂ hn hb
+  exact notMem_ledgerIn_of_settled hK hH₁ hH₂ h₁ h₂ hf₁ hf₂ hn hb
+
 theorem outputs : Outputs := by
   intro Validator BlockId Payload _ _ _ _ U K D T R L x hK ⟨hcard, hs, hpop⟩ hL hLc hx hxc hRx
     hxL hD
@@ -48,7 +52,7 @@ theorem included : Included := by
     ⟨hcard, hs, hpop⟩ hW
   exact mem_ledgerIn_of_gap hK hcard hs hH hgap hdec hf hx hxc hRx hn hpop hW
 
-theorem holds : Statement := ⟨local_, agrees, total, settled, outputs, included⟩
+theorem holds : Statement := ⟨local_, agrees, total, settled, excluded, outputs, included⟩
 
 end Order
 

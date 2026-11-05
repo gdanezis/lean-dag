@@ -17,6 +17,8 @@ author and id:
   causally within a slot;
 * **settled** (`Settled`): a block not in the ledger once the slots up to `D`
   rounds above it are decided never enters;
+* **excluded** (`Excluded`): at `K ≥ 3`, such a block enters no node's
+  ledger, so its author may propose its payload again;
 * **output** (`Outputs`): after synchrony, a leader of `T` outputs every
   block of `T` at most `D` rounds below it;
 * **inclusion** (`Included`): when every `D` rounds hold a slot led by `T`,
@@ -83,6 +85,22 @@ def Settled : Prop :=
     (∀ k, S.slotRound k ≤ (U.block b).round + D → k < n) →
     b ∈ LedgerIn U K H D g n' → b ∈ LedgerIn U K H D g n
 
+/-- **A block settled out of one ledger is in none**: at `K ≥ 3`, a block not
+in a node's ledger once the node has decided every slot at most `D` rounds
+above it is in no node's ledger after any number of slots, once each has
+fetched below the leaders it committed. -/
+def Excluded : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [DecidableEq BlockId] [S : Slots Validator]
+    (U : KRecord Validator BlockId Payload) (K D : ℕ) (H₁ H₂ : Finset BlockId)
+    (g₁ g₂ : ℕ → Option BlockId) (n n' : ℕ) (b : BlockId), 3 ≤ K →
+    H₁ ⊆ U.ids → H₂ ⊆ U.ids → (∀ k, k < n → NodeDecided U K H₁ k (g₁ k)) →
+    (∀ k, k < n' → NodeDecided U K H₂ k (g₂ k)) →
+    (∀ k L, k < n → g₁ k = some L → FetchedIn U K H₁ L ((U.block L).round - D)) →
+    (∀ k L, k < n' → g₂ k = some L → FetchedIn U K H₂ L ((U.block L).round - D)) →
+    (∀ k, S.slotRound k ≤ (U.block b).round + D → k < n) →
+    b ∉ LedgerIn U K H₁ D g₁ n → b ∉ LedgerIn U K H₂ D g₂ n'
+
 /-- **After synchrony, a leader of `T` outputs every block of `T` at most `D`
 rounds below it**, from round `R` on, at `K ≥ 1`. -/
 def Outputs : Prop :=
@@ -113,7 +131,7 @@ def Included : Prop :=
     x ∈ LedgerIn U K H D g n
 
 /-- The order. -/
-def Statement : Prop := Local ∧ Agrees ∧ Total ∧ Settled ∧ Outputs ∧ Included
+def Statement : Prop := Local ∧ Agrees ∧ Total ∧ Settled ∧ Excluded ∧ Outputs ∧ Included
 
 end Order
 

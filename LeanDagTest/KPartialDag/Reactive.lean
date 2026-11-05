@@ -4,7 +4,7 @@ import LeanDag.KPartialDag.Reactive.Proof
 
 `ReactiveRun` is satisfiable: one correct validator builds one block a
 round up to round `N`, each referencing the one below, and holds every block
-at every time. With `G = δ = τ = 0`, `Reactive.Commits` then decides every
+at every time. With `G = δ = τ = γ = μ = 0`, `Reactive.Commits` then decides every
 slot from `2` to `N − 2`. The witness shows the fields of `ReactiveRun` are
 consistent; with `δ = 0` it exercises none of the timing.
 -/
@@ -83,7 +83,7 @@ theorem waitsFor_chain {N r : ℕ} (hr : r < N) :
   exact mem_chainRefs.mpr ⟨by omega, by omega⟩
 
 /-- **The chain is a reactive run** from round `0` to round `N`. -/
-theorem chain_run (N : ℕ) : ReactiveRun (chain N) (chainTimeline N) 0 0 0 0 N where
+theorem chain_run (N : ℕ) : ReactiveRun (chain N) (chainTimeline N) 0 0 0 0 0 0 N where
   held_ids _ _ := Finset.Subset.refl _
   mono _ _ _ _ _ := Finset.Subset.refl _
   delivers _ hb _ _ _ _ _ _ := hb
@@ -92,18 +92,17 @@ theorem chain_run (N : ℕ) : ReactiveRun (chain N) (chainTimeline N) 0 0 0 0 N 
   prior _ _ _ _ _ _ hne := absurd rfl hne
   late _ _ _ _ := le_rfl
   start := ⟨0, fun _ _ => ⟨0, Finset.mem_range.mpr (by omega), rfl, rfl, le_rfl⟩⟩
-  waits b hb _ r hbr _ := Or.inl (waitsFor_chain (by
+  waits b hb _ r hbr _ := Or.inl ⟨le_rfl, waitsFor_chain (by
     have : (chain N).block b = chainBlock b := rfl
     simp only [Finset.mem_range, chain] at hb
     simp only [this, chainBlock] at hbr
-    omega))
+    omega)⟩
   prompt _ _ r _ _ hr _ := ⟨r + 1, Finset.mem_range.mpr (by omega), rfl, rfl, Nat.zero_le _⟩
-  votes b hb _ k hk _ := by
-    rw [slotRound_unit] at hk
-    have hbk : b = k + 1 := hk.symm
-    subst hbk
-    refine ⟨k, mem_chainRefs.mpr ⟨by omega, by omega⟩,
-      Finset.mem_range.mpr (by simp [chain] at hb; omega), rfl, rfl⟩
+  covers b hb _ x hx hxb := by
+    have hb' : (chain N).block b = chainBlock b := rfl
+    have hx' : (chain N).block x = chainBlock x := rfl
+    simp only [hb', hx', chainBlock] at hxb
+    exact ⟨x, mem_chainRefs.mpr ⟨by omega, by omega⟩, rfl⟩
   certifies b hb _ k hk _ := by
     rw [slotRound_unit] at hk
     have hbk : b = k + 2 := hk.symm
@@ -118,11 +117,16 @@ directly on what it holds, for every slot `k` from `2` to `N − 2`. -/
 theorem chain_decides (N K k : ℕ) (h2 : 2 ≤ k) (hk : k + 2 ≤ N) :
     ∃ L, IsLeaderBlock (chain N) k L ∧
       NodeDecided (chain N) K ((chainTimeline N).held () 0) k (some L) := by
-  have := Reactive.commits Unit ℕ Unit (chain N) (chainTimeline N) 0 0 0 0 K N (chain_run N)
+  have := Reactive.commits Unit ℕ Unit (chain N) (chainTimeline N) 0 0 0 0 0 0 K N (chain_run N)
     le_rfl k 0 (by rw [slotRound_unit]; omega) (by rw [slotRound_unit]; omega)
     (fun _ _ _ => mem_correct_unit _)
     (fun v _ => ⟨k, Finset.mem_range.mpr (by omega), rfl, rfl, le_rfl⟩) () (mem_correct_unit _)
   simpa using this
+
+/-- **The chain is synchronous** from round `1`, by `Reactive.Synchronised`. -/
+theorem chain_synchronised (N : ℕ) : SyncFrom (chain N) (Correct : Finset Unit) 1 N :=
+  Reactive.synchronised Unit ℕ Unit (chain N) (chainTimeline N) 0 0 0 0 0 0 N (chain_run N)
+    le_rfl le_rfl
 
 end KPartialDag
 

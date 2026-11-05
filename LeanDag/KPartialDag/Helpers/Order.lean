@@ -14,7 +14,8 @@ in the leader's history to depth `K`; so the leader outputs every block of
 `T` at most `D` rounds below it (`mem_out_of_synchronisedOn`), and a node
 deciding a slot led by `T` outputs them (`mem_ledgerIn_of_leader_mem`); when
 every `D` rounds hold a slot led by `T`, every block of `T` enters
-(`mem_ledgerIn_of_gap`).
+(`mem_ledgerIn_of_gap`). A block a node has settled out of its ledger is in
+no node's ledger (`notMem_ledgerIn_of_settled`).
 
 A block enters a ledger at one slot (`entersIn_unique`), and two nodes, or
 one node at two times, agree on the slots settled by both
@@ -305,6 +306,26 @@ theorem mem_ledgerIn_settled (hH : H ⊆ U.ids) {g : ℕ → Option BlockId} {n 
   obtain ⟨k, hk, L, hL, hbL⟩ := hb
   have hLk := ((hL ▸ hdec k hk : NodeDecided U K H k (some L)).certified hH).1
   exact ⟨k, hn k (by have := hbL.2; rw [hLk.2.1] at this; omega), L, hL, hbL⟩
+
+/-- **Settled out everywhere**: at `K ≥ 3`, a block missing from a node's
+ledger once the node has decided every slot at most `D` rounds above it is in
+no node's ledger, once each has fetched below the leaders it committed. -/
+theorem notMem_ledgerIn_of_settled (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
+    (hH₂ : H₂ ⊆ U.ids) {g₁ g₂ : ℕ → Option BlockId} {n n' : ℕ}
+    (h₁ : ∀ k, k < n → NodeDecided U K H₁ k (g₁ k))
+    (h₂ : ∀ k, k < n' → NodeDecided U K H₂ k (g₂ k))
+    (hf₁ : ∀ k L, k < n → g₁ k = some L → FetchedIn U K H₁ L ((U.block L).round - D))
+    (hf₂ : ∀ k L, k < n' → g₂ k = some L → FetchedIn U K H₂ L ((U.block L).round - D))
+    {b : BlockId} (hn : ∀ k, S.slotRound k ≤ (U.block b).round + D → k < n)
+    (hb : b ∉ LedgerIn U K H₁ D g₁ n) : b ∉ LedgerIn U K H₂ D g₂ n' := by
+  intro hb₂
+  have hm : b ∈ LedgerIn U K H₂ D g₂ (min n n') := by
+    rcases le_total n n' with h | h
+    · rw [min_eq_left h]; exact mem_ledgerIn_settled hH₂ h₂ hn hb₂
+    · rw [min_eq_right h]; exact hb₂
+  have hle := min_le_right n n'
+  exact hb ((ledgerIn_grows hK hH₂ hH₁ (min_le_left n n') (fun k hk => h₂ k (by omega)) h₁
+    (fun k L hk => hf₂ k L (by omega)) hf₁).1 hm)
 
 /-- **After synchrony, a block of `T` enters the ledger** of a node that has
 decided every slot at most `D` rounds above it, when every `D` rounds hold a

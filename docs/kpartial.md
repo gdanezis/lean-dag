@@ -205,6 +205,10 @@ correct node.
 * *Settled* (`Order.Settled`). A leader outputs only blocks at most `D`
   rounds below it, so a block not in the ledger once every slot up to `D`
   rounds above it is decided never enters.
+* *Excluded* (`Order.Excluded`). At `K ≥ 3`, such a block enters no node's
+  ledger, at any later slot, once each node has fetched below the leaders it
+  committed: a node holding it would agree with the first node on the slots
+  up to `D` rounds above it.
 * *Output* (`Order.Outputs`). After synchrony from `R`, at `K ≥ 1`, a leader
   of `T` outputs every block of `T` from round `R` on at most `D` rounds
   below it. The round just below lies in the leader's history to depth `K`.
@@ -224,10 +228,18 @@ The depth `D` sets what is output, and `K` how far below that a node
 fetches. Safety holds for every `D`. Inclusion asks that every `D` rounds
 hold a slot led by `T`, so `D` is bounded below by the schedule, not by `K`.
 Under round robin with one leader a round, `D = f + 1` suffices, and with `ℓ`
-leaders a round, `D = ⌈f/ℓ⌉ + 1`; these counts are not formalised. With a smaller `D`, a block of a correct author may
-be dropped during a run of skipped slots; by `Order.Settled` its author
-knows so once every slot up to `D` rounds above it is decided, and can
-propose its payload again.
+leaders a round, `D = ⌈f/ℓ⌉ + 1`; these counts are not formalised.
+
+*Late blocks.* References go one round down only, so a block that arrives
+after a quorum has built the round above may never be referenced, and is
+never output. With a smaller `D`, a block may also be dropped during a run
+of skipped slots. A correct author therefore proposes the payload items of
+its block `b` again once it has decided every slot up to `D` rounds above
+`b` and `b` is not in its ledger: by `Order.Excluded`, `b` then enters no
+node's ledger, so the items are output at most once through `b` and its
+replacement. On a reactive run with a grace period, correct blocks are
+not late after synchrony (§11), so re-proposal is needed only for blocks
+built before.
 
 ## 8. Results
 
@@ -250,6 +262,7 @@ propose its payload again.
 | 5 Agrees | ledgers agree across nodes and over time | `K ≥ 3` |
 | 5 Total | the ledger is a strict total order, causal within a slot | linear orders on authors and ids |
 | 5 Settled | a block not output within `D` rounds never is | — |
+| 5 Excluded | a block settled out of one ledger enters none | `K ≥ 3` |
 | 5 Outputs | a leader of `T` outputs the blocks of `T` within `D` rounds | synchrony, `K ≥ 1` |
 | 5 Included | every block of `T` enters the ledger | synchrony, a `T` slot every `D` rounds, `K ≥ 3` |
 | 6 Decides | decisions read the band from `K − 1` rounds below the slot | — |
@@ -260,10 +273,11 @@ propose its payload again.
 | 7 Built | every round is built | reactive rules |
 | 7 CatchesUp | blocks of `f + 1` correct validators at a round bring all to it within `δ` | reactive rules |
 | 7 Starts | the round after the last one reached before `G + τ` starts a reactive run | reactive rules |
-| 7 Slow | each round is built within `δ + τ` | reactive run |
-| 7 Fast | a round next to correct leaders takes `δ` | reactive run, `τ ≥ 2δ` |
+| 7 Slow | each round is built within `δ + max(τ, μ)` | reactive run |
+| 7 Fast | a round next to correct leaders takes `δ + max(γ, μ)` | reactive run, `τ ≥ 2δ` |
 | 7 Responsive | the run is responsive among the correct validators | reactive run, `τ ≥ 2δ` |
-| 7 Commits | a slot among correct leaders commits within `3δ` | reactive run, `τ ≥ 2δ` |
+| 7 Commits | a slot among correct leaders commits within `3δ + 2 max(γ, μ)` | reactive run, `τ ≥ 2δ` |
+| 7 Synchronised | every correct block references every correct block below | reactive run, `2δ ≤ γ ≤ τ` |
 
 ## 9. Why a K-partial DAG
 
@@ -388,10 +402,14 @@ at each time, with their histories to depth `K`, and the time each block was
 built (`Timeline`). A correct node builds above round `r` once it holds what
 it waits for (`WaitsFor`): blocks of a quorum of distinct authors at round
 `r` (`QuorumIn`), a leader block of every slot at round `r`, and a
-certificate for a leader block of every slot at round `r − 1` (`CertIn`). It
-also builds once it has held a quorum of round `r` for a timeout `τ`. Its
-block references the leader blocks it holds one round below, and carries a
-certificate for a leader two rounds below when it holds one. A node *behind*
+certificate for a leader block of every slot at round `r − 1` (`CertIn`);
+it then waits a grace period `γ` for blocks of every validator at round `r`
+(`AllIn`), and builds at once if they all arrive. It also builds once it has
+held a quorum of round `r` for a timeout `τ`. In either case it builds no
+earlier than a minimum wait `μ` after it first held a quorum of round `r`.
+Its block references a block of every author whose block of round `r` it
+holds, and so the leader blocks it holds, and carries a certificate for a
+leader two rounds below when it holds one. A node *behind*
 builds above round `r` at once: it holds blocks of round `r + 1` by `f + 1`
 authors other than itself (`BehindIn`), so a correct node has built that
 round.
@@ -406,7 +424,8 @@ blocks: a Byzantine block reaches a node only among the references of a
 block it holds, which it fetches from the node that sent it. It is a *reactive run* (`ReactiveRun`)
 when, in addition, its correct blocks from round `R` on are built at `G + τ`
 or later. The delay `δ` covers the downloads to depth `K`; nodes do not know
-it, and only the timeout `τ` is configured.
+it, and only `τ`, `γ` and `μ` are configured. The minimum wait bounds the
+rate of rounds; the proofs use it only as a delay.
 
 A quorum spreads. A quorum holds blocks of `f + 1` correct authors, so once
 a correct node holds a quorum of round `s` at a time `t ≥ G`, every correct
@@ -432,39 +451,57 @@ rules from round `R` to round `N`:
 * *A reactive run starts* (`Reactive.Starts`). Let `R'` be the round after
   the last round from `R` on that a correct block reached before `G + τ`, or
   `R` if there is none. If `R' ≤ N`, the timeline is a reactive run from `R'`
-  to `N`, and every correct validator has built at `R'` within `2δ + 2τ` of
-  `G + τ` and of the time all built at `R`.
+  to `N`, and every correct validator has built at `R'` within
+  `2δ + 2 max(τ, μ)` of `G + τ` and of the time all built at `R`.
 
 On a reactive run from round `R` to round `N`:
 
-* *Each round is built within `δ + τ`* (`Reactive.Slow`) of the last correct
-  block of the round below.
-* *Rounds led by correct validators take `δ`* (`Reactive.Fast`). At
-  `τ ≥ 2δ`, when the slots of a round `s ≥ R + 2` and of the round below have
-  correct leaders, every correct validator builds above `s` within `δ` of the
-  last correct block of round `s`; no correct node waits for its timeout.
+* *Each round is built within `δ + max(τ, μ)`* (`Reactive.Slow`) of the
+  last correct block of the round below.
+* *Rounds led by correct validators take `δ + max(γ, μ)`*
+  (`Reactive.Fast`). At `τ ≥ 2δ`, when the slots of a round `s ≥ R + 2` and
+  of the round below have correct leaders, every correct validator builds
+  above `s` within `δ + max(γ, μ)` of the last correct block of round `s`;
+  no correct node waits for its timeout.
 * *The run is responsive* (`Reactive.Responsive`). At `τ ≥ 2δ`, the record is
   responsive among the correct validators from round `R + 1` to `N`, so
   Theorem 4 applies with `T` the correct validators.
-* *A slot led by correct validators commits within `3δ`*
+* *A slot led by correct validators commits within `3δ + 2 max(γ, μ)`*
   (`Reactive.Commits`). At `τ ≥ 2δ`, when every slot from one round below a
   slot at round `r ≥ R + 2` to one round above it has a correct leader, every
-  correct node commits the slot directly on what it holds `3δ` after the
-  last correct block of round `r`.
+  correct node commits the slot directly on what it holds that long after
+  the last correct block of round `r`.
+* *The run is synchronous* (`Reactive.Synchronised`). At `2δ ≤ γ ≤ τ`, from
+  round `R + 1` to `N`, every correct block references every correct block
+  of the round below, so `SyncFrom` holds among the correct validators and
+  Theorem 5's `Outputs` and `Included` apply: no correct block from round
+  `R + 1` on is late.
 
-The bounds depend on the actual delay `δ`, not on `τ`, except where a slot
-next to the round has a Byzantine leader; there a round costs at most
-`δ + τ`. No bound depends on `K`.
+The bounds depend on the actual delay `δ` and the configured `γ` and `μ`,
+not on `τ`, except where a slot next to the round has a Byzantine leader;
+there a round costs at most `δ + max(τ, μ)`. When all `n` validators send
+their blocks, a node does not wait out the grace period. No bound depends on
+`K`.
 
 The rule for nodes behind is what lets nodes pass on only correct blocks. A
 single correct block built on the timer does not bring other nodes to its
 round within `δ`: its author's quorum may include Byzantine blocks that
 reached it alone. Its `f + 1` correct blocks do, through the rule.
 
+The grace period makes the run synchronous. A node that holds a quorum of
+round `r` at `t ≥ G` holds blocks of `f + 1` correct authors, so every
+correct node has built at round `r` by `t + δ`, and its block reaches the
+node by `t + 2δ`. A node building on the wait has held its quorum for `γ`,
+and one building on the timer for `τ`; with `γ, τ ≥ 2δ` it holds every
+correct block of round `r`, and references it. A node building behind holds
+a correct block of round `r + 1` built earlier, which references every
+correct block of round `r`, by induction on build times.
+
 A witness (`LeanDagTest/KPartialDag/Reactive.lean`) shows that the premise is
 consistent: one correct validator building a chain of blocks, all held at
-time `0`, is a reactive run, and `Reactive.Commits` decides its slots. It
-exercises none of the timing, since its delay is `0`.
+time `0`, is a reactive run, and `Reactive.Commits` decides its slots and
+`Reactive.Synchronised` applies. It exercises none of the timing, since its
+delay is `0`.
 
 ## 12. Open questions
 
