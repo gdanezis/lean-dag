@@ -9,8 +9,8 @@ commit rule:
 * **decisions read a band** (`Decides`): a node's decision of a slot at
   round `ρ + K − 1` or above, and not below `ρ`, is the same on its blocks at
   round `ρ` or above;
-* **progress from a band** (`Progress`): after synchrony, a node holding the
-  blocks of `T` over a run and the available sub-DAG above round `ρ` decides
+* **progress from a band** (`Progress`): on a responsive run, a node holding
+  the blocks of `T` over a run and the available sub-DAG above round `ρ` decides
   every slot up to the run's end at round `ρ + K − 1` or above;
 * **building** (`Builds`): a block referencing a quorum of distinct authors of
   the round below is valid, and its obligation is met by the node's blocks
@@ -48,7 +48,7 @@ def Decides : Prop :=
 
 /-- **Progress from a band**: for a schedule offering runs of `c` slots led by
 `T`, each spanning eligibility, past any slot `k` and round `R` there is a run
-from `b` such that, on every record synchronous among `T` from `R` to the
+from `b` such that, on every record responsive among `T` from `R` to the
 run's end, a node holding the blocks of `T` over the run with their
 references, and the available sub-DAG below every certified leader up to the
 run's end at round `ρ` or above, decides every slot below `b + c` at round
@@ -59,7 +59,8 @@ def Progress : Prop :=
     (T : Finset Validator) (c : ℕ), 0 < c →
     (∀ b i, i < b → EligibleAt (S := S) 2 i (b + c - 1)) → FairRunOn T c →
     ∀ R k, ∃ b, k ≤ b ∧ R ≤ S.slotRound b ∧
-      ∀ (U : KRecord Validator BlockId Payload), SyncFrom U T R (S.slotRound (b + c - 1) + 2) →
+      ∀ (U : KRecord Validator BlockId Payload),
+        RespondsFrom U T R (S.slotRound (b + c - 1) + 2) →
         ∀ (H : Finset BlockId) (ρ : ℕ), H ⊆ U.ids →
           WithRefs U T (S.slotRound b) (S.slotRound (b + c - 1) + 2) ⊆ ↑H →
           (∀ z ∈ AvailBelow U K (b + c - 1), ρ ≤ (U.block z).round → z ∈ H) →

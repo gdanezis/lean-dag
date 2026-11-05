@@ -4,14 +4,16 @@ import LeanDag.KPartialDag.Helpers.Node
 # Liveness — helpers
 
 `docs/kpartial.md` §6. After synchrony, a block of `T` two rounds above a
-block of `T` carries votes for it from all of `T` (`carriesVotes_of_synchronisedOn`), so
-a node holding the blocks of `T` at that round with their references commits
-a leader in `T` directly (`nodeDecided_of_leader_mem`). A committed block has a
+block of `T` carries votes for it from all of `T`
+(`carriesVotes_of_synchronisedOn`), so synchrony implies responsiveness
+(`respondsFrom_of_syncFrom`). On a responsive slot, a node holding the blocks
+of `T` two rounds above it with their references commits it directly
+(`nodeDecided_of_responds`). A committed block has a
 certificate (`NodeDecided.certified`), so a node holding the available
 sub-DAG below every certified leader block has fetched the sub-DAG below
 each anchor it uses, and its indirect test returns a verdict either way.
 Below a committed run, the nearest committed anchor of each slot gives the
-slot a verdict, by induction downward (`nodeDecided_below`). A run led by `T`
+slot a verdict, by induction downward (`nodeDecided_below`). A responsive run
 commits, so every slot up to its end is decided (`nodeDecided_of_run`).
 -/
 
@@ -49,24 +51,37 @@ theorem withRefs_mono {lo hi lo' hi' : ℕ} (hlo : lo' ≤ lo) (hhi : hi ≤ hi'
 
 variable [S : Slots Validator]
 
-/-- **A leader in `T` commits**: after synchrony, a node holding the blocks of
-`T` two rounds above the slot, with their references, commits it
-directly. -/
-theorem nodeDecided_of_leader_mem (hcard : quorumCard Validator ≤ T.card)
+/-- **After synchrony, a slot led by `T` responds among `T`**: the blocks of
+`T` two rounds above it carry votes from all of `T`. -/
+theorem responds_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card)
     (hs : SynchronisedOn U T R) {k : ℕ} (hR : R ≤ S.slotRound k) (hlead : S.leader k ∈ T)
-    (hpop : ∀ r, S.slotRound k ≤ r → r ≤ S.slotRound k + 2 → PopulatedOn U T r)
-    (hH : WithRefs U T (S.slotRound k + 2) (S.slotRound k + 2) ⊆ ↑H) :
-    ∃ L, IsLeaderBlock U k L ∧ NodeDecided U K H k (some L) := by
+    (hpop : ∀ r, S.slotRound k ≤ r → r ≤ S.slotRound k + 2 → PopulatedOn U T r) :
+    Responds U T k := by
   obtain ⟨L, hL, hLc, hLr⟩ := hpop _ le_rfl (by omega) (S.leader k) hlead
   have hLT : (U.block L).creator ∈ T := by rw [hLc]; exact hlead
-  refine ⟨L, ⟨hL, hLr, hLc⟩, NodeDecided.directCommit ⟨hL, hLr, hLc⟩ ?_⟩
+  exact ⟨hpop _ (by omega) le_rfl, L, ⟨hL, hLr, hLc⟩, fun C hC hCT hCr =>
+    carriesVotes_of_synchronisedOn hcard hs hR (hpop _ (by omega) (by omega)) hL hLr hLT hC hCr
+      hCT⟩
+
+/-- **Synchrony implies responsiveness.** -/
+theorem respondsFrom_of_syncFrom {N : ℕ} (h : SyncFrom U T R N) : RespondsFrom U T R N :=
+  ⟨h.1, fun _ hR hN hlead => responds_of_synchronisedOn h.1 h.2.1 hR hlead
+    fun r h1 h2 => h.2.2 r (le_trans hR h1) (by omega)⟩
+
+/-- **A responsive slot commits**: a node holding the blocks of `T` two
+rounds above the slot, with their references, commits it directly. -/
+theorem nodeDecided_of_responds (hcard : quorumCard Validator ≤ T.card) {k : ℕ}
+    (hresp : Responds U T k)
+    (hH : WithRefs U T (S.slotRound k + 2) (S.slotRound k + 2) ⊆ ↑H) :
+    ∃ L, IsLeaderBlock U k L ∧ NodeDecided U K H k (some L) := by
+  obtain ⟨hpop, L, hL, hvotes⟩ := hresp
+  refine ⟨L, hL, NodeDecided.directCommit hL ?_⟩
   refine le_trans hcard (Finset.card_le_card ?_)
   intro v hv
-  obtain ⟨C, hC, hCc, hCr⟩ := hpop _ (by omega) le_rfl v hv
+  obtain ⟨C, hC, hCc, hCr⟩ := hpop v hv
   have hCT : (U.block C).creator ∈ T := by rw [hCc]; exact hv
   have hcert : C ∈ certificatesAt U (IsVote U) (quorumCard Validator) L (S.slotRound k + 2) :=
-    mem_certificatesAt.mpr ⟨hC, hCr, carriesVotes_of_synchronisedOn hcard hs hR
-      (hpop _ (by omega) (by omega)) hL hLr hLT hC hCr hCT⟩
+    mem_certificatesAt.mpr ⟨hC, hCr, hvotes C hC hCT hCr⟩
   refine mem_creatorsOf.mpr ⟨C, Finset.mem_filter.mpr ⟨hcert, ?_, fun j hj => ?_⟩, hCc⟩
   · exact hH ⟨C, hC, hCT, le_of_eq hCr.symm, le_of_eq hCr, Or.inl rfl⟩
   · exact hH ⟨C, hC, hCT, le_of_eq hCr.symm, le_of_eq hCr, Or.inr hj⟩
@@ -126,15 +141,13 @@ theorem nodeDecided_below (hH : H ⊆ U.ids) {b n : ℕ} (hbn : b ≤ n)
           fun L hL hl => hc ⟨L, hL, hl⟩⟩
   exact fun i hi => key (b - i) i hi le_rfl
 
-/-- **A run led by `T` decides every slot up to its end**, after synchrony,
-for a node holding the blocks of `T` over the run with their references and
-the available sub-DAG below every certified leader block up to the run's
-end. -/
-theorem nodeDecided_of_run (hcard : quorumCard Validator ≤ T.card)
-    (hs : SynchronisedOn U T R) (hH : H ⊆ U.ids) {b c : ℕ} (hc : 0 < c)
-    (hspan : ∀ b i, i < b → EligibleAt (S := S) 2 i (b + c - 1))
-    (hR : R ≤ S.slotRound b) (hrun : ∀ i, i < c → S.leader (b + i) ∈ T)
-    (hpop : ∀ r, S.slotRound b ≤ r → r ≤ S.slotRound (b + c - 1) + 2 → PopulatedOn U T r)
+/-- **A responsive run decides every slot up to its end**: a node holding the
+blocks of `T` over the run with their references and the available sub-DAG
+below every certified leader block up to the run's end decides every slot
+up to the run's end. -/
+theorem nodeDecided_of_run (hcard : quorumCard Validator ≤ T.card) (hH : H ⊆ U.ids) {b c : ℕ}
+    (hc : 0 < c) (hspan : ∀ b i, i < b → EligibleAt (S := S) 2 i (b + c - 1))
+    (hresp : ∀ j, b ≤ j → j ≤ b + c - 1 → Responds U T j)
     (hheld : WithRefs U T (S.slotRound b) (S.slotRound (b + c - 1) + 2) ∪
       AvailBelow U K (b + c - 1) ⊆ ↑H) :
     ∀ i, i < b + c → ∃ v, NodeDecided U K H i v := by
@@ -142,11 +155,7 @@ theorem nodeDecided_of_run (hcard : quorumCard Validator ≤ T.card)
     intro j h1 h2
     have hb : S.slotRound b ≤ S.slotRound j := S.mono h1
     have hj : S.slotRound j ≤ S.slotRound (b + c - 1) := S.mono h2
-    have hlead : S.leader j ∈ T := by
-      have := hrun (j - b) (by omega)
-      rwa [Nat.add_sub_cancel' h1] at this
-    obtain ⟨L, -, hL⟩ := nodeDecided_of_leader_mem (K := K) hcard hs (le_trans hR hb) hlead
-      (fun r h1 h2 => hpop r (by omega) (by omega))
+    obtain ⟨L, -, hL⟩ := nodeDecided_of_responds (K := K) hcard (hresp j h1 h2)
       (fun z hz => hheld (Set.mem_union_left _ (withRefs_mono (by omega) (by omega) hz)))
     exact ⟨L, hL⟩
   intro i hi
@@ -155,6 +164,17 @@ theorem nodeDecided_of_run (hcard : quorumCard Validator ≤ T.card)
       (fun z hz => hheld (Set.mem_union_right _ hz)) hcommit i hib
   · obtain ⟨A, hA⟩ := hcommit i (by omega) (by omega)
     exact ⟨some A, hA⟩
+
+/-- **A run led by `T` after `R` responds**, on a record responsive among `T`
+from `R` to the run's end. -/
+theorem responds_of_run {b c : ℕ} (hc : 0 < c) (hR : R ≤ S.slotRound b)
+    (hrun : ∀ i, i < c → S.leader (b + i) ∈ T)
+    (h : RespondsFrom U T R (S.slotRound (b + c - 1) + 2)) :
+    ∀ j, b ≤ j → j ≤ b + c - 1 → Responds U T j := by
+  intro j h1 h2
+  refine h.2 j (le_trans hR (S.mono h1)) (by have := S.mono h2; omega) ?_
+  have := hrun (j - b) (by omega)
+  rwa [Nat.add_sub_cancel' h1] at this
 
 end KPartialDag
 

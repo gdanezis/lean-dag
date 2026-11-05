@@ -127,24 +127,35 @@ the certificate's references lie.
 
 ## 6. Liveness
 
-Partial synchrony is read on the record. From a round `R` on, every block
-of an author in a quorum `T` of correct validators references every block
-of an author in `T` of the round below, and `T` has a block at every round
-up to some round `N` (`SyncFrom`). The schedule offers runs: past any slot,
-`c` consecutive slots led by `T` (`FairRunOn`), each run spanning
-eligibility. A node decides once it holds the blocks of `T` over the run
-with their references (`WithRefs`), and the available sub-DAG below every
-leader block with a certificate up to the run's end (`AvailBelow`). By
-Theorem 1 correct nodes hold all of these, and the sub-DAG below a block
-depends only on that block's history, so it does not change as the record
-grows.
+Liveness is read on the record, from a round `R` on, for a quorum `T` of
+correct validators. The premise is *responsiveness* (`RespondsFrom`): for
+every slot led by `T`, `T` has a block two rounds above the slot, and each
+block of `T` there carries votes from a quorum for one leader block of the
+slot (`Responds`). A node produces this by waiting, before it builds two
+rounds above a slot, until it holds a certificate for the slot's leader
+block. It needs no timer when the leader is correct and the network is
+timely: the voters of `T` are a quorum, so no wait depends on a Byzantine
+validator. Partial synchrony as it is read elsewhere in the tree implies
+responsiveness: from `R` on every block of `T` references every block of `T`
+of the round below, and `T` has a block at every round up to some round `N`
+(`SyncFrom`).
+
+The schedule offers runs: past any slot, `c` consecutive slots led by `T`
+(`FairRunOn`), each run spanning eligibility. A node decides once it holds
+the blocks of `T` over the run with their references (`WithRefs`), and the
+available sub-DAG below every leader block with a certificate up to the
+run's end (`AvailBelow`). By Theorem 1 correct nodes hold all of these, and
+the sub-DAG below a block depends only on that block's history, so it does
+not change as the record grows.
 
 **Theorem 4 (liveness; `Live.Statement`).** No bound on `K` is needed.
 
-* *A leader in `T` commits* (`Live.Commits`). After `R`, every block of `T`
-  two rounds above the slot carries votes from all of `T` for the leader's
-  block, so a node holding those blocks with their references commits the
-  slot directly.
+* *Synchrony implies responsiveness* (`Live.Weaker`). After `R`, every block
+  of `T` two rounds above a slot led by `T` carries votes from all of `T`
+  for the leader's block.
+* *A responsive slot commits* (`Live.Commits`). The blocks of `T` two rounds
+  above the slot are a quorum of certificates, so a node holding those
+  blocks with their references commits the slot directly.
 * *A committed run decides below it* (`Live.Descends`). A committed block
   has a certificate, so the node has fetched the sub-DAG below each anchor
   it uses, and its indirect test returns a commit or a skip. Each slot below
@@ -152,12 +163,19 @@ grows.
   downward.
 * *Every slot is decided* (`Live.Progress`). Past any slot `k` and round `R`
   the schedule names a run from `b`, fixed before the record. On every
-  record synchronous among `T` from `R` to the run's end, a node holding
+  record responsive among `T` from `R` to the run's end, a node holding
   what the run needs decides every slot below `b + c`.
 
 With Theorem 3, every correct node eventually decides every slot, and all
 decide each slot alike. Under three-round spacing `c = 1`; with one slot a
 round, `c = 3`.
+
+Responsiveness is a premise on the record. That a node's waiting rule
+produces it, and does so within a few message delays after synchrony with
+a timeout only for Byzantine leaders, needs a model of time; it is not
+formalised. The order's inclusion results (Theorem 5) still assume
+synchrony: they need every block of `T` to be referenced, which a node that
+builds as soon as it holds a certificate does not ensure.
 
 ## 7. The order
 
@@ -224,9 +242,10 @@ propose its payload again.
 | 3 Fetchable | holding the sub-DAG down to `ρ − K` fetches it down to `ρ` | — |
 | 3 Sound | a node's decision is the rule's on every view holding it | — |
 | 3 Agrees | two nodes decide each slot alike | `K ≥ 3` |
-| 4 Commits | a leader in `T` commits directly | synchrony |
+| 4 Weaker | synchrony implies responsiveness | — |
+| 4 Commits | a slot led by `T` commits directly | responsiveness |
 | 4 Descends | a committed run decides every slot below it | — |
-| 4 Progress | every slot is eventually decided | synchrony, fair runs |
+| 4 Progress | every slot is eventually decided | responsiveness, fair runs |
 | 5 Local | a node reads a leader's output once fetched `D` rounds down | — |
 | 5 Agrees | ledgers agree across nodes and over time | `K ≥ 3` |
 | 5 Total | the ledger is a strict total order, causal within a slot | linear orders on authors and ids |
@@ -234,7 +253,7 @@ propose its payload again.
 | 5 Outputs | a leader of `T` outputs the blocks of `T` within `D` rounds | synchrony, `K ≥ 1` |
 | 5 Included | every block of `T` enters the ledger | synchrony, a `T` slot every `D` rounds, `K ≥ 3` |
 | 6 Decides | decisions read the band from `K − 1` rounds below the slot | — |
-| 6 Progress | a node decides from a band of bounded length | synchrony, fair runs |
+| 6 Progress | a node decides from a band of bounded length | responsiveness, fair runs |
 | 6 Builds | building needs the last `K + 1` rounds | — |
 | 6 Resumes | the ledger resumes from the band from `D + K` rounds below | `K ≥ 3` |
 | 6 Counts, Window, AvailRound | `n` blocks a round without equivocation; with it, `≈ |C| f^(K−1)` per history and `≈ |C| f^(K+1)` per round of the available sub-DAG | — |
@@ -261,8 +280,8 @@ is argued only:
   `f + 1` distinct authors does the work of an availability certificate, and
   a node never depends on Byzantine nodes for data.
 * *Mysticeti's guarantees* (proved). The direct rule, and so the commit
-  latency in rounds, is unchanged; agreement holds at `K ≥ 3`, liveness under
-  partial synchrony for every `K`, and the ledger is agreed, never retracted
+  latency in rounds, is unchanged; agreement holds at `K ≥ 3`, liveness on a
+  responsive record for every `K`, and the ledger is agreed, never retracted
   and totally ordered.
 * *Weaker obligations* (argued). No reference to the author's own block is
   required, so a validator that crashed resumes without its own chain, and
@@ -293,7 +312,7 @@ blocks. The blocks of `H` at round `ρ` or above are its *band from `ρ`*
   `linkedIn_band_iff`, `fetchedIn_band_iff`); the direct tests read rounds
   `σ(k)` to `σ(k) + 2` (`heldWithRefs_band`), and every slot a decision
   recurses to lies above (`nodeDecided_band_iff`).
-* *Progress from a band* (`Bounds.Progress`). After synchrony, a node holding
+* *Progress from a band* (`Bounds.Progress`). On a responsive run, a node holding
   the blocks of `T` over a run with their references, and the available
   sub-DAG below every certified leader up to the run's end from round `ρ`
   up, decides every slot below the run's end at round `ρ + K − 1` or above.
@@ -365,6 +384,10 @@ quantitative liveness bound or a state transfer.
   below it.
 * A storage bound linear in `K` under equivocation, which needs a rule for
   equivocating authors (§10).
+* Responsiveness in time: that the waiting rule of §6 produces
+  `RespondsFrom` within a few message delays after synchrony, with a timeout
+  only for Byzantine leaders, and with the downloads to depth `K` inside the
+  round.
 * Quantitative liveness, which a retention bound needs.
 * Crash recovery: that persisting the last round built suffices, with a
   model of validators over time.

@@ -25,9 +25,8 @@ theorem decides : Decides := by
 theorem progress : Progress := by
   intro Validator BlockId Payload _ _ _ _ S K T c hc hspan fair R k
   obtain ⟨b, hkb, hRb, hrun⟩ := Slots.exists_run_past fair k R
-  exact ⟨b, hkb, hRb, fun U ⟨hcard, hs, hpop⟩ H ρ hH hW hav =>
-    nodeDecided_of_run_band hcard hs hH hc hspan hRb hrun
-      (fun r h1 h2 => hpop r (le_trans hRb h1) h2) hW hav⟩
+  exact ⟨b, hkb, hRb, fun U h H ρ hH hW hav =>
+    nodeDecided_of_run_band h.1 hH hc hspan (responds_of_run hc hRb hrun h) hW hav⟩
 
 theorem builds : Builds := by
   intro Validator BlockId Payload _ _ _ _ U K H Q r b hQ hd hq hwin hbr hbQ

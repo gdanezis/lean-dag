@@ -281,8 +281,8 @@ theorem mem_ledgerIn_of_leader_mem (hK : 3 ≤ K) (hcard : quorumCard Validator 
     {x : BlockId} (hx : x ∈ U.ids) (hxc : (U.block x).creator ∈ T)
     (hRx : R ≤ (U.block x).round) (hxk : (U.block x).round < S.slotRound k)
     (hD : S.slotRound k ≤ (U.block x).round + D) : x ∈ LedgerIn U K H D g (k + 1) := by
-  obtain ⟨L, hL, hdec⟩ := nodeDecided_of_leader_mem (K := K) hcard hs (by omega) hlead
-    (fun r h1 h2 => hpop r (by omega) h2) hW
+  obtain ⟨L, hL, hdec⟩ := nodeDecided_of_responds (K := K) hcard
+    (responds_of_synchronisedOn hcard hs (by omega) hlead fun r h1 h2 => hpop r (by omega) h2) hW
   have hg : g k = some L := hk.agree hK hH hH hdec
   have hLc : (U.block L).creator ∈ T := by rw [hL.2.2]; exact hlead
   have hLr := hL.2.1

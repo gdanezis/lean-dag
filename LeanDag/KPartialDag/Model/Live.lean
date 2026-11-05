@@ -8,6 +8,12 @@ of the tree: from round `R` on, every block of an author in a quorum `T`
 references every block of an author in `T` of the round below, and `T` has
 a block at every round up to `N` (`SyncFrom`).
 
+A responsive node waits for less: before building two rounds above a slot it
+waits for a certificate of the slot's leader block, and builds as soon as it
+holds one. The record then has, for each slot led by `T`, blocks of `T` two
+rounds above, each carrying votes from a quorum for one leader block
+(`Responds`, `RespondsFrom`).
+
 A node decides the slots up to `n` once it holds two sets of blocks. The
 first is the blocks of authors in `T` at rounds `lo` to `hi`, with their
 references (`WithRefs`). The second is the available sub-DAG below every
@@ -29,6 +35,23 @@ of the round below, and `T` has a block at every round from `R` to `N`. -/
 def SyncFrom (U : KRecord Validator BlockId Payload) (T : Finset Validator) (R N : ℕ) : Prop :=
   quorumCard Validator ≤ T.card ∧ SynchronisedOn U T R ∧ ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r
 
+variable [S : Slots Validator]
+
+/-- **Slot `k` responds among `T`**: `T` has a block two rounds above the
+slot, and each block of `T` there carries votes from a quorum for one leader
+block of the slot. -/
+def Responds (U : KRecord Validator BlockId Payload) (T : Finset Validator) (k : ℕ) : Prop :=
+  PopulatedOn U T (S.slotRound k + 2) ∧ ∃ L, IsLeaderBlock U k L ∧
+    ∀ C ∈ U.ids, (U.block C).creator ∈ T → (U.block C).round = S.slotRound k + 2 →
+      CarriesVotes U (IsVote U) (quorumCard Validator) C L
+
+/-- **Responsiveness among `T` from round `R` to round `N`**: `T` is a quorum,
+and every slot led by `T` from round `R` to round `N − 2` responds. -/
+def RespondsFrom (U : KRecord Validator BlockId Payload) (T : Finset Validator) (R N : ℕ) :
+    Prop :=
+  quorumCard Validator ≤ T.card ∧ ∀ k, R ≤ S.slotRound k → S.slotRound k + 2 ≤ N →
+    S.leader k ∈ T → Responds U T k
+
 /-- The blocks of authors in `T` at rounds `lo` to `hi`, with their
 references. -/
 def WithRefs (U : KRecord Validator BlockId Payload) (T : Finset Validator) (lo hi : ℕ) :
@@ -38,7 +61,7 @@ def WithRefs (U : KRecord Validator BlockId Payload) (T : Finset Validator) (lo 
 
 /-- The available sub-DAG below every leader block of a slot up to `n` that
 has a certificate. -/
-def AvailBelow [S : Slots Validator] (U : KRecord Validator BlockId Payload) (K n : ℕ) :
+def AvailBelow (U : KRecord Validator BlockId Payload) (K n : ℕ) :
     Set BlockId :=
   {z | ∃ j A, j ≤ n ∧ IsLeaderBlock U j A ∧
     (certificatesAt U (IsVote U) (quorumCard Validator) A (S.slotRound j + 2)).Nonempty ∧

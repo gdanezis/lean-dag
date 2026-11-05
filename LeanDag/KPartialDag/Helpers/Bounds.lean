@@ -588,15 +588,14 @@ theorem nodeDecided_band_iff (hH : H ⊆ U.ids) {ρ i : ℕ} {v : Option BlockId
     NodeDecided U K (Band U H ρ) i v ↔ NodeDecided U K H i v :=
   ⟨fun h => nodeDecided_of_band hH h h1 h2, fun h => nodeDecided_band hH h h1 h2⟩
 
-/-- **Progress from a band**: after synchrony, a node holding the blocks of
-`T` over a run with their references, and the available sub-DAG below every
-certified leader up to the run's end from round `ρ` up, decides every slot
-up to the run's end at round `ρ + K − 1` or above, and not below `ρ`. -/
-theorem nodeDecided_of_run_band {T : Finset Validator} {R : ℕ}
-    (hcard : quorumCard Validator ≤ T.card) (hs : SynchronisedOn U T R) (hH : H ⊆ U.ids)
+/-- **Progress from a band**: on a responsive run, a node holding the blocks
+of `T` over the run with their references, and the available sub-DAG below
+every certified leader up to the run's end from round `ρ` up, decides every
+slot up to the run's end at round `ρ + K − 1` or above, and not below `ρ`. -/
+theorem nodeDecided_of_run_band {T : Finset Validator}
+    (hcard : quorumCard Validator ≤ T.card) (hH : H ⊆ U.ids)
     {b c ρ : ℕ} (hc : 0 < c) (hspan : ∀ b i, i < b → EligibleAt (S := S) 2 i (b + c - 1))
-    (hR : R ≤ S.slotRound b) (hrun : ∀ i, i < c → S.leader (b + i) ∈ T)
-    (hpop : ∀ r, S.slotRound b ≤ r → r ≤ S.slotRound (b + c - 1) + 2 → PopulatedOn U T r)
+    (hresp : ∀ j, b ≤ j → j ≤ b + c - 1 → Responds U T j)
     (hW : WithRefs U T (S.slotRound b) (S.slotRound (b + c - 1) + 2) ⊆ ↑H)
     (hav : ∀ z ∈ AvailBelow U K (b + c - 1), ρ ≤ (U.block z).round → z ∈ H) :
     ∀ i, i < b + c → ρ ≤ S.slotRound i → ρ + K ≤ S.slotRound i + 1 →
@@ -621,7 +620,7 @@ theorem nodeDecided_of_run_band {T : Finset Validator} {R : ℕ}
     · rintro ⟨hz, hρ⟩
       exact ⟨Or.inl hz, hρ⟩
   intro i hi h1 h2
-  obtain ⟨v, hv⟩ := nodeDecided_of_run hcard hs hH' hc hspan hR hrun hpop hheld i hi
+  obtain ⟨v, hv⟩ := nodeDecided_of_run hcard hH' hc hspan hresp hheld i hi
   have := nodeDecided_band hH' hv h1 h2
   rw [heq] at this
   exact ⟨v, nodeDecided_of_band hH this h1 h2⟩
