@@ -6,20 +6,28 @@ import LeanDag.KPartialDag.Model.Reactive
 round it built, and builds only above it (`Persists`), builds at most one
 block a round, whatever it loses in a restart (`Persisted`).
 
-Under the reactive rules from round `R` to round `N`, with message delay `δ`
-from time `G`, timeout `τ`, grace period `γ` and minimum wait `μ`, and
-restarts before `G` (`ReactiveRules`):
+Under the rules for nodes from round `R` to round `N`, with message delay `δ`
+from time `G`, timeout `τ`, grace period `γ` and minimum wait `μ`, and any
+crashes and restarts before `G` (`NodeRules`):
 
-* **every round is built** (`Built`): every correct validator builds at every
-  round from `R` to `N`;
+* **operations resume** (`Resumes`): once a correct validator has built
+  above round `R` by `G`, a reactive run starts above `R`, and every correct
+  validator reaches it within `3δ + 3 max τ μ` of `G`.
+
+Under the reactive rules, with every correct validator at round `R`
+(`ReactiveRules`):
+
+* **every round is reached** (`Built`): every correct validator builds at
+  every round from `R` to `N` or above it;
 * **nodes behind catch up within `δ`** (`CatchesUp`): once `f + 1` correct
-  validators have built at a round by a time `t ≥ G`, every correct
-  validator has built at the round by `t + δ`;
+  validators have built at a round, from `G` on, by `t`, every correct
+  validator has reached the round by `t + δ`;
 * **a reactive run starts** (`Starts`): the round after the last round a
   correct node reached before `G + τ` starts a reactive run (`ReactiveRun`),
-  built within `2δ + 2 max τ μ` of `G + τ`.
+  reached within `2δ + 2 max τ μ` of `G + τ`.
 
-On a reactive run from round `R` to round `N`:
+On a reactive run from round `R` to round `N`, at `δ < γ ≤ τ`, where no
+correct node skips a round:
 
 * **each round is built within `δ + max τ μ`** (`Slow`) of the round below;
 * **rounds led by correct validators are built within `δ + max γ μ`**
@@ -33,9 +41,9 @@ On a reactive run from round `R` to round `N`:
   one round above it have correct leaders, every correct node commits the
   slot directly within that time of the last correct block at the slot's
   round;
-* **the run is synchronous** (`Synchronised`): at `2δ ≤ γ ≤ τ`, every
-  correct block from round `R + 2` to `N` references every correct block of
-  the round below, so the inclusion results of `Order` apply.
+* **the run is synchronous** (`Synchronised`): at `2δ ≤ γ`, every correct
+  block from round `R + 2` to `N` references every correct block of the
+  round below, so the inclusion results of `Order` apply.
 
 No bound depends on `K`: the downloads to depth `K` are inside `δ`.
 Statements only; the proofs are `Proof.lean`.
@@ -59,36 +67,52 @@ def Persisted : Prop :=
       (block i).creator ∈ (Correct : Finset Validator) → (block i).creator = (block j).creator →
       (block i).round = (block j).round → i = j
 
-/-- **Every round is built**: under the reactive rules from round `R` to
+/-- **Operations resume**: under the rules for nodes from round `R` to round
+`N`, with any crashes and restarts before `G`, once a correct validator has
+built above round `R` by `G`, there is a round `R' > R` such that, if
+`R' ≤ N`, the timeline is a reactive run from `R'` to `N`, and every correct
+validator has reached `R'` by `G + 3δ + 3 max τ μ`. -/
+def Resumes : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [DecidableEq BlockId] [Slots Validator]
+    (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
+    (G δ τ γ μ R N : ℕ),
+    NodeRules U tl G δ τ γ μ R N → ∀ b ∈ U.ids,
+      (U.block b).creator ∈ (Correct : Finset Validator) → tl.built b ≤ G →
+      R < (U.block b).round → ∃ R', R < R' ∧
+        (R' ≤ N → ReactiveRun U tl G δ τ γ μ R' N ∧
+          ReachedBy U tl R' (G + 3 * δ + 3 * max τ μ))
+
+/-- **Every round is reached**: under the reactive rules from round `R` to
 round `N`, every correct validator has a block at every round from `R` to
-`N`. -/
+`N`, or above it. -/
 def Built : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [DecidableEq BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (G δ τ γ μ R N : ℕ),
-    ReactiveRules U tl G δ τ γ μ R N → ∀ s, R ≤ s → s ≤ N → ∃ t, BuiltBy U tl s t
+    ReactiveRules U tl G δ τ γ μ R N → ∀ s, R ≤ s → s ≤ N → ∃ t, ReachedBy U tl s t
 
 /-- **Nodes behind catch up within `δ`**: under the reactive rules from round
 `R` to round `N`, once a set `A` of `f + 1` correct validators have built at
-round `s + 1`, from `R + 1` to `N`, by a time `t ≥ G`, every correct
-validator has built at round `s + 1` by `t + δ`. -/
+round `s + 1`, from `R + 1` to `N`, at times from `G` to `t`, every correct
+validator has reached round `s + 1` by `t + δ`. -/
 def CatchesUp : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [F : Faults Validator] [DecidableEq BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (G δ τ γ μ R N : ℕ),
-    ReactiveRules U tl G δ τ γ μ R N → ∀ s t (A : Finset Validator), R ≤ s → s < N → G ≤ t →
+    ReactiveRules U tl G δ τ γ μ R N → ∀ s t (A : Finset Validator), R ≤ s → s < N →
       A ⊆ (Correct : Finset Validator) → F.f + 1 ≤ A.card →
       (∀ v ∈ A, ∃ b ∈ U.ids, (U.block b).creator = v ∧ (U.block b).round = s + 1 ∧
-        tl.built b ≤ t) →
-      BuiltBy U tl (s + 1) (t + δ)
+        G ≤ tl.built b ∧ tl.built b ≤ t) →
+      ReachedBy U tl (s + 1) (t + δ)
 
 /-- **A reactive run starts**: under the reactive rules from round `R` to
 round `N`, there is a round `R' ≥ R`, either `R` or one above a round that a
 correct block reached before `G + τ`, such that, if `R' ≤ N`, the timeline
-is a reactive run from `R'` to `N`, and every correct validator has built at
-`R'` within `2δ + 2 max τ μ` of `G + τ` and of the time all built at `R`. -/
+is a reactive run from `R'` to `N`, and every correct validator has reached
+`R'` within `2δ + 2 max τ μ` of `G + τ` and of the time all reached `R`. -/
 def Starts : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [DecidableEq BlockId] [Slots Validator]
@@ -98,77 +122,78 @@ def Starts : Prop :=
       (R' = R ∨ ∃ x ∈ U.ids, (U.block x).creator ∈ (Correct : Finset Validator) ∧
         (U.block x).round + 1 = R' ∧ tl.built x < G + τ) ∧
       (R' ≤ N → ReactiveRun U tl G δ τ γ μ R' N ∧
-        ∀ t₀, BuiltBy U tl R t₀ → BuiltBy U tl R' (max t₀ (G + τ) + 2 * δ + 2 * max τ μ))
+        ∀ t₀, ReachedBy U tl R t₀ → ReachedBy U tl R' (max t₀ (G + τ) + 2 * δ + 2 * max τ μ))
 
-/-- **Each round within `δ + max τ μ`**: once every correct validator has
-built at round `s`, from `R` to below `N`, by `t`, every correct validator has
-built at round `s + 1` by `t + δ + max τ μ`. -/
+/-- **Each round within `δ + max τ μ`**: at `δ < γ ≤ τ`, once every correct
+validator has reached round `s`, from `R` to below `N`, by `t`, every correct
+validator has built at round `s + 1` by `t + δ + max τ μ`. -/
 def Slow : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [DecidableEq BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (G δ τ γ μ R N : ℕ),
-    ReactiveRun U tl G δ τ γ μ R N → ∀ s t, R ≤ s → s < N → BuiltBy U tl s t →
-      BuiltBy U tl (s + 1) (t + δ + max τ μ)
+    ReactiveRun U tl G δ τ γ μ R N → δ < γ → γ ≤ τ → ∀ s t, R ≤ s → s < N →
+      ReachedBy U tl s t → BuiltBy U tl (s + 1) (t + δ + max τ μ)
 
-/-- **Rounds led by correct validators within `δ + max γ μ`**: at `τ ≥ 2δ`,
-when the slots at round `s`, from `R + 2` to below `N`, and one round below
-have correct leaders, once every correct validator has built at round `s` by
-`t`, every correct validator has built at round `s + 1` by
+/-- **Rounds led by correct validators within `δ + max γ μ`**: at `τ ≥ 2δ`
+and `δ < γ ≤ τ`, when the slots at round `s`, from `R + 2` to below `N`, and
+one round below have correct leaders, once every correct validator has built
+at round `s` by `t`, every correct validator has built at round `s + 1` by
 `t + δ + max γ μ`. -/
 def Fast : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [DecidableEq BlockId] [S : Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (G δ τ γ μ R N : ℕ),
-    ReactiveRun U tl G δ τ γ μ R N → 2 * δ ≤ τ → ∀ s t, R + 2 ≤ s → s < N →
+    ReactiveRun U tl G δ τ γ μ R N → 2 * δ ≤ τ → δ < γ → γ ≤ τ → ∀ s t, R + 2 ≤ s → s < N →
       (∀ k, S.slotRound k = s ∨ S.slotRound k + 1 = s →
         S.leader k ∈ (Correct : Finset Validator)) →
       BuiltBy U tl s t → BuiltBy U tl (s + 1) (t + δ + max γ μ)
 
-/-- **The run is responsive**: at `τ ≥ 2δ`, a reactive run from round `R` to
-round `N` is responsive among the correct validators from round `R + 1` to
-`N`. -/
+/-- **The run is responsive**: at `τ ≥ 2δ` and `δ < γ ≤ τ`, a reactive run
+from round `R` to round `N` is responsive among the correct validators from
+round `R + 1` to `N`. -/
 def Responsive : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [DecidableEq BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (G δ τ γ μ R N : ℕ),
-    ReactiveRun U tl G δ τ γ μ R N → 2 * δ ≤ τ →
+    ReactiveRun U tl G δ τ γ μ R N → 2 * δ ≤ τ → δ < γ → γ ≤ τ →
       RespondsFrom U (Correct : Finset Validator) (R + 1) N
 
 /-- **A slot led by correct validators commits within `3δ + 2 max γ μ`**: at
-`τ ≥ 2δ`, when every slot from one round below a slot at round `r`, from
-`R + 2` to `N − 2`, to one round above it has a correct leader, and every
-correct validator has built at round `r` by `t`, every correct node commits
-the slot directly on what it holds at `t + 3δ + 2 max γ μ`. -/
+`τ ≥ 2δ` and `δ < γ ≤ τ`, when every slot from one round below a slot at
+round `r`, from `R + 2` to `N − 2`, to one round above it has a correct
+leader, and every correct validator has built at round `r` by `t`, every
+correct node commits the slot directly on what it holds at
+`t + 3δ + 2 max γ μ`. -/
 def Commits : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [DecidableEq BlockId] [S : Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (G δ τ γ μ R K N : ℕ),
-    ReactiveRun U tl G δ τ γ μ R N → 2 * δ ≤ τ → ∀ k t, R + 2 ≤ S.slotRound k →
-      S.slotRound k + 2 ≤ N →
+    ReactiveRun U tl G δ τ γ μ R N → 2 * δ ≤ τ → δ < γ → γ ≤ τ → ∀ k t,
+      R + 2 ≤ S.slotRound k → S.slotRound k + 2 ≤ N →
       (∀ j, S.slotRound k ≤ S.slotRound j + 1 → S.slotRound j ≤ S.slotRound k + 1 →
         S.leader j ∈ (Correct : Finset Validator)) →
       BuiltBy U tl (S.slotRound k) t → ∀ v ∈ (Correct : Finset Validator),
         ∃ L, IsLeaderBlock U k L ∧
           NodeDecided U K (tl.held v (t + 3 * δ + 2 * max γ μ)) k (some L)
 
-/-- **The run is synchronous**: at `2δ ≤ γ ≤ τ`, a reactive run from round
-`R` to round `N` is synchronous among the correct validators from round
-`R + 1` to `N`. -/
+/-- **The run is synchronous**: at `2δ ≤ γ ≤ τ` and `δ < γ`, a reactive run
+from round `R` to round `N` is synchronous among the correct validators from
+round `R + 1` to `N`. -/
 def Synchronised : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [DecidableEq BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (G δ τ γ μ R N : ℕ),
-    ReactiveRun U tl G δ τ γ μ R N → 2 * δ ≤ γ → γ ≤ τ →
+    ReactiveRun U tl G δ τ γ μ R N → 2 * δ ≤ γ → δ < γ → γ ≤ τ →
       SyncFrom U (Correct : Finset Validator) (R + 1) N
 
 /-- Reactive nodes in time. -/
 def Statement : Prop :=
-  Persisted ∧ Built ∧ CatchesUp ∧ Starts ∧ Slow ∧ Fast ∧ Responsive ∧ Commits ∧
+  Persisted ∧ Resumes ∧ Built ∧ CatchesUp ∧ Starts ∧ Slow ∧ Fast ∧ Responsive ∧ Commits ∧
     Synchronised
 
 end Reactive

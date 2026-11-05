@@ -3,10 +3,11 @@ import LeanDag.KPartialDag.Reactive.Proof
 # Reactive nodes in time — a witness
 
 `ReactiveRun` is satisfiable: one correct validator builds one block a
-round up to round `N`, each referencing the one below, and holds every block
-at every time. With `G = δ = τ = γ = μ = 0`, `Reactive.Commits` then decides every
-slot from `2` to `N − 2`. The witness shows the fields of `ReactiveRun` are
-consistent; with `δ = 0` it exercises none of the timing.
+round up to round `N`, each referencing the one below, all at time `1`, and
+holds every block, and keeps it on disk, from time `1` on. With
+`G = δ = μ = 0` and `τ = γ = 1`, `Reactive.Commits` then decides every slot
+from `2` to `N − 2`. The witness shows the fields of `ReactiveRun` are
+consistent; with `δ = 0` it exercises none of the timing, and no restart.
 -/
 
 namespace LeanDagTest
@@ -52,8 +53,17 @@ def chain (N : ℕ) : KRecord Unit ℕ Unit where
       omega
   no_equivocation i _ j _ _ _ h := h
 
-/-- Every block is held at every time, and built at time `0`. -/
-def chainTimeline (N : ℕ) : Timeline Unit ℕ := ⟨fun _ _ => Finset.range (N + 1), fun _ => 0⟩
+/-- Every block is held from time `1` on. -/
+def chainHeld (N t : ℕ) : Finset ℕ := if 1 ≤ t then Finset.range (N + 1) else ∅
+
+theorem mem_chainHeld {N t b : ℕ} : b ∈ chainHeld N t ↔ 1 ≤ t ∧ b ≤ N := by
+  unfold chainHeld
+  split_ifs with h <;> simp [h, Nat.lt_succ_iff]
+
+/-- Every block is held, and kept on disk, from time `1` on, and built at
+time `1`. -/
+def chainTimeline (N : ℕ) : Timeline Unit ℕ :=
+  ⟨fun _ => chainHeld N, fun _ => chainHeld N, fun _ => 1⟩
 
 theorem correct_unit : (Correct : Finset Unit) = {()} := by
   ext v
@@ -82,24 +92,62 @@ theorem waitsFor_chain {N r : ℕ} (hr : r < N) :
     ⟨r, Finset.mem_filter.mpr ⟨Finset.mem_range.mpr (by omega), rfl, ?_⟩, rfl⟩⟩
   exact mem_chainRefs.mpr ⟨by omega, by omega⟩
 
+theorem not_quorumIn_empty {N r : ℕ} : ¬ QuorumIn (chain N) ∅ r := by
+  rw [QuorumIn, quorum_unit]
+  simp [creatorsOf]
+
+theorem not_behindIn {N r : ℕ} {H : Finset ℕ} {v : Unit} : ¬ BehindIn (chain N) H v r := by
+  intro h
+  have : ((creatorsOf (chain N).block
+      (H.filter fun b => ((chain N).block b).round = r + 1)).erase v).card = 0 :=
+    Finset.card_eq_zero.mpr
+      (Finset.eq_empty_of_forall_notMem fun w hw => (Finset.mem_erase.mp hw).1 rfl)
+  unfold BehindIn at h
+  rw [this] at h
+  exact Nat.not_succ_le_zero _ h
+
 /-- **The chain is a reactive run** from round `0` to round `N`. -/
-theorem chain_run (N : ℕ) : ReactiveRun (chain N) (chainTimeline N) 0 0 0 0 0 0 N where
-  held_ids _ _ := Finset.Subset.refl _
-  mono _ _ _ _ _ _ := Finset.Subset.refl _
-  delivers _ hb _ _ _ _ _ _ := hb
-  closed _ _ _ b hb j hj := (chain N).complete b hb j hj
-  causal _ _ _ _ _ _ := Nat.zero_le _
+theorem chain_run (N : ℕ) : ReactiveRun (chain N) (chainTimeline N) 0 0 1 1 0 0 N where
+  held_ids _ _ b hb := Finset.mem_range.mpr (by have := mem_chainHeld.mp hb; omega)
+  mono _ _ _ _ _ htt' b hb := by
+    obtain ⟨h1, h2⟩ := mem_chainHeld.mp hb
+    exact mem_chainHeld.mpr ⟨by omega, h2⟩
+  delivers _ _ _ _ b hb _ _ _ := by simpa using hb
+  own b hb _ := mem_chainHeld.mpr ⟨le_rfl, by simp [chain] at hb; omega⟩
+  closed _ _ _ b hb _ j hj := by
+    obtain ⟨h1, h2⟩ := mem_chainHeld.mp hb
+    have := mem_chainRefs.mp hj
+    exact mem_chainHeld.mpr ⟨h1, by omega⟩
+  causal _ _ _ _ hb _ := (mem_chainHeld.mp hb).1
   prior _ _ _ _ _ _ hne := absurd rfl hne
+  disk_held _ _ _ := Finset.Subset.refl _
+  stores b hb _ t ht := by
+    have hbN : b ≤ N := by simp [chain] at hb; omega
+    refine ⟨b, mem_chainHeld.mpr ⟨ht, hbN⟩, rfl, le_rfl, fun j hj => ?_⟩
+    have := mem_chainRefs.mp hj
+    exact mem_chainHeld.mpr ⟨ht, by omega⟩
   late _ _ _ _ := le_rfl
-  start := ⟨0, fun _ _ => ⟨0, Finset.mem_range.mpr (by omega), rfl, rfl, le_rfl⟩⟩
+  start := ⟨1, fun _ _ => ⟨0, Finset.mem_range.mpr (by omega), rfl, le_rfl, le_rfl⟩⟩
   waits b hb _ r hbr _ := by
-    have hW : WaitsFor (chain N) (Finset.range (N + 1)) r := waitsFor_chain (by
+    have hr : r < N := by
       have : (chain N).block b = chainBlock b := rfl
       simp only [Finset.mem_range, chain] at hb
       simp only [this, chainBlock] at hbr
-      omega)
-    exact Or.inl ⟨le_rfl, hW, hW⟩
-  prompt _ _ r _ _ hr _ := ⟨r + 1, Finset.mem_range.mpr (by omega), rfl, rfl, Nat.zero_le _⟩
+      omega
+    have hH : (chainTimeline N).held ((chain N).block b).creator ((chainTimeline N).built b) =
+        Finset.range (N + 1) := by simp [chainTimeline, chainHeld]
+    rw [hH]
+    exact Or.inr (Or.inl ⟨waitsFor_chain hr,
+      fun _ => ⟨r, Finset.mem_range.mpr (by omega), rfl, rfl⟩⟩)
+  prompt v _ r t _ hr hw := by
+    refine ⟨r + 1, Finset.mem_range.mpr (by omega), rfl, le_rfl, ?_⟩
+    change 1 ≤ t
+    rcases hw with ⟨-, hQ, -⟩ | ⟨-, hB⟩
+    · by_contra h0
+      have : (chainTimeline N).held v (t - 0) = ∅ := by
+        simp [chainTimeline, chainHeld]; omega
+      exact not_quorumIn_empty (this ▸ hQ)
+    · exact absurd hB not_behindIn
   covers b hb _ x hx hxb := by
     have hb' : (chain N).block b = chainBlock b := rfl
     have hx' : (chain N).block x = chainBlock x := rfl
@@ -115,20 +163,21 @@ theorem chain_run (N : ℕ) : ReactiveRun (chain N) (chainTimeline N) 0 0 0 0 0 
       ⟨mem_chainRefs.mpr ⟨by omega, by omega⟩, mem_chainRefs.mpr ⟨by omega, by omega⟩⟩, rfl⟩⟩
 
 /-- **The chain decides**: by `Reactive.Commits`, the node decides slot `k`
-directly on what it holds, for every slot `k` from `2` to `N − 2`. -/
+directly on what it holds at time `3`, for every slot `k` from `2` to
+`N − 2`. -/
 theorem chain_decides (N K k : ℕ) (h2 : 2 ≤ k) (hk : k + 2 ≤ N) :
     ∃ L, IsLeaderBlock (chain N) k L ∧
-      NodeDecided (chain N) K ((chainTimeline N).held () 0) k (some L) := by
-  have := Reactive.commits Unit ℕ Unit (chain N) (chainTimeline N) 0 0 0 0 0 0 K N (chain_run N)
-    le_rfl k 0 (by rw [slotRound_unit]; omega) (by rw [slotRound_unit]; omega)
-    (fun _ _ _ => mem_correct_unit _)
+      NodeDecided (chain N) K ((chainTimeline N).held () 3) k (some L) := by
+  have := Reactive.commits Unit ℕ Unit (chain N) (chainTimeline N) 0 0 1 1 0 0 K N (chain_run N)
+    (by norm_num) (by norm_num) le_rfl k 1 (by rw [slotRound_unit]; omega)
+    (by rw [slotRound_unit]; omega) (fun _ _ _ => mem_correct_unit _)
     (fun v _ => ⟨k, Finset.mem_range.mpr (by omega), rfl, rfl, le_rfl⟩) () (mem_correct_unit _)
   simpa using this
 
 /-- **The chain is synchronous** from round `1`, by `Reactive.Synchronised`. -/
 theorem chain_synchronised (N : ℕ) : SyncFrom (chain N) (Correct : Finset Unit) 1 N :=
-  Reactive.synchronised Unit ℕ Unit (chain N) (chainTimeline N) 0 0 0 0 0 0 N (chain_run N)
-    le_rfl le_rfl
+  Reactive.synchronised Unit ℕ Unit (chain N) (chainTimeline N) 0 0 1 1 0 0 N (chain_run N)
+    (by norm_num) (by norm_num) le_rfl
 
 end KPartialDag
 
