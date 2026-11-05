@@ -32,7 +32,9 @@ reactive rules (`ReactiveRules`) when, in addition, every correct node has
 reached round `R`. It is a reactive run (`ReactiveRun`) when, in addition,
 the blocks of correct nodes from round `R` on are built at `G + τ` or later.
 A node keeps on disk the last round it built, and builds only above it
-(`Persists`); that is all it needs to build at most one block a round.
+(`Persists`); that is all it needs to build at most one block a round. A
+node that builds above the blocks of its own on its disk (`BuildsAboveDisk`)
+does so, numbering its builds by time.
 
 Definitions only.
 -/
@@ -190,23 +192,45 @@ structure ReactiveRun (U : KRecord Validator BlockId Payload) (tl : Timeline Val
     R ≤ (U.block b).round → G + τ ≤ tl.built b
 
 /-- **Persisting the last round built**: the builds of each correct
-validator are numbered in order (`order`), and the round it has stored on
-disk before its `i`-th build (`stored v i`) never decreases, across restarts
-too. It builds only above the round it has stored, stores the block's round
-before it sends the block, and numbers no two builds alike. -/
+validator are numbered in order (`order`), and before its `i`-th build it
+keeps on disk the lowest round it may build at, one above the last round it
+built (`next v i`), which never decreases, across restarts too. It builds
+only at or above that round, raises it above the block's round before it
+sends the block, and numbers no two builds alike. -/
 structure Persists (ids : Finset BlockId) (block : BlockId → Block Validator BlockId Payload)
-    (order : BlockId → ℕ) (stored : Validator → ℕ → ℕ) : Prop where
-  /-- The stored round never decreases. -/
-  grows : ∀ v ∈ (Correct : Finset Validator), ∀ i j, i ≤ j → stored v i ≤ stored v j
-  /-- A correct block is above the round its author stored before it. -/
+    (order : BlockId → ℕ) (next : Validator → ℕ → ℕ) : Prop where
+  /-- The lowest round to build at never decreases. -/
+  grows : ∀ v ∈ (Correct : Finset Validator), ∀ i j, i ≤ j → next v i ≤ next v j
+  /-- A correct block is at or above the lowest round its author may build at. -/
   above : ∀ b ∈ ids, (block b).creator ∈ (Correct : Finset Validator) →
-    stored (block b).creator (order b) < (block b).round
-  /-- A correct block's round is stored before its author's next build. -/
+    next (block b).creator (order b) ≤ (block b).round
+  /-- A correct block's round is below the lowest round before its author's
+  next build. -/
   stores : ∀ b ∈ ids, (block b).creator ∈ (Correct : Finset Validator) →
-    (block b).round ≤ stored (block b).creator (order b + 1)
+    (block b).round < next (block b).creator (order b + 1)
   /-- No two builds of a correct validator have the same number. -/
   single : ∀ b ∈ ids, ∀ c ∈ ids, (block b).creator ∈ (Correct : Finset Validator) →
     (block b).creator = (block c).creator → order b = order c → b = c
+
+/-- **Building above the disk**: a correct validator keeps on disk a block of
+its own as high as any it has built, builds at most one block at a time, and
+builds only above the blocks of its own that it kept on disk the time
+before. -/
+structure BuildsAboveDisk (ids : Finset BlockId) (block : BlockId → Block Validator BlockId Payload)
+    (tl : Timeline Validator BlockId) : Prop where
+  /-- A correct node keeps on disk a block of its own at least as high as any
+  it has built. -/
+  stores : ∀ b ∈ ids, (block b).creator ∈ (Correct : Finset Validator) → ∀ t,
+    tl.built b ≤ t → ∃ b' ∈ tl.disk (block b).creator t,
+      (block b').creator = (block b).creator ∧ (block b).round ≤ (block b').round
+  /-- A correct block is above the blocks of its author that its author kept
+  on disk the time before. -/
+  above : ∀ b ∈ ids, (block b).creator ∈ (Correct : Finset Validator) → 0 < tl.built b →
+    ∀ b' ∈ tl.disk (block b).creator (tl.built b - 1),
+      (block b').creator = (block b).creator → (block b').round < (block b).round
+  /-- A correct validator builds at most one block at a time. -/
+  single : ∀ b ∈ ids, ∀ c ∈ ids, (block b).creator ∈ (Correct : Finset Validator) →
+    (block b).creator = (block c).creator → tl.built b = tl.built c → b = c
 
 end KPartialDag
 

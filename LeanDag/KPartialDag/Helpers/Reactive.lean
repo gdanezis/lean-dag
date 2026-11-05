@@ -131,8 +131,8 @@ theorem leaderBlock_eq {k : ℕ} {L L' : BlockId} (hL : IsLeaderBlock U k L)
 namespace Persists
 
 variable {ids : Finset BlockId} {block : BlockId → Block Validator BlockId Payload}
-variable {order : BlockId → ℕ} {stored : Validator → ℕ → ℕ}
-variable (h : Persists ids block order stored)
+variable {order : BlockId → ℕ} {next : Validator → ℕ → ℕ}
+variable (h : Persists ids block order next)
 include h
 
 omit [DecidableEq BlockId] S in
@@ -159,6 +159,42 @@ theorem eq_of_round {i j : BlockId} (hi : i ∈ ids) (hj : j ∈ ids)
   · exact absurd hr (h.round_lt hj hi (hij ▸ hc) hij.symm hgt).ne'
 
 end Persists
+
+namespace BuildsAboveDisk
+
+variable {ids : Finset BlockId} {block : BlockId → Block Validator BlockId Payload}
+variable (h : BuildsAboveDisk ids block tl)
+include h
+
+omit [DecidableEq BlockId] S in
+/-- A correct validator's later builds are at higher rounds. -/
+theorem round_lt {b c : BlockId} (hb : b ∈ ids) (hc : c ∈ ids)
+    (hbc : (block b).creator ∈ (Correct : Finset Validator))
+    (hcb : (block c).creator = (block b).creator) (hlt : tl.built b < tl.built c) :
+    (block b).round < (block c).round := by
+  obtain ⟨b', hb', hb'c, hb'r⟩ := h.stores b hb hbc (tl.built c - 1) (by omega)
+  rw [← hcb] at hb'
+  have := h.above c hc (hcb ▸ hbc) (by omega) b' hb' (hb'c.trans hcb.symm)
+  omega
+
+omit [DecidableEq BlockId] S in
+/-- **Building above the disk persists the last round built**, with builds
+numbered by time and the lowest round to build at one above the highest
+round built before. -/
+theorem persists : ∃ next, Persists ids block tl.built next := by
+  classical
+  refine ⟨fun v i => (ids.filter fun c => (block c).creator = v ∧ tl.built c < i).sup
+    fun c => (block c).round + 1, fun v _ i j hij => Finset.sup_mono fun c hc => ?_,
+    fun b hb hbc => Finset.sup_le fun c hc => ?_, fun b hb hbc => ?_, h.single⟩
+  · obtain ⟨hc, hcv, hct⟩ := Finset.mem_filter.mp hc
+    exact Finset.mem_filter.mpr ⟨hc, hcv, by omega⟩
+  · obtain ⟨hc, hcb, hct⟩ := Finset.mem_filter.mp hc
+    have := h.round_lt hc hb (hcb ▸ hbc) hcb.symm hct
+    omega
+  · exact Finset.le_sup (f := fun c => (block c).round + 1)
+      (Finset.mem_filter.mpr ⟨hb, rfl, by omega⟩)
+
+end BuildsAboveDisk
 
 namespace NodeRules
 

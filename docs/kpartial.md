@@ -271,6 +271,7 @@ built before.
 | 6 Resumes | the ledger resumes from the band from `D + K` rounds below | `K ≥ 3` |
 | 6 Counts, Window, AvailRound | `n` blocks a round without equivocation; with it, `≈ |C| f^(K−1)` per history and `≈ |C| f^(K+1)` per round of the available sub-DAG | — |
 | 7 Persisted | a node persisting its last round builds once a round | the stored round grows |
+| 7 OnDisk | building above the own blocks on disk persists the last round | one build at a time |
 | 7 Resumes | after crashes before `G`, a reactive run is reached within `3δ + 3 max(τ, μ)` of `G` | rules for nodes, a correct block above `R` by `G` |
 | 7 Built | every round is reached | reactive rules |
 | 7 CatchesUp | blocks of `f + 1` correct validators at a round bring all to it within `δ` | reactive rules |
@@ -447,9 +448,12 @@ only as a delay.
 
 To build at most one block a round across restarts, a node keeps on disk
 the last round it built (`Persists`): its builds are numbered in order, the
-stored round never decreases, it builds only above the stored round, and it
-stores a block's round before it sends the block. The block it keeps on disk
-gives that round.
+round it keeps, one above the last round built, never decreases, it builds
+only at or above that round, and it raises it before it sends a block. The
+block it keeps on disk gives that round: a node that keeps its highest block
+on disk, builds at most one block at a time, and builds only above the
+blocks of its own on its disk the time before (`BuildsAboveDisk`) persists
+the last round it built, with its builds numbered by time.
 
 *Recovery.* Suppose every node crashed before `G`, and let `r` be the
 highest round on a correct node's disk. That node holds its block of round
@@ -475,7 +479,8 @@ certificate it held; the node holds these references.
 **Theorem 7 (reactive nodes; `Reactive.Statement`).** A correct validator
 that persists the last round it built builds at most one block a round
 (`Reactive.Persisted`): its builds are at increasing rounds, whatever else
-it loses in a restart.
+it loses in a restart. A validator that builds above the blocks of its own
+on its disk persists the last round it built (`Reactive.OnDisk`).
 
 Under the rules for nodes from round `R` to round `N`, with any crashes and
 restarts before `G`:

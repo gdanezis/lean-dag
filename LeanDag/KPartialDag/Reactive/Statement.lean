@@ -4,7 +4,9 @@ import LeanDag.KPartialDag.Model.Reactive
 
 `docs/kpartial.md` §11. A correct validator that keeps on disk the last
 round it built, and builds only above it (`Persists`), builds at most one
-block a round, whatever it loses in a restart (`Persisted`).
+block a round, whatever it loses in a restart (`Persisted`). A validator
+that builds above the blocks of its own on its disk does so
+(`OnDisk`).
 
 Under the rules for nodes from round `R` to round `N`, with message delay `δ`
 from time `G`, timeout `τ`, grace period `γ` and minimum wait `μ`, and any
@@ -62,10 +64,21 @@ def Persisted : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [DecidableEq BlockId] [Slots Validator]
     (ids : Finset BlockId) (block : BlockId → Block Validator BlockId Payload)
-    (order : BlockId → ℕ) (stored : Validator → ℕ → ℕ),
-    Persists ids block order stored → ∀ i ∈ ids, ∀ j ∈ ids,
+    (order : BlockId → ℕ) (next : Validator → ℕ → ℕ),
+    Persists ids block order next → ∀ i ∈ ids, ∀ j ∈ ids,
       (block i).creator ∈ (Correct : Finset Validator) → (block i).creator = (block j).creator →
       (block i).round = (block j).round → i = j
+
+/-- **Building above the disk persists the last round built**: a correct
+validator that keeps its highest block on disk, builds at most one block at
+a time, and builds only above the blocks of its own on its disk persists the
+last round it built, numbering its builds by time. -/
+def OnDisk : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [DecidableEq BlockId] [Slots Validator]
+    (ids : Finset BlockId) (block : BlockId → Block Validator BlockId Payload)
+    (tl : Timeline Validator BlockId),
+    BuildsAboveDisk ids block tl → ∃ next, Persists ids block tl.built next
 
 /-- **Operations resume**: under the rules for nodes from round `R` to round
 `N`, with any crashes and restarts before `G`, once a correct validator has
@@ -193,7 +206,7 @@ def Synchronised : Prop :=
 
 /-- Reactive nodes in time. -/
 def Statement : Prop :=
-  Persisted ∧ Resumes ∧ Built ∧ CatchesUp ∧ Starts ∧ Slow ∧ Fast ∧ Responsive ∧ Commits ∧
+  Persisted ∧ OnDisk ∧ Resumes ∧ Built ∧ CatchesUp ∧ Starts ∧ Slow ∧ Fast ∧ Responsive ∧ Commits ∧
     Synchronised
 
 end Reactive
