@@ -29,13 +29,11 @@ theorem built : Built := by
   exact h.exists_reachedBy hs hsN
 
 theorem catchesUp : CatchesUp := by
-  intro Validator BlockId Payload _ _ _ _ _ U tl T G δ τ γ μ R N h s t A hs hsN hA hcard hb
-  obtain ⟨v, hv⟩ := Finset.card_pos.mp (by omega : 0 < A.card)
-  obtain ⟨b₀, -, -, -, hG, ht⟩ := hb v hv
-  refine h.reachedBy_of_behind hs hsN (hG.trans ht) hA hcard fun v hv => ?_
-  obtain ⟨b, hb, hbv, hbr, hGb, hbt⟩ := hb v hv
+  intro Validator BlockId Payload _ _ _ _ _ U tl T G δ τ γ μ R N h s t A hs hsN hG hA hcard hb
+  refine h.reachedBy_of_behind hs hsN hG hA hcard fun v hv => ?_
+  obtain ⟨b, hb, hbv, hbr, hbt⟩ := hb v hv
   have hbT : (U.block b).creator ∈ T := hbv ▸ hA hv
-  exact ⟨_, hbT, b, h.mono _ hbT _ _ hGb hbt (h.own b hb (h.stable hbT)), hbv, hbr⟩
+  exact ⟨_, hbT, b, h.own hb (h.stable hbT) hbt, hbv, hbr⟩
 
 theorem starts : Starts := by
   intro Validator BlockId Payload _ _ _ _ _ U tl T G δ τ γ μ R N h
@@ -64,8 +62,8 @@ theorem synchronised : Synchronised := by
   exact h.syncFrom hγ hδ hγτ
 
 theorem durable : Durable := by
-  intro Validator BlockId Payload _ _ _ _ _ U tl T G δ τ γ μ R N K h hK A hA r hC z hz
-  exact h.exists_disk_of_avail hK hA hC hz
+  intro Validator BlockId Payload _ _ _ _ _ U tl T K hT hTq hK A hA r hC z hz
+  exact exists_disk_of_avail hT hTq hK hA hC hz
 
 theorem ledger : Ledger := by
   intro Validator BlockId Payload _ _ _ _ S U tl T G δ τ γ μ R N K D Δ c h hτ hδ hγτ hF hc hspan

@@ -88,9 +88,6 @@ structure NodeRules (U : KRecord Validator BlockId Payload)
   node of `T` `δ` later. -/
   delivers : ∀ v ∈ T, ∀ t, G ≤ t → ∀ b ∈ tl.held v t,
     (U.block b).creator ∈ (Correct : Finset Validator) → ∀ w ∈ T, b ∈ tl.held w (t + δ)
-  /-- A correct node holds its block when it builds it. -/
-  own : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) →
-    b ∈ tl.held (U.block b).creator (tl.built b)
   /-- A correct node holds the references of the correct blocks it holds. -/
   closed : ∀ v ∈ (Correct : Finset Validator), ∀ t, ∀ b ∈ tl.held v t,
     (U.block b).creator ∈ (Correct : Finset Validator) → (U.block b).refs ⊆ tl.held v t
@@ -104,11 +101,9 @@ structure NodeRules (U : KRecord Validator BlockId Payload)
     tl.built b < t
   /-- A correct node holds what it keeps on disk. -/
   disk_held : ∀ v ∈ (Correct : Finset Validator), ∀ t, tl.disk v t ⊆ tl.held v t
-  /-- A correct node keeps on disk every block it has built, with the block's
-  references. -/
+  /-- A correct node keeps on disk every block it has built. -/
   stores : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) → ∀ t,
-    tl.built b ≤ t → b ∈ tl.disk (U.block b).creator t ∧
-      (U.block b).refs ⊆ tl.disk (U.block b).creator t
+    tl.built b ≤ t → b ∈ tl.disk (U.block b).creator t
   /-- **The wait**: a correct block above round `r ≥ R` is built once its
   author has held what it waits for for `γ` and still holds it, holds it with
   blocks of every validator at round `r`, has held a quorum of round `r` for

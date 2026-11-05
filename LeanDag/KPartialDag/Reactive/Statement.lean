@@ -66,19 +66,19 @@ def Built : Prop :=
     (T : Finset Validator) (G δ τ γ μ R N : ℕ),
     ReactiveRules U tl T G δ τ γ μ R N → ∀ s, R ≤ s → s ≤ N → ∃ t, ReachedBy U tl T s t
 
-/-- **Nodes behind catch up within `δ`**: under the reactive rules from round
+/-- **Nodes behind catch up within `δ`**: under the rules for nodes from round
 `R` to round `N`, once a set `A` of `f + 1` validators of `T` have built at
-round `s + 1`, from `R + 1` to `N`, at times from `G` to `t`, every validator
-of `T` has reached round `s + 1` by `t + δ`. -/
+round `s + 1`, from `R + 1` to `N`, by a time `t ≥ G`, every validator of `T`
+has reached round `s + 1` by `t + δ`. -/
 def CatchesUp : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [F : Faults Validator] [DecidableEq BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (G δ τ γ μ R N : ℕ),
-    ReactiveRules U tl T G δ τ γ μ R N → ∀ s t (A : Finset Validator), R ≤ s → s < N →
+    NodeRules U tl T G δ τ γ μ R N → ∀ s t (A : Finset Validator), R ≤ s → s < N → G ≤ t →
       A ⊆ T → F.f + 1 ≤ A.card →
       (∀ v ∈ A, ∃ b ∈ U.ids, (U.block b).creator = v ∧ (U.block b).round = s + 1 ∧
-        G ≤ tl.built b ∧ tl.built b ≤ t) →
+        tl.built b ≤ t) →
       ReachedBy U tl T (s + 1) (t + δ)
 
 /-- **A reactive run starts**: under the reactive rules from round `R` to
@@ -163,16 +163,16 @@ def Synchronised : Prop :=
     ReactiveRun U tl T G δ τ γ μ R N → 2 * δ ≤ γ → δ < γ → γ ≤ τ →
       SyncFrom U T (R + 1) N
 
-/-- **Nothing a leader outputs is lost**: under the rules for nodes, when
-correct nodes keep on disk the histories to depth `K` of their blocks'
-references, every block of the available sub-DAG of a certified block is on
-the disk of a node of `T` from some time on, through any crash. -/
+/-- **Nothing a leader outputs is lost**: when correct nodes keep on disk the
+histories to depth `K` of their blocks' references, every block of the
+available sub-DAG of a certified block is on the disk of a node of any quorum
+`T` of correct nodes from some time on, through any crash. -/
 def Durable : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [DecidableEq BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
-    (T : Finset Validator) (G δ τ γ μ R N K : ℕ),
-    NodeRules U tl T G δ τ γ μ R N → KeepsHistory U tl K → ∀ A ∈ U.ids, ∀ r,
+    (T : Finset Validator) (K : ℕ), T ⊆ (Correct : Finset Validator) →
+    quorumCard Validator ≤ T.card → KeepsHistory U tl K → ∀ A ∈ U.ids, ∀ r,
       (certificatesAt U (IsVote U) (quorumCard Validator) A r).Nonempty → ∀ z ∈ Avail U K A,
       ∃ w ∈ T, ∃ t₀, ∀ t, t₀ ≤ t → z ∈ tl.disk w t
 

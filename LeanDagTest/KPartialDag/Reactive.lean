@@ -116,7 +116,6 @@ theorem chain_run (N : ℕ) :
     obtain ⟨h1, h2⟩ := mem_chainHeld.mp hb
     exact mem_chainHeld.mpr ⟨by omega, h2⟩
   delivers _ _ _ _ b hb _ _ _ := by simpa using hb
-  own b hb _ := mem_chainHeld.mpr ⟨le_rfl, by simp [chain] at hb; omega⟩
   closed _ _ _ b hb _ j hj := by
     obtain ⟨h1, h2⟩ := mem_chainHeld.mp hb
     have := mem_chainRefs.mp hj
@@ -124,11 +123,7 @@ theorem chain_run (N : ℕ) :
   causal _ _ _ _ hb _ := (mem_chainHeld.mp hb).1
   prior _ _ _ _ _ _ hne := absurd rfl hne
   disk_held _ _ _ := Finset.Subset.refl _
-  stores b hb _ t ht := by
-    have hbN : b ≤ N := by simp [chain] at hb; omega
-    refine ⟨mem_chainHeld.mpr ⟨ht, hbN⟩, fun j hj => ?_⟩
-    have := mem_chainRefs.mp hj
-    exact mem_chainHeld.mpr ⟨ht, by omega⟩
+  stores b hb _ t ht := mem_chainHeld.mpr ⟨ht, by simp [chain] at hb; omega⟩
   late _ _ _ _ := le_rfl
   start := ⟨1, fun _ _ => ⟨0, Finset.mem_range.mpr (by omega), rfl, le_rfl, le_rfl⟩⟩
   waits b hb _ r hbr _ := by

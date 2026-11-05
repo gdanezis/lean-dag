@@ -271,7 +271,7 @@ built before.
 | 7 OnDisk | building above the own blocks on disk persists the last round | one build at a time |
 | 7 Resumes | after crashes before `G`, a reactive run is reached within `3δ + 3 max(τ, μ)` of `G` | rules for nodes, a block of `T` above `R` by `G` |
 | 7 Built | every round is reached | reactive rules |
-| 7 CatchesUp | blocks of `f + 1` validators of `T` at a round bring `T` to it within `δ` | reactive rules |
+| 7 CatchesUp | blocks of `f + 1` validators of `T` at a round bring `T` to it within `δ` | rules for nodes |
 | 7 Starts | `R`, or one above a round reached in `T` before `G + τ`, starts a reactive run | reactive rules |
 | 7 Slow | each round is built within `δ + max(τ, μ)` | reactive run, `δ < γ ≤ τ` |
 | 7 Fast | a round next to leaders of `T` takes `δ + max(γ, μ)` | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ` |
@@ -279,7 +279,7 @@ built before.
 | 7 Commits | a slot among leaders of `T` commits within `3δ + 2 max(γ, μ)` | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ` |
 | 7 Synchronised | every block of `T` references every block of `T` below | reactive run, `2δ ≤ γ`, `δ < γ ≤ τ` |
 | 7 Ledger | every node of `T` decides every slot up to a run of leaders of `T`, and fetches below its committed leaders | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ`, fetching, a fair schedule |
-| 7 Durable | every block of a certified block's available sub-DAG stays on the disk of a node of `T` | rules for nodes, histories to depth `K` on disk |
+| 7 Durable | every block of a certified block's available sub-DAG stays on the disk of a node of `T` | `T` a quorum of correct nodes, histories to depth `K` on disk |
 
 ## 9. Why a K-partial DAG
 
@@ -401,8 +401,8 @@ round. A node builds at the highest round it can, and so may skip rounds.
 all at once too. A restart loses what the node held in
 memory and resets its timers, and a node builds nothing while it is down.
 What survives is its disk: a correct node keeps on disk, for ever, every
-block it has built with the block's references (`stores`), and the histories
-to depth `K` of those references (`KeepsHistory`), and holds what is on its
+block it has built (`stores`), and the histories to depth `K` of its
+blocks' references (`KeepsHistory`), and holds what is on its
 disk (`disk_held`). A correct node holds the
 references of the correct blocks it holds (`closed`).
 
@@ -478,14 +478,14 @@ restarts before `G`:
   built above round `R` by `G`, there is a round `R' > R` such that, if
   `R' ≤ N`, the timeline is a reactive run from `R'` to `N`, and every
   validator of `T` has reached `R'` within `3δ + 3 max(τ, μ)` of `G`.
+* *Nodes behind catch up within `δ`* (`Reactive.CatchesUp`). Once `f + 1`
+  validators of `T` have built at a round by a time `t ≥ G`, every validator
+  of `T` has reached the round by `t + δ`.
 
 Under the reactive rules from round `R` to round `N`:
 
 * *Every round is reached* (`Reactive.Built`). Every validator of `T` has a
   block at every round from `R` to `N`, or above it.
-* *Nodes behind catch up within `δ`* (`Reactive.CatchesUp`). Once `f + 1`
-  validators of `T` have built at a round at times from `G` to `t`, every
-  validator of `T` has reached the round by `t + δ`.
 * *A reactive run starts* (`Reactive.Starts`). There is a round `R' ≥ R`,
   either `R` or one above the round of a block of `T` built before `G + τ`,
   such that, if `R' ≤ N`, the timeline is a reactive run from `R'` to `N`,
