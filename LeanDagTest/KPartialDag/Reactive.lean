@@ -90,6 +90,7 @@ theorem chain_run (N : ℕ) : ReactiveRun (chain N) (chainTimeline N) 0 0 0 0 N 
   closed _ _ _ b hb j hj := (chain N).complete b hb j hj
   own _ hb _ := hb
   causal _ _ _ _ _ _ := Nat.zero_le _
+  prior _ _ _ _ _ _ hne := absurd rfl hne
   late _ _ _ _ := le_rfl
   start := ⟨0, fun _ _ => ⟨0, Finset.mem_range.mpr (by omega), rfl, rfl, le_rfl⟩⟩
   waits b hb _ r hbr _ := Or.inl (waitsFor_chain (by

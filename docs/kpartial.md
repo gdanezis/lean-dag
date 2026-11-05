@@ -257,7 +257,10 @@ propose its payload again.
 | 6 Builds | building needs the last `K + 1` rounds | — |
 | 6 Resumes | the ledger resumes from the band from `D + K` rounds below | `K ≥ 3` |
 | 6 Counts, Window, AvailRound | `n` blocks a round without equivocation; with it, `≈ |C| f^(K−1)` per history and `≈ |C| f^(K+1)` per round of the available sub-DAG | — |
-| 7 Built, Slow | every round is built, each within `δ + τ` | reactive run |
+| 7 Built | every round is built | reactive rules |
+| 7 CatchesUp | blocks of `f + 1` correct validators at a round bring all to it within `δ` | reactive rules |
+| 7 Starts | the round after the last one reached before `G + τ` starts a reactive run | reactive rules |
+| 7 Slow | each round is built within `δ + τ` | reactive run |
 | 7 Fast | a round next to correct leaders takes `δ` | reactive run, `τ ≥ 2δ` |
 | 7 Responsive | the run is responsive among the correct validators | reactive run, `τ ≥ 2δ` |
 | 7 Commits | a slot among correct leaders commits within `3δ` | reactive run, `τ ≥ 2δ` |
@@ -388,31 +391,49 @@ it waits for (`WaitsFor`): blocks of a quorum of distinct authors at round
 certificate for a leader block of every slot at round `r − 1` (`CertIn`). It
 also builds once it has held a quorum of round `r` for a timeout `τ`. Its
 block references the leader blocks it holds one round below, and carries a
-certificate for a leader two rounds below when it holds one.
+certificate for a leader two rounds below when it holds one. A node *behind*
+builds above round `r` at once: it holds blocks of round `r + 1` by `f + 1`
+authors other than itself (`BehindIn`), so a correct node has built that
+round.
 
-A *reactive run* from round `R` to round `N` (`ReactiveRun`) is a timeline on
-which correct nodes follow this rule, keep what they hold with its
-references, hold a correct block only once it is built, and from a time `G`
-on hold everything another correct node holds `δ` later. Its correct blocks
-from round `R` on are built at `G + τ` or later, and every correct validator
-has a block at round `R`. The delay `δ` covers the downloads to depth `K`;
-nodes do not know it, and only the timeout `τ` is configured.
+A timeline follows the *reactive rules* from round `R` to round `N`
+(`ReactiveRules`) when correct nodes follow these rules there, keep what they
+hold with its references, hold a correct block only once it is built, and
+another author's correct block only after it is built, and from a time `G`
+on hold everything another correct node holds `δ` later; every correct
+validator has a block at round `R`. It is a *reactive run* (`ReactiveRun`)
+when, in addition, its correct blocks from round `R` on are built at `G + τ`
+or later. The delay `δ` covers the downloads to depth `K`; nodes do not know
+it, and only the timeout `τ` is configured.
 
 The wait spreads. A correct block of round `s + 1` shows that its author held,
-at its build time `t`, what it waits for, or a quorum at `t − τ`; every
-correct node holds the same `δ` later, so every correct node has built at
-round `s + 1` by `t + δ`. Hence a correct leader's block, which is built
+at its build time `t`, what it waits for, or a quorum at `t − τ`, or a
+correct block of round `s + 1` built before `t`; in the last case the same
+holds of that block, which was built earlier. Every correct node holds the
+same `δ` later, so every correct node has built at round `s + 1` by `t + δ`. Hence a correct leader's block, which is built
 within `δ` of any correct block of its round, reaches every correct node
 within `2δ` of the quorum that starts its timer, and so before the timer
 runs out when `τ ≥ 2δ`. The same holds for the votes of all correct
 validators two rounds above.
 
-**Theorem 7 (reactive nodes; `Reactive.Statement`).** On a reactive run from
-round `R` to round `N`:
+**Theorem 7 (reactive nodes; `Reactive.Statement`).** Under the reactive
+rules from round `R` to round `N`:
 
-* *Every round is built* (`Reactive.Built`, `Reactive.Slow`). Every correct
-  validator has a block at every round from `R` to `N`, each round within
-  `δ + τ` of the last correct block of the round below.
+* *Every round is built* (`Reactive.Built`). Every correct validator has a
+  block at every round from `R` to `N`.
+* *Nodes behind catch up within `δ`* (`Reactive.CatchesUp`). Once `f + 1`
+  correct validators have built at a round by a time `t ≥ G`, every correct
+  validator has built at the round by `t + δ`.
+* *A reactive run starts* (`Reactive.Starts`). Let `R'` be the round after
+  the last round from `R` on that a correct block reached before `G + τ`, or
+  `R` if there is none. If `R' ≤ N`, the timeline is a reactive run from `R'`
+  to `N`, and every correct validator has built at `R'` within `2δ + τ` of
+  `G + τ` and of the time all built at `R`.
+
+On a reactive run from round `R` to round `N`:
+
+* *Each round is built within `δ + τ`* (`Reactive.Slow`) of the last correct
+  block of the round below.
 * *Rounds led by correct validators take `δ`* (`Reactive.Fast`). At
   `τ ≥ 2δ`, when the slots of a round `s ≥ R + 2` and of the round below have
   correct leaders, every correct validator builds above `s` within `δ` of the
@@ -430,6 +451,18 @@ The bounds depend on the actual delay `δ`, not on `τ`, except where a slot
 next to the round has a Byzantine leader; there a round costs at most
 `δ + τ`. No bound depends on `K`.
 
+A node behind may build without the leader block of its round. The bounds
+hold nonetheless: by induction on build times, a correct block built behind
+rests on a correct block of its round built earlier, and eventually on one
+built on the wait or the timer, whose author referenced the leader block
+and the certificate it held; the node behind holds these references. The
+rule matters before `G + τ`. A correct block built at `t ≥ G + τ` brings
+every correct node to its round by `t + δ` without the rule, since its
+author's wait rests on blocks held at `t − τ ≥ G` or later, which every
+correct node holds `δ` later; at an earlier `t` the timers of other nodes
+may still have up to `τ` to run. With the rule,
+`f + 1` correct blocks at `t ≥ G` suffice (`CatchesUp`).
+
 A witness (`LeanDagTest/KPartialDag/Reactive.lean`) shows that the premise is
 consistent: one correct validator building a chain of blocks, all held at
 time `0`, is a reactive run, and `Reactive.Commits` decides its slots. It
@@ -446,9 +479,6 @@ exercises none of the timing, since its delay is `0`.
   below it.
 * A storage bound linear in `K` under equivocation, which needs a rule for
   equivocating authors (§10).
-* Reactive runs from the start: Theorem 7 assumes a round `R` whose correct
-  blocks are all built `τ` after synchrony and which every correct validator
-  builds; that some such round exists after synchrony is not formalised.
 * Quantitative liveness, which a retention bound needs.
 * Crash recovery: that persisting the last round built suffices, with a
   model of validators over time.

@@ -11,11 +11,16 @@ and a certificate for a leader block of every slot at round `r − 1`
 (`CertIn`). It also builds once it has held a quorum of round `r` for a
 timeout `τ`.
 
-A reactive run (`ReactiveRun`) is a timeline on which correct nodes follow
-this rule from round `R` to round `N`, reference the leader blocks and certificates
-they hold, and hold every block that another correct node holds at a time
-`t ≥ G` by `t + δ`. The blocks of correct nodes from round `R` on are built
-at `G + τ` or later.
+A node behind builds above round `r` at once when it holds blocks of round
+`r + 1` by `f + 1` authors other than itself (`BehindIn`): one of them is
+correct, so a correct node has built the round.
+
+A timeline follows the reactive rules from round `R` to round `N`
+(`ReactiveRules`) when correct nodes follow these rules there, reference
+the leader blocks and certificates they hold, and hold every block that
+another correct node holds at a time `t ≥ G` by `t + δ`. It is a reactive
+run (`ReactiveRun`) when, in addition, the blocks of correct nodes from
+round `R` on are built at `G + τ` or later.
 
 Definitions only.
 -/
@@ -47,6 +52,12 @@ def WaitsFor (U : KRecord Validator BlockId Payload) (H : Finset BlockId) (r : �
   QuorumIn U H r ∧ (∀ k, S.slotRound k = r → ∃ L ∈ H, IsLeaderBlock U k L) ∧
     ∀ k, S.slotRound k + 1 = r → ∃ L, IsLeaderBlock U k L ∧ CertIn U H r L
 
+/-- **Behind round `r + 1` in `H`, for `v`**: blocks of `H` at round `r + 1`
+by `f + 1` distinct authors other than `v`. -/
+def BehindIn (U : KRecord Validator BlockId Payload) (H : Finset BlockId) (v : Validator)
+    (r : ℕ) : Prop :=
+  F.f + 1 ≤ ((creatorsOf U.block (H.filter fun b => (U.block b).round = r + 1)).erase v).card
+
 /-- **A timeline**: the blocks each validator holds at each time, with their
 histories to depth `K`, and the time each block was built. -/
 structure Timeline (Validator BlockId : Type*) where
@@ -61,10 +72,10 @@ def BuiltBy (U : KRecord Validator BlockId Payload) (tl : Timeline Validator Blo
   ∀ v ∈ (Correct : Finset Validator), ∃ b ∈ U.ids, (U.block b).creator = v ∧
     (U.block b).round = s ∧ tl.built b ≤ t
 
-/-- **A reactive run from round `R` to round `N`**, with message delay `δ`
-from time `G` and timeout `τ`. -/
-structure ReactiveRun (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
-    (G δ τ R N : ℕ) : Prop where
+/-- **The reactive rules from round `R` to round `N`**, with message delay
+`δ` from time `G` and timeout `τ`. -/
+structure ReactiveRules (U : KRecord Validator BlockId Payload)
+    (tl : Timeline Validator BlockId) (G δ τ R N : ℕ) : Prop where
   /-- Nodes hold blocks of the record. -/
   held_ids : ∀ v t, tl.held v t ⊆ U.ids
   /-- A correct node keeps what it holds. -/
@@ -82,23 +93,27 @@ structure ReactiveRun (U : KRecord Validator BlockId Payload) (tl : Timeline Val
   /-- A correct node holds a correct block only once it is built. -/
   causal : ∀ v ∈ (Correct : Finset Validator), ∀ t, ∀ b ∈ tl.held v t,
     (U.block b).creator ∈ (Correct : Finset Validator) → tl.built b ≤ t
-  /-- Correct blocks from round `R` on are built at `G + τ` or later. -/
-  late : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) →
-    R ≤ (U.block b).round → G + τ ≤ tl.built b
+  /-- A correct node holds another correct author's block only after it is
+  built. -/
+  prior : ∀ v ∈ (Correct : Finset Validator), ∀ t, ∀ b ∈ tl.held v t,
+    (U.block b).creator ∈ (Correct : Finset Validator) → (U.block b).creator ≠ v →
+    tl.built b < t
   /-- Every correct validator has a block at round `R`. -/
   start : ∃ t, BuiltBy U tl R t
   /-- **The wait**: a correct block above round `r ≥ R` is built once its
-  author holds what it waits for, or has held a quorum of round `r` for
-  `τ`. -/
+  author holds what it waits for, has held a quorum of round `r` for `τ`, or
+  is behind round `r + 1`. -/
   waits : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) → ∀ r,
     (U.block b).round = r + 1 → R ≤ r →
     WaitsFor U (tl.held (U.block b).creator (tl.built b)) r ∨
-      (τ ≤ tl.built b ∧ QuorumIn U (tl.held (U.block b).creator (tl.built b - τ)) r)
+      (τ ≤ tl.built b ∧ QuorumIn U (tl.held (U.block b).creator (tl.built b - τ)) r) ∨
+      BehindIn U (tl.held (U.block b).creator (tl.built b)) (U.block b).creator r
   /-- **No later than the wait**: a correct node that holds what it waits for
-  above round `r`, from `R` to below `N`, or has held a quorum of round `r`
-  for `τ`, has built its block of round `r + 1`. -/
+  above round `r`, from `R` to below `N`, has held a quorum of round `r` for
+  `τ`, or is behind round `r + 1`, has built its block of round `r + 1`. -/
   prompt : ∀ v ∈ (Correct : Finset Validator), ∀ r t, R ≤ r → r < N →
-    (WaitsFor U (tl.held v t) r ∨ (τ ≤ t ∧ QuorumIn U (tl.held v (t - τ)) r)) →
+    (WaitsFor U (tl.held v t) r ∨ (τ ≤ t ∧ QuorumIn U (tl.held v (t - τ)) r) ∨
+      BehindIn U (tl.held v t) v r) →
     ∃ b ∈ U.ids, (U.block b).creator = v ∧ (U.block b).round = r + 1 ∧ tl.built b ≤ t
   /-- A correct block references a leader block of each slot one round below
   that its author holds. -/
@@ -113,6 +128,14 @@ structure ReactiveRun (U : KRecord Validator BlockId Payload) (tl : Timeline Val
     (∃ L, IsLeaderBlock U k L ∧
       CertIn U (tl.held (U.block b).creator (tl.built b)) (S.slotRound k + 1) L) →
     ∃ L, IsLeaderBlock U k L ∧ CarriesVotes U (IsVote U) (quorumCard Validator) b L
+
+/-- **A reactive run from round `R` to round `N`**: the reactive rules, with
+the correct blocks from round `R` on built at `G + τ` or later. -/
+structure ReactiveRun (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
+    (G δ τ R N : ℕ) : Prop extends ReactiveRules U tl G δ τ R N where
+  /-- Correct blocks from round `R` on are built at `G + τ` or later. -/
+  late : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) →
+    R ≤ (U.block b).round → G + τ ≤ tl.built b
 
 end KPartialDag
 
