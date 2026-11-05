@@ -135,9 +135,8 @@ blocks. -/
 theorem anchoredBelow_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card) {N : ℕ}
     (hs : SynchronisedTo U T R N) {A : BlockId} {m : ℕ} (hRm : R ≤ m) (hmN : m < N)
     (hpop : PopulatedOn U T (m + 1)) {x : BlockId} (hx : x ∈ U.ids)
-    (hxr : (U.block x).round = m) (hxc : (U.block x).creator ∈ T) (y : BlockId → BlockId)
-    (hy : ∀ z ∈ U.ids, (U.block z).round = m + 1 → (U.block z).creator ∈ T →
-      AnchoredBelow U K A (y z) ∧ z ∈ historyUpto U K (y z)) :
+    (hxr : (U.block x).round = m) (hxc : (U.block x).creator ∈ T)
+    (hy : ∀ z ∈ U.ids, (U.block z).round = m + 1 → (U.block z).creator ∈ T → z ∈ Avail U K A) :
     AnchoredBelow U K A x := by
   classical
   let S := (blocksAt U (m + 1)).filter fun z => (U.block z).creator ∈ T
@@ -146,8 +145,7 @@ theorem anchoredBelow_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card
       obtain ⟨hzb, hzc⟩ := Finset.mem_filter.mp hz
       obtain ⟨hzi, hzr⟩ := mem_blocksAt.mp hzb
       exact ⟨hzi, hzr, hzc⟩
-  refine AnchoredBelow.referenced S y (fun z hz => (hy z (hS z hz).1 (hS z hz).2.1 (hS z hz).2.2).1)
-    (fun z hz => (hy z (hS z hz).1 (hS z hz).2.1 (hS z hz).2.2).2)
+  refine AnchoredBelow.of_avail (fun z hz => hy z (hS z hz).1 (hS z hz).2.1 (hS z hz).2.2)
     (fun z hz => hs m hRm hmN z (hS z hz).1 (hS z hz).2.1 (hS z hz).2.2 x hx hxr hxc) ?_
   have hT : T ⊆ creatorsOf U.block S := fun v hv => by
     obtain ⟨z, hz, hzc, hzr⟩ := hpop v hv
@@ -175,14 +173,14 @@ theorem mem_out_of_synchronisedOn (hK : 1 ≤ K) (hcard : quorumCard Validator �
     | zero =>
       intro x hx hxc hRx hxr
       exact anchoredBelow_of_synchronisedOn hcard hs hRx (by omega)
-        (hpop _ (by omega) (by omega)) hx rfl hxc (fun _ => L) fun z hz hzr hzc =>
-          ⟨AnchoredBelow.anchor, ref_mem_historyUpto hK
+        (hpop _ (by omega) (by omega)) hx rfl hxc fun z hz hzr hzc =>
+          ⟨L, AnchoredBelow.anchor, ref_mem_historyUpto hK
             (hs _ (by omega) (by omega) L hL (by omega) hLc z hz hzr hzc)⟩
     | succ d ih =>
       intro x hx hxc hRx hxr
       exact anchoredBelow_of_synchronisedOn hcard hs hRx (by omega)
-        (hpop _ (by omega) (by omega)) hx rfl hxc id fun z hz hzr hzc =>
-          ⟨ih z hz hzc (by omega) (by omega), mem_historyUpto_self⟩
+        (hpop _ (by omega) (by omega)) hx rfl hxc fun z hz hzr hzc =>
+          ⟨z, ih z hz hzc (by omega) (by omega), mem_historyUpto_self⟩
   by_cases h : (U.block x).round + 1 = (U.block L).round
   · exact ⟨L, AnchoredBelow.anchor,
       ref_mem_historyUpto hK (hs _ hRx (by omega) L hL h.symm hLc x hx rfl hxc)⟩
@@ -229,10 +227,7 @@ theorem precedesIn_trans {g : ℕ → Option BlockId} {n : ℕ} {b b' b'' : Bloc
   have := entersIn_unique he₂ he₂'
   refine ⟨k₁, k₃, hk₁, hk₃, he₁, he₃, ?_⟩
   rcases hlt₁ with h | ⟨h, hkey⟩ <;> rcases hlt₂ with h' | ⟨h', hkey'⟩
-  · exact Or.inl (by omega)
-  · exact Or.inl (by omega)
-  · exact Or.inl (by omega)
-  · exact Or.inr ⟨by omega, lt_trans hkey hkey'⟩
+  all_goals first | exact Or.inl (by omega) | exact Or.inr ⟨by omega, lt_trans hkey hkey'⟩
 
 /-- **The ledger order is total** on the ledger. -/
 theorem precedesIn_total {g : ℕ → Option BlockId} {n : ℕ} {b b' : BlockId}

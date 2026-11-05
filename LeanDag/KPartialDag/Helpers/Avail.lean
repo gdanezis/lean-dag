@@ -32,16 +32,9 @@ variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
 variable {U : KRecord Validator BlockId Payload}
 
 /-- A block's history to any depth lies in the record. -/
-theorem historyUpto_subset_ids : ∀ (n : ℕ) {b : BlockId}, b ∈ U.ids → historyUpto U n b ⊆ U.ids
-  | 0, b, hb => by
-    intro i hi
-    rw [historyUpto_zero, Finset.mem_singleton] at hi
-    exact hi ▸ hb
-  | n + 1, b, hb => by
-    intro i hi
-    rcases mem_historyUpto_succ.mp hi with rfl | ⟨j, hj, hij⟩
-    · exact hb
-    · exact historyUpto_subset_ids n (U.complete b hb j hj) hij
+theorem historyUpto_subset_ids (n : ℕ) {b : BlockId} (hb : b ∈ U.ids) :
+    historyUpto U n b ⊆ U.ids :=
+  fun _ hi => mem_ids_of_reaches hb (reaches_of_mem_historyUpto hi)
 
 /-- A reference lies in the history to depth one or more. -/
 theorem ref_mem_historyUpto {K : ℕ} (hK : 1 ≤ K) {y x : BlockId} (hx : x ∈ (U.block y).refs) :
@@ -62,9 +55,18 @@ theorem AnchoredBelow.mem {K : ℕ} {A : BlockId} (hA : A ∈ U.ids) {x : BlockI
   induction h with
   | anchor => exact hA
   | @referenced x S y hy hz href hcard ih =>
-    obtain ⟨c, hc⟩ : (creatorsOf U.block S).Nonempty := Finset.card_pos.mp (by omega)
-    obtain ⟨z, hzS, -⟩ := mem_creatorsOf.mp hc
+    obtain ⟨z, hzS⟩ := nonempty_of_creatorsOf_card_pos (by omega : 0 < (creatorsOf U.block S).card)
     exact U.complete z (historyUpto_subset_ids K (ih z hzS) (hz z hzS)) _ (href z hzS)
+
+/-- **Anchoring from the sub-DAG**: a block that blocks of the available
+sub-DAG from `f + 1` distinct authors reference is anchored. -/
+theorem AnchoredBelow.of_avail {K : ℕ} {A x : BlockId} {S : Finset BlockId}
+    (hS : ∀ z ∈ S, z ∈ Avail U K A) (href : ∀ z ∈ S, x ∈ (U.block z).refs)
+    (hcard : F.f + 1 ≤ (creatorsOf U.block S).card) : AnchoredBelow U K A x := by
+  classical
+  refine AnchoredBelow.referenced S (fun z => if h : z ∈ Avail U K A then h.choose else A)
+    (fun z hz => ?_) (fun z hz => ?_) href hcard <;> simp only [dif_pos (hS z hz)]
+  exacts [(hS z hz).choose_spec.1, (hS z hz).choose_spec.2]
 
 /-- The arithmetic of the double count: `T` authors at the round above, each
 naming `n − f − b` correct authors, cannot spread over the `n − b` correct
@@ -152,18 +154,11 @@ theorem exists_anchored {K : ℕ} {A : BlockId} {S : Finset BlockId} {ρ : ℕ}
     (hq : quorumCard Validator ≤ (creatorsOf U.block S).card) :
     ∃ x ∈ U.ids, (U.block x).round = ρ ∧ (U.block x).creator ∈ (Correct : Finset Validator) ∧
       AnchoredBelow U K A x := by
-  classical
   obtain ⟨x, hx, hxr, hxc, hcard⟩ :=
     exists_correct_referenced (fun z hz => ⟨(hS z hz).1, (hS z hz).2.1⟩) hq
-  let y : BlockId → BlockId := fun z => if h : z ∈ Avail U K A then h.choose else A
-  have hy : ∀ z ∈ S, AnchoredBelow U K A (y z) ∧ z ∈ historyUpto U K (y z) := fun z hz => by
-    have h := (hS z hz).2.2
-    simp only [y, dif_pos h]
-    exact h.choose_spec
-  exact ⟨x, hx, hxr, hxc, AnchoredBelow.referenced (S.filter fun z => x ∈ (U.block z).refs) y
-    (fun z hz => (hy z (Finset.mem_filter.mp hz).1).1)
-    (fun z hz => (hy z (Finset.mem_filter.mp hz).1).2)
-    (fun z hz => (Finset.mem_filter.mp hz).2) hcard⟩
+  exact ⟨x, hx, hxr, hxc, AnchoredBelow.of_avail
+    (fun z hz => (hS z (Finset.mem_filter.mp hz).1).2.2) (fun z hz => (Finset.mem_filter.mp hz).2)
+    hcard⟩
 
 /-- **The available sub-DAG is broad**: below a block `A` of the record, at
 `K ≥ 2`, each round `t + 2` or more below `A` holds an anchored block of a
@@ -186,11 +181,8 @@ theorem broad {K : ℕ} (hK : 2 ≤ K) {A : BlockId} (hA : A ∈ U.ids) :
           ⟨A, AnchoredBelow.anchor, ref_mem_historyUpto (by omega) hz⟩⟩
       by_cases h₁ : t = 1
       · subst h₁
-        have hq := (U.valid A hA).quorum (by omega)
-        obtain ⟨c, hc⟩ : (creatorsOf U.block (U.block A).refs).Nonempty := by
-          have := F.card_validators
-          exact Finset.card_pos.mp (lt_of_lt_of_le (by omega) hq)
-        obtain ⟨w, hw, -⟩ := mem_creatorsOf.mp hc
+        obtain ⟨w, hw⟩ := nonempty_of_creatorsOf_card_pos (blk := U.block) (s := (U.block A).refs)
+          (lt_of_lt_of_le (by have := F.card_validators; omega) ((U.valid A hA).quorum (by omega)))
         refine ⟨w, U.complete A hA w hw, ?_, fun z hz =>
           ⟨A, AnchoredBelow.anchor, ref_ref_mem_historyUpto hK hw hz⟩⟩
         have := (U.valid A hA).predecessor w hw
@@ -201,14 +193,6 @@ theorem broad {K : ℕ} (hK : 2 ≤ K) {A : BlockId} (hA : A ∈ U.ids) :
       hvrefs z hz⟩) ((U.valid v hv).quorum (by omega))
     have := (U.valid v hv).predecessor z hz
     omega
-
-/-- A reference of a reference of a reference lies in the history to depth
-three or more. -/
-theorem ref_ref_ref_mem_historyUpto {K : ℕ} (hK : 3 ≤ K) {y w v x : BlockId}
-    (hw : w ∈ (U.block y).refs) (hv : v ∈ (U.block w).refs) (hx : x ∈ (U.block v).refs) :
-    x ∈ historyUpto U K y := by
-  obtain ⟨k, rfl⟩ : ∃ k, K = k + 1 := ⟨K - 1, by omega⟩
-  exact mem_historyUpto_succ.mpr (Or.inr ⟨w, hw, ref_ref_mem_historyUpto (by omega) hv hx⟩)
 
 /-- **A directly committed block is linked through the sub-DAG**: below a
 block `A` at round `r + 3` or above, at `K ≥ 3`, the available sub-DAG holds
@@ -225,36 +209,27 @@ theorem linked {K : ℕ} (hK : 3 ≤ K) {A L : BlockId} {r : ℕ} (hA : A ∈ U.
         ⟨⟨A, AnchoredBelow.anchor, ref_mem_historyUpto (K := K) (by omega) hz⟩,
           fun j hj => ⟨A, AnchoredBelow.anchor, ref_ref_mem_historyUpto (K := K) (by omega) hz hj⟩⟩⟩
     by_cases h₄ : (U.block A).round = r + 4
-    · have hq := (U.valid A hA).quorum (by omega)
-      obtain ⟨c, hc⟩ : (creatorsOf U.block (U.block A).refs).Nonempty := by
-        have := F.card_validators
-        exact Finset.card_pos.mp (lt_of_lt_of_le (by omega) hq)
-      obtain ⟨w, hw, -⟩ := mem_creatorsOf.mp hc
+    · obtain ⟨w, hw⟩ := nonempty_of_creatorsOf_card_pos (blk := U.block) (s := (U.block A).refs)
+        (lt_of_lt_of_le (by have := F.card_validators; omega) ((U.valid A hA).quorum (by omega)))
+      obtain ⟨k, rfl⟩ : ∃ k, K = k + 1 := ⟨K - 1, by omega⟩
       refine ⟨w, U.complete A hA w hw, ?_, fun z hz =>
-        ⟨⟨A, AnchoredBelow.anchor, ref_ref_mem_historyUpto (K := K) (by omega) hw hz⟩,
-          fun j hj => ⟨A, AnchoredBelow.anchor, ref_ref_ref_mem_historyUpto hK hw hz hj⟩⟩⟩
+        ⟨⟨A, AnchoredBelow.anchor, ref_ref_mem_historyUpto (by omega) hw hz⟩,
+          fun j hj => ⟨A, AnchoredBelow.anchor, mem_historyUpto_succ.mpr
+            (Or.inr ⟨w, hw, ref_ref_mem_historyUpto (by omega) hz hj⟩)⟩⟩⟩
       have := (U.valid A hA).predecessor w hw
       omega
     obtain ⟨y, hy, hyr, -, hya⟩ :=
       broad (K := K) (by omega) hA ((U.block A).round - (r + 5)) (by omega)
     exact ⟨y, hy, by omega, fun z hz => ⟨⟨y, hya, ref_mem_historyUpto (K := K) (by omega) hz⟩,
       fun j hj => ⟨y, hya, ref_ref_mem_historyUpto (K := K) (by omega) hz hj⟩⟩⟩
-  -- a correct author of a reference of `v` and of a certificate
+  -- a reference of `v` and a certificate, from two quorums, share a block
   have hq : quorumCard Validator ≤ (creatorsOf U.block (U.block v).refs).card :=
     (U.valid v hv).quorum (by omega)
-  have hn := F.card_validators
-  obtain ⟨c, hcI, hcB⟩ := exists_mem_inter_notMem (Bad := F.byzantine) (m := F.f)
-    (A := creatorsOf U.block (U.block v).refs)
-    (B := creatorsOf U.block (certificatesAt U (IsVote U) (quorumCard Validator) L (r + 2)))
-    F.card_byzantine (by unfold DirectCommit at hd; omega)
-  obtain ⟨hc₁, hc₂⟩ := Finset.mem_inter.mp hcI
-  obtain ⟨z, hz, hzc⟩ := mem_creatorsOf.mp hc₁
-  obtain ⟨C, hC, hCc⟩ := mem_creatorsOf.mp hc₂
-  obtain ⟨hCi, hCr, -⟩ := mem_certificatesAt.mp hC
-  have hzi := U.complete v hv z hz
-  have hzr := (U.valid v hv).predecessor z hz
-  have hzC : z = C := U.eq_of_creator_eq hzi hCi (mem_correct.mpr hcB) hzc hCc (by omega)
-  subst hzC
+  obtain ⟨z, hz, hC⟩ := exists_common_block U.noEquivOn_honest card_compl_correct_le
+    (t := certificatesAt U (IsVote U) (quorumCard Validator) L (r + 2))
+    (fun z hz => ⟨U.complete v hv z hz, by have := (U.valid v hv).predecessor z hz; omega⟩)
+    (fun C hC => (mem_certificatesAt.mp hC).imp_right And.left)
+    (by have := F.card_validators; unfold DirectCommit at hd; omega)
   exact ⟨z, hC, hvrefs z hz⟩
 
 /-- **A certificate excludes a direct skip**: its votes and the blames come
@@ -266,19 +241,12 @@ theorem not_directSkip {L C : BlockId} {r : ℕ}
   intro hs
   unfold DirectSkip at hs
   obtain ⟨hCi, hCr, hcv⟩ := mem_certificatesAt.mp hC
-  have hn := F.card_validators
-  obtain ⟨c, hcI, hcB⟩ := exists_mem_inter_notMem (Bad := F.byzantine) (m := F.f)
-    F.card_byzantine (A := creatorsOf U.block (carriedVotes U (IsVote U) C L))
-    (B := blames U L (r + 1)) (by unfold CarriesVotes at hcv; omega)
-  obtain ⟨hc₁, hc₂⟩ := Finset.mem_inter.mp hcI
-  obtain ⟨b₁, hb₁, hb₁c⟩ := mem_creatorsOf.mp hc₁
-  obtain ⟨hb₁C, hb₁L⟩ := mem_carriedVotes.mp hb₁
-  obtain ⟨b₂, hb₂, hb₂c⟩ := mem_creatorsOf.mp hc₂
-  obtain ⟨hb₂i, hb₂r, hb₂L⟩ := mem_omissionsOf.mp hb₂
-  have hb₁i := U.complete C hCi b₁ hb₁C
-  have hb₁r := (U.valid C hCi).predecessor b₁ hb₁C
-  have : b₁ = b₂ := U.eq_of_creator_eq hb₁i hb₂i (mem_correct.mpr hcB) hb₁c hb₂c (by omega)
-  exact hb₂L (this ▸ hb₁L)
+  unfold CarriesVotes at hcv
+  have := Finset.card_le_card (creatorsOf_carriedVotes_subset_supporters (L := L) hCi hCr)
+  have := card_supporters_add_card_blames_le U.noEquivOn_honest card_compl_correct_le
+    (L := L) (n := r + 1)
+  have := F.card_validators
+  omega
 
 /-- **The sub-DAG is held**: each of its blocks lies in the history to depth
 `K` of `A`, or of an anchored block a correct author's block of the sub-DAG
@@ -292,15 +260,9 @@ theorem held {K : ℕ} {A z : BlockId} (hz : z ∈ Avail U K A) :
   cases hy with
   | anchor => exact Or.inl rfl
   | referenced S yf hyf hzf href hcard =>
-    right
-    obtain ⟨c, hc, hcb⟩ : ∃ c ∈ creatorsOf U.block S, c ∉ F.byzantine := by
-      by_contra h
-      push Not at h
-      have := Finset.card_le_card (fun c hc => h c hc : creatorsOf U.block S ⊆ F.byzantine)
-      have := F.card_byzantine
-      omega
-    obtain ⟨w, hw, hwc⟩ := mem_creatorsOf.mp hc
-    exact ⟨w, ⟨yf w, hyf w hw, hzf w hw⟩, hwc ▸ mem_correct.mpr hcb, href w hw⟩
+    obtain ⟨c, hc, hcC⟩ := exists_correct_of_card hcard
+    obtain ⟨w, hw, rfl⟩ := mem_creatorsOf.mp hc
+    exact Or.inr ⟨w, ⟨yf w, hyf w hw, hzf w hw⟩, hcC, href w hw⟩
 
 /-- The available sub-DAG below a block of the record lies in the record. -/
 theorem avail_subset_ids {K : ℕ} {A z : BlockId} (hA : A ∈ U.ids) (hz : z ∈ Avail U K A) :

@@ -63,15 +63,13 @@ theorem availIn_subset_held {z : BlockId} (hz : z ∈ AvailIn U K H A) : z ∈ H
 /-- **Anchoring read on `H` reads only `H`.** -/
 theorem AnchoredIn.congr (hb : ∀ i ∈ H, U.block i = U'.block i) {x : BlockId}
     (h : AnchoredIn U K H A x) : AnchoredIn U' K H A x := by
-  have hwin : ∀ y, historyUpto U K y ⊆ H → historyUpto U' K y = historyUpto U K y :=
-    fun y hy => historyUptoFrom_eq_of_subset hb K y hy
   induction h with
-  | anchor h => exact AnchoredIn.anchor (by rw [hwin A h]; exact h)
+  | anchor h => exact AnchoredIn.anchor (by rw [historyUpto_eq_of_subset hb h]; exact h)
   | @referenced x S y hy hz href hcard hx ih =>
     have hSH : ∀ z ∈ S, z ∈ H := fun z hzS => (hy z hzS).window (hz z hzS)
     refine AnchoredIn.referenced S y ih (fun z hzS => ?_) (fun z hzS => ?_) ?_
-      (by rw [hwin x hx]; exact hx)
-    · rw [hwin (y z) (hy z hzS).window]; exact hz z hzS
+      (by rw [historyUpto_eq_of_subset hb hx]; exact hx)
+    · rw [historyUpto_eq_of_subset hb (hy z hzS).window]; exact hz z hzS
     · rw [← hb z (hSH z hzS)]; exact href z hzS
     · have : creatorsOf U'.block S = creatorsOf U.block S :=
         Finset.image_congr fun z hzS => by rw [hb z (hSH z hzS)]
@@ -80,15 +78,10 @@ theorem AnchoredIn.congr (hb : ∀ i ∈ H, U.block i = U'.block i) {x : BlockId
 /-- **The sub-DAG read on `H` reads only `H`.** -/
 theorem availIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i) :
     AvailIn U K H A = AvailIn U' K H A := by
-  have hb' : ∀ i ∈ H, U'.block i = U.block i := fun i hi => (hb i hi).symm
-  ext z
-  constructor
-  · rintro ⟨y, hy, hzy⟩
-    refine ⟨y, hy.congr hb, ?_⟩
-    rw [historyUpto_eq_of_subset hb hy.window]; exact hzy
-  · rintro ⟨y, hy, hzy⟩
-    refine ⟨y, hy.congr hb', ?_⟩
-    rw [historyUpto_eq_of_subset hb' hy.window]; exact hzy
+  have sub : ∀ {U U' : KRecord Validator BlockId Payload}, (∀ i ∈ H, U.block i = U'.block i) →
+      AvailIn U K H A ⊆ AvailIn U' K H A := fun hb z ⟨y, hy, hzy⟩ =>
+    ⟨y, hy.congr hb, by rw [historyUpto_eq_of_subset hb hy.window]; exact hzy⟩
+  exact (sub hb).antisymm (sub fun i hi => (hb i hi).symm)
 
 /-- **The indirect test read on `H` reads only `H`.** -/
 theorem linkedIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i) {L : BlockId} {r : ℕ} :
@@ -196,19 +189,12 @@ theorem avail_linkedIn (hH : H ⊆ U.ids) {L : BlockId} {r : ℕ} (hf : FetchedI
 to `ρ`**, for an anchor of the record at or above `ρ`. -/
 theorem fetchedIn_of_subset (hA : A ∈ U.ids) {ρ : ℕ} (hρ : ρ ≤ (U.block A).round)
     (hsub : ∀ z ∈ Avail U K A, ρ ≤ (U.block z).round + K → z ∈ H) : FetchedIn U K H A ρ := by
-  classical
   refine ⟨fun z hz => hsub z ⟨A, AnchoredBelow.anchor, hz⟩
     (by have := (round_of_mem_historyUpto K hA hz).2; omega), fun S x hS href hcard => ?_⟩
-  let y : BlockId → BlockId := fun z => if h : z ∈ Avail U K A then h.choose else A
-  have hy : ∀ z ∈ S, AnchoredBelow U K A (y z) ∧ z ∈ historyUpto U K (y z) := fun z hz => by
-    have h := availIn_subset (hS z hz).1
-    simp only [y, dif_pos h]
-    exact h.choose_spec
   have hx : AnchoredBelow U K A x :=
-    AnchoredBelow.referenced S y (fun z hz => (hy z hz).1) (fun z hz => (hy z hz).2) href hcard
-  obtain ⟨c, hc⟩ : (creatorsOf U.block S).Nonempty := Finset.card_pos.mp (by omega)
-  obtain ⟨z, hzS, -⟩ := mem_creatorsOf.mp hc
-  have hzi := historyUpto_subset_ids K ((hy z hzS).1.mem hA) (hy z hzS).2
+    AnchoredBelow.of_avail (fun z hz => availIn_subset (hS z hz).1) href hcard
+  obtain ⟨z, hzS⟩ := nonempty_of_creatorsOf_card_pos (by omega : 0 < (creatorsOf U.block S).card)
+  have hzi := avail_subset_ids hA (availIn_subset (hS z hzS).1)
   have hxz := (U.valid z hzi).predecessor x (href z hzS)
   have hρz := (hS z hzS).2
   exact fun w hw => hsub w ⟨x, hx, hw⟩
@@ -244,9 +230,8 @@ theorem NodeDecided.decided (hH : H ⊆ U.ids) {V : U.View} (hHV : H ⊆ V.ids) 
 theorem NodeDecided.agree (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
     (hH₂ : H₂ ⊆ U.ids) {k : ℕ} {v₁ v₂ : Option BlockId} (h₁ : NodeDecided U K H₁ k v₁)
     (h₂ : NodeDecided U K H₂ k v₂) : v₁ = v₂ :=
-  (kRule K).decided_unique (kRule_laws hK) trivial
-    (h₁.decided (V := View.full U) hH₁ hH₁) (View.full U) v₂
-    (h₂.decided (V := View.full U) hH₂ hH₂)
+  (kRule K).decided_agree (kRule_laws hK) trivial
+    (h₁.decided (V := View.full U) hH₁ hH₁) (h₂.decided (V := View.full U) hH₂ hH₂)
 
 end KPartialDag
 

@@ -27,33 +27,21 @@ theorem eq_of_certificates {L₁ L₂ C₁ C₂ : BlockId} {r : ℕ}
     (hc : (U.block L₁).creator = (U.block L₂).creator) : L₁ = L₂ := by
   obtain ⟨hC₁i, hC₁r, hv₁⟩ := mem_certificatesAt.mp hC₁
   obtain ⟨hC₂i, hC₂r, hv₂⟩ := mem_certificatesAt.mp hC₂
-  have hn := F.card_validators
-  obtain ⟨c, hcI, hcB⟩ := exists_mem_inter_notMem (Bad := F.byzantine) (m := F.f)
-    (A := creatorsOf U.block (carriedVotes U (IsVote U) C₁ L₁))
-    (B := creatorsOf U.block (carriedVotes U (IsVote U) C₂ L₂)) F.card_byzantine
-    (by unfold CarriesVotes at hv₁ hv₂; omega)
-  obtain ⟨hc₁, hc₂⟩ := Finset.mem_inter.mp hcI
-  obtain ⟨b₁, hb₁, hb₁c⟩ := mem_creatorsOf.mp hc₁
-  obtain ⟨b₂, hb₂, hb₂c⟩ := mem_creatorsOf.mp hc₂
-  obtain ⟨hb₁C, hb₁L⟩ := mem_carriedVotes.mp hb₁
-  obtain ⟨hb₂C, hb₂L⟩ := mem_carriedVotes.mp hb₂
-  have hb₁i := U.complete C₁ hC₁i b₁ hb₁C
-  have hb₂i := U.complete C₂ hC₂i b₂ hb₂C
-  have hb₁r := (U.valid C₁ hC₁i).predecessor b₁ hb₁C
-  have hb₂r := (U.valid C₂ hC₂i).predecessor b₂ hb₂C
-  have hb : b₁ = b₂ := U.eq_of_creator_eq hb₁i hb₂i (mem_correct.mpr hcB) hb₁c hb₂c (by omega)
-  subst hb
-  exact (U.valid b₁ hb₁i).clause L₁ hb₁L L₂ hb₂L hc
+  obtain ⟨b, hb₁, hb₂⟩ := exists_common_block U.noEquivOn_honest card_compl_correct_le
+    (s := carriedVotes U (IsVote U) C₁ L₁) (t := carriedVotes U (IsVote U) C₂ L₂)
+    (fun b hb => (mem_carriedVotes_spec (n := r + 1) hC₁i hC₁r hb).imp_right And.left)
+    (fun b hb => (mem_carriedVotes_spec (n := r + 1) hC₂i hC₂r hb).imp_right And.left)
+    (by have := F.card_validators; unfold CarriesVotes at hv₁ hv₂; omega)
+  exact (U.valid b (mem_carriedVotes_spec (n := r + 1) hC₁i hC₁r hb₁).1).clause L₁
+    (mem_carriedVotes.mp hb₁).2 L₂ (mem_carriedVotes.mp hb₂).2 hc
 
 /-- A certificate exists for a directly committed block. -/
 theorem exists_certificate {L : BlockId} {r : ℕ} (h : DirectCommit U L r) :
     ∃ C, C ∈ certificatesAt U (IsVote U) (quorumCard Validator) L (r + 2) := by
   have hn := F.card_validators
-  obtain ⟨c, hc⟩ : (creatorsOf U.block
-      (certificatesAt U (IsVote U) (quorumCard Validator) L (r + 2))).Nonempty :=
-    Finset.card_pos.mp (by unfold DirectCommit at h; omega)
-  obtain ⟨C, hC, -⟩ := mem_creatorsOf.mp hc
-  exact ⟨C, hC⟩
+  exact nonempty_of_creatorsOf_card_pos (blk := U.block)
+    (s := certificatesAt U (IsVote U) (quorumCard Validator) L (r + 2))
+    (by unfold DirectCommit at h; omega)
 
 variable [S : Slots Validator]
 
