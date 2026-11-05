@@ -19,19 +19,21 @@ A node behind builds above round `r` at once when it holds blocks of round
 correct, so a correct node has built the round. A node builds above the
 highest round it can, and may skip rounds.
 
-Before a time `G` correct nodes may crash and restart, all at once too. A
-restart loses what a node held, except what it keeps on disk: every block it
-built, with the block's references, and with their histories to depth `K`
-(`KeepsHistory`). From `G` on correct nodes are up, keep what they hold, and
-pass on the correct blocks they hold within `δ`. A correct node holds the
-references of the correct blocks it holds, and, from `G` on, the available
-sub-DAG of a certified leader block it holds `Δ` later (`Fetches`).
+Correct nodes may crash and restart, all at once too. A restart loses what
+a node held, except what it keeps on disk: every block it built, with the
+block's references, and with their histories to depth `K` (`KeepsHistory`).
+A set `T` of at least `n − f` correct nodes is up from a time `G` on: its
+nodes keep what they hold, and pass on the correct blocks they hold within
+`δ`; the other correct nodes may crash and restart at any time. A correct
+node holds the references of the correct blocks it holds, and a node of `T`
+holds, from `G` on, the available sub-DAG of a certified leader block it
+holds `Δ` later (`Fetches`).
 
 The timeline follows the rules for nodes from round `R` to round `N`
 (`NodeRules`) when correct nodes follow these rules there; it follows the
-reactive rules (`ReactiveRules`) when, in addition, every correct node has
+reactive rules (`ReactiveRules`) when, in addition, every node of `T` has
 reached round `R`. It is a reactive run (`ReactiveRun`) when, in addition,
-the blocks of correct nodes from round `R` on are built at `G + τ` or later.
+the blocks of `T` from round `R` on are built at `G + τ` or later.
 A node keeps on disk the last round it built, and builds only above it
 (`Persists`); that is all it needs to build at most one block a round. A
 node that builds above the blocks of its own on its disk (`BuildsAboveDisk`)
@@ -88,34 +90,36 @@ structure Timeline (Validator BlockId : Type*) where
   /-- The time a block was built. -/
   built : BlockId → ℕ
 
-/-- **Every correct validator has a block at round `s` built by time `t`.** -/
+/-- **Every validator of `T` has a block at round `s` built by time `t`.** -/
 def BuiltBy (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
-    (s t : ℕ) : Prop :=
-  ∀ v ∈ (Correct : Finset Validator), ∃ b ∈ U.ids, (U.block b).creator = v ∧
+    (T : Finset Validator) (s t : ℕ) : Prop :=
+  ∀ v ∈ T, ∃ b ∈ U.ids, (U.block b).creator = v ∧
     (U.block b).round = s ∧ tl.built b ≤ t
 
-/-- **Every correct validator has a block at round `s` or above built by time
+/-- **Every validator of `T` has a block at round `s` or above built by time
 `t`.** -/
 def ReachedBy (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
-    (s t : ℕ) : Prop :=
-  ∀ v ∈ (Correct : Finset Validator), ∃ b ∈ U.ids, (U.block b).creator = v ∧
+    (T : Finset Validator) (s t : ℕ) : Prop :=
+  ∀ v ∈ T, ∃ b ∈ U.ids, (U.block b).creator = v ∧
     s ≤ (U.block b).round ∧ tl.built b ≤ t
 
-/-- **The rules for nodes from round `R` to round `N`**, with restarts before
-`G`, message delay `δ` from `G`, timeout `τ`, grace period `γ` and minimum
-wait `μ`. -/
+/-- **The rules for nodes from round `R` to round `N`**, with the correct
+nodes of `T` up from `G` on, message delay `δ` from `G`, timeout `τ`, grace
+period `γ` and minimum wait `μ`. -/
 structure NodeRules (U : KRecord Validator BlockId Payload)
-    (tl : Timeline Validator BlockId) (G δ τ γ μ R N : ℕ) : Prop where
+    (tl : Timeline Validator BlockId) (T : Finset Validator) (G δ τ γ μ R N : ℕ) : Prop where
+  /-- The nodes up from `G` on are correct. -/
+  stable : T ⊆ (Correct : Finset Validator)
+  /-- They are a quorum. -/
+  large : quorumCard Validator ≤ T.card
   /-- Nodes hold blocks of the record. -/
   held_ids : ∀ v t, tl.held v t ⊆ U.ids
-  /-- From `G` on, a correct node keeps what it holds. -/
-  mono : ∀ v ∈ (Correct : Finset Validator), ∀ t t', G ≤ t → t ≤ t' →
-    tl.held v t ⊆ tl.held v t'
-  /-- From `G` on, a correct block held by a correct node is held by every
-  correct node `δ` later. -/
-  delivers : ∀ v ∈ (Correct : Finset Validator), ∀ t, G ≤ t → ∀ b ∈ tl.held v t,
-    (U.block b).creator ∈ (Correct : Finset Validator) →
-    ∀ w ∈ (Correct : Finset Validator), b ∈ tl.held w (t + δ)
+  /-- From `G` on, a node of `T` keeps what it holds. -/
+  mono : ∀ v ∈ T, ∀ t t', G ≤ t → t ≤ t' → tl.held v t ⊆ tl.held v t'
+  /-- From `G` on, a correct block held by a node of `T` is held by every
+  node of `T` `δ` later. -/
+  delivers : ∀ v ∈ T, ∀ t, G ≤ t → ∀ b ∈ tl.held v t,
+    (U.block b).creator ∈ (Correct : Finset Validator) → ∀ w ∈ T, b ∈ tl.held w (t + δ)
   /-- A correct node holds its block when it builds it. -/
   own : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) →
     b ∈ tl.held (U.block b).creator (tl.built b)
@@ -149,12 +153,12 @@ structure NodeRules (U : KRecord Validator BlockId Payload)
         AllIn U (tl.held (U.block b).creator (tl.built b)) r) ∨
       (τ ≤ tl.built b ∧ QuorumIn U (tl.held (U.block b).creator (tl.built b - τ)) r) ∨
       BehindIn U (tl.held (U.block b).creator (tl.built b)) (U.block b).creator r
-  /-- **No later than the wait**: a correct node that has held a quorum of
+  /-- **No later than the wait**: a node of `T` that has held a quorum of
   round `r`, from `R` to below `N`, for `μ`, and has held what it waits for
   above `r` for `γ`, holds it with blocks of every validator at round `r`, or
   has held the quorum for `τ`, all since `G`, has built a block above `r`; so
-  has a correct node behind round `r + 1` from `G` on. -/
-  prompt : ∀ v ∈ (Correct : Finset Validator), ∀ r t, R ≤ r → r < N →
+  has a node of `T` behind round `r + 1` from `G` on. -/
+  prompt : ∀ v ∈ T, ∀ r t, R ≤ r → r < N →
     (G + μ ≤ t ∧ QuorumIn U (tl.held v (t - μ)) r ∧
       ((G + γ ≤ t ∧ WaitsFor U (tl.held v (t - γ)) r) ∨
         (WaitsFor U (tl.held v t) r ∧ AllIn U (tl.held v t) r) ∨
@@ -175,20 +179,20 @@ structure NodeRules (U : KRecord Validator BlockId Payload)
     ∃ L, IsLeaderBlock U k L ∧ CarriesVotes U (IsVote U) (quorumCard Validator) b L
 
 /-- **The reactive rules from round `R` to round `N`**: the rules for nodes,
-with every correct validator at round `R` or above. -/
+with every validator of `T` at round `R` or above. -/
 structure ReactiveRules (U : KRecord Validator BlockId Payload)
-    (tl : Timeline Validator BlockId) (G δ τ γ μ R N : ℕ) : Prop
-    extends NodeRules U tl G δ τ γ μ R N where
-  /-- Every correct validator has a block at round `R` or above. -/
-  start : ∃ t, ReachedBy U tl R t
+    (tl : Timeline Validator BlockId) (T : Finset Validator) (G δ τ γ μ R N : ℕ) : Prop
+    extends NodeRules U tl T G δ τ γ μ R N where
+  /-- Every validator of `T` has a block at round `R` or above. -/
+  start : ∃ t, ReachedBy U tl T R t
 
 /-- **A reactive run from round `R` to round `N`**: the reactive rules, with
-the correct blocks from round `R` on built at `G + τ` or later. -/
+the blocks of `T` from round `R` on built at `G + τ` or later. -/
 structure ReactiveRun (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
-    (G δ τ γ μ R N : ℕ) : Prop extends ReactiveRules U tl G δ τ γ μ R N where
-  /-- Correct blocks from round `R` on are built at `G + τ` or later. -/
-  late : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) →
-    R ≤ (U.block b).round → G + τ ≤ tl.built b
+    (T : Finset Validator) (G δ τ γ μ R N : ℕ) : Prop extends
+    ReactiveRules U tl T G δ τ γ μ R N where
+  /-- Blocks of `T` from round `R` on are built at `G + τ` or later. -/
+  late : ∀ b ∈ U.ids, (U.block b).creator ∈ T → R ≤ (U.block b).round → G + τ ≤ tl.built b
 
 /-- **Keeping histories on disk**: a correct node keeps on disk, from the
 time it builds a block on, the history to depth `K` of each of the block's
@@ -198,12 +202,12 @@ def KeepsHistory (U : KRecord Validator BlockId Payload) (tl : Timeline Validato
   ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) → ∀ t, tl.built b ≤ t →
     ∀ y ∈ (U.block b).refs, historyUpto U K y ⊆ tl.disk (U.block b).creator t
 
-/-- **Fetching the available sub-DAG**: from `G` on, a correct node that holds
+/-- **Fetching the available sub-DAG**: from `G` on, a node of `T` that holds
 a leader block with a certificate holds the block's available sub-DAG `Δ`
 later. -/
 def Fetches (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
-    (K G Δ : ℕ) : Prop :=
-  ∀ v ∈ (Correct : Finset Validator), ∀ t, G ≤ t → ∀ j A, IsLeaderBlock U j A →
+    (T : Finset Validator) (K G Δ : ℕ) : Prop :=
+  ∀ v ∈ T, ∀ t, G ≤ t → ∀ j A, IsLeaderBlock U j A →
     (certificatesAt U (IsVote U) (quorumCard Validator) A (S.slotRound j + 2)).Nonempty →
     A ∈ tl.held v t → ∀ z ∈ Avail U K A, z ∈ tl.held v (t + Δ)
 

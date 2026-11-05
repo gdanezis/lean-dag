@@ -107,7 +107,10 @@ theorem not_behindIn {N r : ℕ} {H : Finset ℕ} {v : Unit} : ¬ BehindIn (chai
   exact Nat.not_succ_le_zero _ h
 
 /-- **The chain is a reactive run** from round `0` to round `N`. -/
-theorem chain_run (N : ℕ) : ReactiveRun (chain N) (chainTimeline N) 0 0 1 1 0 0 N where
+theorem chain_run (N : ℕ) :
+    ReactiveRun (chain N) (chainTimeline N) (Correct : Finset Unit) 0 0 1 1 0 0 N where
+  stable := Finset.Subset.refl _
+  large := card_correct
   held_ids _ _ b hb := Finset.mem_range.mpr (by have := mem_chainHeld.mp hb; omega)
   mono _ _ _ _ _ htt' b hb := by
     obtain ⟨h1, h2⟩ := mem_chainHeld.mp hb
@@ -168,7 +171,8 @@ directly on what it holds at time `3`, for every slot `k` from `2` to
 theorem chain_decides (N K k : ℕ) (h2 : 2 ≤ k) (hk : k + 2 ≤ N) :
     ∃ L, IsLeaderBlock (chain N) k L ∧
       NodeDecided (chain N) K ((chainTimeline N).held () 3) k (some L) := by
-  have := Reactive.commits Unit ℕ Unit (chain N) (chainTimeline N) 0 0 1 1 0 0 K N (chain_run N)
+  have := Reactive.commits Unit ℕ Unit (chain N) (chainTimeline N) Correct 0 0 1 1 0 0 K N
+    (chain_run N)
     (by norm_num) (by norm_num) le_rfl k 1 (by rw [slotRound_unit]; omega)
     (by rw [slotRound_unit]; omega) (fun _ _ _ => mem_correct_unit _)
     (fun v _ => ⟨k, Finset.mem_range.mpr (by omega), rfl, rfl, le_rfl⟩) () (mem_correct_unit _)
@@ -176,7 +180,8 @@ theorem chain_decides (N K k : ℕ) (h2 : 2 ≤ k) (hk : k + 2 ≤ N) :
 
 /-- **The chain is synchronous** from round `1`, by `Reactive.Synchronised`. -/
 theorem chain_synchronised (N : ℕ) : SyncFrom (chain N) (Correct : Finset Unit) 1 N :=
-  Reactive.synchronised Unit ℕ Unit (chain N) (chainTimeline N) 0 0 1 1 0 0 N (chain_run N)
+  Reactive.synchronised Unit ℕ Unit (chain N) (chainTimeline N) Correct 0 0 1 1 0 0 N
+    (chain_run N)
     (by norm_num) (by norm_num) le_rfl
 
 end KPartialDag

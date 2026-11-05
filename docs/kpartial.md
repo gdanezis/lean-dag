@@ -422,8 +422,8 @@ builds above round `r` at once: it holds blocks of round `r + 1` by `f + 1`
 authors other than itself (`BehindIn`), so a correct node has built that
 round. A node builds at the highest round it can, and so may skip rounds.
 
-*Disk and memory.* Before a time `G` correct nodes may crash and restart any
-number of times, all at once too. A restart loses what the node held in
+*Disk and memory.* Correct nodes may crash and restart any number of times,
+all at once too. A restart loses what the node held in
 memory and resets its timers, and a node builds nothing while it is down.
 What survives is its disk: a correct node keeps on disk, for ever, every
 block it has built with the block's references (`stores`), and the histories
@@ -431,14 +431,22 @@ to depth `K` of those references (`KeepsHistory`), and holds what is on its
 disk (`disk_held`). These histories are what a correct node must hold to
 build (§10), so every block of the available sub-DAG of a certified block,
 which lies in them (Theorem 1), survives any crash. A correct node holds the
-references of the correct blocks it holds (`closed`). From `G` on correct
-nodes are up: a correct node keeps what it holds, every correct block that
-a correct node holds reaches every correct node within `δ` (`delivers`),
-and a correct node that holds a certified leader block holds its available
-sub-DAG `Δ` later (`Fetches`), fetching it from the disks that keep it. Nodes pass on only correct blocks: a
+references of the correct blocks it holds (`closed`).
+
+*Crashes after `G`.* A set `T` of at least `n − f` correct nodes is up from
+a time `G` on (`stable`, `large`); every other correct node may crash and
+restart at any time, before or after `G`. Nodes down count against `f` for
+liveness only: a crashed node is correct, and builds at most one block a
+round. From `G` on a node of `T` keeps what it holds, every correct block
+that a node of `T` holds reaches every node of `T` within `δ` (`delivers`),
+and a node of `T` that holds a certified leader block holds its available
+sub-DAG `Δ` later (`Fetches`), fetching it from the disks that keep it. A
+quorum holds blocks of `f + 1` authors of `T`, which is what the arguments
+below use: the liveness results speak of `T`. With no crash after `G`, `T`
+is the set of correct validators. Nodes pass on only correct blocks: a
 Byzantine block reaches a node only among the references of a block it
 holds, which it fetches from the node that sent it. A correct node is
-obliged to build only on what it has held since `G`, and the wait on the
+obliged, if in `T`, to build only on what it has held since `G`, and the wait on the
 grace period holds what the node waits for both when the period starts and
 when it builds.
 
@@ -494,64 +502,64 @@ on its disk persists the last round it built (`Reactive.OnDisk`).
 Under the rules for nodes from round `R` to round `N`, with any crashes and
 restarts before `G`:
 
-* *Operations resume* (`Reactive.Resumes`). Once a correct validator has
+* *Operations resume* (`Reactive.Resumes`). Once a validator of `T` has
   built above round `R` by `G`, there is a round `R' > R` such that, if
   `R' ≤ N`, the timeline is a reactive run from `R'` to `N`, and every
-  correct validator has reached `R'` within `3δ + 3 max(τ, μ)` of `G`.
+  validator of `T` has reached `R'` within `3δ + 3 max(τ, μ)` of `G`.
 
 Under the reactive rules from round `R` to round `N`:
 
-* *Every round is reached* (`Reactive.Built`). Every correct validator has a
+* *Every round is reached* (`Reactive.Built`). Every validator of `T` has a
   block at every round from `R` to `N`, or above it.
 * *Nodes behind catch up within `δ`* (`Reactive.CatchesUp`). Once `f + 1`
-  correct validators have built at a round at times from `G` to `t`, every
-  correct validator has reached the round by `t + δ`.
+  validators of `T` have built at a round at times from `G` to `t`, every
+  validator of `T` has reached the round by `t + δ`.
 * *A reactive run starts* (`Reactive.Starts`). Let `R'` be the round after
-  the last round from `R` on that a correct block reached before `G + τ`, or
+  the last round from `R` on that a block of `T` reached before `G + τ`, or
   `R` if there is none. If `R' ≤ N`, the timeline is a reactive run from `R'`
-  to `N`, and every correct validator has reached `R'` within
+  to `N`, and every validator of `T` has reached `R'` within
   `2δ + 2 max(τ, μ)` of `G + τ` and of the time all reached `R`.
 
-On a reactive run from round `R` to round `N`, at `δ < γ ≤ τ`, no correct
-node skips a round from `R + 1` on (`builtBy_below`): by the time a correct
-block of round `s + 1` is built, every correct validator has built at round
+On a reactive run from round `R` to round `N`, at `δ < γ ≤ τ`, no node
+of `T` skips a round from `R + 1` on (`builtBy_below`): by the time a block of `T`
+of round `s + 1` is built, every validator of `T` has built at round
 `s`. A block built on the grace period or the timer was built `γ` or `τ`
-after its author held a quorum of round `s`; its `f + 1` correct blocks
-reach every correct node within `δ`, which is less, so every correct node is
+after its author held a quorum of round `s`; its `f + 1` blocks of `T`
+reach every node of `T` within `δ`, which is less, so every node of `T` is
 behind and builds at round `s` first. A block built on blocks of every
-validator holds every correct block of round `s`; one built behind rests on
-an earlier correct block of its round. Hence:
+validator holds every block of `T` of round `s`; one built behind rests on
+an earlier block of `T` of its round. Hence:
 
 * *Each round is built within `δ + max(τ, μ)`* (`Reactive.Slow`) of the
-  last correct block of the round below.
-* *Rounds led by correct validators take `δ + max(γ, μ)`*
+  last block of `T` of the round below.
+* *Rounds led by `T` take `δ + max(γ, μ)`*
   (`Reactive.Fast`). At `τ ≥ 2δ`, when the slots of a round `s ≥ R + 2` and
-  of the round below have correct leaders, every correct validator builds
-  above `s` within `δ + max(γ, μ)` of the last correct block of round `s`;
-  no correct node waits for its timeout.
+  of the round below have leaders in `T`, every validator of `T` builds
+  above `s` within `δ + max(γ, μ)` of the last block of `T` of round `s`;
+  no node of `T` waits for its timeout.
 * *The run is responsive* (`Reactive.Responsive`). At `τ ≥ 2δ`, the record is
-  responsive among the correct validators from round `R + 1` to `N`, so
-  Theorem 4 applies with `T` the correct validators.
-* *A slot led by correct validators commits within `3δ + 2 max(γ, μ)`*
+  responsive among `T` from round `R + 1` to `N`, so
+  Theorem 4 applies with `T`.
+* *A slot led by `T` commits within `3δ + 2 max(γ, μ)`*
   (`Reactive.Commits`). At `τ ≥ 2δ`, when every slot from one round below a
-  slot at round `r ≥ R + 2` to one round above it has a correct leader, every
-  correct node commits the slot directly on what it holds that long after
-  the last correct block of round `r`.
+  slot at round `r ≥ R + 2` to one round above it has a leader in `T`, every
+  node of `T` commits the slot directly on what it holds that long after
+  the last block of `T` of round `r`.
 * *The run is synchronous* (`Reactive.Synchronised`). At `2δ ≤ γ`, from
-  round `R + 1` to `N`, every correct block references every correct block
-  of the round below, so `SyncFrom` holds among the correct validators and
-  Theorem 5's `Outputs` and `Included` apply: no correct block from round
+  round `R + 1` to `N`, every block of `T` references every block of `T`
+  of the round below, so `SyncFrom` holds among `T` and
+  Theorem 5's `Outputs` and `Included` apply: no block of `T` from round
   `R + 1` on is late.
 * *The ledger grows* (`Reactive.Ledger`). At `τ ≥ 2δ` and `δ < γ ≤ τ`, when
-  correct nodes fetch the available sub-DAG of the certified leaders they
-  hold, and the schedule offers runs of `c` correct leaders that span
+  nodes of `T` fetch the available sub-DAG of the certified leaders they
+  hold, and the schedule offers runs of `c` leaders in `T` that span
   eligibility, past any slot there is a run, starting at slot `b`, such
-  that, if the run lies below `N`, every correct node at one time decides
+  that, if the run lies below `N`, every node of `T` at one time decides
   every slot below `b + c`, from slot `0`, and has fetched each leader it
   commits down to `D` rounds below it. These are the premises of Theorem
-  5's `Agrees`: every correct node's ledger after `b + c` slots is defined,
-  and the ledgers agree. Every certified leader is referenced by a correct
-  vote, which its author keeps on disk and passes on, so every correct node
+  5's `Agrees`: every node of `T`'s ledger after `b + c` slots is defined,
+  and the ledgers agree. Every certified leader is referenced by a
+  vote of `T`, which its author keeps on disk and passes on, so every node of `T`
   holds it and fetches its available sub-DAG; the run is responsive, and
   `Live.Progress` decides every slot below its end.
 
@@ -580,7 +588,7 @@ correct node has built at round `r` by `t + δ`, and its block reaches the
 node by `t + 2δ`. A node building on the wait has held its quorum for `γ`,
 and one building on the timer for `τ`; with `γ, τ ≥ 2δ` it holds every
 correct block of round `r`, and references it. A node building behind holds
-a correct block of round `r + 1` built earlier, which references every
+a block of `T` of round `r + 1` built earlier, which references every
 correct block of round `r`, by induction on build times.
 
 A witness (`LeanDagTest/KPartialDag/Reactive.lean`) shows that the premise is
@@ -589,9 +597,9 @@ time `1`, is a reactive run, and `Reactive.Commits` decides its slots and
 `Reactive.Synchronised` applies. It exercises none of the timing, since its
 delay is `0`, and no restart.
 
-Crashes after `G` are not modelled: a node that is down then breaks the
-obligation to build, and would count against `f`. A crash of all nodes after
-`G` is covered by taking `G` after it.
+Crashes after `G` are covered for the nodes outside `T`. Rolling restarts
+that in time reach every node are covered only by taking `G` after the last
+crash of a node of `T`.
 
 ## 12. Open questions
 
@@ -605,8 +613,9 @@ obligation to build, and would count against `f`. A crash of all nodes after
 * A storage bound linear in `K` under equivocation, which needs a rule for
   equivocating authors (§10).
 * Quantitative liveness, which a retention bound needs.
-* Crashes after `G`: the correct validators that are up vary with time, and
-  those down count against `f`.
+* Crashes of every node over time: a set `T` up during a bounded window
+  only, with every result stated inside the window, so that rolling restarts
+  of all nodes keep the protocol live.
 * A time bound for the ledger: `Reactive.Ledger` shows the ledger grows, not
   how soon; fetching the available sub-DAG is bounded by `Δ`, but the slot
   `b` depends on the schedule.
