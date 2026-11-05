@@ -281,6 +281,8 @@ built before.
 | 7 Responsive | the run is responsive among the correct validators | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ` |
 | 7 Commits | a slot among correct leaders commits within `3δ + 2 max(γ, μ)` | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ` |
 | 7 Synchronised | every correct block references every correct block below | reactive run, `2δ ≤ γ`, `δ < γ ≤ τ` |
+| 7 Ledger | every correct node decides every slot up to a run of correct leaders, and fetches below its committed leaders | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ`, fetching, a fair schedule |
+| 7 Durable | no block of a certified block's available sub-DAG is lost | rules for nodes, histories to depth `K` on disk |
 
 ## 9. Why a K-partial DAG
 
@@ -393,8 +395,11 @@ blocks. The blocks of `H` at round `ρ` or above are its *band from `ρ`*
   therefore needs a rule for equivocating authors.
 
 That persisting the last round built before sending suffices to avoid
-equivocation after a restart is Theorem 7's `Persisted` (§11). Not proved:
-how long correct nodes must retain a band, which needs a quantitative
+equivocation after a restart is Theorem 7's `Persisted` (§11). A node needs
+only its band, but others must keep the blocks it may still fetch: correct
+nodes keep on disk, for ever, the histories to depth `K` of their blocks'
+references, and Theorem 7's `Durable` shows that nothing a leader outputs is
+then lost. A bound on how long they must keep them would need a quantitative
 liveness bound or a state transfer.
 
 ## 11. Reactive nodes in time
@@ -420,15 +425,17 @@ round. A node builds at the highest round it can, and so may skip rounds.
 *Disk and memory.* Before a time `G` correct nodes may crash and restart any
 number of times, all at once too. A restart loses what the node held in
 memory and resets its timers, and a node builds nothing while it is down.
-What survives is its disk: a correct node keeps on disk a block of its own
-at least as high as any it has built, with that block's references
-(`stores`), and holds what is on its disk (`disk_held`). Since the
-references are kept, history above the highest round on any disk survives
-any crash; below it, history may be lost. A correct node holds the
-references of the blocks it holds above a round `R` (`closed`), and fetches
-nothing below. From `G` on correct nodes are up: a correct node keeps what
-it holds, and every correct block that a correct node holds reaches every
-correct node within `δ` (`delivers`). Nodes pass on only correct blocks: a
+What survives is its disk: a correct node keeps on disk, for ever, every
+block it has built with the block's references (`stores`), and the histories
+to depth `K` of those references (`KeepsHistory`), and holds what is on its
+disk (`disk_held`). These histories are what a correct node must hold to
+build (§10), so every block of the available sub-DAG of a certified block,
+which lies in them (Theorem 1), survives any crash. A correct node holds the
+references of the correct blocks it holds (`closed`). From `G` on correct
+nodes are up: a correct node keeps what it holds, every correct block that
+a correct node holds reaches every correct node within `δ` (`delivers`),
+and a correct node that holds a certified leader block holds its available
+sub-DAG `Δ` later (`Fetches`), fetching it from the disks that keep it. Nodes pass on only correct blocks: a
 Byzantine block reaches a node only among the references of a block it
 holds, which it fetches from the node that sent it. A correct node is
 obliged to build only on what it has held since `G`, and the wait on the
@@ -461,7 +468,9 @@ highest round on a correct node's disk. That node holds its block of round
 passes them on, and every correct node has built at round `r` or above by
 `G + δ + max(τ, μ)`. From there the rounds advance as before. Keeping only
 the last round would not do: after a crash of all nodes, no node would hold
-a quorum of any round, and none could build again.
+a quorum of any round, and none could build again. Keeping only the last
+block would restart the rounds but not the ledger: the slots below it could
+no longer be decided.
 
 A quorum spreads. A quorum holds blocks of `f + 1` correct authors, so once
 a correct node holds a quorum of round `s` at a time `t ≥ G`, every correct
@@ -533,6 +542,26 @@ an earlier correct block of its round. Hence:
   of the round below, so `SyncFrom` holds among the correct validators and
   Theorem 5's `Outputs` and `Included` apply: no correct block from round
   `R + 1` on is late.
+* *The ledger grows* (`Reactive.Ledger`). At `τ ≥ 2δ` and `δ < γ ≤ τ`, when
+  correct nodes fetch the available sub-DAG of the certified leaders they
+  hold, and the schedule offers runs of `c` correct leaders that span
+  eligibility, past any slot there is a run, starting at slot `b`, such
+  that, if the run lies below `N`, every correct node at one time decides
+  every slot below `b + c`, from slot `0`, and has fetched each leader it
+  commits down to `D` rounds below it. These are the premises of Theorem
+  5's `Agrees`: every correct node's ledger after `b + c` slots is defined,
+  and the ledgers agree. Every certified leader is referenced by a correct
+  vote, which its author keeps on disk and passes on, so every correct node
+  holds it and fetches its available sub-DAG; the run is responsive, and
+  `Live.Progress` decides every slot below its end.
+
+When correct nodes keep the histories on disk (`KeepsHistory`), nothing a
+leader outputs is lost (`Reactive.Durable`): every block of the available
+sub-DAG of a certified block is on a correct node's disk from some time on,
+through any crash. Together with `Resumes`, the ledger therefore resumes
+after any crash before `G`, of all nodes too, from slot `0`: the slots
+decided before the crash are decided again, alike, on the blocks the disks
+kept.
 
 The bounds depend on the actual delay `δ` and the configured `γ` and `μ`,
 not on `τ`, except where a slot next to the round has a Byzantine leader;
@@ -567,7 +596,7 @@ obligation to build, and would count against `f`. A crash of all nodes after
 ## 12. Open questions
 
 * Bounds: the cost of fetching the sub-DAG, and how long correct nodes must
-  keep the histories they downloaded.
+  keep the histories on disk; they keep them for ever here.
 * Chain quality: the share of correct blocks in a leader's output.
 * Inclusion counted on every committed leader rather than leaders of `T`:
   the references of any block include `f + 1` blocks of `T`, which suggests
@@ -578,6 +607,6 @@ obligation to build, and would count against `f`. A crash of all nodes after
 * Quantitative liveness, which a retention bound needs.
 * Crashes after `G`: the correct validators that are up vary with time, and
   those down count against `f`.
-* History below the highest round on a disk: the rules ask a node to hold
-  references only above `R`, and do not model the depth-`K` histories of
-  Theorem 6 in time.
+* A time bound for the ledger: `Reactive.Ledger` shows the ledger grows, not
+  how soon; fetching the available sub-DAG is bounded by `Δ`, but the slot
+  `b` depends on the schedule.

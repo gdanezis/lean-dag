@@ -25,6 +25,13 @@ as any it built, from its disk (`exists_held_of_built`); so after crashes
 before `G` every correct node reaches the highest round built by `G`
 (`reachedBy_of_built`), and operations resume (`exists_resumed`). In a run,
 at `δ < γ ≤ τ`, no correct node skips a round (`builtBy_below`).
+
+A committed leader is certified (`certified_of_nodeDecided`), and its
+available sub-DAG stays on a correct node's disk (`exists_disk_of_avail`).
+Every certified leader is referenced by a correct vote that its author keeps
+on disk, so every correct node holds it and fetches its available sub-DAG;
+with the run responsive, every correct node decides every slot up to a run
+of correct leaders (`exists_ledger`).
 -/
 
 namespace LeanDag
@@ -128,6 +135,21 @@ theorem leaderBlock_eq {k : ℕ} {L L' : BlockId} (hL : IsLeaderBlock U k L)
     (hL' : IsLeaderBlock U k L') (hc : S.leader k ∈ (Correct : Finset Validator)) : L = L' :=
   U.eq_of_creator_eq hL.1 hL'.1 hc hL.2.2 hL'.2.2 (hL.2.1.trans hL'.2.1.symm)
 
+/-- **A committed leader is certified**: a leader block that a node commits,
+on blocks of the record, has a certificate in the record. -/
+theorem certified_of_nodeDecided {K : ℕ} {H : Finset BlockId} (hH : H ⊆ U.ids) {k : ℕ}
+    {L : BlockId} (h : NodeDecided U K H k (some L)) : IsLeaderBlock U k L ∧
+      (certificatesAt U (IsVote U) (quorumCard Validator) L (S.slotRound k + 2)).Nonempty := by
+  cases h with
+  | directCommit hL hcard =>
+    have hn := F.card_validators
+    obtain ⟨c, hc⟩ := Finset.card_pos.mp (lt_of_lt_of_le (by omega) hcard)
+    obtain ⟨C, hC, -⟩ := mem_creatorsOf.mp hc
+    exact ⟨hL, C, (Finset.mem_filter.mp hC).1⟩
+  | indirectCommit _ _ _ _ hL hlink =>
+    obtain ⟨C, hC, -⟩ := linkedIn_avail hH hlink
+    exact ⟨hL, C, hC⟩
+
 namespace Persists
 
 variable {ids : Finset BlockId} {block : BlockId → Block Validator BlockId Payload}
@@ -204,7 +226,6 @@ include h
 /-- The rules for nodes hold from any later round. -/
 theorem above {R' : ℕ} (hR : R ≤ R') : NodeRules U tl G δ τ γ μ R' N :=
   { h with
-    closed := fun v hv t b hb hbR => h.closed v hv t b hb (by omega)
     waits := fun b hb hbc r hbr hr => h.waits b hb hbc r hbr (hR.trans hr)
     prompt := fun v hv r t hr hrN hw => h.prompt v hv r t (hR.trans hr) hrN hw }
 
@@ -225,31 +246,31 @@ theorem mem_held {b : BlockId} (hb : b ∈ U.ids)
     (h0 : tl.built b ≤ t₀) (ht : t₀ + δ ≤ t) : b ∈ tl.held v t :=
   h.mem_held_of_held hbc hG (h.own b hb hbc) hbc hv (by omega)
 
-/-- **History above `R`**: a correct node that holds a block above round
-`k ≥ R` holds a quorum at round `k`. -/
+/-- **History below a correct block**: a correct node that holds a correct
+block above round `k` holds a quorum at round `k`. -/
 theorem quorumIn_of_held {v : Validator} (hv : v ∈ (Correct : Finset Validator)) {t k : ℕ}
-    (hk : R ≤ k) {y : BlockId} (hy : y ∈ tl.held v t) (hky : k < (U.block y).round) :
-    QuorumIn U (tl.held v t) k := by
+    {y : BlockId} (hy : y ∈ tl.held v t) (hyc : (U.block y).creator ∈ (Correct : Finset Validator))
+    (hky : k < (U.block y).round) : QuorumIn U (tl.held v t) k := by
   obtain ⟨m, hm⟩ : ∃ m, (U.block y).round = k + 1 + m := ⟨(U.block y).round - (k + 1), by omega⟩
   induction m generalizing y with
   | zero =>
-    exact quorumIn_mono (h.closed v hv t y hy (by omega))
+    exact quorumIn_mono (h.closed v hv t y hy hyc)
       (quorumIn_refs (h.held_ids _ _ hy) (by omega))
   | succ m ih =>
-    obtain ⟨z, hz, hzr, -⟩ := exists_correct_of_quorumIn
+    obtain ⟨z, hz, hzr, hzc⟩ := exists_correct_of_quorumIn
       (quorumIn_refs (s := k + 1 + m) (h.held_ids _ _ hy) (by omega))
-    exact ih (h.closed v hv t y hy (by omega) hz) (by omega) hzr
+    exact ih (h.closed v hv t y hy hyc hz) hzc (by omega) hzr
 
-/-- A correct node that holds a correct block above round `s ≥ R` holds a
+/-- A correct node that holds a correct block above round `s` holds a
 correct block of round `s + 1`. -/
 theorem exists_succ_held {v : Validator} (hv : v ∈ (Correct : Finset Validator)) {t s : ℕ}
-    (hs : R ≤ s) {e : BlockId} (he : e ∈ tl.held v t)
+    {e : BlockId} (he : e ∈ tl.held v t)
     (hec : (U.block e).creator ∈ (Correct : Finset Validator)) (hes : s + 1 ≤ (U.block e).round) :
     ∃ y ∈ tl.held v t, (U.block y).creator ∈ (Correct : Finset Validator) ∧
       (U.block y).round = s + 1 := by
   rcases Nat.eq_or_lt_of_le hes with heq | hlt
   · exact ⟨e, he, hec, heq.symm⟩
-  obtain ⟨y, hy, hyr, hyc⟩ := exists_correct_of_quorumIn (h.quorumIn_of_held hv (by omega) he hlt)
+  obtain ⟨y, hy, hyr, hyc⟩ := exists_correct_of_quorumIn (h.quorumIn_of_held hv he hec hlt)
   exact ⟨y, hy, hyc, hyr⟩
 
 /-- **The disk**: a correct validator that has built at round `s` or above by
@@ -260,22 +281,22 @@ theorem exists_held_of_built {v : Validator} (hv : v ∈ (Correct : Finset Valid
     ∃ y ∈ tl.held v t, (U.block y).creator = v ∧ s ≤ (U.block y).round := by
   obtain ⟨b, hb, hbv, hbs, hbt⟩ := hb
   subst hbv
-  obtain ⟨y, hy, hyc, hyr, -⟩ := h.stores b hb hv t hbt
-  exact ⟨y, h.disk_held _ hv t hy, hyc, by omega⟩
+  exact ⟨b, h.disk_held _ hv t (h.stores b hb hv t hbt).1, rfl, hbs⟩
 
-/-- Once every correct validator has reached round `s ≥ R` by a time `t ≥ G`,
+/-- Once every correct validator has reached round `s` by a time `t ≥ G`,
 every correct node holds a quorum at round `s` by `t + δ`. -/
-theorem quorumIn_of_reachedBy {s t : ℕ} (hs : R ≤ s) (hG : G ≤ t) (hb : ReachedBy U tl s t)
+theorem quorumIn_of_reachedBy {s t : ℕ} (hG : G ≤ t) (hb : ReachedBy U tl s t)
     {v : Validator} (hv : v ∈ (Correct : Finset Validator)) :
     QuorumIn U (tl.held v (t + δ)) s := by
-  by_cases habove : ∃ y ∈ tl.held v (t + δ), s < (U.block y).round
-  · obtain ⟨y, hy, hys⟩ := habove
-    exact h.quorumIn_of_held hv hs hy hys
+  by_cases habove : ∃ y ∈ tl.held v (t + δ),
+      (U.block y).creator ∈ (Correct : Finset Validator) ∧ s < (U.block y).round
+  · obtain ⟨y, hy, hyc, hys⟩ := habove
+    exact h.quorumIn_of_held hv hy hyc hys
   push Not at habove
   exact quorum_le_of_correct fun w hw => by
     obtain ⟨y, hy, hyw, hys⟩ := h.exists_held_of_built hw (hb w hw)
     have hyv := h.mem_held_of_held hw hG hy (hyw ▸ hw) hv le_rfl
-    exact ⟨y, Finset.mem_filter.mpr ⟨hyv, le_antisymm (habove y hyv) hys⟩, hyw⟩
+    exact ⟨y, Finset.mem_filter.mpr ⟨hyv, le_antisymm (habove y hyv (hyw ▸ hw)) hys⟩, hyw⟩
 
 /-- **A correct node votes for the leader blocks it holds**: a correct block
 references a leader block of each slot one round below whose leader block
@@ -382,7 +403,7 @@ theorem reachedBy_of_quorumIn {s t : ℕ} (hR : R ≤ s) (hN : s < N) (hG : G �
 from `G` on. -/
 theorem reachedBy_succ {s t : ℕ} (hs : R ≤ s) (hsN : s < N) (hG : G ≤ t)
     (hb : ReachedBy U tl s t) : ReachedBy U tl (s + 1) (t + δ + max τ μ) := fun _ hv =>
-  h.built_of_quorumIn hv hs hsN (by omega) (h.quorumIn_of_reachedBy hs hG hb hv)
+  h.built_of_quorumIn hv hs hsN (by omega) (h.quorumIn_of_reachedBy hG hb hv)
 
 /-- **Recovery**: once a correct validator has built at a round `r`, from
 `R + 1` to `N`, by `G`, every correct validator reaches round `r` by
@@ -396,7 +417,8 @@ theorem reachedBy_of_built {b : BlockId} (hb : b ∈ U.ids)
     h.exists_held_of_built hbc (s := (U.block b).round) ⟨b, hb, rfl, le_rfl, hbG⟩
   have hyw := h.mem_held_of_held hbc le_rfl hy (hyc ▸ hbc) hw le_rfl
   obtain ⟨b', hb', hb'w, hb'r, hb't⟩ := h.built_of_quorumIn hw (r := (U.block b).round - 1)
-    (t := G + δ) (by omega) (by omega) (by omega) (h.quorumIn_of_held hw (by omega) hyw (by omega))
+    (t := G + δ) (by omega) (by omega) (by omega)
+    (h.quorumIn_of_held hw hyw (hyc ▸ hbc) (by omega))
   exact ⟨b', hb', hb'w, by omega, hb't⟩
 
 end NodeRules
@@ -448,7 +470,7 @@ theorem exists_run : ∃ R', R ≤ R' ∧ (R' = R ∨ ∃ x ∈ U.ids,
         have hyw := h.mem_held_of_held hxc (by omega) hy (hyc ▸ hxc) hw le_rfl
         obtain ⟨b, hb, hbw, hbr, hbt⟩ := h.built_of_quorumIn hw (r := (U.block x).round - 1)
           (t := G + τ + δ) (by omega) (by omega) (by omega)
-          (h.quorumIn_of_held hw (by omega) hyw (by omega))
+          (h.quorumIn_of_held hw hyw (hyc ▸ hxc) (by omega))
         exact ⟨b, hb, hbw, by omega, by omega⟩
       exact reachedBy_mono (h.reachedBy_succ hxR (by omega) (by omega) hm) (by omega)
     obtain ⟨t₀, ht₀⟩ := h.start
@@ -484,6 +506,18 @@ theorem exists_resumed {b : BlockId} (hb : b ∈ U.ids)
     have := le_max_left τ μ
     omega
   · exact ⟨_, hRb, fun h' => absurd h' hbN⟩
+
+/-- **Nothing a leader outputs is lost**: when correct nodes keep histories
+on disk, every block of the available sub-DAG of a certified block is on a
+correct node's disk from some time on, through any crash. -/
+theorem exists_disk_of_avail {K : ℕ} (hK : KeepsHistory U tl K) {A z : BlockId} {r : ℕ}
+    (hA : A ∈ U.ids) (hC : (certificatesAt U (IsVote U) (quorumCard Validator) A r).Nonempty)
+    (hz : z ∈ Avail U K A) :
+    ∃ w ∈ (Correct : Finset Validator), ∃ t₀, ∀ t, t₀ ≤ t → z ∈ tl.disk w t := by
+  obtain ⟨c, hc, hcc, hzc | ⟨y, hy, hzy⟩⟩ := avail_correctHeld hA hC hz
+  · subst hzc
+    exact ⟨_, hcc, _, fun t ht => (h.stores z hc hcc t ht).1⟩
+  · exact ⟨_, hcc, _, fun t ht => hK c hc hcc t ht y hy hzy⟩
 
 end NodeRules
 
@@ -530,7 +564,7 @@ theorem builtBy_below (hδ : δ < γ) (hγτ : γ ≤ τ) {s : ℕ} (hs : R + 1 
       rcases Nat.eq_or_lt_of_le hes with heq | hlt
       · exact ⟨e, he, hex, heq.symm, hen.le⟩
       subst hex
-      obtain ⟨y, hy, hyc, hyr⟩ := h.exists_succ_held hx (by omega) (h.own e he hx) hx hlt
+      obtain ⟨y, hy, hyc, hyr⟩ := h.exists_succ_held hx (h.own e he hx) hx hlt
       have hyt := h.causal _ hx _ y hy hyc
       obtain ⟨z, hz, hzx, hzr, hzt⟩ :=
         ih _ (by omega) y (h.held_ids _ _ hy) hyc hyr rfl _ hx
@@ -579,7 +613,7 @@ theorem builtBy_of_reachedBy (hδ : δ < γ) (hγτ : γ ≤ τ) {s t : ℕ} (hs
   rcases Nat.eq_or_lt_of_le hes with heq | hlt
   · exact ⟨e, he, hex, heq.symm, het⟩
   subst hex
-  obtain ⟨y, hy, hyc, hyr⟩ := h.exists_succ_held hx (by omega) (h.own e he hx) hx hlt
+  obtain ⟨y, hy, hyc, hyr⟩ := h.exists_succ_held hx (h.own e he hx) hx hlt
   obtain ⟨z, hz, hzx, hzr, hzt⟩ :=
     h.builtBy_below hδ hγτ hs hsN (h.held_ids _ _ hy) hyc hyr _ hx
   exact ⟨z, hz, hzx, hzr, by have := h.causal _ hx _ y hy hyc; omega⟩
@@ -611,7 +645,7 @@ theorem leader_mem_held (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ
     exact ⟨L, h.mem_held_of_round hL (hLc ▸ hlead) (by omega) hbc hLt (by omega), hL, by omega,
       hLc⟩
   · obtain ⟨L, hL, hlead'⟩ := h.votes (h.held_ids _ _ hyH) hyc (by omega) hy
-    exact ⟨L, h.closed _ hbc _ y hyH (by omega) hL, hlead'⟩
+    exact ⟨L, h.closed _ hbc _ y hyH hyc hL, hlead'⟩
 
 /-- **Every correct voter votes for a correct leader**: a correct block one
 round above a slot led by a correct validator, from round `R + 1` on,
@@ -662,7 +696,7 @@ theorem certIn_held (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ) {k
     refine ⟨L, hL, le_trans hv (Finset.card_le_card (Finset.image_subset_image fun z hz => ?_))⟩
     obtain ⟨-, hzr, hzL⟩ := mem_carriedVotes_spec hy' hyr hz
     exact Finset.mem_filter.mpr
-      ⟨h.closed _ hcc _ y hyH (by omega) (mem_carriedVotes.mp hz).1, hzr, hzL⟩
+      ⟨h.closed _ hcc _ y hyH hyc (mem_carriedVotes.mp hz).1, hzr, hzL⟩
 
 /-- **Every correct certifier certifies a correct leader**: a correct block
 two rounds above a slot led by a correct validator, from round `R + 1` on,
@@ -690,7 +724,7 @@ theorem builtBy_succ_fast (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ 
   have hG := h.le_of_reachedBy (by omega) hb.reachedBy
   refine h.builtBy_of_reachedBy hδ hγτ (by omega) (by omega) fun v hv => ?_
   refine h.built_of_waitsFor hv (by omega) hsN (by omega)
-    ⟨h.quorumIn_of_reachedBy (by omega) (by omega) hb.reachedBy hv, fun k hk => ?_,
+    ⟨h.quorumIn_of_reachedBy (by omega) hb.reachedBy hv, fun k hk => ?_,
       fun k hk => ?_⟩
   · obtain ⟨L, hL, hLc, hLr, hLt⟩ := hb _ (hlead k (Or.inl hk))
     exact ⟨L, h.mem_held_of_round hL (hLc ▸ hlead k (Or.inl hk)) (by omega) hv hLt le_rfl, hL,
@@ -753,7 +787,7 @@ theorem nodeDecided_fast (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ �
     h.mem_held_of_round hc hcc (by omega) hv hct' (by omega)
   rcases hz with rfl | hz
   · exact hheld
-  · exact h.closed v hv _ c hheld (by omega) hz
+  · exact h.closed v hv _ c hheld hcc hz
 
 /-- **A correct node holds the correct blocks of the round below when it
 builds**, at `2δ ≤ γ ≤ τ` and `δ < γ`: a correct block of round `r + 1`, `r`
@@ -792,7 +826,7 @@ theorem mem_held_below (hγ : 2 * δ ≤ γ) (hδ : δ < γ) (hγτ : γ ≤ τ)
     have hzr := (U.valid y (h.held_ids _ _ hyH)).predecessor z hz
     obtain rfl : z = x :=
       U.eq_of_creator_eq (U.complete y (h.held_ids _ _ hyH) z hz) hx hxc hzc rfl (by omega)
-    exact h.closed _ hbc _ y hyH (by omega) hz
+    exact h.closed _ hbc _ y hyH hyc hz
 
 /-- **The run is synchronous among the correct validators** from round
 `R + 1` to `N`, at `2δ ≤ γ ≤ τ` and `δ < γ`: every correct block references
@@ -808,6 +842,57 @@ theorem syncFrom (hγ : 2 * δ ≤ γ) (hδ : δ < γ) (hγτ : γ ≤ τ) :
   · obtain ⟨t, ht⟩ := h.exists_builtBy hδ hγτ hr hrN
     obtain ⟨b, hb, hbv, hbr, -⟩ := ht v hv
     exact ⟨b, hb, hbv, hbr⟩
+
+/-- **The ledger grows**, at `τ ≥ 2δ` and `δ < γ ≤ τ`, when correct nodes
+fetch the available sub-DAG of the certified leader blocks they hold within
+`Δ`, and the schedule offers runs of `c` correct leaders spanning
+eligibility: past any slot `k` there is a slot `b` such that, if the run
+reaches round `σ(b + c − 1) + 2`, every correct node, at one time, decides
+every slot below `b + c` and has fetched each leader it commits down to `D`
+rounds below it. -/
+theorem exists_ledger (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ) {K Δ : ℕ} (D : ℕ)
+    (hF : Fetches U tl K G Δ) {c : ℕ} (hc : 0 < c)
+    (hspan : ∀ b i, i < b → EligibleAt (S := S) 2 i (b + c - 1))
+    (fair : FairRunOn (Correct : Finset Validator) c) (k : ℕ) :
+    ∃ b, k ≤ b ∧ (S.slotRound (b + c - 1) + 2 ≤ N → ∃ t, ∀ v ∈ (Correct : Finset Validator),
+      ∃ g : ℕ → Option BlockId, ∀ i, i < b + c → NodeDecided U K (tl.held v t) i (g i) ∧
+        ∀ L, g i = some L → FetchedIn U K (tl.held v t) L ((U.block L).round - D)) := by
+  classical
+  obtain ⟨b, hkb, hRb, hrun⟩ := Slots.exists_run_past fair k (R + 1)
+  refine ⟨b, hkb, fun hN => ⟨max G (U.ids.sup tl.built) + δ + Δ, fun v hv => ?_⟩⟩
+  set T₀ := max G (U.ids.sup tl.built)
+  have hT₀ : ∀ x ∈ U.ids, tl.built x ≤ T₀ := fun x hx =>
+    (Finset.le_sup (f := tl.built) hx).trans (le_max_right _ _)
+  have hresp := responds_of_run hc hRb hrun ⟨(h.respondsFrom hτ hδ hγτ).1,
+    fun j h1 h2 h3 => (h.respondsFrom hτ hδ hγτ).2 j h1 (h2.trans hN) h3⟩
+  have hheld : WithRefs U (Correct : Finset Validator) (S.slotRound b)
+      (S.slotRound (b + c - 1) + 2) ∪ AvailBelow U K (b + c - 1) ⊆
+      ↑(tl.held v (T₀ + δ + Δ)) := by
+    rintro z (⟨x, hx, hxc, hxlo, -, hzx⟩ | ⟨j, A, hj, hA, ⟨C, hC⟩, hzA⟩)
+    · have hxv := h.mem_held_of_round hx hxc (by omega) hv (hT₀ x hx) (t := T₀ + δ + Δ)
+        (by omega)
+      rcases hzx with rfl | hzx
+      · exact hxv
+      · exact h.closed v hv _ x hxv hxc hzx
+    · obtain ⟨hCi, -, hvC⟩ := mem_certificatesAt.mp hC
+      obtain ⟨u, hu, huc⟩ := exists_correct_of_card
+        (S := creatorsOf U.block (carriedVotes U (IsVote U) C A))
+        (by have := F.card_validators; unfold CarriesVotes at hvC; omega)
+      obtain ⟨y, hyC, hyu⟩ := mem_creatorsOf.mp hu
+      obtain ⟨hyref, hyA⟩ := mem_carriedVotes.mp hyC
+      have hy := U.complete C hCi y hyref
+      have hyc : (U.block y).creator ∈ (Correct : Finset Validator) := hyu ▸ huc
+      have hyw := h.disk_held _ hyc T₀ (h.stores y hy hyc T₀ (hT₀ y hy)).1
+      have hyv := h.mem_held_of_held hyc (le_max_left _ _) hyw hyc hv le_rfl
+      exact hF v hv (T₀ + δ) (by omega) j A hA ⟨C, hC⟩ (h.closed v hv _ y hyv hyc hyA) z hzA
+  have hdec := nodeDecided_of_run card_correct (h.held_ids v _) hc hspan hresp hheld
+  refine ⟨fun i => if hi : i < b + c then (hdec i hi).choose else none, fun i hi => ?_⟩
+  simp only [dif_pos hi]
+  refine ⟨(hdec i hi).choose_spec, fun L hL => ?_⟩
+  obtain ⟨hlead, hcert⟩ :=
+    certified_of_nodeDecided (h.held_ids v _) (hL ▸ (hdec i hi).choose_spec)
+  exact fetchedIn_of_subset hlead.1 (Nat.sub_le _ _) fun z hz _ =>
+    hheld (Set.mem_union_right _ ⟨i, L, by omega, hlead, hcert, hz⟩)
 
 end ReactiveRun
 

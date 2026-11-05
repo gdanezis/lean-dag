@@ -45,7 +45,15 @@ correct node skips a round:
   round;
 * **the run is synchronous** (`Synchronised`): at `2δ ≤ γ`, every correct
   block from round `R + 2` to `N` references every correct block of the
-  round below, so the inclusion results of `Order` apply.
+  round below, so the inclusion results of `Order` apply;
+* **the ledger grows** (`Ledger`): when nodes fetch the available sub-DAG of
+  the certified leaders they hold, every correct node eventually decides
+  every slot up to a run of correct leaders and fetches below the leaders
+  it commits, so its ledger is defined there and agrees by `Order.Agrees`.
+
+When correct nodes keep on disk the histories to depth `K` of their blocks'
+references, nothing a leader outputs is lost, through any crash
+(`Durable`).
 
 No bound depends on `K`: the downloads to depth `K` are inside `δ`.
 Statements only; the proofs are `Proof.lean`.
@@ -204,10 +212,42 @@ def Synchronised : Prop :=
     ReactiveRun U tl G δ τ γ μ R N → 2 * δ ≤ γ → δ < γ → γ ≤ τ →
       SyncFrom U (Correct : Finset Validator) (R + 1) N
 
+/-- **Nothing a leader outputs is lost**: under the rules for nodes, when
+correct nodes keep on disk the histories to depth `K` of their blocks'
+references, every block of the available sub-DAG of a certified block is on
+a correct node's disk from some time on, through any crash. -/
+def Durable : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [DecidableEq BlockId] [Slots Validator]
+    (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
+    (G δ τ γ μ R N K : ℕ),
+    NodeRules U tl G δ τ γ μ R N → KeepsHistory U tl K → ∀ A ∈ U.ids, ∀ r,
+      (certificatesAt U (IsVote U) (quorumCard Validator) A r).Nonempty → ∀ z ∈ Avail U K A,
+      ∃ w ∈ (Correct : Finset Validator), ∃ t₀, ∀ t, t₀ ≤ t → z ∈ tl.disk w t
+
+/-- **The ledger grows**: on a reactive run from round `R` to round `N`, at
+`τ ≥ 2δ` and `δ < γ ≤ τ`, when correct nodes fetch the available sub-DAG of
+the certified leader blocks they hold within `Δ`, and the schedule offers
+runs of `c` correct leaders spanning eligibility, past any slot `k` there is
+a slot `b` such that, if the run reaches round `σ(b + c − 1) + 2`, every
+correct node, at one time, decides every slot below `b + c` and has fetched
+each leader it commits down to `D` rounds below it. -/
+def Ledger : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [DecidableEq BlockId] [S : Slots Validator]
+    (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
+    (G δ τ γ μ R N K D Δ c : ℕ),
+    ReactiveRun U tl G δ τ γ μ R N → 2 * δ ≤ τ → δ < γ → γ ≤ τ → Fetches U tl K G Δ →
+    0 < c → (∀ b i, i < b → EligibleAt (S := S) 2 i (b + c - 1)) →
+    FairRunOn (Correct : Finset Validator) c → ∀ k, ∃ b, k ≤ b ∧
+      (S.slotRound (b + c - 1) + 2 ≤ N → ∃ t, ∀ v ∈ (Correct : Finset Validator),
+        ∃ g : ℕ → Option BlockId, ∀ i, i < b + c → NodeDecided U K (tl.held v t) i (g i) ∧
+          ∀ L, g i = some L → FetchedIn U K (tl.held v t) L ((U.block L).round - D))
+
 /-- Reactive nodes in time. -/
 def Statement : Prop :=
   Persisted ∧ OnDisk ∧ Resumes ∧ Built ∧ CatchesUp ∧ Starts ∧ Slow ∧ Fast ∧ Responsive ∧ Commits ∧
-    Synchronised
+    Synchronised ∧ Durable ∧ Ledger
 
 end Reactive
 

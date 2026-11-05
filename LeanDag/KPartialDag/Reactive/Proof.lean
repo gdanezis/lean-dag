@@ -14,7 +14,9 @@ Operations resume by `NodeRules.exists_resumed`. Every round is reached by
 correct leaders by `ReactiveRun.builtBy_succ_fast`; the run is responsive by
 `ReactiveRun.respondsFrom`, and a slot led by correct validators commits
 within `3δ + 2 max γ μ` by `ReactiveRun.nodeDecided_fast`; the run is
-synchronous by `ReactiveRun.syncFrom`.
+synchronous by `ReactiveRun.syncFrom`. Nothing a leader outputs is lost by
+`NodeRules.exists_disk_of_avail`, and the ledger grows by
+`ReactiveRun.exists_ledger`.
 -/
 
 namespace LeanDag
@@ -74,9 +76,18 @@ theorem synchronised : Synchronised := by
   intro Validator BlockId Payload _ _ _ _ _ U tl G δ τ γ μ R N h hγ hδ hγτ
   exact h.syncFrom hγ hδ hγτ
 
+theorem durable : Durable := by
+  intro Validator BlockId Payload _ _ _ _ _ U tl G δ τ γ μ R N K h hK A hA r hC z hz
+  exact h.exists_disk_of_avail hK hA hC hz
+
+theorem ledger : Ledger := by
+  intro Validator BlockId Payload _ _ _ _ S U tl G δ τ γ μ R N K D Δ c h hτ hδ hγτ hF hc hspan
+    fair k
+  exact h.exists_ledger hτ hδ hγτ D hF hc hspan fair k
+
 theorem holds : Statement :=
   ⟨persisted, onDisk, resumes, built, catchesUp, starts, slow, fast, responsive, commits,
-    synchronised⟩
+    synchronised, durable, ledger⟩
 
 end Reactive
 

@@ -123,7 +123,7 @@ theorem chain_run (N : ℕ) : ReactiveRun (chain N) (chainTimeline N) 0 0 1 1 0 
   disk_held _ _ _ := Finset.Subset.refl _
   stores b hb _ t ht := by
     have hbN : b ≤ N := by simp [chain] at hb; omega
-    refine ⟨b, mem_chainHeld.mpr ⟨ht, hbN⟩, rfl, le_rfl, fun j hj => ?_⟩
+    refine ⟨mem_chainHeld.mpr ⟨ht, hbN⟩, fun j hj => ?_⟩
     have := mem_chainRefs.mp hj
     exact mem_chainHeld.mpr ⟨ht, by omega⟩
   late _ _ _ _ := le_rfl
