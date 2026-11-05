@@ -248,6 +248,18 @@ theorem not_directSkip {L C : BlockId} {r : ℕ}
   have := F.card_validators
   omega
 
+/-- An anchored block is `A`, or referenced by a correct author's block of the
+sub-DAG. -/
+theorem AnchoredBelow.eq_or_referenced {K : ℕ} {A y : BlockId} (h : AnchoredBelow U K A y) :
+    y = A ∨ ∃ w ∈ Avail U K A, (U.block w).creator ∈ (Correct : Finset Validator) ∧
+      y ∈ (U.block w).refs := by
+  cases h with
+  | anchor => exact Or.inl rfl
+  | referenced S yf hyf hzf href hcard =>
+    obtain ⟨c, hc, hcC⟩ := exists_correct_of_card hcard
+    obtain ⟨w, hw, rfl⟩ := mem_creatorsOf.mp hc
+    exact Or.inr ⟨w, ⟨yf w, hyf w hw, hzf w hw⟩, hcC, href w hw⟩
+
 /-- **The sub-DAG is held**: each of its blocks lies in the history to depth
 `K` of `A`, or of an anchored block a correct author's block of the sub-DAG
 references. -/
@@ -256,13 +268,7 @@ theorem held {K : ℕ} {A z : BlockId} (hz : z ∈ Avail U K A) :
       (y = A ∨ ∃ w ∈ Avail U K A, (U.block w).creator ∈ (Correct : Finset Validator) ∧
         y ∈ (U.block w).refs) := by
   obtain ⟨y, hy, hzy⟩ := hz
-  refine ⟨y, hy, hzy, ?_⟩
-  cases hy with
-  | anchor => exact Or.inl rfl
-  | referenced S yf hyf hzf href hcard =>
-    obtain ⟨c, hc, hcC⟩ := exists_correct_of_card hcard
-    obtain ⟨w, hw, rfl⟩ := mem_creatorsOf.mp hc
-    exact Or.inr ⟨w, ⟨yf w, hyf w hw, hzf w hw⟩, hcC, href w hw⟩
+  exact ⟨y, hy, hzy, hy.eq_or_referenced⟩
 
 /-- The available sub-DAG below a block of the record lies in the record. -/
 theorem avail_subset_ids {K : ℕ} {A z : BlockId} (hA : A ∈ U.ids) (hz : z ∈ Avail U K A) :

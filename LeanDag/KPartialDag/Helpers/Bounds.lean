@@ -99,7 +99,6 @@ theorem availIn_band_iff (hH : H ⊆ U.ids) {ρ : ℕ} {z : BlockId}
 read on the band from `ρ`.** -/
 theorem linkedIn_band_iff (hH : H ⊆ U.ids) {ρ r : ℕ} (hr : ρ + K ≤ r + 1) {L : BlockId} :
     LinkedIn U K (Band U H ρ) A L r ↔ LinkedIn U K H A L r := by
-  have hHb : Band U H ρ ⊆ U.ids := band_subset.trans hH
   constructor
   · rintro ⟨C, hC, hCr, hrefs, hv⟩
     exact ⟨C, availIn_mono band_subset hC, hCr, fun j hj => availIn_mono band_subset (hrefs j hj),
@@ -153,8 +152,7 @@ theorem AnchoredBelow.round_le (hA : A ∈ U.ids) {y : BlockId} (h : AnchoredBel
   induction h with
   | anchor => exact le_rfl
   | @referenced x S y hy hz href hcard ih =>
-    obtain ⟨c, hc⟩ : (creatorsOf U.block S).Nonempty := Finset.card_pos.mp (by omega)
-    obtain ⟨z, hzS, -⟩ := mem_creatorsOf.mp hc
+    obtain ⟨z, hzS⟩ := nonempty_of_creatorsOf_card_pos (by omega : 0 < (creatorsOf U.block S).card)
     have hyz := (hy z hzS).mem hA
     have hzi := historyUpto_subset_ids K hyz (hz z hzS)
     have := (U.valid z hzi).predecessor x (href z hzS)
@@ -238,11 +236,6 @@ def byzLayers (U : KRecord Validator BlockId Payload) (r : BlockId) : ℕ → Fi
   | s + 1 => (byzLayers U r s).biUnion fun w =>
       (U.block w).refs.filter fun j => (U.block j).creator ∉ (Correct : Finset Validator)
 
-theorem layers_mono {s t : Finset BlockId} (h : s ⊆ t) :
-    ∀ d, layers U s d ⊆ layers U t d
-  | 0 => h
-  | d + 1 => Finset.biUnion_subset_biUnion_of_subset_left _ (layers_mono h d)
-
 theorem layers_ref {x j : BlockId} (hj : j ∈ (U.block x).refs) :
     ∀ d, layers U {j} d ⊆ layers U {x} (d + 1)
   | 0 => by
@@ -287,15 +280,22 @@ theorem card_byz_refs_le {w : BlockId} (hw : w ∈ U.ids) :
       (Finset.mem_filter.mp (Finset.mem_coe.mp hj)).1 hij
 
 omit [DecidableEq BlockId] in
-/-- Blocks of correct authors at one round number at most `|C|`. -/
-theorem card_correct_round_le {ρ : ℕ} {X : Finset BlockId}
-    (hX : ∀ x ∈ X, x ∈ U.ids ∧ (U.block x).round = ρ ∧
-      (U.block x).creator ∈ (Correct : Finset Validator)) :
-    X.card ≤ (Correct : Finset Validator).card :=
-  Finset.card_le_card_of_injOn (fun x => (U.block x).creator)
-    (fun x hx => Finset.mem_coe.mpr (hX x (Finset.mem_coe.mp hx)).2.2) fun i hi j hj hij =>
-      U.eq_of_creator_eq (hX i hi).1 (hX j hj).1 (hX i hi).2.2 rfl hij.symm
-        ((hX i hi).2.1.trans (hX j hj).2.1.symm)
+/-- Blocks at one round number at most `|C|` besides their Byzantine ones. -/
+theorem card_round_le {ρ : ℕ} {X : Finset BlockId}
+    (hX : ∀ x ∈ X, x ∈ U.ids ∧ (U.block x).round = ρ) :
+    X.card ≤ (Correct : Finset Validator).card +
+      (X.filter fun x => (U.block x).creator ∉ (Correct : Finset Validator)).card := by
+  have hsplit := Finset.card_filter_add_card_filter_not (s := X)
+    (fun x => (U.block x).creator ∈ (Correct : Finset Validator))
+  have hc : (X.filter fun x => (U.block x).creator ∈ (Correct : Finset Validator)).card ≤
+      (Correct : Finset Validator).card :=
+    Finset.card_le_card_of_injOn (fun x => (U.block x).creator)
+      (fun x hx => Finset.mem_coe.mpr (Finset.mem_filter.mp hx).2) fun i hi j hj hij => by
+        obtain ⟨hiX, hic⟩ := Finset.mem_filter.mp hi
+        obtain ⟨hjX, -⟩ := Finset.mem_filter.mp hj
+        exact U.eq_of_creator_eq (hX i hiX).1 (hX j hjX).1 hic rfl hij.symm
+          ((hX i hiX).2.trans (hX j hjX).2.symm)
+  omega
 
 /-- **One layer of a history**: at most `|C|` blocks of correct authors, and
 at most `f` Byzantine blocks per block of the layer above. -/
@@ -304,24 +304,15 @@ theorem card_layers_le {x : BlockId} (hx : x ∈ U.ids) :
   | 0 => by simp [layers, layerBound]
   | d + 1 => by
     classical
-    have hsplit := Finset.card_filter_add_card_filter_not (s := layers U {x} (d + 1))
-      (fun w => (U.block w).creator ∈ (Correct : Finset Validator))
-    have hc : ((layers U {x} (d + 1)).filter
-        fun w => (U.block w).creator ∈ (Correct : Finset Validator)).card ≤
-        (Correct : Finset Validator).card := by
-      refine card_correct_round_le (U := U) (ρ := (U.block x).round - (d + 1)) fun w hw => ?_
-      obtain ⟨hwl, hwc⟩ := Finset.mem_filter.mp hw
-      obtain ⟨hwi, hwr⟩ := layers_round hx (d + 1) w hwl
-      exact ⟨hwi, by omega, hwc⟩
+    have hc := card_round_le (U := U) (ρ := (U.block x).round - (d + 1)) fun w hw => by
+      obtain ⟨hwi, hwr⟩ := layers_round hx (d + 1) w hw
+      exact ⟨hwi, by omega⟩
     have hb : ((layers U {x} (d + 1)).filter
         fun w => (U.block w).creator ∉ (Correct : Finset Validator)).card ≤
         (layers U {x} d).card * F.f := by
-      refine (Finset.card_le_card fun w hw => ?_).trans
-        (Finset.card_biUnion_le_card_mul _ _ _ fun p hp =>
-          card_byz_refs_le (layers_round hx d p hp).1)
-      obtain ⟨hwl, hwc⟩ := Finset.mem_filter.mp hw
-      obtain ⟨p, hp, hwp⟩ := Finset.mem_biUnion.mp hwl
-      exact Finset.mem_biUnion.mpr ⟨p, hp, Finset.mem_filter.mpr ⟨hwp, hwc⟩⟩
+      rw [layers, Finset.filter_biUnion]
+      exact Finset.card_biUnion_le_card_mul _ _ _ fun p hp =>
+        card_byz_refs_le (layers_round hx d p hp).1
     have ih := card_layers_le hx d
     have : (layers U {x} d).card * F.f ≤ F.f * layerBound (Correct : Finset Validator).card F.f d :=
       by rw [mul_comm]; exact Nat.mul_le_mul_left _ ih
@@ -337,15 +328,10 @@ theorem card_historyUpto_le (K : ℕ) {x : BlockId} (hx : x ∈ U.ids) :
   (Finset.card_le_card (historyUpto_subset_layers K x)).trans
     (Finset.card_biUnion_le.trans (Finset.sum_le_sum fun d _ => card_layers_le hx d))
 
-theorem byzLayers_subset_ids {r : BlockId} (hr : r ∈ U.ids) : ∀ s, ∀ w ∈ byzLayers U r s,
-    w ∈ U.ids ∧ (U.block w).round + s = (U.block r).round
-  | 0, w, hw => by rw [Finset.mem_singleton.mp hw]; exact ⟨hr, rfl⟩
-  | s + 1, w, hw => by
-    obtain ⟨p, hp, hwp⟩ := Finset.mem_biUnion.mp hw
-    obtain ⟨hpi, hpr⟩ := byzLayers_subset_ids hr s p hp
-    have hwp' := (Finset.mem_filter.mp hwp).1
-    have := (U.valid p hpi).predecessor w hwp'
-    exact ⟨U.complete p hpi w hwp', by omega⟩
+theorem byzLayers_subset_layers {r : BlockId} : ∀ s, byzLayers U r s ⊆ layers U {r} s
+  | 0 => subset_rfl
+  | s + 1 => (Finset.biUnion_mono fun _ _ => Finset.filter_subset _ _).trans
+      (Finset.biUnion_subset_biUnion_of_subset_left _ (byzLayers_subset_layers s))
 
 /-- At most `f^s` Byzantine blocks are reached from a block by `s` references
 through Byzantine blocks. -/
@@ -354,7 +340,7 @@ theorem card_byzLayers_le {r : BlockId} (hr : r ∈ U.ids) :
   | 0 => by simp [byzLayers]
   | s + 1 => by
     refine (Finset.card_biUnion_le_card_mul _ _ _ fun p hp =>
-      card_byz_refs_le (byzLayers_subset_ids hr s p hp).1).trans ?_
+      card_byz_refs_le (layers_round hr s p (byzLayers_subset_layers s hp)).1).trans ?_
     rw [pow_succ]
     exact Nat.mul_le_mul_right _ (card_byzLayers_le hr s)
 
@@ -414,12 +400,8 @@ theorem card_anchored_le (hA : A ∈ U.ids) {ρ : ℕ} {B : Finset Validator} {X
       x ∈ (U.block z).refs := by
     intro x hx
     obtain ⟨hxa, -, hxA, -⟩ := hX x hx
-    cases hxa with
-    | anchor => exact absurd rfl hxA
-    | referenced S y hy hz href hcard =>
-      obtain ⟨c, hc, hcC⟩ := exists_correct_of_card hcard
-      obtain ⟨z, hzS, hzc⟩ := mem_creatorsOf.mp hc
-      exact ⟨z, historyUpto_subset_ids K ((hy z hzS).mem hA) (hz z hzS), hzc ▸ hcC, href z hzS⟩
+    obtain ⟨w, hw, hwc, hxw⟩ := hxa.eq_or_referenced.resolve_left hxA
+    exact ⟨w, avail_subset_ids hA hw, hwc, hxw⟩
   choose! zf hzf using hex
   have hcard : X.card ≤ ((Correct : Finset Validator) ×ˢ B).card :=
     Finset.card_le_card_of_injOn (fun x => ((U.block (zf x)).creator, (U.block x).creator))
@@ -443,12 +425,7 @@ theorem card_roots_le (hA : A ∈ U.ids) {ρ : ℕ} {X : Finset BlockId}
       ((U.block x).creator ∈ (Correct : Finset Validator) ∨ AnchoredBelow U K A x)) :
     X.card ≤ (Correct : Finset Validator).card * (F.f + 1) + 1 := by
   classical
-  have hsplit := Finset.card_filter_add_card_filter_not (s := X)
-    (fun x => (U.block x).creator ∈ (Correct : Finset Validator))
-  have hc := card_correct_round_le (U := U) (ρ := ρ) (X := X.filter
-    fun x => (U.block x).creator ∈ (Correct : Finset Validator)) fun x hx => by
-      obtain ⟨hxX, hxc⟩ := Finset.mem_filter.mp hx
-      exact ⟨(hX x hxX).1, (hX x hxX).2.1, hxc⟩
+  have hc := card_round_le (U := U) fun x hx => ⟨(hX x hx).1, (hX x hx).2.1⟩
   have h1 := Finset.pred_card_le_card_erase (s := X.filter
     fun x => (U.block x).creator ∉ (Correct : Finset Validator)) (a := A)
   have hb := card_anchored_le hA (ρ := ρ) (B := F.byzantine) (X := (X.filter
@@ -471,13 +448,7 @@ theorem card_avail_round_le (hA : A ∈ U.ids) {ρ : ℕ} {Z : Finset BlockId}
       ((Correct : Finset Validator).card * (F.f + 1) + 1) *
         ∑ s ∈ Finset.range (K + 1), F.f ^ s := by
   classical
-  have hsplit := Finset.card_filter_add_card_filter_not (s := Z)
-    (fun z => (U.block z).creator ∈ (Correct : Finset Validator))
-  have hc := card_correct_round_le (U := U) (ρ := ρ) (X := Z.filter
-    fun z => (U.block z).creator ∈ (Correct : Finset Validator)) fun z hz => by
-      obtain ⟨hzZ, hzc⟩ := Finset.mem_filter.mp hz
-      obtain ⟨⟨y, hy, hzy⟩, hzr⟩ := hZ z hzZ
-      exact ⟨historyUpto_subset_ids K (hy.mem hA) hzy, hzr, hzc⟩
+  have hc := card_round_le (U := U) fun z hz => ⟨avail_subset_ids hA (hZ z hz).1, (hZ z hz).2⟩
   let R : ℕ → Finset BlockId := fun t => U.ids.filter fun r => (U.block r).round = t ∧
     ((U.block r).creator ∈ (Correct : Finset Validator) ∨ AnchoredBelow U K A r)
   have hsub : Z.filter (fun z => (U.block z).creator ∉ (Correct : Finset Validator)) ⊆
@@ -497,96 +468,68 @@ theorem card_avail_round_le (hA : A ∈ U.ids) {ρ : ℕ} {Z : Finset BlockId}
     rw [Finset.mul_sum]
     refine Finset.sum_le_sum fun s _ => (Finset.card_biUnion_le_card_mul _ _ _ fun r hr =>
       card_byzLayers_le (Finset.mem_filter.mp hr).1 s).trans (Nat.mul_le_mul_right _ ?_)
-    exact card_roots_le hA fun x hx => by
-      obtain ⟨hxi, hxr, hxt⟩ := Finset.mem_filter.mp hx
-      exact ⟨hxi, hxr, hxt⟩
+    exact card_roots_le hA fun x hx => Finset.mem_filter.mp hx
   omega
 
 variable [S : Slots Validator]
 
 /-! ## Decisions read a band -/
 
-/-- One direction of the band: a decision on `H` is one on the band. -/
-theorem nodeDecided_band (hH : H ⊆ U.ids) {ρ i : ℕ} {v : Option BlockId}
-    (h : NodeDecided U K H i v) :
-    ρ ≤ S.slotRound i → ρ + K ≤ S.slotRound i + 1 → NodeDecided U K (Band U H ρ) i v := by
+/-- **A decision passes between two held sets**, for a slot at round
+`ρ + K − 1` or above, and not below `ρ`, when they agree above `ρ` on the
+blocks held with their references, on the indirect test and on the fetch
+test. -/
+theorem nodeDecided_of_agree {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids) {ρ : ℕ}
+    (hheld : ∀ s : Finset BlockId, (∀ b ∈ s, b ∈ U.ids ∧ ρ + 1 ≤ (U.block b).round) →
+      heldWithRefs U H₁ s = heldWithRefs U H₂ s)
+    (hlink : ∀ A L r, ρ + K ≤ r + 1 → (LinkedIn U K H₁ A L r ↔ LinkedIn U K H₂ A L r))
+    (hfetch : ∀ A ρ', ρ + K ≤ (U.block A).round → ρ + K ≤ ρ' →
+      (FetchedIn U K H₁ A ρ' ↔ FetchedIn U K H₂ A ρ'))
+    {i : ℕ} {v : Option BlockId} (h : NodeDecided U K H₁ i v) :
+    ρ ≤ S.slotRound i → ρ + K ≤ S.slotRound i + 1 → NodeDecided U K H₂ i v := by
   induction h with
   | @directCommit k L hL hc =>
     intro h1 h2
     refine NodeDecided.directCommit hL ?_
-    rw [heldWithRefs_band fun b hb => by
+    rw [← hheld _ fun b hb => by
       obtain ⟨hbi, hbr, -⟩ := mem_certificatesAt.mp hb
       exact ⟨hbi, by omega⟩]
     exact hc
   | @directSkip k hs =>
     intro h1 h2
     refine NodeDecided.directSkip ?_
-    rw [heldWithRefs_band fun b hb => by
+    rw [← hheld _ fun b hb => by
       obtain ⟨hbi, hbr⟩ := mem_blocksAt.mp (Finset.mem_filter.mp hb).1
       exact ⟨hbi, by omega⟩]
     exact hs
-  | @indirectCommit k j A L hkj helig hj hmid hL hlink ihj ihm =>
+  | @indirectCommit k j A L hkj helig hj hmid hL hl ihj ihm =>
     intro h1 h2
     have hkj' := S.mono hkj.le
     exact NodeDecided.indirectCommit hkj helig (ihj (by omega) (by omega))
       (fun m h3 h4 h5 => ihm m h3 h4 h5 (by have := S.mono h3.le; omega)
-        (by have := S.mono h3.le; omega)) hL ((linkedIn_band_iff hH h2).mpr hlink)
+        (by have := S.mono h3.le; omega)) hL ((hlink A L _ h2).mp hl)
   | @indirectSkip k j A hkj helig hj hmid hf hnone ihj ihm =>
     intro h1 h2
     have hkj' := S.mono hkj.le
-    have hA := (hj.certified hH).1
+    have hA := (hj.certified hH₁).1
     have hAr : ρ + K ≤ (U.block A).round := by
       rw [hA.2.1]; have := eligibleAt_iff.mp helig; omega
     exact NodeDecided.indirectSkip hkj helig (ihj (by omega) (by omega))
       (fun m h3 h4 h5 => ihm m h3 h4 h5 (by have := S.mono h3.le; omega)
         (by have := S.mono h3.le; omega))
-      ((fetchedIn_band_iff hH hAr (by omega)).mpr hf)
-      fun L hL hl => hnone L hL ((linkedIn_band_iff hH h2).mp hl)
-
-/-- The other direction: a decision on the band is one on `H`. -/
-theorem nodeDecided_of_band (hH : H ⊆ U.ids) {ρ i : ℕ} {v : Option BlockId}
-    (h : NodeDecided U K (Band U H ρ) i v) :
-    ρ ≤ S.slotRound i → ρ + K ≤ S.slotRound i + 1 → NodeDecided U K H i v := by
-  have hHb : Band U H ρ ⊆ U.ids := band_subset.trans hH
-  induction h with
-  | @directCommit k L hL hc =>
-    intro h1 h2
-    refine NodeDecided.directCommit hL ?_
-    rw [← heldWithRefs_band (ρ := ρ) fun b hb => by
-      obtain ⟨hbi, hbr, -⟩ := mem_certificatesAt.mp hb
-      exact ⟨hbi, by omega⟩]
-    exact hc
-  | @directSkip k hs =>
-    intro h1 h2
-    refine NodeDecided.directSkip ?_
-    rw [← heldWithRefs_band (ρ := ρ) fun b hb => by
-      obtain ⟨hbi, hbr⟩ := mem_blocksAt.mp (Finset.mem_filter.mp hb).1
-      exact ⟨hbi, by omega⟩]
-    exact hs
-  | @indirectCommit k j A L hkj helig hj hmid hL hlink ihj ihm =>
-    intro h1 h2
-    have hkj' := S.mono hkj.le
-    exact NodeDecided.indirectCommit hkj helig (ihj (by omega) (by omega))
-      (fun m h3 h4 h5 => ihm m h3 h4 h5 (by have := S.mono h3.le; omega)
-        (by have := S.mono h3.le; omega)) hL ((linkedIn_band_iff hH h2).mp hlink)
-  | @indirectSkip k j A hkj helig hj hmid hf hnone ihj ihm =>
-    intro h1 h2
-    have hkj' := S.mono hkj.le
-    have hA := (hj.certified hHb).1
-    have hAr : ρ + K ≤ (U.block A).round := by
-      rw [hA.2.1]; have := eligibleAt_iff.mp helig; omega
-    exact NodeDecided.indirectSkip hkj helig (ihj (by omega) (by omega))
-      (fun m h3 h4 h5 => ihm m h3 h4 h5 (by have := S.mono h3.le; omega)
-        (by have := S.mono h3.le; omega))
-      ((fetchedIn_band_iff hH hAr (by omega)).mp hf)
-      fun L hL hl => hnone L hL ((linkedIn_band_iff hH h2).mpr hl)
+      ((hfetch A _ hAr (by omega)).mp hf) fun L hL hl' => hnone L hL ((hlink A L _ h2).mpr hl')
 
 /-- **A decision of a slot at round `ρ + K − 1` or above, and not below `ρ`,
 reads only the band from `ρ`.** -/
 theorem nodeDecided_band_iff (hH : H ⊆ U.ids) {ρ i : ℕ} {v : Option BlockId}
     (h1 : ρ ≤ S.slotRound i) (h2 : ρ + K ≤ S.slotRound i + 1) :
     NodeDecided U K (Band U H ρ) i v ↔ NodeDecided U K H i v :=
-  ⟨fun h => nodeDecided_of_band hH h h1 h2, fun h => nodeDecided_band hH h h1 h2⟩
+  ⟨fun h => nodeDecided_of_agree (band_subset.trans hH) (fun _ hs => heldWithRefs_band hs)
+      (fun _ _ _ hr => linkedIn_band_iff hH hr) (fun _ _ hA hρ => fetchedIn_band_iff hH hA hρ)
+      h h1 h2,
+    fun h => nodeDecided_of_agree hH (fun _ hs => (heldWithRefs_band hs).symm)
+      (fun _ _ _ hr => (linkedIn_band_iff hH hr).symm)
+      (fun _ _ hA hρ => (fetchedIn_band_iff hH hA hρ).symm) h h1 h2⟩
 
 /-- **Progress from a band**: on a responsive run, a node holding the blocks
 of `T` over the run with their references, and the available sub-DAG below
@@ -611,19 +554,14 @@ theorem nodeDecided_of_run_band {T : Finset Validator}
       exact Finset.mem_union_right _
         (Finset.mem_filter.mpr ⟨avail_subset_ids hL.1 hzL, ⟨j, L, hj, hL, hC, hzL⟩⟩)
   have heq : Band U H' ρ = Band U H ρ := by
-    ext z
-    simp only [mem_band, H', Finset.mem_union, Finset.mem_filter]
-    constructor
-    · rintro ⟨hz | ⟨-, hz⟩, hρ⟩
-      · exact ⟨hz, hρ⟩
-      · exact ⟨hav z hz hρ, hρ⟩
-    · rintro ⟨hz, hρ⟩
-      exact ⟨Or.inl hz, hρ⟩
+    refine (Finset.filter_union _ _ _).trans (Finset.union_eq_left.mpr fun z hz => ?_)
+    obtain ⟨hz, hρ⟩ := Finset.mem_filter.mp hz
+    exact mem_band.mpr ⟨hav z (Finset.mem_filter.mp hz).2 hρ, hρ⟩
   intro i hi h1 h2
   obtain ⟨v, hv⟩ := nodeDecided_of_run hcard hH' hc hspan hresp hheld i hi
-  have := nodeDecided_band hH' hv h1 h2
+  have := (nodeDecided_band_iff hH' h1 h2).mpr hv
   rw [heq] at this
-  exact ⟨v, nodeDecided_of_band hH this h1 h2⟩
+  exact ⟨v, (nodeDecided_band_iff hH h1 h2).mp this⟩
 
 /-! ## Resuming the ledger -/
 
