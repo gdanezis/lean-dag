@@ -131,8 +131,8 @@ theorem ledgerIn_grows (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId} (hH₁ : H₁
 /-- **After synchrony, a block of `T` is anchored** when the blocks of `T` of
 the round above, which reference it, lie in the windows of anchored
 blocks. -/
-theorem anchoredBelow_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card)
-    (hs : SynchronisedOn U T R) {A : BlockId} {m : ℕ} (hRm : R ≤ m)
+theorem anchoredBelow_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card) {N : ℕ}
+    (hs : SynchronisedTo U T R N) {A : BlockId} {m : ℕ} (hRm : R ≤ m) (hmN : m < N)
     (hpop : PopulatedOn U T (m + 1)) {x : BlockId} (hx : x ∈ U.ids)
     (hxr : (U.block x).round = m) (hxc : (U.block x).creator ∈ T) (y : BlockId → BlockId)
     (hy : ∀ z ∈ U.ids, (U.block z).round = m + 1 → (U.block z).creator ∈ T →
@@ -147,7 +147,7 @@ theorem anchoredBelow_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card
       exact ⟨hzi, hzr, hzc⟩
   refine AnchoredBelow.referenced S y (fun z hz => (hy z (hS z hz).1 (hS z hz).2.1 (hS z hz).2.2).1)
     (fun z hz => (hy z (hS z hz).1 (hS z hz).2.1 (hS z hz).2.2).2)
-    (fun z hz => hs m hRm z (hS z hz).1 (hS z hz).2.1 (hS z hz).2.2 x hx hxr hxc) ?_
+    (fun z hz => hs m hRm hmN z (hS z hz).1 (hS z hz).2.1 (hS z hz).2.2 x hx hxr hxc) ?_
   have hT : T ⊆ creatorsOf U.block S := fun v hv => by
     obtain ⟨z, hz, hzc, hzr⟩ := hpop v hv
     exact mem_creatorsOf.mpr
@@ -159,7 +159,7 @@ theorem anchoredBelow_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card
 /-- **After synchrony, a leader of `T` outputs every block of `T` at most `D`
 rounds below it**, from round `R` on, at `K ≥ 1`. -/
 theorem mem_out_of_synchronisedOn (hK : 1 ≤ K) (hcard : quorumCard Validator ≤ T.card)
-    (hs : SynchronisedOn U T R) {L : BlockId}
+    {L : BlockId} (hs : SynchronisedTo U T R (U.block L).round)
     (hpop : ∀ r, R ≤ r → r < (U.block L).round → PopulatedOn U T r) (hL : L ∈ U.ids)
     (hLc : (U.block L).creator ∈ T) {x : BlockId} (hx : x ∈ U.ids)
     (hxc : (U.block x).creator ∈ T) (hRx : R ≤ (U.block x).round)
@@ -173,16 +173,18 @@ theorem mem_out_of_synchronisedOn (hK : 1 ≤ K) (hcard : quorumCard Validator �
     induction d with
     | zero =>
       intro x hx hxc hRx hxr
-      exact anchoredBelow_of_synchronisedOn hcard hs hRx (hpop _ (by omega) (by omega)) hx rfl
-        hxc (fun _ => L) fun z hz hzr hzc => ⟨AnchoredBelow.anchor,
-          ref_mem_historyUpto hK (hs _ (by omega) L hL (by omega) hLc z hz hzr hzc)⟩
+      exact anchoredBelow_of_synchronisedOn hcard hs hRx (by omega)
+        (hpop _ (by omega) (by omega)) hx rfl hxc (fun _ => L) fun z hz hzr hzc =>
+          ⟨AnchoredBelow.anchor, ref_mem_historyUpto hK
+            (hs _ (by omega) (by omega) L hL (by omega) hLc z hz hzr hzc)⟩
     | succ d ih =>
       intro x hx hxc hRx hxr
-      exact anchoredBelow_of_synchronisedOn hcard hs hRx (hpop _ (by omega) (by omega)) hx rfl
-        hxc id fun z hz hzr hzc => ⟨ih z hz hzc (by omega) (by omega), mem_historyUpto_self⟩
+      exact anchoredBelow_of_synchronisedOn hcard hs hRx (by omega)
+        (hpop _ (by omega) (by omega)) hx rfl hxc id fun z hz hzr hzc =>
+          ⟨ih z hz hzc (by omega) (by omega), mem_historyUpto_self⟩
   by_cases h : (U.block x).round + 1 = (U.block L).round
   · exact ⟨L, AnchoredBelow.anchor,
-      ref_mem_historyUpto hK (hs _ hRx L hL h.symm hLc x hx rfl hxc)⟩
+      ref_mem_historyUpto hK (hs _ hRx (by omega) L hL h.symm hLc x hx rfl hxc)⟩
   · exact ⟨x, key ((U.block L).round - (U.block x).round - 2) x hx hxc hRx (by omega),
       mem_historyUpto_self⟩
 
@@ -273,7 +275,8 @@ variable [S : Slots Validator]
 it holds the blocks of `T` two rounds above the slot with their references
 and has fetched below the slot's leader. -/
 theorem mem_ledgerIn_of_leader_mem (hK : 3 ≤ K) (hcard : quorumCard Validator ≤ T.card)
-    (hs : SynchronisedOn U T R) (hH : H ⊆ U.ids) {g : ℕ → Option BlockId} {k : ℕ}
+    {k : ℕ} (hs : SynchronisedTo U T R (S.slotRound k + 2)) (hH : H ⊆ U.ids)
+    {g : ℕ → Option BlockId}
     (hlead : S.leader k ∈ T) (hpop : ∀ r, R ≤ r → r ≤ S.slotRound k + 2 → PopulatedOn U T r)
     (hW : WithRefs U T (S.slotRound k + 2) (S.slotRound k + 2) ⊆ ↑H)
     (hk : NodeDecided U K H k (g k))
@@ -282,13 +285,15 @@ theorem mem_ledgerIn_of_leader_mem (hK : 3 ≤ K) (hcard : quorumCard Validator 
     (hRx : R ≤ (U.block x).round) (hxk : (U.block x).round < S.slotRound k)
     (hD : S.slotRound k ≤ (U.block x).round + D) : x ∈ LedgerIn U K H D g (k + 1) := by
   obtain ⟨L, hL, hdec⟩ := nodeDecided_of_responds (K := K) hcard
-    (responds_of_synchronisedOn hcard hs (by omega) hlead fun r h1 h2 => hpop r (by omega) h2) hW
+    (responds_of_synchronisedOn hcard hs (by omega) le_rfl hlead
+      fun r h1 h2 => hpop r (by omega) h2) hW
   have hg : g k = some L := hk.agree hK hH hH hdec
   have hLc : (U.block L).creator ∈ T := by rw [hL.2.2]; exact hlead
   have hLr := hL.2.1
   refine ⟨k, by omega, L, hg, ?_⟩
   rw [outIn_eq hH (hf L hg)]
-  exact mem_out_of_synchronisedOn (by omega) hcard hs (fun r h1 h2 => hpop r h1 (by omega))
+  exact mem_out_of_synchronisedOn (by omega) hcard
+    (fun n h1 h2 => hs n h1 (by rw [hLr] at h2; omega)) (fun r h1 h2 => hpop r h1 (by omega))
     hL.1 hLc hx hxc hRx (by omega) (by omega)
 
 /-- **A block's fate is settled** once every slot at most `D` rounds above it
@@ -305,18 +310,19 @@ theorem mem_ledgerIn_settled (hH : H ⊆ U.ids) {g : ℕ → Option BlockId} {n 
 decided every slot at most `D` rounds above it, when every `D` rounds hold a
 slot led by `T`. -/
 theorem mem_ledgerIn_of_gap (hK : 3 ≤ K) (hcard : quorumCard Validator ≤ T.card)
-    (hs : SynchronisedOn U T R) (hH : H ⊆ U.ids)
+    {x : BlockId} (hs : SynchronisedTo U T R ((U.block x).round + D + 2)) (hH : H ⊆ U.ids)
     (hgap : ∀ r, ∃ k, r < S.slotRound k ∧ S.slotRound k ≤ r + D ∧ S.leader k ∈ T)
     {g : ℕ → Option BlockId} {n : ℕ} (hdec : ∀ k, k < n → NodeDecided U K H k (g k))
     (hf : ∀ k L, k < n → g k = some L → FetchedIn U K H L ((U.block L).round - D))
-    {x : BlockId} (hx : x ∈ U.ids) (hxc : (U.block x).creator ∈ T)
+    (hx : x ∈ U.ids) (hxc : (U.block x).creator ∈ T)
     (hRx : R ≤ (U.block x).round) (hn : ∀ k, S.slotRound k ≤ (U.block x).round + D → k < n)
     (hpop : ∀ r, R ≤ r → r ≤ (U.block x).round + D + 2 → PopulatedOn U T r)
     (hW : WithRefs U T ((U.block x).round + 3) ((U.block x).round + D + 2) ⊆ ↑H) :
     x ∈ LedgerIn U K H D g n := by
   obtain ⟨k, hxk, hkD, hlead⟩ := hgap (U.block x).round
   have hkn := hn k hkD
-  exact ledgerIn_mono (by omega) (mem_ledgerIn_of_leader_mem hK hcard hs hH hlead
+  exact ledgerIn_mono (by omega) (mem_ledgerIn_of_leader_mem hK hcard
+    (fun m h1 h2 => hs m h1 (by omega)) hH hlead
     (fun r h1 h2 => hpop r h1 (by omega))
     (fun z hz => hW (withRefs_mono (by omega) (by omega) hz)) (hdec k hkn)
     (fun L hL => hf k L hkn hL) hx hxc hRx hxk hkD)

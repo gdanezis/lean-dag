@@ -4,9 +4,10 @@ import LeanDag.Common.Participation
 # K-partial DAG — what a node needs to decide
 
 `docs/kpartial.md` §6. Partial synchrony is read on the record as in the rest
-of the tree: from round `R` on, every block of an author in a quorum `T`
-references every block of an author in `T` of the round below, and `T` has
-a block at every round up to `N` (`SyncFrom`).
+of the tree, up to a round `N`: from round `R` to round `N`, every block of
+an author in a quorum `T` references every block of an author in `T` of the
+round below (`SynchronisedTo`), and `T` has a block at every round
+(`SyncFrom`).
 
 A responsive node waits for less: before building two rounds above a slot it
 waits for a certificate of the slot's leader block, and builds as soon as it
@@ -29,11 +30,21 @@ namespace KPartialDag
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
 variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
 
+/-- **References among `T` from round `R` to round `N`**: every block of `T`
+at a round from `R + 1` to `N` references every block of `T` of the round
+below. -/
+def SynchronisedTo (U : KRecord Validator BlockId Payload) (T : Finset Validator) (R N : ℕ) :
+    Prop :=
+  ∀ n, R ≤ n → n < N → ∀ b ∈ U.ids, (U.block b).round = n + 1 → (U.block b).creator ∈ T →
+    ∀ a ∈ U.ids, (U.block a).round = n → (U.block a).creator ∈ T → a ∈ (U.block b).refs
+
 /-- **Partial synchrony among `T` from round `R` to round `N`**: `T` is a
-quorum, from round `R` on every block of `T` references every block of `T`
-of the round below, and `T` has a block at every round from `R` to `N`. -/
+quorum, from round `R` to round `N` every block of `T` references every
+block of `T` of the round below, and `T` has a block at every round from `R`
+to `N`. -/
 def SyncFrom (U : KRecord Validator BlockId Payload) (T : Finset Validator) (R N : ℕ) : Prop :=
-  quorumCard Validator ≤ T.card ∧ SynchronisedOn U T R ∧ ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r
+  quorumCard Validator ≤ T.card ∧ SynchronisedTo U T R N ∧
+    ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r
 
 variable [S : Slots Validator]
 

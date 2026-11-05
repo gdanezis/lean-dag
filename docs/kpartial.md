@@ -136,9 +136,9 @@ rounds above a slot, until it holds a certificate for the slot's leader
 block. It needs no timer when the leader is correct and the network is
 timely: the voters of `T` are a quorum, so no wait depends on a Byzantine
 validator. Partial synchrony as it is read elsewhere in the tree implies
-responsiveness: from `R` on every block of `T` references every block of `T`
-of the round below, and `T` has a block at every round up to some round `N`
-(`SyncFrom`).
+responsiveness: from `R` to some round `N`, every block of `T` references
+every block of `T` of the round below (`SynchronisedTo`), and `T` has a block
+at every round (`SyncFrom`).
 
 The schedule offers runs: past any slot, `c` consecutive slots led by `T`
 (`FairRunOn`), each run spanning eligibility. A node decides once it holds

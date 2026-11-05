@@ -28,8 +28,9 @@ variable {T : Finset Validator} {R : ℕ}
 
 /-- **After synchrony, a block of `T` carries votes from all of `T`** for a
 block of `T` two rounds below, once the round between is populated. -/
-theorem carriesVotes_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card)
-    (hs : SynchronisedOn U T R) {r : ℕ} (hRr : R ≤ r) (hpop : PopulatedOn U T (r + 1))
+theorem carriesVotes_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card) {N : ℕ}
+    (hs : SynchronisedTo U T R N) {r : ℕ} (hRr : R ≤ r) (hrN : r + 2 ≤ N)
+    (hpop : PopulatedOn U T (r + 1))
     {L C : BlockId} (hL : L ∈ U.ids) (hLr : (U.block L).round = r)
     (hLc : (U.block L).creator ∈ T) (hC : C ∈ U.ids) (hCr : (U.block C).round = r + 2)
     (hCc : (U.block C).creator ∈ T) :
@@ -39,7 +40,8 @@ theorem carriesVotes_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card)
   obtain ⟨b, hb, hbc, hbr⟩ := hpop v hv
   have hbT : (U.block b).creator ∈ T := by rw [hbc]; exact hv
   exact mem_creatorsOf.mpr ⟨b, mem_carriedVotes.mpr
-    ⟨hs (r + 1) (by omega) C hC (by omega) hCc b hb hbr hbT, hs r hRr b hb hbr hbT L hL hLr hLc⟩,
+    ⟨hs (r + 1) (by omega) (by omega) C hC (by omega) hCc b hb hbr hbT,
+      hs r hRr (by omega) b hb hbr hbT L hL hLr hLc⟩,
     hbc⟩
 
 omit [DecidableEq BlockId] in
@@ -53,19 +55,21 @@ variable [S : Slots Validator]
 
 /-- **After synchrony, a slot led by `T` responds among `T`**: the blocks of
 `T` two rounds above it carry votes from all of `T`. -/
-theorem responds_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card)
-    (hs : SynchronisedOn U T R) {k : ℕ} (hR : R ≤ S.slotRound k) (hlead : S.leader k ∈ T)
+theorem responds_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card) {N : ℕ}
+    (hs : SynchronisedTo U T R N) {k : ℕ} (hR : R ≤ S.slotRound k)
+    (hN : S.slotRound k + 2 ≤ N) (hlead : S.leader k ∈ T)
     (hpop : ∀ r, S.slotRound k ≤ r → r ≤ S.slotRound k + 2 → PopulatedOn U T r) :
     Responds U T k := by
   obtain ⟨L, hL, hLc, hLr⟩ := hpop _ le_rfl (by omega) (S.leader k) hlead
   have hLT : (U.block L).creator ∈ T := by rw [hLc]; exact hlead
   exact ⟨hpop _ (by omega) le_rfl, L, ⟨hL, hLr, hLc⟩, fun C hC hCT hCr =>
-    carriesVotes_of_synchronisedOn hcard hs hR (hpop _ (by omega) (by omega)) hL hLr hLT hC hCr
+    carriesVotes_of_synchronisedOn hcard hs hR hN (hpop _ (by omega) (by omega)) hL hLr hLT hC
+      hCr
       hCT⟩
 
 /-- **Synchrony implies responsiveness.** -/
 theorem respondsFrom_of_syncFrom {N : ℕ} (h : SyncFrom U T R N) : RespondsFrom U T R N :=
-  ⟨h.1, fun _ hR hN hlead => responds_of_synchronisedOn h.1 h.2.1 hR hlead
+  ⟨h.1, fun _ hR hN hlead => responds_of_synchronisedOn h.1 h.2.1 hR hN hlead
     fun r h1 h2 => h.2.2 r (le_trans hR h1) (by omega)⟩
 
 /-- **A responsive slot commits**: a node holding the blocks of `T` two
