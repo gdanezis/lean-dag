@@ -53,8 +53,8 @@ node of `T` skips a round:
   it commits, so its ledger is defined there and agrees by `Order.Agrees`.
 
 When correct nodes keep on disk the histories to depth `K` of their blocks'
-references, nothing a leader outputs is lost, through any crash
-(`Durable`).
+references, nothing a leader outputs is lost: it stays on the disk of a
+node of `T`, through any crash (`Durable`).
 
 No bound depends on `K`: the downloads to depth `K` are inside `δ`.
 Statements only; the proofs are `Proof.lean`.
@@ -215,7 +215,7 @@ def Synchronised : Prop :=
 /-- **Nothing a leader outputs is lost**: under the rules for nodes, when
 correct nodes keep on disk the histories to depth `K` of their blocks'
 references, every block of the available sub-DAG of a certified block is on
-a correct node's disk from some time on, through any crash. -/
+the disk of a node of `T` from some time on, through any crash. -/
 def Durable : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [DecidableEq BlockId] [Slots Validator]
@@ -223,7 +223,7 @@ def Durable : Prop :=
     (T : Finset Validator) (G δ τ γ μ R N K : ℕ),
     NodeRules U tl T G δ τ γ μ R N → KeepsHistory U tl K → ∀ A ∈ U.ids, ∀ r,
       (certificatesAt U (IsVote U) (quorumCard Validator) A r).Nonempty → ∀ z ∈ Avail U K A,
-      ∃ w ∈ (Correct : Finset Validator), ∃ t₀, ∀ t, t₀ ≤ t → z ∈ tl.disk w t
+      ∃ w ∈ T, ∃ t₀, ∀ t, t₀ ≤ t → z ∈ tl.disk w t
 
 /-- **The ledger grows**: on a reactive run from round `R` to round `N`, at
 `τ ≥ 2δ` and `δ < γ ≤ τ`, when nodes of `T` fetch the available sub-DAG of

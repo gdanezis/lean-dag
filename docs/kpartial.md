@@ -282,7 +282,7 @@ built before.
 | 7 Commits | a slot among correct leaders commits within `3δ + 2 max(γ, μ)` | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ` |
 | 7 Synchronised | every correct block references every correct block below | reactive run, `2δ ≤ γ`, `δ < γ ≤ τ` |
 | 7 Ledger | every correct node decides every slot up to a run of correct leaders, and fetches below its committed leaders | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ`, fetching, a fair schedule |
-| 7 Durable | no block of a certified block's available sub-DAG is lost | rules for nodes, histories to depth `K` on disk |
+| 7 Durable | every block of a certified block's available sub-DAG stays on the disk of a node of `T` | rules for nodes, histories to depth `K` on disk |
 
 ## 9. Why a K-partial DAG
 
@@ -565,8 +565,10 @@ an earlier block of `T` of its round. Hence:
 
 When correct nodes keep the histories on disk (`KeepsHistory`), nothing a
 leader outputs is lost (`Reactive.Durable`): every block of the available
-sub-DAG of a certified block is on a correct node's disk from some time on,
-through any crash. Together with `Resumes`, the ledger therefore resumes
+sub-DAG of a certified block is on the disk of a node of `T` from some time
+on, through any crash: a quorum of voters keeps the leader's history, and
+`f + 1` authors keep each block anchored below it, and either includes a node
+of `T`. Nodes that crash for good are therefore never needed. Together with `Resumes`, the ledger therefore resumes
 after any crash before `G`, of all nodes too, from slot `0`: the slots
 decided before the crash are decided again, alike, on the blocks the disks
 kept.

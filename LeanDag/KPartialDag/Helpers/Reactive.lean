@@ -27,7 +27,7 @@ before `G` every correct node reaches the highest round built by `G`
 at `δ < γ ≤ τ`, no correct node skips a round (`builtBy_below`).
 
 A committed leader is certified (`certified_of_nodeDecided`), and its
-available sub-DAG stays on a correct node's disk (`exists_disk_of_avail`).
+available sub-DAG stays on the disk of a node of `T` (`exists_disk_of_avail`).
 Every certified leader is referenced by a correct vote that its author keeps
 on disk, so every correct node holds it and fetches its available sub-DAG;
 with the run responsive, every correct node decides every slot up to a run
@@ -535,16 +535,30 @@ theorem exists_resumed {b : BlockId} (hb : b ∈ U.ids)
   · exact ⟨_, hRb, fun h' => absurd h' hbN⟩
 
 /-- **Nothing a leader outputs is lost**: when correct nodes keep histories
-on disk, every block of the available sub-DAG of a certified block is on a
-correct node's disk from some time on, through any crash. -/
+on disk, every block of the available sub-DAG of a certified block is on the
+disk of a node of `T` from some time on, through any crash. A quorum of
+voters, or `f + 1` authors, include a node of `T`. -/
 theorem exists_disk_of_avail {K : ℕ} (hK : KeepsHistory U tl K) {A z : BlockId} {r : ℕ}
     (hA : A ∈ U.ids) (hC : (certificatesAt U (IsVote U) (quorumCard Validator) A r).Nonempty)
     (hz : z ∈ Avail U K A) :
-    ∃ w ∈ (Correct : Finset Validator), ∃ t₀, ∀ t, t₀ ≤ t → z ∈ tl.disk w t := by
-  obtain ⟨c, hc, hcc, hzc | ⟨y, hy, hzy⟩⟩ := avail_correctHeld hA hC hz
-  · subst hzc
-    exact ⟨_, hcc, _, fun t ht => (h.stores z hc hcc t ht).1⟩
-  · exact ⟨_, hcc, _, fun t ht => hK c hc hcc t ht y hy hzy⟩
+    ∃ w ∈ T, ∃ t₀, ∀ t, t₀ ≤ t → z ∈ tl.disk w t := by
+  obtain ⟨y, hy, hzy⟩ := hz
+  cases hy with
+  | anchor =>
+    obtain ⟨C, hC⟩ := hC
+    obtain ⟨hCi, -, hv⟩ := mem_certificatesAt.mp hC
+    obtain ⟨u, hu, huT⟩ := exists_mem_of_card h.large
+      (A := creatorsOf U.block (carriedVotes U (IsVote U) C A))
+      (by have := F.card_validators; unfold CarriesVotes at hv; omega)
+    obtain ⟨b, hb, rfl⟩ := mem_creatorsOf.mp hu
+    obtain ⟨hbC, hbA⟩ := mem_carriedVotes.mp hb
+    exact ⟨_, huT, _, fun t ht =>
+      hK b (U.complete C hCi b hbC) (h.stable huT) t ht A hbA hzy⟩
+  | referenced S yf hyf hzf href hcard =>
+    obtain ⟨c, hc, hcT⟩ := exists_mem_of_card h.large hcard
+    obtain ⟨w, hw, rfl⟩ := mem_creatorsOf.mp hc
+    exact ⟨_, hcT, _, fun t ht => hK w (avail_subset_ids hA ⟨yf w, hyf w hw, hzf w hw⟩)
+      (h.stable hcT) t ht y (href w hw) hzy⟩
 
 end NodeRules
 
