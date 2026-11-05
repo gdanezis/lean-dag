@@ -17,7 +17,9 @@ DAG of Mysticeti:
 2. a correct author that references a block has downloaded that block's
    history to depth `K` only, not its whole history.
 
-A correct node need not build a block at every round; no result assumes it.
+A correct node need not build a block at every round. No safety result
+assumes it; the liveness results ask it of `T` at the rounds they concern,
+and Theorem 7 derives it.
 
 Hashes fix the whole history of every block, so the record of a run is an
 ordinary block record (`KRecord`, at the validity `KValid`). What changes is
@@ -198,7 +200,8 @@ correct node.
   `D + K` rounds below it.
 * *Agreement* (`Order.Agrees`). At `K ≥ 3`, what a node outputs after `n`
   slots, it and every other node output at the same slot and in the same
-  order after `n' ≥ n` slots. Ledgers agree, and none is retracted.
+  order after `n' ≥ n` slots, once each has fetched below the leaders it
+  committed. Ledgers agree, and none is retracted.
 * *Total order* (`Order.Total`). The ledger order is irreflexive, transitive
   and total on the ledger, and a reference of a block entering at the same
   slot precedes it.
@@ -217,7 +220,9 @@ correct node.
   round by round downward.
 * *Inclusion* (`Order.Included`). If every `D` consecutive rounds hold a
   slot led by `T`, then after synchrony every block of `T` enters the ledger
-  of a node that has decided every slot up to `D` rounds above it.
+  of a node that has decided every slot up to `D` rounds above it, has
+  fetched below the leaders it committed, and holds the blocks of `T` from
+  3 to `D + 2` rounds above it with their references.
 
 The ledger carries no causal guarantee across slots: a block may enter
 before one of its ancestors, or without it. The order is agreed, so
@@ -259,29 +264,29 @@ built before.
 | 4 Descends | a committed run decides every slot below it | — |
 | 4 Progress | every slot is eventually decided | responsiveness, fair runs |
 | 5 Local | a node reads a leader's output once fetched `D` rounds down | — |
-| 5 Agrees | ledgers agree across nodes and over time | `K ≥ 3` |
+| 5 Agrees | ledgers agree across nodes and over time | `K ≥ 3`, fetched below committed leaders |
 | 5 Total | the ledger is a strict total order, causal within a slot | linear orders on authors and ids |
 | 5 Settled | a block not output within `D` rounds never is | — |
-| 5 Excluded | a block settled out of one ledger enters none | `K ≥ 3` |
+| 5 Excluded | a block settled out of one ledger enters none | `K ≥ 3`, fetched below committed leaders |
 | 5 Outputs | a leader of `T` outputs the blocks of `T` within `D` rounds | synchrony, `K ≥ 1` |
-| 5 Included | every block of `T` enters the ledger | synchrony, a `T` slot every `D` rounds, `K ≥ 3` |
+| 5 Included | every block of `T` enters the ledger | synchrony, a `T` slot every `D` rounds, `K ≥ 3`, fetched below committed leaders, the blocks of `T` above held |
 | 6 Decides | decisions read the band from `K − 1` rounds below the slot | — |
 | 6 Progress | a node decides from a band of bounded length | responsiveness, fair runs |
 | 6 Builds | building needs the last `K + 1` rounds | — |
-| 6 Resumes | the ledger resumes from the band from `D + K` rounds below | `K ≥ 3` |
+| 6 Resumes | the ledger resumes from the band from `D + K` rounds below | `K ≥ 3`, fetched below committed leaders |
 | 6 Counts, Window, AvailRound | `n` blocks a round without equivocation; with it, `≈ |C| f^(K−1)` per history and `≈ |C| f^(K+1)` per round of the available sub-DAG | — |
 | 7 Persisted | a node persisting its last round builds once a round | the stored round grows |
 | 7 OnDisk | building above the own blocks on disk persists the last round | one build at a time |
-| 7 Resumes | after crashes before `G`, a reactive run is reached within `3δ + 3 max(τ, μ)` of `G` | rules for nodes, a correct block above `R` by `G` |
+| 7 Resumes | after crashes before `G`, a reactive run is reached within `3δ + 3 max(τ, μ)` of `G` | rules for nodes, a block of `T` above `R` by `G` |
 | 7 Built | every round is reached | reactive rules |
-| 7 CatchesUp | blocks of `f + 1` correct validators at a round bring all to it within `δ` | reactive rules |
-| 7 Starts | the round after the last one reached before `G + τ` starts a reactive run | reactive rules |
+| 7 CatchesUp | blocks of `f + 1` validators of `T` at a round bring `T` to it within `δ` | reactive rules |
+| 7 Starts | `R`, or one above a round reached in `T` before `G + τ`, starts a reactive run | reactive rules |
 | 7 Slow | each round is built within `δ + max(τ, μ)` | reactive run, `δ < γ ≤ τ` |
-| 7 Fast | a round next to correct leaders takes `δ + max(γ, μ)` | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ` |
-| 7 Responsive | the run is responsive among the correct validators | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ` |
-| 7 Commits | a slot among correct leaders commits within `3δ + 2 max(γ, μ)` | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ` |
-| 7 Synchronised | every correct block references every correct block below | reactive run, `2δ ≤ γ`, `δ < γ ≤ τ` |
-| 7 Ledger | every correct node decides every slot up to a run of correct leaders, and fetches below its committed leaders | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ`, fetching, a fair schedule |
+| 7 Fast | a round next to leaders of `T` takes `δ + max(γ, μ)` | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ` |
+| 7 Responsive | the run is responsive among `T` | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ` |
+| 7 Commits | a slot among leaders of `T` commits within `3δ + 2 max(γ, μ)` | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ` |
+| 7 Synchronised | every block of `T` references every block of `T` below | reactive run, `2δ ≤ γ`, `δ < γ ≤ τ` |
+| 7 Ledger | every node of `T` decides every slot up to a run of leaders of `T`, and fetches below its committed leaders | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ`, fetching, a fair schedule |
 | 7 Durable | every block of a certified block's available sub-DAG stays on the disk of a node of `T` | rules for nodes, histories to depth `K` on disk |
 
 ## 9. Why a K-partial DAG
@@ -310,8 +315,8 @@ is argued only:
   responsive record for every `K`, and the ledger is agreed, never retracted
   and totally ordered.
 * *Weaker obligations* (argued). No reference to the author's own block is
-  required, so a validator that crashed resumes without its own chain, and
-  none must build at every round; no result uses either.
+  required, so a validator that crashed resumes without its own chain; no
+  result uses one.
 * *Bounded state* (proved in rounds, §10). A node decides from the rounds
   from `K − 1` below its lowest undecided slot, and resumes the ledger from
   `D + K` rounds below; how long others must retain these is open.
@@ -363,7 +368,8 @@ blocks. The blocks of `H` at round `ρ` or above are its *band from `ρ`*
 * *Counting* (`Bounds.Counts`, `Bounds.Window`, `Bounds.AvailRound`).
   Without equivocation the record holds at most `n` blocks per round
   (`card_between_le`), so a band of `w` rounds holds at most `n w` blocks:
-  `n (K + 1)` to build, `n (D + K + lag)` to restart. With equivocation and
+  `n (K + 1)` to build, `n (D + K + ℓ)` to restart, with `ℓ` the rounds
+  from the lowest undecided slot up to the current round. With equivocation and
   no further mechanism:
   - a history to depth `K` holds at most `N_0 + ⋯ + N_K` blocks, with
     `N_0 = 1` and `N_{d+1} = |C| + f · N_d`: each layer holds at most `|C|`
@@ -454,8 +460,8 @@ A timeline follows the *rules for nodes* from round `R` to round `N`
 (`NodeRules`) when correct nodes follow these rules there, hold a correct
 block only once it is built, and another author's correct block only after
 it is built. It follows the *reactive rules* (`ReactiveRules`) when, in
-addition, every correct validator has a block at round `R` or above. It is a
-*reactive run* (`ReactiveRun`) when, in addition, its correct blocks from
+addition, every validator of `T` has a block at round `R` or above. It is a
+*reactive run* (`ReactiveRun`) when, in addition, its blocks of `T` from
 round `R` on are built at `G + τ` or later. The delay `δ` covers the
 downloads to depth `K`; nodes do not know it, and only `τ`, `γ` and `μ` are
 configured. The minimum wait bounds the rate of rounds; the proofs use it
@@ -471,26 +477,25 @@ blocks of its own on its disk the time before (`BuildsAboveDisk`) persists
 the last round it built, with its builds numbered by time.
 
 *Recovery.* Suppose every node crashed before `G`, and let `r` be the
-highest round on a correct node's disk. That node holds its block of round
-`r` and the block's references, a quorum of round `r − 1`; from `G` on it
-passes them on, and every correct node has built at round `r` or above by
+highest round on the disk of a node of `T`. That node holds its block of
+round `r` and the block's references, a quorum of round `r − 1`; from `G` on
+it passes them on, and every node of `T` has built at round `r` or above by
 `G + δ + max(τ, μ)`. From there the rounds advance as before. Keeping only
 the last round would not do: after a crash of all nodes, no node would hold
 a quorum of any round, and none could build again. Keeping only the last
 block would restart the rounds but not the ledger: the slots below it could
 no longer be decided.
 
-A quorum spreads. A quorum holds blocks of `f + 1` correct authors, so once
-a correct node holds a quorum of round `s` at a time `t ≥ G`, every correct
-node holds `f + 1` correct blocks of round `s` by `t + δ`, is behind, and
-has reached round `s`. A correct node's timer starts at a quorum, so a
-correct leader's block is built within `δ` of the start of every correct
-node's timer, and reaches the node within `2δ`: before the timer runs out
-when `τ ≥ 2δ`. The same holds for the votes of all correct validators two
-rounds above. A node that waited, or was behind, needs no timing argument:
-by induction on build times, a correct block built behind rests on an
-earlier correct block of its round, and eventually on one built on the wait
-or the timer, whose author referenced the leader block and carried the
+A quorum spreads. A quorum holds blocks of `f + 1` authors of `T`, so once
+a node of `T` holds a quorum of round `s` at a time `t ≥ G`, every node of
+`T` holds `f + 1` blocks of `T` of round `s` by `t + δ`, is behind, and has
+reached round `s`. A node's timer starts at a quorum, so the block of a
+leader of `T` is built within `δ` of the start of the timer of every node of
+`T`, and reaches the node within `2δ`: before the timer runs out when
+`τ ≥ 2δ`. The same holds for the votes of `T` two rounds above. A node that
+waited, or was behind, needs no timing argument: by induction on build
+times, a block of `T` built behind rests on an earlier block of `T` of its
+round, and eventually on one built on the wait or the timer, whose author referenced the leader block and carried the
 certificate it held; the node holds these references.
 
 **Theorem 7 (reactive nodes; `Reactive.Statement`).** A correct validator
@@ -514,10 +519,9 @@ Under the reactive rules from round `R` to round `N`:
 * *Nodes behind catch up within `δ`* (`Reactive.CatchesUp`). Once `f + 1`
   validators of `T` have built at a round at times from `G` to `t`, every
   validator of `T` has reached the round by `t + δ`.
-* *A reactive run starts* (`Reactive.Starts`). Let `R'` be the round after
-  the last round from `R` on that a block of `T` reached before `G + τ`, or
-  `R` if there is none. If `R' ≤ N`, the timeline is a reactive run from `R'`
-  to `N`, and every validator of `T` has reached `R'` within
+* *A reactive run starts* (`Reactive.Starts`). There is a round `R' ≥ R`,
+  either `R` or one above the round of a block of `T` built before `G + τ`,
+  such that, if `R' ≤ N`, the timeline is a reactive run from `R'` to `N`, and every validator of `T` has reached `R'` within
   `2δ + 2 max(τ, μ)` of `G + τ` and of the time all reached `R`.
 
 On a reactive run from round `R` to round `N`, at `δ < γ ≤ τ`, no node
@@ -568,10 +572,11 @@ leader outputs is lost (`Reactive.Durable`): every block of the available
 sub-DAG of a certified block is on the disk of a node of `T` from some time
 on, through any crash: a quorum of voters keeps the leader's history, and
 `f + 1` authors keep each block anchored below it, and either includes a node
-of `T`. Nodes that crash for good are therefore never needed. Together with `Resumes`, the ledger therefore resumes
-after any crash before `G`, of all nodes too, from slot `0`: the slots
-decided before the crash are decided again, alike, on the blocks the disks
-kept.
+of `T`. Nodes that crash for good are therefore never needed. With
+`Resumes`, and `Ledger` when nodes fetch, this argues that the ledger
+resumes after any crash before `G`, of all nodes too, from slot `0`: the
+slots decided before the crash are decided again, alike, on the blocks the
+disks kept. No single theorem states this.
 
 The bounds depend on the actual delay `δ` and the configured `γ` and `μ`,
 not on `τ`, except where a slot next to the round has a Byzantine leader;
@@ -582,16 +587,16 @@ their blocks, a node does not wait out the grace period. No bound depends on
 The rule for nodes behind is what lets nodes pass on only correct blocks. A
 single correct block built on the timer does not bring other nodes to its
 round within `δ`: its author's quorum may include Byzantine blocks that
-reached it alone. Its `f + 1` correct blocks do, through the rule.
+reached it alone. Its `f + 1` blocks of `T` do, through the rule.
 
-The grace period makes the run synchronous. A node that holds a quorum of
-round `r` at `t ≥ G` holds blocks of `f + 1` correct authors, so every
-correct node has built at round `r` by `t + δ`, and its block reaches the
-node by `t + 2δ`. A node building on the wait has held its quorum for `γ`,
-and one building on the timer for `τ`; with `γ, τ ≥ 2δ` it holds every
-correct block of round `r`, and references it. A node building behind holds
-a block of `T` of round `r + 1` built earlier, which references every
-correct block of round `r`, by induction on build times.
+The grace period makes the run synchronous. A node of `T` that holds a
+quorum of round `r` at `t ≥ G` holds blocks of `f + 1` authors of `T`, so
+every node of `T` has built at round `r` by `t + δ`, and its block reaches
+the node by `t + 2δ`. A node building on the wait has held its quorum for
+`γ`, and one building on the timer for `τ`; with `γ, τ ≥ 2δ` it holds every
+block of `T` of round `r`, and references it. A node building behind holds a
+block of `T` of round `r + 1` built earlier, which references every block of
+`T` of round `r`, by induction on build times.
 
 A witness (`LeanDagTest/KPartialDag/Reactive.lean`) shows that the premise is
 consistent: one correct validator building a chain of blocks, all held at

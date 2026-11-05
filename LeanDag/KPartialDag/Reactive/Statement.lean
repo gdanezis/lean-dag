@@ -25,9 +25,9 @@ Under the reactive rules, with every validator of `T` at round `R`
 * **nodes behind catch up within `δ`** (`CatchesUp`): once `f + 1`
   validators of `T` have built at a round, from `G` on, by `t`, every validator
   of `T` has reached the round by `t + δ`;
-* **a reactive run starts** (`Starts`): the round after the last round a
-  node of `T` reached before `G + τ` starts a reactive run (`ReactiveRun`),
-  reached within `2δ + 2 max τ μ` of `G + τ`.
+* **a reactive run starts** (`Starts`): `R`, or one above a round a node of
+  `T` reached before `G + τ`, starts a reactive run (`ReactiveRun`), reached
+  within `2δ + 2 max τ μ` of `G + τ`.
 
 On a reactive run from round `R` to round `N`, at `δ < γ ≤ τ`, where no
 node of `T` skips a round:
@@ -45,7 +45,7 @@ node of `T` skips a round:
   slot directly within that time of the last block of `T` at the slot's
   round;
 * **the run is synchronous** (`Synchronised`): at `2δ ≤ γ`, every block of `T`
-  from round `R + 2` to `N` references every block of `T` of the
+  from round `R + 1` to `N` references every block of `T` of the
   round below, so the inclusion results of `Order` apply;
 * **the ledger grows** (`Ledger`): when nodes of `T` fetch the available sub-DAG of
   the certified leaders they hold, every node of `T` eventually decides
