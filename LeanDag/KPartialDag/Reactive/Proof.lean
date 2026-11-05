@@ -45,7 +45,7 @@ theorem catchesUp : CatchesUp := by
   intro Validator BlockId Payload _ _ _ _ _ U tl T G δ τ γ μ R N h s t A hs hsN hA hcard hb
   obtain ⟨v, hv⟩ := Finset.card_pos.mp (by omega : 0 < A.card)
   obtain ⟨b₀, -, -, -, hG, ht⟩ := hb v hv
-  refine h.reachedBy_of_behind hs hsN (hG.trans ht) (hA.trans h.stable) hcard fun v hv => ?_
+  refine h.reachedBy_of_behind hs hsN (hG.trans ht) hA hcard fun v hv => ?_
   obtain ⟨b, hb, hbv, hbr, hGb, hbt⟩ := hb v hv
   have hbT : (U.block b).creator ∈ T := hbv ▸ hA hv
   exact ⟨_, hbT, b, h.mono _ hbT _ _ hGb hbt (h.own b hb (h.stable hbT)), hbv, hbr⟩
