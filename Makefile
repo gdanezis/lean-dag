@@ -4,9 +4,9 @@
 #
 #   make fast     library only, plus the sub-second checks          ~3s warm
 #   make check    both libraries, plus the sub-second checks        ~5s warm
-#   make deps     regenerate deps.tsv and the support diagrams       ~26s
+#   make deps     regenerate deps.tsv and the support diagrams       ~6s
 #   make pdf      the report PDF                                     ~2s
-#   make verify   everything, in the order a commit needs it        ~30s
+#   make verify   everything, in the order a commit needs it        ~15s
 #
 # `make fast` skips the witness layer (LeanDagTest) and the dependency
 # extraction.  A cold `make fast` is 119s against 325s for a cold `make
@@ -17,10 +17,9 @@
 # every theorem above it.
 #
 # `make deps` is separate because `scripts/DepGraph.lean` walks the whole
-# compiled environment and takes 25s, five to eight times an incremental
-# build.  Nothing it produces changes unless a declaration is added,
-# renamed or removed, so it does not belong in the loop.  Run it when the
-# set of declarations changes, and before a commit that adds any.
+# compiled environment.  Nothing it produces changes unless a declaration
+# is added, renamed or removed, so it does not belong in the loop.  Run it
+# when the set of declarations changes, and before a commit that adds any.
 
 .PHONY: fast check deps pdf verify clean-project help
 .DEFAULT_GOAL := help
@@ -41,7 +40,7 @@ check:
 
 ## deps: regenerate the dependency graph, after declarations change
 deps:
-	lake env lean scripts/DepGraph.lean > docs/depgraph/deps.tsv
+	lake env lean scripts/DepGraph.lean
 	python3 scripts/depgraph.py
 
 ## pdf: build the report

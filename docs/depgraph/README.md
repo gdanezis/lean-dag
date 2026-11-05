@@ -26,7 +26,7 @@ with no incoming arrow rests only on definitions and unlabelled lemmas.
 
 ## How it is built
 
-    lake env lean scripts/DepGraph.lean > docs/depgraph/deps.tsv
+    lake env lean scripts/DepGraph.lean
     python3 scripts/depgraph.py
 
 `deps.tsv` is not tracked: it is eight megabytes, changes with every

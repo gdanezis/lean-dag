@@ -178,7 +178,7 @@ it and require an empty diff — which regeneration being deterministic
 makes meaningful:
 
     lake build
-    lake env lean scripts/DepGraph.lean > docs/depgraph/deps.tsv
+    lake env lean scripts/DepGraph.lean
     scripts/extract-decls.py && scripts/gen-reference.py
     scripts/depgraph.py && scripts/svg2pdf.sh
     scripts/audit-report.py

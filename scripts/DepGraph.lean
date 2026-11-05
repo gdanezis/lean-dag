@@ -6,9 +6,13 @@ import LeanDagTest
 
 Walks the compiled environment and emits, for every `LeanDag`/`LeanDagTest`
 declaration, the constants it mentions — in its type *and* in its proof
-term. Run with
+term. Run from the repository root with
 
-    lake env lean scripts/DepGraph.lean > docs/depgraph/deps.tsv
+    lake env lean scripts/DepGraph.lean
+
+It writes `docs/depgraph/deps.tsv` itself rather than printing: output of
+`#eval` is captured as a message, and formatting a message of this size took
+minutes where the walk takes seconds.
 
 Output is tab-separated, two record kinds:
 
@@ -74,5 +78,4 @@ def usedConsts (ci : ConstantInfo) : NameSet :=
       for d in (usedConsts ci).toList do
         if keepName d && userName d != userName n then
           out := out.push s!"EDGE\t{userName n}\t{userName d}"
-  for line in out do
-    IO.println line
+  IO.FS.writeFile "docs/depgraph/deps.tsv" (String.intercalate "\n" out.toList ++ "\n")
