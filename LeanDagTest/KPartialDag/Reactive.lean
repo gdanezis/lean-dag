@@ -86,9 +86,8 @@ theorem waitsFor_chain {N r : ℕ} (hr : r < N) :
 theorem chain_run (N : ℕ) : ReactiveRun (chain N) (chainTimeline N) 0 0 0 0 N where
   held_ids _ _ := Finset.Subset.refl _
   mono _ _ _ _ _ := Finset.Subset.refl _
-  gossip _ _ _ _ _ _ := Finset.Subset.refl _
+  delivers _ hb _ _ _ _ _ _ := hb
   closed _ _ _ b hb j hj := (chain N).complete b hb j hj
-  own _ hb _ := hb
   causal _ _ _ _ _ _ := Nat.zero_le _
   prior _ _ _ _ _ _ hne := absurd rfl hne
   late _ _ _ _ := le_rfl

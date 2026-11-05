@@ -17,8 +17,9 @@ correct, so a correct node has built the round.
 
 A timeline follows the reactive rules from round `R` to round `N`
 (`ReactiveRules`) when correct nodes follow these rules there, reference
-the leader blocks and certificates they hold, and hold every block that
-another correct node holds at a time `t ≥ G` by `t + δ`. It is a reactive
+the leader blocks and certificates they hold, and hold every correct block
+built by a time `t ≥ G` by `t + δ`; they hold other blocks only as
+references of blocks they hold. It is a reactive
 run (`ReactiveRun`) when, in addition, the blocks of correct nodes from
 round `R` on are built at `G + τ` or later.
 
@@ -80,16 +81,13 @@ structure ReactiveRules (U : KRecord Validator BlockId Payload)
   held_ids : ∀ v t, tl.held v t ⊆ U.ids
   /-- A correct node keeps what it holds. -/
   mono : ∀ v ∈ (Correct : Finset Validator), ∀ t t', t ≤ t' → tl.held v t ⊆ tl.held v t'
-  /-- From `G` on, what a correct node holds every correct node holds `δ`
-  later. -/
-  gossip : ∀ u ∈ (Correct : Finset Validator), ∀ v ∈ (Correct : Finset Validator), ∀ t,
-    G ≤ t → tl.held u t ⊆ tl.held v (t + δ)
+  /-- From `G` on, a correct block built by `t` is held by every correct node
+  by `t + δ`. -/
+  delivers : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) →
+    ∀ v ∈ (Correct : Finset Validator), ∀ t, G ≤ t → tl.built b ≤ t → b ∈ tl.held v (t + δ)
   /-- A correct node holds the references of the blocks it holds. -/
   closed : ∀ v ∈ (Correct : Finset Validator), ∀ t, ∀ b ∈ tl.held v t,
     (U.block b).refs ⊆ tl.held v t
-  /-- A correct author holds its block once built. -/
-  own : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) →
-    b ∈ tl.held (U.block b).creator (tl.built b)
   /-- A correct node holds a correct block only once it is built. -/
   causal : ∀ v ∈ (Correct : Finset Validator), ∀ t, ∀ b ∈ tl.held v t,
     (U.block b).creator ∈ (Correct : Finset Validator) → tl.built b ≤ t

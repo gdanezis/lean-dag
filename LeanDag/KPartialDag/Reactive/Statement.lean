@@ -12,7 +12,7 @@ import LeanDag.KPartialDag.Model.Reactive
   validator has built at the round by `t + δ`;
 * **a reactive run starts** (`Starts`): the round after the last round a
   correct node reached before `G + τ` starts a reactive run (`ReactiveRun`),
-  built within `2δ + τ` of `G + τ`.
+  built within `2δ + 2τ` of `G + τ`.
 
 On a reactive run from round `R` to round `N`:
 
@@ -65,7 +65,7 @@ def CatchesUp : Prop :=
 round `N`, there is a round `R' ≥ R`, either `R` or one above a round that a
 correct block reached before `G + τ`, such that, if `R' ≤ N`, the timeline
 is a reactive run from `R'` to `N`, and every correct validator has built at
-`R'` within `2δ + τ` of `G + τ` and of the time all built at `R`. -/
+`R'` within `2δ + 2τ` of `G + τ` and of the time all built at `R`. -/
 def Starts : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [DecidableEq BlockId] [Slots Validator]
@@ -74,7 +74,7 @@ def Starts : Prop :=
       (R' = R ∨ ∃ x ∈ U.ids, (U.block x).creator ∈ (Correct : Finset Validator) ∧
         (U.block x).round + 1 = R' ∧ tl.built x < G + τ) ∧
       (R' ≤ N → ReactiveRun U tl G δ τ R' N ∧
-        ∀ t₀, BuiltBy U tl R t₀ → BuiltBy U tl R' (max t₀ (G + τ) + 2 * δ + τ))
+        ∀ t₀, BuiltBy U tl R t₀ → BuiltBy U tl R' (max t₀ (G + τ) + 2 * δ + 2 * τ))
 
 /-- **Each round within `δ + τ`**: once every correct validator has built at
 round `s`, from `R` to below `N`, by `t`, every correct validator has built at round `s + 1` by

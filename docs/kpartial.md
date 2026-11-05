@@ -399,22 +399,27 @@ round.
 A timeline follows the *reactive rules* from round `R` to round `N`
 (`ReactiveRules`) when correct nodes follow these rules there, keep what they
 hold with its references, hold a correct block only once it is built, and
-another author's correct block only after it is built, and from a time `G`
-on hold everything another correct node holds `δ` later; every correct
-validator has a block at round `R`. It is a *reactive run* (`ReactiveRun`)
+another author's correct block only after it is built; every correct
+validator has a block at round `R`. From a time `G` on, every correct node
+holds a correct block `δ` after it is built. Nodes pass on only correct
+blocks: a Byzantine block reaches a node only among the references of a
+block it holds, which it fetches from the node that sent it. It is a *reactive run* (`ReactiveRun`)
 when, in addition, its correct blocks from round `R` on are built at `G + τ`
 or later. The delay `δ` covers the downloads to depth `K`; nodes do not know
 it, and only the timeout `τ` is configured.
 
-The wait spreads. A correct block of round `s + 1` shows that its author held,
-at its build time `t`, what it waits for, or a quorum at `t − τ`, or a
-correct block of round `s + 1` built before `t`; in the last case the same
-holds of that block, which was built earlier. Every correct node holds the
-same `δ` later, so every correct node has built at round `s + 1` by `t + δ`. Hence a correct leader's block, which is built
-within `δ` of any correct block of its round, reaches every correct node
-within `2δ` of the quorum that starts its timer, and so before the timer
-runs out when `τ ≥ 2δ`. The same holds for the votes of all correct
-validators two rounds above.
+A quorum spreads. A quorum holds blocks of `f + 1` correct authors, so once
+a correct node holds a quorum of round `s` at a time `t ≥ G`, every correct
+node holds `f + 1` correct blocks of round `s` by `t + δ`, is behind, and
+has built at round `s`. A correct node's timer starts at a quorum, so a
+correct leader's block is built within `δ` of the start of every correct
+node's timer, and reaches the node within `2δ`: before the timer runs out
+when `τ ≥ 2δ`. The same holds for the votes of all correct validators two
+rounds above. A node that waited, or was behind, needs no timing argument:
+by induction on build times, a correct block built behind rests on an
+earlier correct block of its round, and eventually on one built on the wait
+or the timer, whose author referenced the leader block and carried the
+certificate it held; the node holds these references.
 
 **Theorem 7 (reactive nodes; `Reactive.Statement`).** Under the reactive
 rules from round `R` to round `N`:
@@ -427,7 +432,7 @@ rules from round `R` to round `N`:
 * *A reactive run starts* (`Reactive.Starts`). Let `R'` be the round after
   the last round from `R` on that a correct block reached before `G + τ`, or
   `R` if there is none. If `R' ≤ N`, the timeline is a reactive run from `R'`
-  to `N`, and every correct validator has built at `R'` within `2δ + τ` of
+  to `N`, and every correct validator has built at `R'` within `2δ + 2τ` of
   `G + τ` and of the time all built at `R`.
 
 On a reactive run from round `R` to round `N`:
@@ -451,17 +456,10 @@ The bounds depend on the actual delay `δ`, not on `τ`, except where a slot
 next to the round has a Byzantine leader; there a round costs at most
 `δ + τ`. No bound depends on `K`.
 
-A node behind may build without the leader block of its round. The bounds
-hold nonetheless: by induction on build times, a correct block built behind
-rests on a correct block of its round built earlier, and eventually on one
-built on the wait or the timer, whose author referenced the leader block
-and the certificate it held; the node behind holds these references. The
-rule matters before `G + τ`. A correct block built at `t ≥ G + τ` brings
-every correct node to its round by `t + δ` without the rule, since its
-author's wait rests on blocks held at `t − τ ≥ G` or later, which every
-correct node holds `δ` later; at an earlier `t` the timers of other nodes
-may still have up to `τ` to run. With the rule,
-`f + 1` correct blocks at `t ≥ G` suffice (`CatchesUp`).
+The rule for nodes behind is what lets nodes pass on only correct blocks. A
+single correct block built on the timer does not bring other nodes to its
+round within `δ`: its author's quorum may include Byzantine blocks that
+reached it alone. Its `f + 1` correct blocks do, through the rule.
 
 A witness (`LeanDagTest/KPartialDag/Reactive.lean`) shows that the premise is
 consistent: one correct validator building a chain of blocks, all held at
