@@ -589,3 +589,7 @@ import LeanDag.KPartialDag.Model.Bounds
 import LeanDag.KPartialDag.Helpers.Bounds
 import LeanDag.KPartialDag.Bounds.Statement
 import LeanDag.KPartialDag.Bounds.Proof
+import LeanDag.KPartialDag.Model.Reactive
+import LeanDag.KPartialDag.Helpers.Reactive
+import LeanDag.KPartialDag.Reactive.Statement
+import LeanDag.KPartialDag.Reactive.Proof

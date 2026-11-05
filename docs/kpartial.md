@@ -170,12 +170,12 @@ With Theorem 3, every correct node eventually decides every slot, and all
 decide each slot alike. Under three-round spacing `c = 1`; with one slot a
 round, `c = 3`.
 
-Responsiveness is a premise on the record. That a node's waiting rule
-produces it, and does so within a few message delays after synchrony with
-a timeout only for Byzantine leaders, needs a model of time; it is not
-formalised. The order's inclusion results (Theorem 5) still assume
-synchrony: they need every block of `T` to be referenced, which a node that
-builds as soon as it holds a certificate does not ensure.
+The order's inclusion results (Theorem 5) still assume synchrony: they need
+every block of `T` to be referenced, which a node that builds as soon as it
+holds a certificate does not ensure.
+
+Theorem 7 (§11) shows that nodes following a waiting rule produce
+responsiveness after synchrony.
 
 ## 7. The order
 
@@ -257,6 +257,10 @@ propose its payload again.
 | 6 Builds | building needs the last `K + 1` rounds | — |
 | 6 Resumes | the ledger resumes from the band from `D + K` rounds below | `K ≥ 3` |
 | 6 Counts, Window, AvailRound | `n` blocks a round without equivocation; with it, `≈ |C| f^(K−1)` per history and `≈ |C| f^(K+1)` per round of the available sub-DAG | — |
+| 7 Built, Slow | every round is built, each within `δ + τ` | reactive run |
+| 7 Fast | a round next to correct leaders takes `δ` | reactive run, `τ ≥ 2δ` |
+| 7 Responsive | the run is responsive among the correct validators | reactive run, `τ ≥ 2δ` |
+| 7 Commits | a slot among correct leaders commits within `3δ` | reactive run, `τ ≥ 2δ` |
 
 ## 9. Why a K-partial DAG
 
@@ -373,7 +377,65 @@ to avoid equivocation after a restart, which needs a model of validators
 over time; and how long correct nodes must retain a band, which needs a
 quantitative liveness bound or a state transfer.
 
-## 11. Open questions
+## 11. Reactive nodes in time
+
+Responsiveness is a premise on the record; a model of time shows that the
+waiting rule produces it. A *timeline* gives the blocks each validator holds
+at each time, with their histories to depth `K`, and the time each block was
+built (`Timeline`). A correct node builds above round `r` once it holds what
+it waits for (`WaitsFor`): blocks of a quorum of distinct authors at round
+`r` (`QuorumIn`), a leader block of every slot at round `r`, and a
+certificate for a leader block of every slot at round `r − 1` (`CertIn`). It
+also builds once it has held a quorum of round `r` for a timeout `τ`. Its
+block references the leader blocks it holds one round below, and carries a
+certificate for a leader two rounds below when it holds one.
+
+A *reactive run* from round `R` to round `N` (`ReactiveRun`) is a timeline on
+which correct nodes follow this rule, keep what they hold with its
+references, hold a correct block only once it is built, and from a time `G`
+on hold everything another correct node holds `δ` later. Its correct blocks
+from round `R` on are built at `G + τ` or later, and every correct validator
+has a block at round `R`. The delay `δ` covers the downloads to depth `K`;
+nodes do not know it, and only the timeout `τ` is configured.
+
+The wait spreads. A correct block of round `s + 1` shows that its author held,
+at its build time `t`, what it waits for, or a quorum at `t − τ`; every
+correct node holds the same `δ` later, so every correct node has built at
+round `s + 1` by `t + δ`. Hence a correct leader's block, which is built
+within `δ` of any correct block of its round, reaches every correct node
+within `2δ` of the quorum that starts its timer, and so before the timer
+runs out when `τ ≥ 2δ`. The same holds for the votes of all correct
+validators two rounds above.
+
+**Theorem 7 (reactive nodes; `Reactive.Statement`).** On a reactive run from
+round `R` to round `N`:
+
+* *Every round is built* (`Reactive.Built`, `Reactive.Slow`). Every correct
+  validator has a block at every round from `R` to `N`, each round within
+  `δ + τ` of the last correct block of the round below.
+* *Rounds led by correct validators take `δ`* (`Reactive.Fast`). At
+  `τ ≥ 2δ`, when the slots of a round `s ≥ R + 2` and of the round below have
+  correct leaders, every correct validator builds above `s` within `δ` of the
+  last correct block of round `s`; no correct node waits for its timeout.
+* *The run is responsive* (`Reactive.Responsive`). At `τ ≥ 2δ`, the record is
+  responsive among the correct validators from round `R + 1` to `N`, so
+  Theorem 4 applies with `T` the correct validators.
+* *A slot led by correct validators commits within `3δ`*
+  (`Reactive.Commits`). At `τ ≥ 2δ`, when every slot from one round below a
+  slot at round `r ≥ R + 2` to one round above it has a correct leader, every
+  correct node commits the slot directly on what it holds `3δ` after the
+  last correct block of round `r`.
+
+The bounds depend on the actual delay `δ`, not on `τ`, except where a slot
+next to the round has a Byzantine leader; there a round costs at most
+`δ + τ`. No bound depends on `K`.
+
+A witness (`LeanDagTest/KPartialDag/Reactive.lean`) shows that the premise is
+consistent: one correct validator building a chain of blocks, all held at
+time `0`, is a reactive run, and `Reactive.Commits` decides its slots. It
+exercises none of the timing, since its delay is `0`.
+
+## 12. Open questions
 
 * Bounds: the cost of fetching the sub-DAG, and how long correct nodes must
   keep the histories they downloaded.
@@ -384,10 +446,9 @@ quantitative liveness bound or a state transfer.
   below it.
 * A storage bound linear in `K` under equivocation, which needs a rule for
   equivocating authors (§10).
-* Responsiveness in time: that the waiting rule of §6 produces
-  `RespondsFrom` within a few message delays after synchrony, with a timeout
-  only for Byzantine leaders, and with the downloads to depth `K` inside the
-  round.
+* Reactive runs from the start: Theorem 7 assumes a round `R` whose correct
+  blocks are all built `τ` after synchrony and which every correct validator
+  builds; that some such round exists after synchrony is not formalised.
 * Quantitative liveness, which a retention bound needs.
 * Crash recovery: that persisting the last round built suffices, with a
   model of validators over time.
