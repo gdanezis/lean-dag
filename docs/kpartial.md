@@ -282,6 +282,7 @@ built before.
 | 7 Durable | every block of a certified block's available sub-DAG stays on the disk of a node of `T` | `T` a quorum of correct nodes, histories to depth `K` on disk |
 | 8 Closes | every node of `T` decides every slot up to the last commit | reactive run, `2δ ≤ γ`, `δ < γ ≤ τ`, `K ≥ 3`, fetching, a fair schedule, a `T` slot every `D` rounds, `T` declares closure |
 | 8 Serves | a node holding what a node at the last commit holds reaches it alike | that node fetched below its committed leaders |
+| 8 Agrees | two nodes reach one last commit with one ledger | `K ≥ 3`, fetched below committed leaders |
 
 ## 9. Why a K-partial DAG
 
@@ -605,6 +606,12 @@ and serves the blocks it holds after it stops.
   the links only gain, and an indirect skip reads a sub-DAG fetched below
   the slot, which is the record's; a leader's output read once fetched is
   the record's (`Order.Local`).
+* *Nodes agree on the last commit* (`Close.Agrees`). At `K ≥ 3`, two nodes
+  that have each decided every slot up to their last commit, and fetched
+  each leader they commit down to `D` rounds below it, have the same last
+  commit and the same ledger after it. By `Order.Agrees` they have one
+  ledger after every count of slots both have decided, so closure reads
+  alike, and the least count at which it holds is the same.
 
 Together these argue for a rule for stopping: a validator of `T` builds
 until it has decided the last commit. If none stops before the run reaches
@@ -617,9 +624,8 @@ the premises of `Closes` (`t_closes`).
 
 ## 13. Open questions
 
-* Agreement on the last commit, which `Order.Agrees` suggests, and what
-  happens to payloads entering after it, which must be proposed again in
-  the next channel.
+* Payloads entering the ledger after the last commit, which must be
+  proposed again in the next channel.
 * Bounds: the cost of fetching the sub-DAG, and how long correct nodes must
   keep the histories on disk within a channel; they keep them for ever
   here, and a bound needs the time bound for the ledger below.

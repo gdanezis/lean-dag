@@ -5,7 +5,8 @@ import LeanDag.KPartialDag.Helpers.Bounds
 # Closing the channel — helpers
 
 `docs/kpartial.md` §12. A node's decisions hold on more blocks
-(`NodeDecided.mono`), and with them its last commit (`closesAfter_mono`); on
+(`NodeDecided.mono`), and with them its last commit (`closesAfter_mono`); two
+nodes reach one last commit with one ledger (`closesAfter_agree`); on
 a reactive run where `T` declares the channel closed, every node of `T`
 reaches the last commit (`exists_closesAfter`).
 -/
@@ -84,6 +85,35 @@ theorem closesAfter_mono (hH : H ⊆ H') (hH' : H' ⊆ U.ids) {closes : Payload 
     (hc : ClosesAfter U K H D closes g n) : ClosesAfter U K H' D closes g n :=
   ⟨(closedIn_iff_of_mono hH hH' h le_rfl).mp hc.1, fun m hm hm' =>
     hc.2 m hm ((closedIn_iff_of_mono hH hH' h hm.le).mpr hm')⟩
+
+/-- Two nodes read closure alike after slots they have both decided, at
+`K ≥ 3`. -/
+theorem closedIn_iff_of_agree (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
+    (hH₂ : H₂ ⊆ U.ids) {closes : Payload → Prop} {g₁ g₂ : ℕ → Option BlockId} {n₁ n₂ m : ℕ}
+    (h₁ : DecidesBelow U K H₁ D g₁ n₁) (h₂ : DecidesBelow U K H₂ D g₂ n₂) (hm₁ : m ≤ n₁)
+    (hm₂ : m ≤ n₂) : ClosedIn U K H₁ D closes g₁ m ↔ ClosedIn U K H₂ D closes g₂ m := by
+  have heq := (ledgerIn_agree (D := D) hK hH₁ hH₂ (n := m) (fun k hk => (h₁ k (by omega)).1)
+    (fun k hk => (h₂ k (by omega)).1) (fun k L hk => (h₁ k (by omega)).2 L)
+    (fun k L hk => (h₂ k (by omega)).2 L)).1
+  unfold ClosedIn
+  rw [heq]
+
+/-- **Two nodes reach one last commit with one ledger**, at `K ≥ 3`. -/
+theorem closesAfter_agree (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
+    (hH₂ : H₂ ⊆ U.ids) {closes : Payload → Prop} {g₁ g₂ : ℕ → Option BlockId} {n₁ n₂ : ℕ}
+    (h₁ : DecidesBelow U K H₁ D g₁ n₁) (hc₁ : ClosesAfter U K H₁ D closes g₁ n₁)
+    (h₂ : DecidesBelow U K H₂ D g₂ n₂) (hc₂ : ClosesAfter U K H₂ D closes g₂ n₂) :
+    n₁ = n₂ ∧ LedgerIn U K H₁ D g₁ n₁ = LedgerIn U K H₂ D g₂ n₂ := by
+  have hn : n₁ = n₂ := by
+    rcases lt_trichotomy n₁ n₂ with hlt | heq | hlt
+    · exact absurd ((closedIn_iff_of_agree hK hH₁ hH₂ h₁ h₂ le_rfl hlt.le).mp hc₁.1)
+        (hc₂.2 n₁ hlt)
+    · exact heq
+    · exact absurd ((closedIn_iff_of_agree hK hH₁ hH₂ h₁ h₂ hlt.le le_rfl).mpr hc₂.1)
+        (hc₁.2 n₂ hlt)
+  subst hn
+  exact ⟨rfl, (ledgerIn_agree hK hH₁ hH₂ (fun k hk => (h₁ k hk).1) (fun k hk => (h₂ k hk).1)
+    (fun k L hk => (h₁ k hk).2 L) (fun k L hk => (h₂ k hk).2 L)).1⟩
 
 variable {tl : Timeline Validator BlockId} {T : Finset Validator} {G δ τ γ μ R N : ℕ}
 

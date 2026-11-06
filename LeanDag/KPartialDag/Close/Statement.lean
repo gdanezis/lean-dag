@@ -4,7 +4,8 @@ import LeanDag.KPartialDag.Model.Close
 
 `docs/kpartial.md` §12, Theorem 8: when the validators of `T` declare the
 channel closed, every node of `T` reaches the last commit on a reactive
-run, and a node holding what such a node holds reaches it alike.
+run, a node holding what such a node holds reaches it alike, and two nodes
+reach one last commit with one ledger.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -45,8 +46,21 @@ def Serves : Prop :=
     DecidesBelow U K H D g n → ClosesAfter U K H D closes g n →
     DecidesBelow U K H' D g n ∧ ClosesAfter U K H' D closes g n
 
+/-- **Nodes agree on the last commit**: at `K ≥ 3`, two nodes that have each
+decided every slot up to their last commit, and fetched each leader they
+commit down to `D` rounds below it, have the same last commit and the same
+ledger after it. -/
+def Agrees : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [DecidableEq BlockId] [Slots Validator]
+    (U : KRecord Validator BlockId Payload) (K D : ℕ) (H₁ H₂ : Finset BlockId)
+    (closes : Payload → Prop) (g₁ g₂ : ℕ → Option BlockId) (n₁ n₂ : ℕ), 3 ≤ K →
+    H₁ ⊆ U.ids → H₂ ⊆ U.ids → DecidesBelow U K H₁ D g₁ n₁ → ClosesAfter U K H₁ D closes g₁ n₁ →
+    DecidesBelow U K H₂ D g₂ n₂ → ClosesAfter U K H₂ D closes g₂ n₂ →
+    n₁ = n₂ ∧ LedgerIn U K H₁ D g₁ n₁ = LedgerIn U K H₂ D g₂ n₂
+
 /-- Closing the channel. -/
-def Statement : Prop := Closes ∧ Serves
+def Statement : Prop := Closes ∧ Serves ∧ Agrees
 
 end Close
 
