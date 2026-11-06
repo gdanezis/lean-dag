@@ -13,7 +13,7 @@ namespace LeanDag
 namespace KPartialDag
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
-variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
+variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 
 /-- **What a committed leader `L` outputs**: the blocks of its available
 sub-DAG at most `D` rounds below it. -/
@@ -40,19 +40,19 @@ def EntersIn (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset Block
 
 /-- **The position of a block within one slot's output**: its round, then
 its author, then its id, in lexicographic order. -/
-def slotKey [LinearOrder Validator] [LinearOrder BlockId] (U : KRecord Validator BlockId Payload)
+def slotKey [LinearOrder Validator] (U : KRecord Validator BlockId Payload)
     (b : BlockId) : Lex (ℕ × Lex (Validator × BlockId)) :=
   toLex ((U.block b).round, toLex ((U.block b).creator, b))
 
 /-- `b` comes before `b'` within one slot's output. -/
-def KeyLt [LinearOrder Validator] [LinearOrder BlockId] (U : KRecord Validator BlockId Payload)
+def KeyLt [LinearOrder Validator] (U : KRecord Validator BlockId Payload)
     (b b' : BlockId) : Prop :=
   slotKey U b < slotKey U b'
 
 /-- **`b` precedes `b'` in a node's ledger** after slots `0, …, n-1`: it
 enters at an earlier slot, or at the same slot and before `b'` within the
 slot. -/
-def PrecedesIn [LinearOrder Validator] [LinearOrder BlockId]
+def PrecedesIn [LinearOrder Validator]
     (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (D : ℕ)
     (g : ℕ → Option BlockId) (n : ℕ) (b b' : BlockId) : Prop :=
   ∃ k k', k < n ∧ k' < n ∧ EntersIn U K H D g b k ∧ EntersIn U K H D g b' k' ∧

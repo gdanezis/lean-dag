@@ -25,7 +25,7 @@ slot `b` such that, if the run reaches round `σ(b + c − 1) + 2`, every node
 of `T` at one time has decided every slot up to its last commit. -/
 def Closes : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] [S : Slots Validator]
+    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (G δ τ γ μ R N K D Δ c r₀ : ℕ) (closes : Payload → Prop),
     ReactiveRun U tl T G δ τ γ μ R N → 2 * δ ≤ γ → δ < γ → γ ≤ τ → 3 ≤ K →
@@ -40,7 +40,7 @@ what a node that decided every slot up to its last commit holds decides
 those slots alike and reaches the same last commit. -/
 def Serves : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] [Slots Validator]
+    [Faults Validator] [LinearOrder BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (K D : ℕ) (H H' : Finset BlockId)
     (closes : Payload → Prop) (g : ℕ → Option BlockId) (n : ℕ), H ⊆ H' → H' ⊆ U.ids →
     DecidesBelow U K H D g n → ClosesAfter U K H D closes g n →
@@ -52,7 +52,7 @@ commit down to `D` rounds below it, have the same last commit and the same
 ledger after it. -/
 def Agrees : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] [Slots Validator]
+    [Faults Validator] [LinearOrder BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (K D : ℕ) (H₁ H₂ : Finset BlockId)
     (closes : Payload → Prop) (g₁ g₂ : ℕ → Option BlockId) (n₁ n₂ : ℕ), 3 ≤ K →
     H₁ ⊆ U.ids → H₂ ⊆ U.ids → DecidesBelow U K H₁ D g₁ n₁ → ClosesAfter U K H₁ D closes g₁ n₁ →

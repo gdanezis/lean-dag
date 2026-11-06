@@ -13,7 +13,7 @@ namespace LeanDag
 namespace KPartialDag
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
-variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
+variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 
 /-- **References among `T` from round `R` to round `N`**: every block of `T`
 at a round from `R + 1` to `N` references every block of `T` of the round

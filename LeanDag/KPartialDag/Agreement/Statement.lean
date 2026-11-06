@@ -18,14 +18,14 @@ namespace Agreement
 /-- **The laws of an anchored rule** hold of the commit rule at `K ≥ 3`. -/
 def Laws : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] (K : ℕ), 3 ≤ K →
+    [Faults Validator] [LinearOrder BlockId] (K : ℕ), 3 ≤ K →
     (kRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) K).Laws
 
 /-- **Two views decide each slot alike**: at `K ≥ 3`, decisions of a slot
 by the commit rule on two views of one record are equal. -/
 def Agrees : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] [S : Slots Validator]
+    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator]
     (U : KRecord Validator BlockId Payload) (K : ℕ) (V₁ V₂ : U.View) (k : ℕ)
     (v₁ v₂ : Option BlockId), 3 ≤ K → (kRule K).Decided (S := S) U V₁ k v₁ →
     (kRule K).Decided (S := S) U V₂ k v₂ → v₁ = v₂

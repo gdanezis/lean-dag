@@ -17,12 +17,12 @@ theorem local_ : Local := by
   exact ⟨outIn_subset, outIn_eq hH⟩
 
 theorem agrees : Agrees := by
-  intro Validator BlockId Payload _ _ _ _ _ _ _ U K D H₁ H₂ g₁ g₂ n n' hK hH₁ hH₂ hn h₁ h₂ hf₁ hf₂
+  intro Validator BlockId Payload _ _ _ _ _ _ U K D H₁ H₂ g₁ g₂ n n' hK hH₁ hH₂ hn h₁ h₂ hf₁ hf₂
   obtain ⟨hl, he⟩ := ledgerIn_grows hK hH₁ hH₂ hn h₁ h₂ hf₁ hf₂
   exact ⟨hl, he, fun b b' h => precedesIn_grows hK hH₁ hH₂ hn h₁ h₂ hf₁ hf₂ h⟩
 
 theorem total : Total := by
-  intro Validator BlockId Payload _ _ _ _ _ _ U K D H g n
+  intro Validator BlockId Payload _ _ _ _ _ U K D H g n
   exact ⟨precedesIn_irrefl, fun _ _ _ => precedesIn_trans,
     fun _ hb _ hb' hne => precedesIn_total hb hb' hne,
     fun _ _ _ hb h hk he he' => precedesIn_of_ref hb h hk he he'⟩

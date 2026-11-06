@@ -50,6 +50,9 @@ theorem ne_three_iff {w : Fin 4} : w ≠ 3 ↔ w.val ≠ 3 := by
 /-- A block id: a round and an author. -/
 abbrev Id := ℕ × Fin 4
 
+/-- Block ids in lexicographic order, for the tie-break. -/
+instance : LinearOrder Id := inferInstanceAs (LinearOrder (Lex (ℕ × Fin 4)))
+
 /-- Block `(r, v)` references the blocks of the correct validators at round
 `r − 1`. -/
 def tBlock (b : Id) : Block (Fin 4) Id Unit :=

@@ -12,7 +12,7 @@ namespace LeanDag
 namespace KPartialDag
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
-variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
+variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 variable {U : KRecord Validator BlockId Payload}
 
 /-- **Two certificates for blocks of one author at one round certify one

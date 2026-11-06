@@ -20,7 +20,7 @@ blocks agree on `H`, the indirect test and the fetch test read on `H` hold
 alike. -/
 def Local : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] (U U' : KRecord Validator BlockId Payload) (K : ℕ)
+    [Faults Validator] [LinearOrder BlockId] (U U' : KRecord Validator BlockId Payload) (K : ℕ)
     (H : Finset BlockId) (A L : BlockId) (r ρ : ℕ), (∀ i ∈ H, U.block i = U'.block i) →
     (LinkedIn U K H A L r ↔ LinkedIn U' K H A L r) ∧
       (FetchedIn U K H A ρ ↔ FetchedIn U' K H A ρ)
@@ -29,7 +29,7 @@ def Local : Prop :=
 down to `ρ`**, for an anchor of the record at or above round `ρ`. -/
 def Fetchable : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
+    [Faults Validator] [LinearOrder BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
     (H : Finset BlockId) (A : BlockId) (ρ : ℕ), A ∈ U.ids → ρ ≤ (U.block A).round →
     (∀ z ∈ Avail U K A, ρ ≤ (U.block z).round + K → z ∈ H) → FetchedIn U K H A ρ
 
@@ -37,7 +37,7 @@ def Fetchable : Prop :=
 node holds. -/
 def Sound : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] [S : Slots Validator]
+    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator]
     (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (V : U.View) (k : ℕ)
     (v : Option BlockId), H ⊆ U.ids → H ⊆ V.ids → NodeDecided U K H k v →
     (kRule K).Decided (S := S) U V k v
@@ -45,7 +45,7 @@ def Sound : Prop :=
 /-- **Two nodes decide each slot alike**, at `K ≥ 3`. -/
 def Agrees : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] [Slots Validator]
+    [Faults Validator] [LinearOrder BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (K : ℕ) (H₁ H₂ : Finset BlockId) (k : ℕ)
     (v₁ v₂ : Option BlockId), 3 ≤ K → H₁ ⊆ U.ids → H₂ ⊆ U.ids →
     NodeDecided U K H₁ k v₁ → NodeDecided U K H₂ k v₂ → v₁ = v₂

@@ -20,7 +20,7 @@ a certificate, every block of the available sub-DAG is held by a correct
 node. -/
 def Held : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
+    [Faults Validator] [LinearOrder BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
     (A : BlockId) (r : ℕ), A ∈ U.ids →
     (certificatesAt U (IsVote U) (quorumCard Validator) A r).Nonempty →
     Avail U K A ⊆ CorrectHeld U K
@@ -29,7 +29,7 @@ def Held : Prop :=
 holds an anchored block of a correct author. -/
 def Broad : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
+    [Faults Validator] [LinearOrder BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
     (A : BlockId) (ρ : ℕ), 2 ≤ K → A ∈ U.ids → ρ + 2 ≤ (U.block A).round →
     ∃ x ∈ U.ids, (U.block x).round = ρ ∧ (U.block x).creator ∈ (Correct : Finset Validator) ∧
       AnchoredBelow U K A x
@@ -39,7 +39,7 @@ block at round `r + 3` or above, the sub-DAG holds a certificate for a
 directly committed round-`r` block, with its references. -/
 def Linked : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
+    [Faults Validator] [LinearOrder BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
     (A L : BlockId) (r : ℕ), 3 ≤ K → A ∈ U.ids → r + 3 ≤ (U.block A).round →
     DirectCommit U L r → AvailLinked U K A L r
 
@@ -47,7 +47,7 @@ def Linked : Prop :=
 certificate is not directly skipped. -/
 def Exclusive : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
+    [Faults Validator] [LinearOrder BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
     (A L : BlockId) (r : ℕ), AvailLinked U K A L r → ¬ DirectSkip U L r
 
 /-- The available sub-DAG. -/

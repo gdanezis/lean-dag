@@ -16,18 +16,18 @@ namespace LeanDag
 namespace KPartialDag
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
-variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
+variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 variable [S : Slots Validator]
 variable {U : KRecord Validator BlockId Payload} {tl : Timeline Validator BlockId}
 variable {T : Finset Validator}
 variable {G δ τ γ μ R N : ℕ}
 
-omit [DecidableEq BlockId] S in
+omit [LinearOrder BlockId] S in
 theorem creatorsOf_filter_mono {H H' : Finset BlockId} (hH : H ⊆ H') (p : BlockId → Prop)
     [DecidablePred p] : creatorsOf U.block (H.filter p) ⊆ creatorsOf U.block (H'.filter p) :=
   Finset.image_subset_image (Finset.filter_subset_filter _ hH)
 
-omit [DecidableEq BlockId] S in
+omit [LinearOrder BlockId] S in
 theorem quorumIn_mono {H H' : Finset BlockId} (hH : H ⊆ H') {r : ℕ} (h : QuorumIn U H r) :
     QuorumIn U H' r :=
   le_trans h (Finset.card_le_card (creatorsOf_filter_mono hH _))
@@ -47,7 +47,7 @@ theorem waitsFor_mono {H H' : Finset BlockId} (hH : H ⊆ H') {r : ℕ} (h : Wai
   · obtain ⟨L, hlead, hcert⟩ := hc k hk
     exact ⟨L, hlead, certIn_mono hH hcert⟩
 
-omit [DecidableEq BlockId] S in
+omit [LinearOrder BlockId] S in
 /-- A set of blocks with a block by every validator of a quorum `T` reaches a
 quorum. -/
 theorem quorum_le_of_mem (hT : quorumCard Validator ≤ T.card) {X : Finset BlockId}
@@ -57,7 +57,7 @@ theorem quorum_le_of_mem (hT : quorumCard Validator ≤ T.card) {X : Finset Bloc
     obtain ⟨y, hy, hyw⟩ := h w hw
     exact mem_creatorsOf.mpr ⟨y, hy, hyw⟩)
 
-omit [DecidableEq BlockId] S in
+omit [LinearOrder BlockId] S in
 /-- A set of blocks whose authors reach a quorum holds a block by a validator
 of a quorum `T`. -/
 theorem exists_mem_of_quorum (hT : quorumCard Validator ≤ T.card) {X : Finset BlockId}
@@ -81,7 +81,7 @@ theorem exists_mem_of_card (hT : quorumCard Validator ≤ T.card) {A : Finset Va
   have := F.card_validators
   omega
 
-omit [DecidableEq BlockId] S in
+omit [LinearOrder BlockId] S in
 /-- Blocks behind for `v` include a block of round `r + 1` by another author
 of a quorum `T`. -/
 theorem exists_mem_of_behindIn (hT : quorumCard Validator ≤ T.card) {H : Finset BlockId}
@@ -94,19 +94,19 @@ theorem exists_mem_of_behindIn (hT : quorumCard Validator ≤ T.card) {H : Finse
   obtain ⟨hyH, hyr⟩ := Finset.mem_filter.mp hy
   exact ⟨y, hyH, hyr, hyw ▸ hwT, hyw ▸ hwv⟩
 
-omit [DecidableEq BlockId] S in
+omit [LinearOrder BlockId] S in
 theorem reachedBy_mono {s t t' : ℕ} (hb : ReachedBy U tl T s t) (ht : t ≤ t') :
     ReachedBy U tl T s t' := fun v hv => by
   obtain ⟨b, hb, hbv, hbr, hbt⟩ := hb v hv
   exact ⟨b, hb, hbv, hbr, hbt.trans ht⟩
 
-omit [DecidableEq BlockId] S in
+omit [LinearOrder BlockId] S in
 theorem BuiltBy.reachedBy {s t : ℕ} (hb : BuiltBy U tl T s t) : ReachedBy U tl T s t :=
   fun v hv => by
     obtain ⟨b, hb, hbv, hbr, hbt⟩ := hb v hv
     exact ⟨b, hb, hbv, hbr.ge, hbt⟩
 
-omit [DecidableEq BlockId] S in
+omit [LinearOrder BlockId] S in
 /-- A block of round `s + 1` references blocks of a quorum at round `s`. -/
 theorem quorumIn_refs {x : BlockId} (hx : x ∈ U.ids) {s : ℕ} (hxr : (U.block x).round = s + 1) :
     QuorumIn U (U.block x).refs s :=
@@ -121,7 +121,7 @@ variable {order : BlockId → ℕ} {next : Validator → ℕ → ℕ}
 variable (h : Persists ids block order next)
 include h
 
-omit [DecidableEq BlockId] S in
+omit [LinearOrder BlockId] S in
 /-- A correct validator's later builds are at higher rounds. -/
 theorem round_lt {i j : BlockId} (hi : i ∈ ids) (hj : j ∈ ids)
     (hc : (block i).creator ∈ (Correct : Finset Validator))
@@ -133,7 +133,7 @@ theorem round_lt {i j : BlockId} (hi : i ∈ ids) (hj : j ∈ ids)
   rw [← hij] at h3
   omega
 
-omit [DecidableEq BlockId] S in
+omit [LinearOrder BlockId] S in
 /-- **A correct validator builds at most one block a round.** -/
 theorem eq_of_round {i j : BlockId} (hi : i ∈ ids) (hj : j ∈ ids)
     (hc : (block i).creator ∈ (Correct : Finset Validator))
@@ -152,7 +152,7 @@ variable {ids : Finset BlockId} {block : BlockId → Block Validator BlockId Pay
 variable (h : BuildsAboveDisk ids block tl)
 include h
 
-omit [DecidableEq BlockId] S in
+omit [LinearOrder BlockId] S in
 /-- A correct validator's later builds are at higher rounds. -/
 theorem round_lt {b c : BlockId} (hb : b ∈ ids) (hc : c ∈ ids)
     (hbc : (block b).creator ∈ (Correct : Finset Validator))
@@ -163,7 +163,7 @@ theorem round_lt {b c : BlockId} (hb : b ∈ ids) (hc : c ∈ ids)
   have := h.above c hc (hcb ▸ hbc) (by omega) b' hb' (hb'c.trans hcb.symm)
   omega
 
-omit [DecidableEq BlockId] S in
+omit [LinearOrder BlockId] S in
 /-- **Building above the disk persists the last round built**, with builds
 numbered by time and the lowest round to build at one above the highest
 round built before. -/

@@ -14,7 +14,7 @@ namespace LeanDag
 namespace KPartialDag
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
-variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
+variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 variable {U : KRecord Validator BlockId Payload} {K D : ℕ} {H : Finset BlockId}
 variable {T : Finset Validator} {R : ℕ}
 
@@ -171,9 +171,8 @@ theorem mem_out_of_synchronisedOn (hK : 1 ≤ K) (hcard : quorumCard Validator �
 
 section Slot
 
-variable [LinearOrder Validator] [LinearOrder BlockId]
+variable [LinearOrder Validator]
 
-omit [DecidableEq BlockId] in
 /-- The order within a slot is total: two distinct blocks are ordered. -/
 theorem keyLt_total {b b' : BlockId} (h : b ≠ b') : KeyLt U b b' ∨ KeyLt U b' b := by
   rcases lt_trichotomy (slotKey U b) (slotKey U b') with h1 | h1 | h1
@@ -184,7 +183,6 @@ theorem keyLt_total {b b' : BlockId} (h : b ≠ b') : KeyLt U b b' ∨ KeyLt U b
     simpa [slotKey] using this
   · exact Or.inr h1
 
-omit [DecidableEq BlockId] in
 /-- **Within a slot, a reference comes first.** -/
 theorem keyLt_of_ref {b b' : BlockId} (hb : b ∈ U.ids) (h : b' ∈ (U.block b).refs) :
     KeyLt U b' b := by

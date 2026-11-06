@@ -15,14 +15,14 @@ namespace LeanDag
 namespace KPartialDag
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
-variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
+variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 variable {U : KRecord Validator BlockId Payload} {K : ℕ} {H : Finset BlockId} {A : BlockId}
 
-omit [DecidableEq BlockId] in
+omit [LinearOrder BlockId] in
 theorem mem_band {ρ : ℕ} {b : BlockId} : b ∈ Band U H ρ ↔ b ∈ H ∧ ρ ≤ (U.block b).round :=
   Finset.mem_filter
 
-omit [DecidableEq BlockId] in
+omit [LinearOrder BlockId] in
 theorem band_subset {ρ : ℕ} : Band U H ρ ⊆ H := Finset.filter_subset _ _
 
 /-- Anchoring read on `H` grows with `H`. -/
@@ -150,7 +150,7 @@ theorem round_le_of_mem_outIn {D : ℕ} {L b : BlockId} (hL : L ∈ U.ids)
 
 /-! ## Building -/
 
-omit [DecidableEq BlockId] in
+omit [LinearOrder BlockId] in
 /-- **A block referencing a quorum of distinct authors of the round below is
 valid.** -/
 theorem validAt_of_quorum {Q : Finset BlockId} {r : ℕ} {b : Block Validator BlockId Payload}
@@ -175,7 +175,7 @@ theorem obliged_band {Q : Finset BlockId} {r : ℕ} {b : Block Validator BlockId
 
 /-! ## Counting -/
 
-omit [DecidableEq BlockId] in
+omit [LinearOrder BlockId] in
 /-- **Without equivocation, the record holds at most `n` blocks per round.** -/
 theorem card_between_le {lo hi : ℕ} (hE : EquivFree U lo hi) :
     (Between U lo hi).card ≤ (hi + 1 - lo) * Fintype.card Validator := by
@@ -247,7 +247,7 @@ theorem layers_round {x : BlockId} (hx : x ∈ U.ids) :
     have := (U.valid p hpi).predecessor w hwp
     exact ⟨U.complete p hpi w hwp, by omega⟩
 
-omit [DecidableEq BlockId] in
+omit [LinearOrder BlockId] in
 /-- A block references at most `f` Byzantine blocks. -/
 theorem card_byz_refs_le {w : BlockId} (hw : w ∈ U.ids) :
     ((U.block w).refs.filter fun j => (U.block j).creator ∉ (Correct : Finset Validator)).card ≤
@@ -259,7 +259,7 @@ theorem card_byz_refs_le {w : BlockId} (hw : w ∈ U.ids) :
   · exact (U.valid w hw).clause i (Finset.mem_filter.mp (Finset.mem_coe.mp hi)).1 j
       (Finset.mem_filter.mp (Finset.mem_coe.mp hj)).1 hij
 
-omit [DecidableEq BlockId] in
+omit [LinearOrder BlockId] in
 /-- Blocks at one round number at most `|C|` besides their Byzantine ones. -/
 theorem card_round_le {ρ : ℕ} {X : Finset BlockId}
     (hX : ∀ x ∈ X, x ∈ U.ids ∧ (U.block x).round = ρ) :

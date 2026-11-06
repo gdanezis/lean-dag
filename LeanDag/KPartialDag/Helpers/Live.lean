@@ -13,7 +13,7 @@ namespace LeanDag
 namespace KPartialDag
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
-variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
+variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 variable {U : KRecord Validator BlockId Payload} {K : ℕ} {H : Finset BlockId}
 variable {T : Finset Validator} {R : ℕ}
 
@@ -35,7 +35,7 @@ theorem carriesVotes_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card)
       hs r hRr (by omega) b hb hbr hbT L hL hLr hLc⟩,
     hbc⟩
 
-omit [DecidableEq BlockId] in
+omit [LinearOrder BlockId] in
 /-- `WithRefs` grows with its rounds. -/
 theorem withRefs_mono {lo hi lo' hi' : ℕ} (hlo : lo' ≤ lo) (hhi : hi ≤ hi') :
     WithRefs U T lo hi ⊆ WithRefs U T lo' hi' := by

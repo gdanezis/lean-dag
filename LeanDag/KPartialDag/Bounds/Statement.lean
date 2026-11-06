@@ -21,7 +21,7 @@ namespace Bounds
 `ρ` or above. -/
 def Decides : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] [S : Slots Validator]
+    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator]
     (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (ρ i : ℕ)
     (v : Option BlockId), H ⊆ U.ids → ρ ≤ S.slotRound i → ρ + K ≤ S.slotRound i + 1 →
     (NodeDecided U K (Band U H ρ) i v ↔ NodeDecided U K H i v)
@@ -35,7 +35,7 @@ run's end at round `ρ` or above, decides every slot below `b + c` at round
 `ρ + K − 1` or above, and not below `ρ`. -/
 def Progress : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] [S : Slots Validator] (K : ℕ)
+    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator] (K : ℕ)
     (T : Finset Validator) (c : ℕ), 0 < c →
     (∀ b i, i < b → EligibleAt (S := S) 2 i (b + c - 1)) → FairRunOn T c →
     ∀ R k, ∃ b, k ≤ b ∧ R ≤ S.slotRound b ∧
@@ -52,7 +52,7 @@ authors of round `r` is valid, and a node holding the histories to depth `K`
 of `Q` meets its obligation with its blocks at round `r − K` or above. -/
 def Builds : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
+    [Faults Validator] [LinearOrder BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
     (H Q : Finset BlockId) (r : ℕ) (b : Block Validator BlockId Payload),
     (∀ x ∈ Q, x ∈ U.ids ∧ (U.block x).round = r) →
     (∀ x ∈ Q, ∀ y ∈ Q, (U.block x).creator = (U.block y).creator → x = y) →
@@ -66,7 +66,7 @@ to `D` rounds below `s`, give each block the same entry slot from `s` to
 `m`. Neither needs a verdict of an earlier slot. -/
 def Resumes : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] [S : Slots Validator]
+    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator]
     (U : KRecord Validator BlockId Payload) (K D : ℕ) (H₁ H₂ : Finset BlockId)
     (g₁ g₂ : ℕ → Option BlockId) (s m : ℕ), 3 ≤ K → H₁ ⊆ U.ids → H₂ ⊆ U.ids →
     (∀ j L, g₁ j = some L → IsLeaderBlock U j L) →
@@ -82,7 +82,7 @@ def Resumes : Prop :=
 /-- **At most `n` blocks a round without equivocation.** -/
 def Counts : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] (U : KRecord Validator BlockId Payload)
+    [Faults Validator] [LinearOrder BlockId] (U : KRecord Validator BlockId Payload)
     (lo hi : ℕ), EquivFree U lo hi →
     (Between U lo hi).card ≤ (hi + 1 - lo) * Fintype.card Validator
 
@@ -91,7 +91,7 @@ def Counts : Prop :=
 (`layerBound`), with no condition on equivocation. -/
 def Window : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
+    [Faults Validator] [LinearOrder BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
     (x : BlockId), x ∈ U.ids →
     historyUpto U K x ⊆ Between U ((U.block x).round - K) (U.block x).round ∧
       (historyUpto U K x).card ≤
@@ -104,7 +104,7 @@ besides the anchor, and at most `|C| + (|C|(f + 1) + 1)(1 + f + ⋯ + f^K)`
 blocks of the available sub-DAG. -/
 def AvailRound : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
+    [Faults Validator] [LinearOrder BlockId] (U : KRecord Validator BlockId Payload) (K : ℕ)
     (A : BlockId) (ρ : ℕ), A ∈ U.ids →
     (∀ X : Finset BlockId, (∀ x ∈ X, AnchoredBelow U K A x ∧ (U.block x).round = ρ ∧ x ≠ A) →
       X.card ≤ (Correct : Finset Validator).card * Fintype.card Validator) ∧

@@ -20,7 +20,7 @@ round `R` to round `N` gives responsiveness among `T` over the same
 rounds. -/
 def Weaker : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] [Slots Validator]
+    [Faults Validator] [LinearOrder BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (T : Finset Validator) (R N : ℕ),
     SyncFrom U T R N → RespondsFrom U T R N
 
@@ -29,7 +29,7 @@ above a slot led by `T`, with their references, commits the slot directly
 on a record responsive among `T`. -/
 def Commits : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] [S : Slots Validator]
+    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator]
     (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId)
     (T : Finset Validator) (R k : ℕ), RespondsFrom U T R (S.slotRound k + 2) →
     R ≤ S.slotRound k → S.leader k ∈ T →
@@ -42,7 +42,7 @@ committed every slot from `b` to `n`, decides every slot below `b` that `n`
 may anchor. -/
 def Descends : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] [S : Slots Validator]
+    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator]
     (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (b n : ℕ),
     H ⊆ U.ids → b ≤ n → (∀ i, i < b → EligibleAt (S := S) 2 i n) →
     AvailBelow U K n ⊆ ↑H → (∀ j, b ≤ j → j ≤ n → ∃ A, NodeDecided U K H j (some A)) →
@@ -55,7 +55,7 @@ to the run's end, a node holding what the run needs decides every slot below
 `b + c`. -/
 def Progress : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [DecidableEq BlockId] [S : Slots Validator] (K : ℕ)
+    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator] (K : ℕ)
     (T : Finset Validator) (c : ℕ), 0 < c →
     (∀ b i, i < b → EligibleAt (S := S) 2 i (b + c - 1)) → FairRunOn T c →
     ∀ R k, ∃ b, k ≤ b ∧ R ≤ S.slotRound b ∧

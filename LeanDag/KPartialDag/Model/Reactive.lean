@@ -15,7 +15,7 @@ namespace LeanDag
 namespace KPartialDag
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
-variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
+variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 variable [S : Slots Validator]
 
 /-- **A quorum at round `r` in `H`**: blocks of `H` at round `r` by a quorum of
