@@ -593,3 +593,7 @@ import LeanDag.KPartialDag.Model.Reactive
 import LeanDag.KPartialDag.Helpers.Reactive
 import LeanDag.KPartialDag.Reactive.Statement
 import LeanDag.KPartialDag.Reactive.Proof
+import LeanDag.KPartialDag.Model.Close
+import LeanDag.KPartialDag.Helpers.Close
+import LeanDag.KPartialDag.Close.Statement
+import LeanDag.KPartialDag.Close.Proof

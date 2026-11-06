@@ -1,4 +1,5 @@
 import LeanDag.KPartialDag.Reactive.Proof
+import LeanDag.KPartialDag.Close.Proof
 import LeanDag.KPartialDag.Helpers.Bounds
 /-!
 # Reactive nodes in time — a timed witness
@@ -10,6 +11,7 @@ leaders of the round and of the round below are correct, and `δ + τ` after
 it otherwise. Validator `2` restarts at time `2` and keeps only its disk.
 The timeline is a reactive run from round `2`, keeps histories on disk and
 builds above the disk, and `Reactive.Commits` decides slot `5` by time `27`.
+With every block declaring the channel closed, `Close.Closes` applies.
 -/
 
 namespace LeanDagTest
@@ -443,6 +445,23 @@ theorem t_ledger {N : ℕ} (hN : 2 ≤ N) (K D k : ℕ) : ∃ b, k ≤ b ∧
   Reactive.ledger (Fin 4) Id Unit (tRec N) (tl N) Correct 3 1 4 2 1 2 N K D 1 3 (t_run hN)
     (by norm_num) (by norm_num) (by norm_num) (t_fetches N K) (by norm_num)
     (fun b i hi => by unfold EligibleAt; rw [slotRound_eq, slotRound_eq]; omega) t_fair k
+
+/-- **The channel closes**, by `Close.Closes`, when every block declares it
+closed: every two rounds hold a slot led by a correct validator. -/
+theorem t_closes {N : ℕ} (hN : 2 ≤ N) : ∃ b, b + 3 - 1 + 2 ≤ N → ∃ t,
+    ∀ v ∈ (Correct : Finset (Fin 4)), ∃ (g : ℕ → Option Id) (n : ℕ),
+      DecidesBelow (tRec N) 3 (tHeld N v t) 2 g n ∧
+      ClosesAfter (tRec N) 3 (tHeld N v t) 2 (fun _ => True) g n :=
+  Close.closes (Fin 4) Id Unit (tRec N) (tl N) Correct 3 1 4 2 1 2 N 3 2 1 3 0 (fun _ => True)
+    (t_run hN) (by norm_num) (by norm_num) (by norm_num) le_rfl (t_fetches N 3) (by norm_num)
+    (fun b i hi => by unfold EligibleAt; rw [slotRound_eq, slotRound_eq]; omega) t_fair
+    (fun r => by
+      by_cases hr : (r + 1) % 4 = 3
+      · exact ⟨r + 2, by rw [slotRound_eq]; omega, (slotRound_eq _).le,
+          mem_correct_four.mpr (leader_ne.mpr (by omega))⟩
+      · exact ⟨r + 1, by rw [slotRound_eq]; omega, by rw [slotRound_eq]; omega,
+          mem_correct_four.mpr (leader_ne.mpr hr)⟩)
+    fun _ _ _ _ => trivial
 
 end Timed
 

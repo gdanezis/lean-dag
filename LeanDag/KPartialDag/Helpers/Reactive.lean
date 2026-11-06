@@ -776,35 +776,44 @@ theorem syncFrom (hγ : 2 * δ ≤ γ) (hδ : δ < γ) (hγτ : γ ≤ τ) : Syn
       (h.mem_held_below hγ hδ hγτ hn hnN.le ha haT har hb hbT hbr)
   · exact h.populatedOn hδ hγτ hr hrN v hv
 
+/-- Once every block of the record is built, every node of `T` holds the
+blocks of `T` from round `R` on with their references, `δ` later. -/
+theorem withRefs_subset_held {lo hi t : ℕ} (hlo : R ≤ lo) {v : Validator} (hv : v ∈ T)
+    (ht : max G (U.ids.sup tl.built) + δ ≤ t) : WithRefs U T lo hi ⊆ ↑(tl.held v t) := by
+  rintro z ⟨x, hx, hxT, hxlo, -, hzx⟩
+  have hxv := h.mem_held_of_round hx hxT (by omega) hv
+    ((Finset.le_sup (f := tl.built) hx).trans (le_max_right _ _)) ht
+  rcases hzx with rfl | hzx
+  · exact hxv
+  · exact h.closed v (h.stable hv) _ x hxv (h.stable hxT) hzx
+
 /-- **The ledger grows**, at `τ ≥ 2δ` and `δ < γ ≤ τ`, when nodes of `T`
 fetch the available sub-DAG of the certified leader blocks they hold within
 `Δ`, and the schedule offers runs of `c` leaders of `T` spanning eligibility:
 past any slot `k` there is a slot `b` such that, if the run reaches round
-`σ(b + c − 1) + 2`, every node of `T`, at one time, decides every slot below
-`b + c` and has fetched each leader it commits down to `D` rounds below it. -/
-theorem exists_ledger (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ) {K Δ : ℕ} (D : ℕ)
+`σ(b + c − 1) + 2`, every node of `T`, from `Δ + δ` after every block of the
+record is built, decides every slot below `b + c` and has fetched each leader
+it commits down to `D` rounds below it. -/
+theorem exists_ledger_from (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ) {K Δ : ℕ} (D : ℕ)
     (hF : Fetches U tl T K G Δ) {c : ℕ} (hc : 0 < c)
     (hspan : ∀ b i, i < b → EligibleAt (S := S) 2 i (b + c - 1)) (fair : FairRunOn T c)
     (k : ℕ) :
-    ∃ b, k ≤ b ∧ (S.slotRound (b + c - 1) + 2 ≤ N → ∃ t, ∀ v ∈ T,
+    ∃ b, k ≤ b ∧ (S.slotRound (b + c - 1) + 2 ≤ N → ∀ t,
+      max G (U.ids.sup tl.built) + δ + Δ ≤ t → ∀ v ∈ T,
       ∃ g : ℕ → Option BlockId, ∀ i, i < b + c → NodeDecided U K (tl.held v t) i (g i) ∧
         ∀ L, g i = some L → FetchedIn U K (tl.held v t) L ((U.block L).round - D)) := by
   classical
   obtain ⟨b, hkb, hRb, hrun⟩ := Slots.exists_run_past fair k (R + 1)
-  refine ⟨b, hkb, fun hN => ⟨max G (U.ids.sup tl.built) + δ + Δ, fun v hv => ?_⟩⟩
+  refine ⟨b, hkb, fun hN t ht v hv => ?_⟩
   set T₀ := max G (U.ids.sup tl.built)
   have hT₀ : ∀ x ∈ U.ids, tl.built x ≤ T₀ := fun x hx =>
     (Finset.le_sup (f := tl.built) hx).trans (le_max_right _ _)
   have hresp := responds_of_run hc hRb hrun ⟨(h.respondsFrom hτ hδ hγτ).1,
     fun j h1 h2 h3 => (h.respondsFrom hτ hδ hγτ).2 j h1 (h2.trans hN) h3⟩
   have hheld : WithRefs U T (S.slotRound b) (S.slotRound (b + c - 1) + 2) ∪
-      AvailBelow U K (b + c - 1) ⊆ ↑(tl.held v (T₀ + δ + Δ)) := by
-    rintro z (⟨x, hx, hxT, hxlo, -, hzx⟩ | ⟨j, A, hj, hA, ⟨C, hC⟩, hzA⟩)
-    · have hxv := h.mem_held_of_round hx hxT (by omega) hv (hT₀ x hx) (t := T₀ + δ + Δ)
-        (by omega)
-      rcases hzx with rfl | hzx
-      · exact hxv
-      · exact h.closed v (h.stable hv) _ x hxv (h.stable hxT) hzx
+      AvailBelow U K (b + c - 1) ⊆ ↑(tl.held v t) := by
+    rintro z (hz | ⟨j, A, hj, hA, ⟨C, hC⟩, hzA⟩)
+    · exact h.withRefs_subset_held (by omega) hv (by omega) hz
     · obtain ⟨hCi, -, hvC⟩ := mem_certificatesAt.mp hC
       obtain ⟨y, hyC, hyT⟩ := exists_mem_of_quorum h.large hvC
       obtain ⟨hyref, hyA⟩ := mem_carriedVotes.mp hyC
@@ -812,8 +821,8 @@ theorem exists_ledger (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ) 
       have hyc := h.stable hyT
       have hyw := h.own hy hyc (hT₀ y hy)
       have hyv := h.mem_held_of_held hyT (le_max_left _ _) hyw hyc hv le_rfl
-      exact hF v hv (T₀ + δ) (by omega) j A hA ⟨C, hC⟩
-        (h.closed v (h.stable hv) _ y hyv hyc hyA) z hzA
+      exact h.mono v hv _ _ (by omega) (by omega) (hF v hv (T₀ + δ) (by omega) j A hA ⟨C, hC⟩
+        (h.closed v (h.stable hv) _ y hyv hyc hyA) z hzA)
   have hdec := nodeDecided_of_run h.large (h.held_ids v _) hc hspan hresp hheld
   refine ⟨fun i => if hi : i < b + c then (hdec i hi).choose else none, fun i hi => ?_⟩
   simp only [dif_pos hi]
@@ -821,6 +830,17 @@ theorem exists_ledger (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ) 
   obtain ⟨hlead, hcert⟩ := NodeDecided.certified (h.held_ids v _) (hL ▸ (hdec i hi).choose_spec)
   exact fetchedIn_of_subset hlead.1 (Nat.sub_le _ _) fun z hz _ =>
     hheld (Set.mem_union_right _ ⟨i, L, by omega, hlead, hcert, hz⟩)
+
+/-- **The ledger grows**: `exists_ledger_from` at one time. -/
+theorem exists_ledger (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ) {K Δ : ℕ} (D : ℕ)
+    (hF : Fetches U tl T K G Δ) {c : ℕ} (hc : 0 < c)
+    (hspan : ∀ b i, i < b → EligibleAt (S := S) 2 i (b + c - 1)) (fair : FairRunOn T c)
+    (k : ℕ) :
+    ∃ b, k ≤ b ∧ (S.slotRound (b + c - 1) + 2 ≤ N → ∃ t, ∀ v ∈ T,
+      ∃ g : ℕ → Option BlockId, ∀ i, i < b + c → NodeDecided U K (tl.held v t) i (g i) ∧
+        ∀ L, g i = some L → FetchedIn U K (tl.held v t) L ((U.block L).round - D)) := by
+  obtain ⟨b, hkb, hb⟩ := h.exists_ledger_from hτ hδ hγτ D hF hc hspan fair k
+  exact ⟨b, hkb, fun hN => ⟨_, fun v hv => hb hN _ le_rfl v hv⟩⟩
 
 end ReactiveRun
 

@@ -280,6 +280,8 @@ built before.
 | 7 Synchronised | every block of `T` references every block of `T` below | reactive run, `2δ ≤ γ`, `δ < γ ≤ τ` |
 | 7 Ledger | every node of `T` decides every slot up to a run of leaders of `T`, and fetches below its committed leaders | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ`, fetching, a fair schedule |
 | 7 Durable | every block of a certified block's available sub-DAG stays on the disk of a node of `T` | `T` a quorum of correct nodes, histories to depth `K` on disk |
+| 8 Closes | every node of `T` decides every slot up to the last commit | reactive run, `2δ ≤ γ`, `δ < γ ≤ τ`, `K ≥ 3`, fetching, a fair schedule, a `T` slot every `D` rounds, `T` declares closure |
+| 8 Serves | a node holding what a node at the last commit holds reaches it alike | that node fetched below its committed leaders |
 
 ## 9. Why a K-partial DAG
 
@@ -566,11 +568,61 @@ timeline is a reactive run from round `2`, keeps the histories on disk,
 fetches within `δ` and builds above the disk; `Commits` decides slot `5` by
 time `27`, and `Persisted`, `Synchronised` and `Ledger` apply.
 
-## 12. Open questions
+## 12. Closing the channel
 
+The validators end a channel by declaring it closed. A block declares the
+channel closed through its payload (`closes`). A node's ledger is *closed*
+after slots `0, …, n − 1` when it holds blocks declaring closure by a quorum
+of distinct authors (`ClosedIn`), and the channel *closes after `n` slots*
+when the ledger is closed after `n` slots and after no fewer
+(`ClosesAfter`): slot `n − 1` is the last commit. A quorum holds `f + 1`
+correct authors, so Byzantine validators alone cannot close the channel, and
+the validators of `T` can close it without them. The count runs over the
+ledger, not one leader's output, since blocks declaring closure may enter at
+different slots. The slots up to the last commit are decided on blocks
+built after it, so a validator that has declared closure goes on building,
+with or without payload, until it has decided the last commit, and keeps
+and serves the blocks it holds after it stops.
+
+**Theorem 8 (closing the channel; `Close.Statement`).**
+
+* *The channel closes* (`Close.Closes`). On a reactive run from round `R`,
+  at `2δ ≤ γ ≤ τ`, `δ < γ` and `K ≥ 3`, when nodes of `T` fetch, the
+  schedule offers runs of `c` leaders of `T` spanning eligibility and a slot
+  led by `T` every `D` rounds, and the validators of `T` declare the channel
+  closed from round `r₀` on (`DeclaresFrom`), there is a slot `b` such that,
+  if the run reaches round `σ(b + c − 1) + 2`, every node of `T` at one time
+  has decided every slot up to its last commit and fetched each leader it
+  commits down to `D` rounds below it (`DecidesBelow`). The blocks of `T` at
+  round `max(r₀, R + 1)` declare closure; the run is synchronous, so by
+  `Order.Included` they enter the ledger of a node of `T` once it decides the
+  slots up to `D` rounds above them, and `Reactive.Ledger` supplies those
+  decisions.
+* *Served blocks suffice* (`Close.Serves`). A node holding, among blocks of
+  the record, what a node that has decided every slot up to its last commit
+  holds decides those slots alike and reaches the same last commit. A node's
+  decisions hold on more blocks (`NodeDecided.mono`): the direct tests and
+  the links only gain, and an indirect skip reads a sub-DAG fetched below
+  the slot, which is the record's; a leader's output read once fetched is
+  the record's (`Order.Local`).
+
+Together these argue for a rule for stopping: a validator of `T` builds
+until it has decided the last commit. If none stops before the run reaches
+round `σ(b + c − 1) + 2`, every node of `T` decides the last commit by
+`Closes`. If one stops earlier, it has decided the last commit, and a node
+that obtains the blocks it holds, correct nodes outside `T` and nodes that
+return later included, decides it alike by `Serves`. No single theorem
+states this. The witness of §11, with every block declaring closure, meets
+the premises of `Closes` (`t_closes`).
+
+## 13. Open questions
+
+* Agreement on the last commit, which `Order.Agrees` suggests, and what
+  happens to payloads entering after it, which must be proposed again in
+  the next channel.
 * Bounds: the cost of fetching the sub-DAG, and how long correct nodes must
-  keep the histories on disk; they keep them for ever here, and a bound
-  needs the time bound for the ledger below.
+  keep the histories on disk within a channel; they keep them for ever
+  here, and a bound needs the time bound for the ledger below.
 * Chain quality: the share of correct blocks in a leader's output.
 * Inclusion counted on every committed leader rather than leaders of `T`:
   the references of any block include `f + 1` blocks of `T`, which suggests
