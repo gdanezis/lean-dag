@@ -29,7 +29,7 @@ quorum, from round `R` to round `N` every block of `T` references every
 block of `T` of the round below, and `T` has a block at every round from `R`
 to `N`. -/
 def SyncFrom (U : KRecord Validator BlockId Payload) (T : Finset Validator) (R N : ℕ) : Prop :=
-  quorumCard Validator ≤ T.card ∧ SynchronisedTo U T R N ∧
+  kQuorum Validator ≤ T.card ∧ SynchronisedTo U T R N ∧
     ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r
 
 variable [S : Slots Validator]
@@ -41,7 +41,7 @@ quorum. -/
 def Responds (U : KRecord Validator BlockId Payload) (T : Finset Validator) (k : ℕ) : Prop :=
   PopulatedOn U T (S.slotRound k + 2) ∧ ∃ L, IsLeaderBlock U k L ∧
     (∀ C ∈ U.ids, (U.block C).creator ∈ T → (U.block C).round = S.slotRound k + 2 →
-      CarriesVotes U (IsVote U) (quorumCard Validator) C L) ∧
+      CarriesVotes U (IsVote U) (kQuorum Validator) C L) ∧
     PopulatedOn U T (S.slotRound k + 1) ∧
     ∀ b ∈ U.ids, (U.block b).creator ∈ T → (U.block b).round = S.slotRound k + 1 → IsVote U b L
 
@@ -49,7 +49,7 @@ def Responds (U : KRecord Validator BlockId Payload) (T : Finset Validator) (k :
 and every slot led by `T` from round `R` to round `N − 2` responds. -/
 def RespondsFrom (U : KRecord Validator BlockId Payload) (T : Finset Validator) (R N : ℕ) :
     Prop :=
-  quorumCard Validator ≤ T.card ∧ ∀ k, R ≤ S.slotRound k → S.slotRound k + 2 ≤ N →
+  kQuorum Validator ≤ T.card ∧ ∀ k, R ≤ S.slotRound k → S.slotRound k + 2 ≤ N →
     S.leader k ∈ T → Responds U T k
 
 /-- The blocks of authors in `T` at rounds `lo` to `hi`, with their

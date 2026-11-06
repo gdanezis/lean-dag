@@ -60,7 +60,7 @@ def Builds : Prop :=
     (H Q : Finset BlockId) (r : ℕ) (b : Block Validator BlockId Payload),
     (∀ x ∈ Q, x ∈ U.ids ∧ (U.block x).round = r) →
     (∀ x ∈ Q, ∀ y ∈ Q, (U.block x).creator = (U.block y).creator → x = y) →
-    quorumCard Validator ≤ (creatorsOf U.block Q).card →
+    kQuorum Validator ≤ (creatorsOf U.block Q).card →
     (∀ x ∈ Q, historyUpto U K x ⊆ H) → b.round = r + 1 → b.refs = Q →
     KValid Validator BlockId Payload U.block b ∧ Obliged U K (Band U H (r - K)) b
 
@@ -73,7 +73,7 @@ def Resumes : Prop :=
     [Faults Validator] [Crashes Validator]
     [LinearOrder BlockId] [S : Slots Validator] (p : Scheme.Params)
     (U : KRecord Validator BlockId Payload) (K D : ℕ) (H₁ H₂ : Finset BlockId)
-    (g₁ g₂ : ℕ → Option BlockId) (s m : ℕ), Row Validator p → 3 ≤ K → H₁ ⊆ U.ids →
+    (g₁ g₂ : ℕ → Option BlockId) (s m : ℕ), Row Validator p → kDepth Validator p ≤ K → H₁ ⊆ U.ids →
     H₂ ⊆ U.ids →
     (∀ j L, g₁ j = some L → IsLeaderBlock U j L) →
     (∀ j L, g₂ j = some L → IsLeaderBlock U j L) →

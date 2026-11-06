@@ -51,9 +51,9 @@ theorem waitsFor_mono {H H' : Finset BlockId} (hH : H ⊆ H') {r : ℕ} (h : Wai
 omit [LinearOrder BlockId] S in
 /-- A set of blocks with a block by every validator of a quorum `T` reaches a
 quorum. -/
-theorem quorum_le_of_mem (hT : quorumCard Validator ≤ T.card) {X : Finset BlockId}
+theorem quorum_le_of_mem (hT : kQuorum Validator ≤ T.card) {X : Finset BlockId}
     (h : ∀ w ∈ T, ∃ y ∈ X, (U.block y).creator = w) :
-    quorumCard Validator ≤ (creatorsOf U.block X).card :=
+    kQuorum Validator ≤ (creatorsOf U.block X).card :=
   le_trans hT (Finset.card_le_card fun w hw => by
     obtain ⟨y, hy, hyw⟩ := h w hw
     exact mem_creatorsOf.mpr ⟨y, hy, hyw⟩)
@@ -61,19 +61,23 @@ theorem quorum_le_of_mem (hT : quorumCard Validator ≤ T.card) {X : Finset Bloc
 omit [LinearOrder BlockId] S in
 /-- A set of blocks whose authors reach a quorum holds a block by a validator
 of a quorum `T`. -/
-theorem exists_mem_of_quorum (hT : quorumCard Validator ≤ T.card) {X : Finset BlockId}
-    (h : quorumCard Validator ≤ (creatorsOf U.block X).card) :
+theorem exists_mem_of_quorum (hT : kQuorum Validator ≤ T.card) {X : Finset BlockId}
+    (h : kQuorum Validator ≤ (creatorsOf U.block X).card) :
     ∃ x ∈ X, (U.block x).creator ∈ T := by
-  obtain ⟨v, hv⟩ := Finset.card_pos.mp
-    (lt_of_lt_of_le (Nat.succ_pos _) (card_inter_ge_of_quorum h hT))
-  obtain ⟨hvX, hvT⟩ := Finset.mem_inter.mp hv
-  obtain ⟨x, hx, rfl⟩ := mem_creatorsOf.mp hvX
-  exact ⟨x, hx, hvT⟩
+  by_contra hno
+  push Not at hno
+  have hsub : creatorsOf U.block X ⊆ Finset.univ \ T := fun v hv => by
+    obtain ⟨x, hx, rfl⟩ := mem_creatorsOf.mp hv
+    exact Finset.mem_sdiff.mpr ⟨Finset.mem_univ _, hno x hx⟩
+  have := Finset.card_le_card hsub
+  rw [Finset.card_univ_sdiff] at this
+  have := Cr.card_validators
+  omega
 
 omit S in
 /-- `f + 1` validators include one of a quorum `T`. -/
-theorem exists_mem_of_card (hT : quorumCard Validator ≤ T.card) {A : Finset Validator}
-    (hA : F.f + 1 ≤ A.card) : ∃ v ∈ A, v ∈ T := by
+theorem exists_mem_of_card (hT : kQuorum Validator ≤ T.card) {A : Finset Validator}
+    (hA : F.f + Cr.c + 1 ≤ A.card) : ∃ v ∈ A, v ∈ T := by
   by_contra hno
   push Not at hno
   have := Finset.card_le_card fun v hv =>
@@ -85,7 +89,7 @@ theorem exists_mem_of_card (hT : quorumCard Validator ≤ T.card) {A : Finset Va
 omit [LinearOrder BlockId] S in
 /-- Blocks behind for `v` include a block of round `r + 1` by another author
 of a quorum `T`. -/
-theorem exists_mem_of_behindIn (hT : quorumCard Validator ≤ T.card) {H : Finset BlockId}
+theorem exists_mem_of_behindIn (hT : kQuorum Validator ≤ T.card) {H : Finset BlockId}
     {v : Validator} {r : ℕ} (h : BehindIn U H v r) :
     ∃ y ∈ H, (U.block y).round = r + 1 ∧ (U.block y).creator ∈ T ∧
       (U.block y).creator ≠ v := by
@@ -122,7 +126,7 @@ variable {order : BlockId → ℕ} {next : Validator → ℕ → ℕ}
 variable (h : Persists ids block order next)
 include h
 
-omit [LinearOrder BlockId] S in
+omit [LinearOrder BlockId] S Cr in
 /-- A correct validator's later builds are at higher rounds. -/
 theorem round_lt {i j : BlockId} (hi : i ∈ ids) (hj : j ∈ ids)
     (hc : (block i).creator ∈ (Correct : Finset Validator))
@@ -134,7 +138,7 @@ theorem round_lt {i j : BlockId} (hi : i ∈ ids) (hj : j ∈ ids)
   rw [← hij] at h3
   omega
 
-omit [LinearOrder BlockId] S in
+omit [LinearOrder BlockId] S Cr in
 /-- **A correct validator builds at most one block a round.** -/
 theorem eq_of_round {i j : BlockId} (hi : i ∈ ids) (hj : j ∈ ids)
     (hc : (block i).creator ∈ (Correct : Finset Validator))
@@ -153,7 +157,7 @@ variable {ids : Finset BlockId} {block : BlockId → Block Validator BlockId Pay
 variable (h : BuildsAboveDisk ids block tl)
 include h
 
-omit [LinearOrder BlockId] S in
+omit [LinearOrder BlockId] S Cr in
 /-- A correct validator's later builds are at higher rounds. -/
 theorem round_lt {b c : BlockId} (hb : b ∈ ids) (hc : c ∈ ids)
     (hbc : (block b).creator ∈ (Correct : Finset Validator))
@@ -164,7 +168,7 @@ theorem round_lt {b c : BlockId} (hb : b ∈ ids) (hc : c ∈ ids)
   have := h.above c hc (hcb ▸ hbc) (by omega) b' hb' (hb'c.trans hcb.symm)
   omega
 
-omit [LinearOrder BlockId] S in
+omit [LinearOrder BlockId] S Cr in
 /-- **Building above the disk persists the last round built**, with builds
 numbered by time and the lowest round to build at one above the highest
 round built before. -/
@@ -343,10 +347,11 @@ theorem induction_behind {s : ℕ} (hR : R ≤ s) (P : BlockId → Prop)
         (h.stable hyT) hyv) y (h.held_ids _ _ hyH) hyT hyr rfl)
 
 /-- **Catching up**: once nodes of `T` hold, at a time `t ≥ G`, blocks of
-round `s + 1`, from `R + 1` to `N`, by `f + 1` correct authors, every
+round `s + 1`, from `R + 1` to `N`, by `f + c + 1` correct authors, every
 validator of `T` has reached round `s + 1` by `t + δ`. -/
 theorem reachedBy_of_behind {s t : ℕ} (hR : R ≤ s) (hN : s < N) (hG : G ≤ t)
-    {A : Finset Validator} (hA : A ⊆ T) (hcard : F.f + 1 ≤ A.card)
+    {A : Finset Validator} (hA : A ⊆ (Correct : Finset Validator))
+    (hcard : F.f + Cr.c + 1 ≤ A.card)
     (hb : ∀ v ∈ A, ∃ u ∈ T, ∃ b ∈ tl.held u t,
       (U.block b).creator = v ∧ (U.block b).round = s + 1) :
     ReachedBy U tl T (s + 1) (t + δ) := by
@@ -354,12 +359,12 @@ theorem reachedBy_of_behind {s t : ℕ} (hR : R ≤ s) (hN : s < N) (hG : G ≤ 
   by_cases hwA : w ∈ A
   · obtain ⟨u, hu, b, hb, hbw, hbr⟩ := hb w hwA
     exact ⟨b, h.held_ids _ _ hb, hbw, hbr.ge,
-      (h.causal u (h.stable hu) t b hb (hbw ▸ h.stable (hA hwA))).trans (by omega)⟩
+      (h.causal u (h.stable hu) t b hb (hbw ▸ hA hwA)).trans (by omega)⟩
   refine h.prompt w hw s _ hR hN (Or.inr ⟨by omega, le_trans hcard
     (Finset.card_le_card fun v hv => ?_)⟩)
   obtain ⟨u, hu, b, hb', hbv, hbr⟩ := hb v hv
   refine Finset.mem_erase.mpr ⟨fun hvw => hwA (hvw ▸ hv), mem_creatorsOf.mpr ⟨b,
-    Finset.mem_filter.mpr ⟨h.mem_held_of_held hu hG hb' (hbv ▸ h.stable (hA hv)) hw le_rfl,
+    Finset.mem_filter.mpr ⟨h.mem_held_of_held hu hG hb' (hbv ▸ hA hv) hw le_rfl,
       hbr⟩, hbv⟩⟩
 
 /-- **A quorum brings every node of `T` to its round**: once a node of `T`
@@ -368,8 +373,14 @@ holds, at a time `t ≥ G`, blocks of a quorum at round `s`, from `R + 1` to
 theorem reachedBy_of_quorumIn {s t : ℕ} (hR : R < s) (hN : s ≤ N) (hG : G ≤ t) {u : Validator}
     (hu : u ∈ T) (hQ : QuorumIn U (tl.held u t) s) : ReachedBy U tl T s (t + δ) := by
   obtain ⟨s, rfl⟩ : ∃ s', s = s' + 1 := ⟨s - 1, by omega⟩
-  refine h.reachedBy_of_behind (by omega) (by omega) hG Finset.inter_subset_right
-    (card_inter_ge_of_quorum hQ h.large) fun v hv => ?_
+  have hsplit := card_le_card_inter_correct_add_byzantine
+    (creatorsOf U.block ((tl.held u t).filter fun b => (U.block b).round = s + 1))
+  have := F.card_byzantine
+  have := Cr.card_validators
+  refine h.reachedBy_of_behind (by omega) (by omega) hG
+    (A := creatorsOf U.block ((tl.held u t).filter fun b => (U.block b).round = s + 1) ∩
+      (Correct : Finset Validator)) Finset.inter_subset_right
+    (by unfold QuorumIn at hQ; omega) fun v hv => ?_
   obtain ⟨hvc, -⟩ := Finset.mem_inter.mp hv
   obtain ⟨x, hx, hxv⟩ := mem_creatorsOf.mp hvc
   obtain ⟨hxH, hxr⟩ := Finset.mem_filter.mp hx
@@ -478,7 +489,7 @@ on disk, every block of the available sub-DAG of a voted block is on the disk
 of a node of a quorum `T` of correct nodes from some time on, through any
 crash. Its `f + 1` voters, or `f + 1` authors, include a node of `T`. -/
 theorem exists_disk_of_avail (hT : T ⊆ (Correct : Finset Validator))
-    (hTq : quorumCard Validator ≤ T.card) {K : ℕ} (hK1 : 1 ≤ K) (hK : KeepsHistory U tl K)
+    (hTq : kQuorum Validator ≤ T.card) {K : ℕ} (hK1 : 1 ≤ K) (hK : KeepsHistory U tl K)
     {A z : BlockId} (hA : A ∈ U.ids) (hV : Voted U A) (hz : z ∈ Avail U K A) :
     ∃ w ∈ T, ∃ t₀, ∀ t, t₀ ≤ t → z ∈ tl.disk w t := by
   obtain ⟨y, d, hy, hzy⟩ := hz
@@ -508,7 +519,7 @@ include h
 or later. -/
 theorem le_of_reachedBy {s t : ℕ} (hs : R ≤ s) (hb : ReachedBy U tl T s t) : G + τ ≤ t := by
   obtain ⟨v, hv⟩ := Finset.card_pos.mp
-    (by have := h.large; have := F.card_validators; omega : 0 < T.card)
+    (by have := h.large; have := Cr.card_validators; omega : 0 < T.card)
   obtain ⟨b, hb, hbv, hbr, hbt⟩ := hb v hv
   have := h.late b hb (hbv ▸ hv) (by omega)
   omega
@@ -668,7 +679,7 @@ theorem carriesVotes_of_leader (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ
     (hk : R + 1 ≤ S.slotRound k) (hN : S.slotRound k + 2 ≤ N) (hlead : S.leader k ∈ T)
     {c : BlockId} (hc : c ∈ U.ids) (hcT : (U.block c).creator ∈ T)
     (hcr : (U.block c).round = S.slotRound k + 2) {L : BlockId} (hL : IsLeaderBlock U k L) :
-    CarriesVotes U (IsVote U) (quorumCard Validator) c L := by
+    CarriesVotes U (IsVote U) (kQuorum Validator) c L := by
   obtain ⟨L', hL', hv⟩ := h.certifies c hc (h.stable hcT) k hcr.symm
     (h.certIn_held hτ hδ hγτ hk hN hlead hc hcT hcr)
   exact isLeaderBlock_unique_of_honest (h.stable hlead) hL hL' ▸ hv

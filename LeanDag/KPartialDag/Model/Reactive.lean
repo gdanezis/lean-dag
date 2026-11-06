@@ -22,13 +22,13 @@ variable [S : Slots Validator]
 /-- **A quorum at round `r` in `H`**: blocks of `H` at round `r` by a quorum of
 distinct authors. -/
 def QuorumIn (U : KRecord Validator BlockId Payload) (H : Finset BlockId) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (creatorsOf U.block (H.filter fun b => (U.block b).round = r)).card
+  kQuorum Validator ≤ (creatorsOf U.block (H.filter fun b => (U.block b).round = r)).card
 
 /-- **A certificate for `L` in `H`**: blocks of `H` at round `r` by a quorum of
 distinct authors reference `L`. -/
 def CertIn (U : KRecord Validator BlockId Payload) (H : Finset BlockId) (r : ℕ) (L : BlockId) :
     Prop :=
-  quorumCard Validator ≤
+  kQuorum Validator ≤
     (creatorsOf U.block (H.filter fun b => (U.block b).round = r ∧ L ∈ (U.block b).refs)).card
 
 /-- **What a node waits for before building above round `r`**: a quorum at
@@ -42,7 +42,7 @@ def WaitsFor (U : KRecord Validator BlockId Payload) (H : Finset BlockId) (r : �
 by `f + 1` distinct authors other than `v`. -/
 def BehindIn (U : KRecord Validator BlockId Payload) (H : Finset BlockId) (v : Validator)
     (r : ℕ) : Prop :=
-  F.f + 1 ≤ ((creatorsOf U.block (H.filter fun b => (U.block b).round = r + 1)).erase v).card
+  F.f + Cr.c + 1 ≤ ((creatorsOf U.block (H.filter fun b => (U.block b).round = r + 1)).erase v).card
 
 /-- **All authors at round `r` in `H`**: a block of every validator at round
 `r`. -/
@@ -80,7 +80,7 @@ structure NodeRules (U : KRecord Validator BlockId Payload)
   /-- The nodes up from `G` on are correct. -/
   stable : T ⊆ (Correct : Finset Validator)
   /-- They are a quorum. -/
-  large : quorumCard Validator ≤ T.card
+  large : kQuorum Validator ≤ T.card
   /-- Nodes hold blocks of the record. -/
   held_ids : ∀ v t, tl.held v t ⊆ U.ids
   /-- From `G` on, a node of `T` keeps what it holds. -/
@@ -140,7 +140,7 @@ structure NodeRules (U : KRecord Validator BlockId Payload)
     S.slotRound k + 2 = (U.block b).round →
     (∃ L, IsLeaderBlock U k L ∧
       CertIn U (tl.held (U.block b).creator (tl.built b)) (S.slotRound k + 1) L) →
-    ∃ L, IsLeaderBlock U k L ∧ CarriesVotes U (IsVote U) (quorumCard Validator) b L
+    ∃ L, IsLeaderBlock U k L ∧ CarriesVotes U (IsVote U) (kQuorum Validator) b L
 
 /-- **The reactive rules from round `R` to round `N`**: the rules for nodes,
 with every validator of `T` at round `R` or above. -/

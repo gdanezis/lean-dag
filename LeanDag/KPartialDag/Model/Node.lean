@@ -25,7 +25,7 @@ inductive AnchoredIn (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Fins
       (hy : ∀ z ∈ S, AnchoredIn U K H A (y z) (d z))
       (hz : ∀ z ∈ S, z ∈ historyUpto U (d z) (y z))
       (href : ∀ z ∈ S, x ∈ (U.block z).refs)
-      (hcard : F.f + 1 ≤ (creatorsOf U.block S).card)
+      (hcard : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card)
       (hx : historyUpto U K x ⊆ H) : AnchoredIn U K H A x K
   | reached {x : BlockId} (S : Finset BlockId) (m : BlockId → BlockId)
       (y : BlockId → BlockId) (d : BlockId → ℕ) (y' : BlockId → BlockId) (d' : BlockId → ℕ)
@@ -33,7 +33,7 @@ inductive AnchoredIn (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Fins
       (hy' : ∀ z ∈ S, AnchoredIn U K H A (y' z) (d' z))
       (hmz : ∀ z ∈ S, m z ∈ historyUpto U (d' z) (y' z))
       (hm : ∀ z ∈ S, m z ∈ (U.block z).refs) (href : ∀ z ∈ S, x ∈ (U.block (m z)).refs)
-      (hcard : F.f + 1 ≤ (creatorsOf U.block S).card) (hc : 1 ≤ Cr.c)
+      (hcard : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card) (hc : 1 ≤ Cr.c)
       (hx : historyUpto U (K - 1) x ⊆ H) : AnchoredIn U K H A x (K - 1)
 
 /-- **The available sub-DAG below `A`, read on `H`.** -/
@@ -60,11 +60,11 @@ def FetchedIn (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset Bloc
     (A : BlockId) (ρ : ℕ) : Prop :=
   historyUpto U K A ⊆ H ∧ (∀ (S : Finset BlockId) (x : BlockId),
     (∀ z ∈ S, z ∈ AvailIn U K H A ∧ ρ < (U.block z).round) →
-    (∀ z ∈ S, x ∈ (U.block z).refs) → F.f + 1 ≤ (creatorsOf U.block S).card →
+    (∀ z ∈ S, x ∈ (U.block z).refs) → F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card →
     historyUpto U K x ⊆ H) ∧ ∀ (S : Finset BlockId) (m : BlockId → BlockId) (x : BlockId),
     (∀ z ∈ S, z ∈ AvailIn U K H A ∧ m z ∈ AvailIn U K H A ∧ ρ < (U.block (m z)).round) →
     (∀ z ∈ S, m z ∈ (U.block z).refs) → (∀ z ∈ S, x ∈ (U.block (m z)).refs) →
-    F.f + 1 ≤ (creatorsOf U.block S).card → 1 ≤ Cr.c → historyUpto U (K - 1) x ⊆ H
+    F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card → 1 ≤ Cr.c → historyUpto U (K - 1) x ⊆ H
 
 /-- The blocks of `s` the node holds with their references. -/
 def heldWithRefs (U : KRecord Validator BlockId Payload) (H : Finset BlockId)

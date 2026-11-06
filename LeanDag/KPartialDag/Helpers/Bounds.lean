@@ -210,7 +210,7 @@ valid.** -/
 theorem validAt_of_quorum {Q : Finset BlockId} {r : ℕ} {b : Block Validator BlockId Payload}
     (hQ : ∀ x ∈ Q, (U.block x).round = r) (hd : ∀ x ∈ Q, ∀ y ∈ Q,
       (U.block x).creator = (U.block y).creator → x = y)
-    (hq : quorumCard Validator ≤ (creatorsOf U.block Q).card) (hbr : b.round = r + 1)
+    (hq : kQuorum Validator ≤ (creatorsOf U.block Q).card) (hbr : b.round = r + 1)
     (hbQ : b.refs = Q) : KValid Validator BlockId Payload U.block b where
   predecessor := fun i hi => by rw [hbr, hQ i (hbQ ▸ hi)]
   quorum := fun _ => by unfold creators; rw [hbQ]; exact hq
@@ -617,7 +617,7 @@ of `T` over the run with their references, and the available sub-DAG below
 every voted leader up to the run's end from round `ρ` up, decides every
 slot up to the run's end at round `ρ + K − 1` or above, and not below `ρ`. -/
 theorem nodeDecided_of_run_band (hrow : Row Validator p) (hlive : LiveRow Validator p)
-    {T : Finset Validator} (hcard : quorumCard Validator ≤ T.card) (hH : H ⊆ U.ids)
+    {T : Finset Validator} (hcard : kQuorum Validator ≤ T.card) (hH : H ⊆ U.ids)
     {b c ρ : ℕ} (hc : 0 < c)
     (hspan : ∀ b i, i < b → EligibleAt (S := S) (p.waveLength - 1) i (b + c - 1))
     (hresp : ∀ j, b ≤ j → j ≤ b + c - 1 → Responds U T j)

@@ -51,7 +51,7 @@ def Agrees : Prop :=
     [Faults Validator] [Crashes Validator]
     [LinearOrder BlockId] [Slots Validator] (p : Scheme.Params)
     (U : KRecord Validator BlockId Payload) (K : ℕ) (H₁ H₂ : Finset BlockId) (k : ℕ)
-    (v₁ v₂ : Option BlockId), Row Validator p → 3 ≤ K → H₁ ⊆ U.ids → H₂ ⊆ U.ids →
+    (v₁ v₂ : Option BlockId), Row Validator p → kDepth Validator p ≤ K → H₁ ⊆ U.ids → H₂ ⊆ U.ids →
     NodeDecided p U K H₁ k v₁ → NodeDecided p U K H₂ k v₂ → v₁ = v₂
 
 /-- What a node reads. -/

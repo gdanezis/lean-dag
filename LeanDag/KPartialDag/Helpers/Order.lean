@@ -79,8 +79,8 @@ theorem entersIn_of {H₁ H₂ : Finset BlockId} {g₁ g₂ : ℕ → Option Blo
 
 /-- **Two nodes have one ledger, and one entry slot per block**, at `K ≥ 3`,
 once each has fetched down to `D` rounds below the leaders it committed. -/
-theorem ledgerIn_agree (hrow : Row Validator p) (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId}
-    (hH₁ : H₁ ⊆ U.ids)
+theorem ledgerIn_agree (hrow : Row Validator p) (hK : kDepth Validator p ≤ K)
+    {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
     (hH₂ : H₂ ⊆ U.ids) [S : Slots Validator] {g₁ g₂ : ℕ → Option BlockId} {n : ℕ}
     (h₁ : ∀ k, k < n → NodeDecided p U K H₁ k (g₁ k))
     (h₂ : ∀ k, k < n → NodeDecided p U K H₂ k (g₂ k))
@@ -101,8 +101,8 @@ theorem ledgerIn_agree (hrow : Row Validator p) (hK : 3 ≤ K) {H₁ H₂ : Fins
 /-- **No retraction**: what a node outputs after slots `0, …, n-1`, it, or any
 other node, outputs at the same slot after `n'` slots, for `n ≤ n'`, at
 `K ≥ 3`, once each has fetched below the leaders it committed. -/
-theorem ledgerIn_grows (hrow : Row Validator p) (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId}
-    (hH₁ : H₁ ⊆ U.ids)
+theorem ledgerIn_grows (hrow : Row Validator p) (hK : kDepth Validator p ≤ K)
+    {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
     (hH₂ : H₂ ⊆ U.ids) [S : Slots Validator] {g₁ g₂ : ℕ → Option BlockId} {n n' : ℕ}
     (hn : n ≤ n') (h₁ : ∀ k, k < n → NodeDecided p U K H₁ k (g₁ k))
     (h₂ : ∀ k, k < n' → NodeDecided p U K H₂ k (g₂ k))
@@ -117,7 +117,7 @@ theorem ledgerIn_grows (hrow : Row Validator p) (hK : 3 ≤ K) {H₁ H₂ : Fins
 /-- **After synchrony, a block of `T` is anchored** when the blocks of `T` of
 the round above, which reference it, lie in the windows of anchored
 blocks. -/
-theorem anchoredBelow_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card) {N : ℕ}
+theorem anchoredBelow_of_synchronisedOn (hcard : kQuorum Validator ≤ T.card) {N : ℕ}
     (hs : SynchronisedTo U T R N) {A : BlockId} {m : ℕ} (hRm : R ≤ m) (hmN : m < N)
     (hpop : PopulatedOn U T (m + 1)) {x : BlockId} (hx : x ∈ U.ids)
     (hxr : (U.block x).round = m) (hxc : (U.block x).creator ∈ T)
@@ -137,12 +137,12 @@ theorem anchoredBelow_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card
     exact mem_creatorsOf.mpr
       ⟨z, Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨hz, hzr⟩, by rw [hzc]; exact hv⟩, hzc⟩
   have := Finset.card_le_card hT
-  have := F.card_validators
+  have := Cr.card_validators
   omega
 
 /-- **After synchrony, a leader of `T` outputs every block of `T` at most `D`
 rounds below it**, from round `R` on, at `K ≥ 1`. -/
-theorem mem_out_of_synchronisedOn (hK : 1 ≤ K) (hcard : quorumCard Validator ≤ T.card)
+theorem mem_out_of_synchronisedOn (hK : 1 ≤ K) (hcard : kQuorum Validator ≤ T.card)
     {L : BlockId} (hs : SynchronisedTo U T R (U.block L).round)
     (hpop : ∀ r, R ≤ r → r < (U.block L).round → PopulatedOn U T r) (hL : L ∈ U.ids)
     (hLc : (U.block L).creator ∈ T) {x : BlockId} (hx : x ∈ U.ids)
@@ -234,8 +234,8 @@ theorem precedesIn_of_ref {g : ℕ → Option BlockId} {n k : ℕ} {b b' : Block
 
 /-- **The ledger order is kept**: as a node settles more slots, and across
 nodes, at `K ≥ 3`, once each has fetched below the leaders it committed. -/
-theorem precedesIn_grows (hrow : Row Validator p) (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId}
-    (hH₁ : H₁ ⊆ U.ids)
+theorem precedesIn_grows (hrow : Row Validator p) (hK : kDepth Validator p ≤ K)
+    {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
     (hH₂ : H₂ ⊆ U.ids) [S : Slots Validator] {g₁ g₂ : ℕ → Option BlockId} {n n' : ℕ}
     (hn : n ≤ n') (h₁ : ∀ k, k < n → NodeDecided p U K H₁ k (g₁ k))
     (h₂ : ∀ k, k < n' → NodeDecided p U K H₂ k (g₂ k))
@@ -256,7 +256,7 @@ it holds the blocks of `T` one and two rounds above the slot with their
 references
 and has fetched below the slot's leader. -/
 theorem mem_ledgerIn_of_leader_mem (hrow : Row Validator p) (hlive : LiveRow Validator p)
-    (hK : 3 ≤ K) (hcard : quorumCard Validator ≤ T.card)
+    (hK : kDepth Validator p ≤ K) (hcard : kQuorum Validator ≤ T.card)
     {k : ℕ} (hs : SynchronisedTo U T R (S.slotRound k + 2)) (hH : H ⊆ U.ids)
     {g : ℕ → Option BlockId}
     (hlead : S.leader k ∈ T) (hpop : ∀ r, R ≤ r → r ≤ S.slotRound k + 2 → PopulatedOn U T r)
@@ -274,6 +274,7 @@ theorem mem_ledgerIn_of_leader_mem (hrow : Row Validator p) (hlive : LiveRow Val
   have hLr := hL.2.1
   refine ⟨k, by omega, L, hg, ?_⟩
   rw [outIn_eq hH (hf L hg)]
+  have := three_le_of_kDepth hK
   exact mem_out_of_synchronisedOn (by omega) hcard
     (fun n h1 h2 => hs n h1 (by rw [hLr] at h2; omega)) (fun r h1 h2 => hpop r h1 (by omega))
     hL.1 hLc hx hxc hRx (by omega) (by omega)
@@ -292,8 +293,8 @@ theorem mem_ledgerIn_settled (hrow : Row Validator p) (hH : H ⊆ U.ids) {g : �
 /-- **Settled out everywhere**: at `K ≥ 3`, a block missing from a node's
 ledger once the node has decided every slot at most `D` rounds above it is in
 no node's ledger, once each has fetched below the leaders it committed. -/
-theorem notMem_ledgerIn_of_settled (hrow : Row Validator p) (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId}
-    (hH₁ : H₁ ⊆ U.ids)
+theorem notMem_ledgerIn_of_settled (hrow : Row Validator p) (hK : kDepth Validator p ≤ K)
+    {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
     (hH₂ : H₂ ⊆ U.ids) {g₁ g₂ : ℕ → Option BlockId} {n n' : ℕ}
     (h₁ : ∀ k, k < n → NodeDecided p U K H₁ k (g₁ k))
     (h₂ : ∀ k, k < n' → NodeDecided p U K H₂ k (g₂ k))
@@ -314,7 +315,7 @@ theorem notMem_ledgerIn_of_settled (hrow : Row Validator p) (hK : 3 ≤ K) {H₁
 decided every slot at most `D` rounds above it, when every `D` rounds hold a
 slot led by `T`. -/
 theorem mem_ledgerIn_of_gap (hrow : Row Validator p) (hlive : LiveRow Validator p)
-    (hK : 3 ≤ K) (hcard : quorumCard Validator ≤ T.card)
+    (hK : kDepth Validator p ≤ K) (hcard : kQuorum Validator ≤ T.card)
     {x : BlockId} (hs : SynchronisedTo U T R ((U.block x).round + D + 2)) (hH : H ⊆ U.ids)
     (hgap : ∀ r, ∃ k, r < S.slotRound k ∧ S.slotRound k ≤ r + D ∧ S.leader k ∈ T)
     {g : ℕ → Option BlockId} {n : ℕ} (hdec : ∀ k, k < n → NodeDecided p U K H k (g k))

@@ -27,17 +27,29 @@ class Crashes where
 
 variable [Cr : Crashes Validator]
 
+/-- The substrate's quorum `n − f − c`: the distinct authors a block
+references, and so the most a correct node can wait for. Notation, so that
+`omega` sees the subtraction. -/
+scoped notation:max "kQuorum " V:max => Fintype.card V - Faults.f V - Crashes.c V
+
 variable (Validator BlockId Payload) in
-/-- **The substrate's validity**: references one round below, from a quorum
-of distinct authors, at most one of each author, and no reference to the
+/-- **The substrate's validity**: references one round below, from `n − f − c`
+distinct authors, at most one of each author, and no reference to the
 author's own block required. -/
 abbrev KValid : Validity Validator BlockId Payload :=
-  ValidAt (quorumCard Validator) Clause.distinct
+  ValidAt (kQuorum Validator) Clause.distinct
 
 variable (Validator BlockId Payload) in
 /-- **A K-partial DAG**: a record at the substrate's validity, whose honest
 authors are the correct validators. -/
 abbrev KRecord := BlockRecord Validator BlockId Payload (KValid Validator BlockId Payload) Correct
+
+variable (Validator) in
+/-- **The spreading condition**: `n − f` correct authors named `f + c` times
+each take fewer names than `n − f − c` authors naming `n − 2f − c` correct
+authors each. It holds without crashes, and at `n ≥ 5f + 3c + 1`. -/
+def Spread : Prop :=
+  (Fintype.card Validator - F.f) * (F.f + Cr.c) < kQuorum Validator * (kQuorum Validator - F.f)
 
 /-- **Held by a correct node**: a block of a correct author, or a block in the
 history to depth `K` of a block that a correct author's block references. -/
@@ -59,14 +71,14 @@ inductive AnchoredBelow (U : KRecord Validator BlockId Payload) (K : ℕ) (A : B
       (hy : ∀ z ∈ S, AnchoredBelow U K A (y z) (d z))
       (hz : ∀ z ∈ S, z ∈ historyUpto U (d z) (y z))
       (href : ∀ z ∈ S, x ∈ (U.block z).refs)
-      (hcard : F.f + 1 ≤ (creatorsOf U.block S).card) : AnchoredBelow U K A x K
+      (hcard : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card) : AnchoredBelow U K A x K
   | reached {x : BlockId} (S : Finset BlockId) (m : BlockId → BlockId)
       (y : BlockId → BlockId) (d : BlockId → ℕ) (y' : BlockId → BlockId) (d' : BlockId → ℕ)
       (hy : ∀ z ∈ S, AnchoredBelow U K A (y z) (d z)) (hz : ∀ z ∈ S, z ∈ historyUpto U (d z) (y z))
       (hy' : ∀ z ∈ S, AnchoredBelow U K A (y' z) (d' z))
       (hmz : ∀ z ∈ S, m z ∈ historyUpto U (d' z) (y' z))
       (hm : ∀ z ∈ S, m z ∈ (U.block z).refs) (href : ∀ z ∈ S, x ∈ (U.block (m z)).refs)
-      (hcard : F.f + 1 ≤ (creatorsOf U.block S).card) (hc : 1 ≤ Cr.c) :
+      (hcard : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card) (hc : 1 ≤ Cr.c) :
       AnchoredBelow U K A x (K - 1)
 
 /-- **The available sub-DAG below `A`**: the history each anchor point

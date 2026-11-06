@@ -5,7 +5,7 @@ import LeanDag.KPartialDag.Helpers.Avail
 `docs/kpartial.md` §4. Votes for two blocks of one slot from more than
 `n + f` authors name one block (`eq_of_votes`), as do two certificates when
 two certificate thresholds exceed `n + f` (`eq_of_certs`), and the commit
-rule obeys the laws of an anchored rule at a row and `K ≥ 3`
+rule obeys the laws of an anchored rule at a row and its depth
 (`kRule_laws`).
 -/
 
@@ -91,7 +91,7 @@ theorem row_arith (hrow : Row Validator p) {c l : ℕ} (hc : p.commitThreshold �
     (hl : p.linkSize ≤ l) :
     p.linkSize ≤ c ∧ (p.voteIsCert = true → Fintype.card Validator + F.f < c + l) := by
   have := F.card_validators
-  rcases hrow with ⟨hv, -, -, -, hb, hc'⟩ | ⟨hv, -, hl1, -, -, hc'⟩
+  rcases hrow with ⟨hv, -, -, -, -, hb, hc'⟩ | ⟨hv, -, hl1, -, -, hc'⟩
   · exact ⟨by omega, fun _ => by omega⟩
   · exact ⟨by omega, fun h => absurd (hv.symm.trans h) (by simp)⟩
 
@@ -115,12 +115,13 @@ theorem voted_of_certs (hrow : Row Validator p) {A : BlockId} {X : Finset BlockI
     rw [if_neg (by simp [hv]), hw] at hC
     obtain ⟨hCi, hCr, hcv⟩ := mem_certificatesAt.mp hC
     unfold CarriesVotes at hcv
-    exact (by omega : F.f + 1 ≤ p.certThreshold).trans (hcv.trans (Finset.card_le_card
+    have := Cr.card_validators
+    exact (by omega : F.f + Cr.c + 1 ≤ p.certThreshold).trans (hcv.trans (Finset.card_le_card
       (creatorsOf_carriedVotes_subset_supporters hCi hCr)))
 
 omit S in
-/-- **The laws of the commit rule**, at a row and `K ≥ 3`. -/
-theorem kRule_laws (hrow : Row Validator p) {K : ℕ} (hK : 3 ≤ K) :
+/-- **The laws of the commit rule**, at a row and its depth. -/
+theorem kRule_laws (hrow : Row Validator p) {K : ℕ} (hK : kDepth Validator p ≤ K) :
     (kRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) p K).Laws where
   commit_unique := by
     intro S U V₁ V₂ k L₁ L₂ _ hL₁ hL₂ h₁ h₂
@@ -134,7 +135,7 @@ theorem kRule_laws (hrow : Row Validator p) {K : ℕ} (hK : 3 ≤ K) :
     unfold DirectSkip at hs
     have hc := h.le
     have := F.card_validators
-    rcases hrow with ⟨hv, hw, -, ha, -, hc'⟩ | ⟨hv, hw, -, -, hb, hc'⟩
+    rcases hrow with ⟨hv, hw, -, -, ha, -, hc'⟩ | ⟨hv, hw, -, -, hb, hc'⟩
     · have := card_votes_add_blames_le hv hw (subset_refl (certsFor p U L (S.slotRound k)))
       omega
     · obtain ⟨C, hC⟩ := nonempty_of_creatorsOf_card_pos (blk := U.block)

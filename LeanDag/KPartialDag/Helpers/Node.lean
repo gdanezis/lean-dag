@@ -296,7 +296,7 @@ theorem NodeDecided.decided {p : Scheme.Params} (hrow : Row Validator p) (hH : H
       (fun L hL hlink => hnone L hL (avail_linkedIn hH hrow hf hlink))
 
 /-- **Two nodes decide each slot alike**, at a row and `K ≥ 3`. -/
-theorem NodeDecided.agree {p : Scheme.Params} (hrow : Row Validator p) (hK : 3 ≤ K)
+theorem NodeDecided.agree {p : Scheme.Params} (hrow : Row Validator p) (hK : kDepth Validator p ≤ K)
     {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids) (hH₂ : H₂ ⊆ U.ids) {k : ℕ}
     {v₁ v₂ : Option BlockId} (h₁ : NodeDecided p U K H₁ k v₁)
     (h₂ : NodeDecided p U K H₂ k v₂) : v₁ = v₂ :=

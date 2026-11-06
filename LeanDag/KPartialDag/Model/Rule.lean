@@ -6,10 +6,11 @@ import LeanDag.Scheme.Model.Params
 # K-partial DAG — the commit rule's tests
 
 `docs/kpartial.md` §2. The rows of the scheme the substrate runs (`Row`,
-`LiveRow`), a row's certificates (`certsFor`, `Certifies`), the direct tests
-(`DirectCommit`, `DirectSkip`), the indirect test read on the available
-sub-DAG (`AvailLinked`), blocks with votes of `f + 1` authors (`Voted`), and
-the commit rule (`kRule`).
+`LiveRow`) and the depth they need (`kDepth`), a row's certificates
+(`certsFor`, `Certifies`), the direct tests (`DirectCommit`, `DirectSkip`),
+the indirect test read on the available sub-DAG (`AvailLinked`), blocks
+with votes of `f + c + 1` authors (`Voted`), and the commit rule
+(`kRule`).
 -/
 
 namespace LeanDag
@@ -24,21 +25,28 @@ variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 
 variable (Validator) in
 /-- **A row of the scheme the substrate runs**: a vote one round above the
-slot, at the substrate's `n − f` references a block, either as its own
-certificate at a wave of two, meeting the two-round inequalities with a link
-of `f + 1` authors or more, or certified one round later at a wave of
-three, meeting the three-round inequalities with a link of one certificate. -/
+slot, at the substrate's `n − f − c` references a block, either as its own
+certificate at a wave of two, meeting the two-round inequalities at
+`n ≥ 5f + 3c + 1` with a link of `f + c + 1` authors or more, or certified
+one round later at a wave of three, meeting the three-round inequalities
+with a link of one certificate. -/
 def Row (p : Params) : Prop :=
-  (p.voteIsCert = true ∧ p.waveLength = 2 ∧ F.f + 1 ≤ p.linkSize ∧
-      p.TwoRound (Fintype.card Validator) F.f (quorumCard Validator)) ∨
+  (p.voteIsCert = true ∧ p.waveLength = 2 ∧ F.f + Cr.c + 1 ≤ p.linkSize ∧
+      5 * F.f + 3 * Cr.c + 1 ≤ Fintype.card Validator ∧
+      p.TwoRound (Fintype.card Validator) F.f (kQuorum Validator)) ∨
     (p.voteIsCert = false ∧ p.waveLength = 3 ∧ p.linkSize = 1 ∧
-      p.ThreeRound (Fintype.card Validator) F.f (quorumCard Validator))
+      p.ThreeRound (Fintype.card Validator) F.f (kQuorum Validator))
+
+variable (Validator) in
+/-- **The depth of history a row needs**: four rounds for a three-round row
+when validators may crash for good, three otherwise. -/
+def kDepth (p : Params) : ℕ := if p.voteIsCert = false ∧ 1 ≤ Cr.c then 4 else 3
 
 variable (Validator) in
 /-- **A row is live on the substrate**: its commit and certificate thresholds
 are at most a quorum. -/
 def LiveRow (p : Params) : Prop :=
-  p.commitThreshold ≤ quorumCard Validator ∧ p.certThreshold ≤ quorumCard Validator
+  p.commitThreshold ≤ kQuorum Validator ∧ p.certThreshold ≤ kQuorum Validator
 
 /-- **The certificates of a round-`r` block `L`** at the decision round
 `r + (w − 1)`: the votes for `L`, when a vote is its own certificate, and
@@ -78,10 +86,10 @@ def AvailLinked (p : Params) (U : KRecord Validator BlockId Payload) (K : ℕ) (
     (p.voteIsCert = false → ∀ j ∈ (U.block C).refs, j ∈ Avail U K A)) ∧
     p.linkSize ≤ (creatorsOf U.block X).card
 
-/-- **`A` is voted for**: blocks of `f + 1` distinct authors one round above
+/-- **`A` is voted for**: blocks of `f + c + 1` distinct authors one round above
 reference it. -/
 def Voted (U : KRecord Validator BlockId Payload) (A : BlockId) : Prop :=
-  F.f + 1 ≤ (creatorsOf U.block (votesFor U A ((U.block A).round + 1))).card
+  F.f + Cr.c + 1 ≤ (creatorsOf U.block (votesFor U A ((U.block A).round + 1))).card
 
 /-- **The commit rule on a K-partial DAG** at a row of the scheme: the
 scheme's direct commit and slot skip read on a view, at the row's wave, with

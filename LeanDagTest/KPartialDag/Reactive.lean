@@ -38,7 +38,7 @@ theorem leader_val (k : ℕ) : (tSlots.leader k).val = k % 4 := rfl
 
 theorem slotRound_eq (k : ℕ) : tSlots.slotRound k = k := rfl
 
-theorem quorum_four : quorumCard (Fin 4) = 3 := rfl
+theorem quorum_four : kQuorum (Fin 4) = 3 := rfl
 
 theorem mem_three {w : Fin 4} : w ∈ ({0, 1, 2} : Finset (Fin 4)) ↔ w ≠ 3 := by
   revert w; decide
@@ -101,7 +101,7 @@ def tRec (N : ℕ) : KRecord (Fin 4) Id Unit where
   valid i _ := by
     refine ⟨fun j hj => ?_, fun h0 => ?_, fun j hj k hk hjk => ?_⟩
     · rw [mem_tRefs] at hj; exact hj.2.1
-    · change quorumCard (Fin 4) ≤ (creatorsOf tBlock (tBlock i).refs).card
+    · change kQuorum (Fin 4) ≤ (creatorsOf tBlock (tBlock i).refs).card
       rw [creatorsOf_tRefs h0]; rfl
     · rw [mem_tRefs] at hj hk
       exact Prod.ext (by omega) hjk
@@ -419,7 +419,7 @@ abbrev mysticeti : Scheme.Params := Scheme.Params.mysticeti 4 1
 
 /-- **Mysticeti is a live row** of the witness's validators, by `Agreement.Rows`. -/
 theorem t_row : Row (Fin 4) mysticeti ∧ LiveRow (Fin 4) mysticeti :=
-  (Agreement.rows (Fin 4)).1
+  (Agreement.rows (Fin 4)).1 rfl
 
 /-- **Slot `5` commits by time `27`**: its leader and the leaders next to it
 are correct, the blocks of round `5` are built at time `20`, and by

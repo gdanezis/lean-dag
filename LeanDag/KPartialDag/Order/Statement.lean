@@ -25,7 +25,7 @@ def Local : Prop :=
     OutIn U K H D L ⊆ Out U K D L ∧
       (FetchedIn U K H L ((U.block L).round - D) → OutIn U K H D L = Out U K D L)
 
-/-- **Ledgers agree and are never retracted**: at `K ≥ 3`, what a node outputs
+/-- **Ledgers agree and are never retracted**: at the row's depth, what a node outputs
 after slots `0, …, n-1`, it and every other node output at the same slot and
 in the same order after `n' ≥ n` slots, once each has fetched below the
 leaders it committed. -/
@@ -33,7 +33,8 @@ def Agrees : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder Validator] [Faults Validator] [Crashes Validator] [LinearOrder BlockId]
     [Slots Validator] (p : Scheme.Params) (U : KRecord Validator BlockId Payload) (K D : ℕ)
-    (H₁ H₂ : Finset BlockId) (g₁ g₂ : ℕ → Option BlockId) (n n' : ℕ), Row Validator p → 3 ≤ K →
+    (H₁ H₂ : Finset BlockId) (g₁ g₂ : ℕ → Option BlockId) (n n' : ℕ), Row Validator p →
+    kDepth Validator p ≤ K →
     H₁ ⊆ U.ids → H₂ ⊆ U.ids → n ≤ n' → (∀ k, k < n → NodeDecided p U K H₁ k (g₁ k)) →
     (∀ k, k < n' → NodeDecided p U K H₂ k (g₂ k)) →
     (∀ k L, k < n → g₁ k = some L → FetchedIn U K H₁ L ((U.block L).round - D)) →
@@ -67,7 +68,7 @@ def Settled : Prop :=
     (∀ k, S.slotRound k ≤ (U.block b).round + D → k < n) →
     b ∈ LedgerIn U K H D g n' → b ∈ LedgerIn U K H D g n
 
-/-- **A block settled out of one ledger is in none**: at `K ≥ 3`, a block not
+/-- **A block settled out of one ledger is in none**: at the row's depth, a block not
 in a node's ledger once the node has decided every slot at most `D` rounds
 above it is in no node's ledger after any number of slots, once each has
 fetched below the leaders it committed. -/
@@ -76,7 +77,7 @@ def Excluded : Prop :=
     [Faults Validator] [Crashes Validator] [LinearOrder BlockId] [S : Slots Validator]
     (p : Scheme.Params) (U : KRecord Validator BlockId Payload) (K D : ℕ)
     (H₁ H₂ : Finset BlockId) (g₁ g₂ : ℕ → Option BlockId) (n n' : ℕ) (b : BlockId),
-    Row Validator p → 3 ≤ K →
+    Row Validator p → kDepth Validator p ≤ K →
     H₁ ⊆ U.ids → H₂ ⊆ U.ids → (∀ k, k < n → NodeDecided p U K H₁ k (g₁ k)) →
     (∀ k, k < n' → NodeDecided p U K H₂ k (g₂ k)) →
     (∀ k L, k < n → g₁ k = some L → FetchedIn U K H₁ L ((U.block L).round - D)) →
@@ -98,13 +99,13 @@ def Outputs : Prop :=
 
 /-- **After synchrony, every block of `T` enters the ledger** of a node that
 has decided every slot at most `D` rounds above it, when every `D` rounds
-hold a slot led by `T`, at `K ≥ 3`. -/
+hold a slot led by `T`, at the row's depth. -/
 def Included : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [Crashes Validator] [LinearOrder BlockId] [S : Slots Validator]
     (p : Scheme.Params) (U : KRecord Validator BlockId Payload) (K D : ℕ) (H : Finset BlockId)
     (T : Finset Validator) (R : ℕ) (g : ℕ → Option BlockId) (n : ℕ) (x : BlockId),
-    Row Validator p → LiveRow Validator p → 3 ≤ K → H ⊆ U.ids →
+    Row Validator p → LiveRow Validator p → kDepth Validator p ≤ K → H ⊆ U.ids →
     (∀ r, ∃ k, r < S.slotRound k ∧ S.slotRound k ≤ r + D ∧ S.leader k ∈ T) →
     (∀ k, k < n → NodeDecided p U K H k (g k)) →
     (∀ k L, k < n → g k = some L → FetchedIn U K H L ((U.block L).round - D)) →

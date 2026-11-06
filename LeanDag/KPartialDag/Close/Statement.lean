@@ -30,7 +30,7 @@ def Closes : Prop :=
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (G δ τ γ μ R N K D Δ c r₀ : ℕ) (closes : Payload → Prop),
     Row Validator p → LiveRow Validator p →
-    ReactiveRun U tl T G δ τ γ μ R N → 2 * δ ≤ γ → δ < γ → γ ≤ τ → 3 ≤ K →
+    ReactiveRun U tl T G δ τ γ μ R N → 2 * δ ≤ γ → δ < γ → γ ≤ τ → kDepth Validator p ≤ K →
     Fetches U tl T K G Δ → 0 < c →
     (∀ b i, i < b → EligibleAt (S := S) (p.waveLength - 1) i (b + c - 1)) →
     FairRunOn T c → (∀ r, ∃ k, r < S.slotRound k ∧ S.slotRound k ≤ r + D ∧ S.leader k ∈ T) →
@@ -60,7 +60,8 @@ def Agrees : Prop :=
     [Faults Validator] [Crashes Validator]
     [LinearOrder BlockId] [Slots Validator] (p : Scheme.Params)
     (U : KRecord Validator BlockId Payload) (K D : ℕ) (H₁ H₂ : Finset BlockId)
-    (closes : Payload → Prop) (g₁ g₂ : ℕ → Option BlockId) (n₁ n₂ : ℕ), Row Validator p → 3 ≤ K →
+    (closes : Payload → Prop) (g₁ g₂ : ℕ → Option BlockId) (n₁ n₂ : ℕ), Row Validator p →
+    kDepth Validator p ≤ K →
     H₁ ⊆ U.ids → H₂ ⊆ U.ids → DecidesBelow p U K H₁ D g₁ n₁ → ClosesAfter U K H₁ D closes g₁ n₁ →
     DecidesBelow p U K H₂ D g₂ n₂ → ClosesAfter U K H₂ D closes g₂ n₂ →
     n₁ = n₂ ∧ LedgerIn U K H₁ D g₁ n₁ = LedgerIn U K H₂ D g₂ n₂

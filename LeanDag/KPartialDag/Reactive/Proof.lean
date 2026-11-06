@@ -30,7 +30,7 @@ theorem built : Built := by
 
 theorem catchesUp : CatchesUp := by
   intro Validator BlockId Payload _ _ _ _ _ _ U tl T G δ τ γ μ R N h s t A hs hsN hG hA hcard hb
-  refine h.reachedBy_of_behind hs hsN hG hA hcard fun v hv => ?_
+  refine h.reachedBy_of_behind hs hsN hG (fun v hv => h.stable (hA hv)) hcard fun v hv => ?_
   obtain ⟨b, hb, hbv, hbr, hbt⟩ := hb v hv
   have hbT : (U.block b).creator ∈ T := hbv ▸ hA hv
   exact ⟨_, hbT, b, h.own hb (h.stable hbT) hbt, hbv, hbr⟩

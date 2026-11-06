@@ -76,7 +76,7 @@ def CatchesUp : Prop :=
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (G δ τ γ μ R N : ℕ),
     NodeRules U tl T G δ τ γ μ R N → ∀ s t (A : Finset Validator), R ≤ s → s < N → G ≤ t →
-      A ⊆ T → F.f + 1 ≤ A.card →
+      A ⊆ T → F.f + Crashes.c Validator + 1 ≤ A.card →
       (∀ v ∈ A, ∃ b ∈ U.ids, (U.block b).creator = v ∧ (U.block b).round = s + 1 ∧
         tl.built b ≤ t) →
       ReachedBy U tl T (s + 1) (t + δ)
@@ -173,7 +173,7 @@ def Durable : Prop :=
     [Faults Validator] [Crashes Validator] [LinearOrder BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (K : ℕ), T ⊆ (Correct : Finset Validator) →
-    quorumCard Validator ≤ T.card → 1 ≤ K → KeepsHistory U tl K → ∀ A ∈ U.ids, Voted U A →
+    kQuorum Validator ≤ T.card → 1 ≤ K → KeepsHistory U tl K → ∀ A ∈ U.ids, Voted U A →
       ∀ z ∈ Avail U K A, ∃ w ∈ T, ∃ t₀, ∀ t, t₀ ≤ t → z ∈ tl.disk w t
 
 /-- **The ledger grows**: at a live row, on a reactive run from round `R` to

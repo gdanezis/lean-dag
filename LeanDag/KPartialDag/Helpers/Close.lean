@@ -101,8 +101,8 @@ theorem closesAfter_mono (hH : H ⊆ H') (hH' : H' ⊆ U.ids) {closes : Payload 
 
 /-- Two nodes read closure alike after slots they have both decided, at
 `K ≥ 3`. -/
-theorem closedIn_iff_of_agree (hrow : Row Validator p) (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId}
-    (hH₁ : H₁ ⊆ U.ids)
+theorem closedIn_iff_of_agree (hrow : Row Validator p) (hK : kDepth Validator p ≤ K)
+    {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
     (hH₂ : H₂ ⊆ U.ids) {closes : Payload → Prop} {g₁ g₂ : ℕ → Option BlockId} {n₁ n₂ m : ℕ}
     (h₁ : DecidesBelow p U K H₁ D g₁ n₁) (h₂ : DecidesBelow p U K H₂ D g₂ n₂) (hm₁ : m ≤ n₁)
     (hm₂ : m ≤ n₂) : ClosedIn U K H₁ D closes g₁ m ↔ ClosedIn U K H₂ D closes g₂ m := by
@@ -113,8 +113,8 @@ theorem closedIn_iff_of_agree (hrow : Row Validator p) (hK : 3 ≤ K) {H₁ H₂
   rw [heq]
 
 /-- **Two nodes reach one last commit with one ledger**, at `K ≥ 3`. -/
-theorem closesAfter_agree (hrow : Row Validator p) (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId}
-    (hH₁ : H₁ ⊆ U.ids)
+theorem closesAfter_agree (hrow : Row Validator p) (hK : kDepth Validator p ≤ K)
+    {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
     (hH₂ : H₂ ⊆ U.ids) {closes : Payload → Prop} {g₁ g₂ : ℕ → Option BlockId} {n₁ n₂ : ℕ}
     (h₁ : DecidesBelow p U K H₁ D g₁ n₁) (hc₁ : ClosesAfter U K H₁ D closes g₁ n₁)
     (h₂ : DecidesBelow p U K H₂ D g₂ n₂) (hc₂ : ClosesAfter U K H₂ D closes g₂ n₂) :
@@ -144,7 +144,7 @@ channel closed from round `r₀` on: there is a slot `b` such that, if the run
 reaches round `σ(b + c − 1) + 2`, every node of `T` at one time has decided
 every slot up to its last commit. -/
 theorem exists_closesAfter (hrow : Row Validator p) (hlive : LiveRow Validator p)
-    (hγ : 2 * δ ≤ γ) (hδ : δ < γ) (hγτ : γ ≤ τ) {Δ : ℕ} (hK : 3 ≤ K)
+    (hγ : 2 * δ ≤ γ) (hδ : δ < γ) (hγτ : γ ≤ τ) {Δ : ℕ} (hK : kDepth Validator p ≤ K)
     (hF : Fetches U tl T K G Δ) {c : ℕ} (hc : 0 < c)
     (hspan : ∀ b i, i < b → EligibleAt (S := S) (p.waveLength - 1) i (b + c - 1))
     (fair : FairRunOn T c)

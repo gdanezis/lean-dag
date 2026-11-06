@@ -46,12 +46,14 @@ theorem conforms : Conforms := by
   exact Finset.mem_filter.mpr ⟨hcerts ▸ hX hC, mem_history_of_avail hA (hXa C hC).1⟩
 
 theorem rows : Rows := by
-  intro Validator _ _ F _
+  intro Validator _ _ F Cr
   have := F.card_validators
-  refine ⟨⟨Or.inr ⟨rfl, rfl, rfl, ?_⟩, ?_⟩, ⟨Or.inr ⟨rfl, rfl, rfl, ?_⟩, ?_⟩, fun h5 =>
-    ⟨Or.inl ⟨rfl, rfl, ?_, ?_⟩, ?_⟩⟩ <;>
-    simp only [LiveRow, Params.mysticeti, Params.cordialMinersPS, Params.blueBottlePS,
-      Params.TwoRound, Params.ThreeRound] <;> omega
+  have := Cr.card_validators
+  refine ⟨fun hc => ⟨Or.inr ⟨rfl, rfl, rfl, ?_⟩, ?_⟩, fun hc => ⟨Or.inr ⟨rfl, rfl, rfl, ?_⟩, ?_⟩,
+    fun hc h5 => ⟨Or.inl ⟨rfl, rfl, ?_, ?_, ?_⟩, ?_⟩, ⟨Or.inr ⟨rfl, rfl, rfl, ?_⟩, ?_⟩,
+    fun h5 => ⟨Or.inl ⟨rfl, rfl, ?_, h5, ?_⟩, ?_⟩⟩ <;>
+    (try simp only [LiveRow, Params.mysticeti, Params.cordialMinersPS, Params.blueBottlePS,
+      Params.hybridMysticeti, Params.orcaella, Params.TwoRound, Params.ThreeRound]) <;> omega
 
 theorem holds : Statement := ⟨laws, agrees, conforms, rows⟩
 

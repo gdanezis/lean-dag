@@ -22,7 +22,7 @@ whose payloads declare the channel closed, by a quorum of distinct authors. -/
 def ClosedIn (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (D : ℕ)
     (closes : Payload → Prop) (g : ℕ → Option BlockId) (n : ℕ) : Prop :=
   ∃ X : Finset BlockId, ↑X ⊆ LedgerIn U K H D g n ∧ (∀ x ∈ X, closes (U.block x).payload) ∧
-    quorumCard Validator ≤ (creatorsOf U.block X).card
+    kQuorum Validator ≤ (creatorsOf U.block X).card
 
 /-- **The channel closes after `n` slots** on a node's ledger: the ledger is
 closed after slots `0, …, n-1` and after no fewer, so slot `n − 1` is the

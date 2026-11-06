@@ -20,13 +20,13 @@ variable {T : Finset Validator} {R : ℕ}
 
 /-- **After synchrony, a block of `T` carries votes from all of `T`** for a
 block of `T` two rounds below, once the round between is populated. -/
-theorem carriesVotes_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card) {N : ℕ}
+theorem carriesVotes_of_synchronisedOn (hcard : kQuorum Validator ≤ T.card) {N : ℕ}
     (hs : SynchronisedTo U T R N) {r : ℕ} (hRr : R ≤ r) (hrN : r + 2 ≤ N)
     (hpop : PopulatedOn U T (r + 1))
     {L C : BlockId} (hL : L ∈ U.ids) (hLr : (U.block L).round = r)
     (hLc : (U.block L).creator ∈ T) (hC : C ∈ U.ids) (hCr : (U.block C).round = r + 2)
     (hCc : (U.block C).creator ∈ T) :
-    CarriesVotes U (IsVote U) (quorumCard Validator) C L := by
+    CarriesVotes U (IsVote U) (kQuorum Validator) C L := by
   refine le_trans hcard (Finset.card_le_card ?_)
   intro v hv
   obtain ⟨b, hb, hbc, hbr⟩ := hpop v hv
@@ -48,7 +48,7 @@ variable [S : Slots Validator]
 /-- **After synchrony, a slot led by `T` responds among `T`**: the blocks of
 `T` one round above it reference its leader's block, and those two rounds
 above carry votes from all of `T`. -/
-theorem responds_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card) {N : ℕ}
+theorem responds_of_synchronisedOn (hcard : kQuorum Validator ≤ T.card) {N : ℕ}
     (hs : SynchronisedTo U T R N) {k : ℕ} (hR : R ≤ S.slotRound k)
     (hN : S.slotRound k + 2 ≤ N) (hlead : S.leader k ∈ T)
     (hpop : ∀ r, S.slotRound k ≤ r → r ≤ S.slotRound k + 2 → PopulatedOn U T r) :
@@ -70,7 +70,7 @@ theorem respondsFrom_of_syncFrom {N : ℕ} (h : SyncFrom U T R N) : RespondsFrom
 directly, on the votes of `T` when votes are certificates and on the
 certificates of `T` otherwise. -/
 theorem nodeDecided_of_responds {p : Scheme.Params} (hrow : Row Validator p)
-    (hlive : LiveRow Validator p) (hcard : quorumCard Validator ≤ T.card) {k : ℕ}
+    (hlive : LiveRow Validator p) (hcard : kQuorum Validator ≤ T.card) {k : ℕ}
     (hresp : Responds U T k)
     (hH : WithRefs U T (S.slotRound k + 1) (S.slotRound k + 2) ⊆ ↑H) :
     ∃ L, IsLeaderBlock U k L ∧ NodeDecided p U K H k (some L) := by
@@ -167,7 +167,7 @@ node holding the blocks of `T` over the run with their references and the
 available sub-DAG below every voted leader block up to the run's end
 decides every slot up to the run's end. -/
 theorem nodeDecided_of_run {p : Scheme.Params} (hrow : Row Validator p)
-    (hlive : LiveRow Validator p) (hcard : quorumCard Validator ≤ T.card) (hH : H ⊆ U.ids)
+    (hlive : LiveRow Validator p) (hcard : kQuorum Validator ≤ T.card) (hH : H ⊆ U.ids)
     {b c : ℕ} (hc : 0 < c)
     (hspan : ∀ b i, i < b → EligibleAt (S := S) (p.waveLength - 1) i (b + c - 1))
     (hresp : ∀ j, b ≤ j → j ≤ b + c - 1 → Responds U T j)
