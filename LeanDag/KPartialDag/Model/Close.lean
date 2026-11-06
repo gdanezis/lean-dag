@@ -14,6 +14,7 @@ namespace LeanDag
 namespace KPartialDag
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
+variable [Cr : Crashes Validator]
 variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 
 /-- **A node's ledger is closed** after slots `0, …, n-1`: it holds blocks

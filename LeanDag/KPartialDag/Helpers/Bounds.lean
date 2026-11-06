@@ -1,6 +1,7 @@
 import LeanDag.KPartialDag.Model.Bounds
 import LeanDag.KPartialDag.Helpers.Order
 import Mathlib.Order.Interval.Finset.Nat
+import Mathlib.Data.Fintype.Option
 /-!
 # Bands of rounds — helpers
 
@@ -15,6 +16,7 @@ namespace LeanDag
 namespace KPartialDag
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
+variable [Cr : Crashes Validator]
 variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 variable {U : KRecord Validator BlockId Payload} {K : ℕ} {H : Finset BlockId} {A : BlockId}
 variable {p : Scheme.Params}
@@ -27,53 +29,72 @@ omit [LinearOrder BlockId] in
 theorem band_subset {ρ : ℕ} : Band U H ρ ⊆ H := Finset.filter_subset _ _
 
 /-- Anchoring read on `H` grows with `H`. -/
-theorem AnchoredIn.mono {H' : Finset BlockId} (hsub : H ⊆ H') {y : BlockId}
-    (h : AnchoredIn U K H A y) : AnchoredIn U K H' A y := by
+theorem AnchoredIn.mono {H' : Finset BlockId} (hsub : H ⊆ H') {y : BlockId} {d : ℕ}
+    (h : AnchoredIn U K H A y d) : AnchoredIn U K H' A y d := by
   induction h with
   | anchor h => exact AnchoredIn.anchor (h.trans hsub)
-  | referenced S y _ hz href hcard hx ih =>
-    exact AnchoredIn.referenced S y ih hz href hcard (hx.trans hsub)
+  | referenced S y d _ hz href hcard hx ih =>
+    exact AnchoredIn.referenced S y d ih hz href hcard (hx.trans hsub)
+  | reached S m y d y' d' _ hz _ hmz hm href hcard hc hx ih ih' =>
+    exact AnchoredIn.reached S m y d y' d' ih hz ih' hmz hm href hcard hc (hx.trans hsub)
 
 /-- The available sub-DAG read on `H` grows with `H`. -/
 theorem availIn_mono {H' : Finset BlockId} (hsub : H ⊆ H') {z : BlockId}
     (hz : z ∈ AvailIn U K H A) : z ∈ AvailIn U K H' A := by
-  obtain ⟨y, hy, hzy⟩ := hz
-  exact ⟨y, hy.mono hsub, hzy⟩
+  obtain ⟨y, d, hy, hzy⟩ := hz
+  exact ⟨y, d, hy.mono hsub, hzy⟩
 
-/-- A history to depth `K` of a block at round `ρ + K` or above, held in
+/-- A history to depth `d` of a block at round `ρ + d` or above, held in
 `H`, is held in the band of `H` from `ρ`. -/
-theorem historyUpto_subset_band (hH : H ⊆ U.ids) {ρ : ℕ} {x : BlockId}
-    (hx : historyUpto U K x ⊆ H) (hρ : ρ + K ≤ (U.block x).round) :
-    historyUpto U K x ⊆ Band U H ρ := by
+theorem historyUpto_subset_band (hH : H ⊆ U.ids) {ρ d : ℕ} {x : BlockId}
+    (hx : historyUpto U d x ⊆ H) (hρ : ρ + d ≤ (U.block x).round) :
+    historyUpto U d x ⊆ Band U H ρ := by
   have hxi : x ∈ U.ids := hH (hx mem_historyUpto_self)
   intro w hw
-  have := (round_of_mem_historyUpto K hxi hw).2
+  have := (round_of_mem_historyUpto d hxi hw).2
   exact mem_band.mpr ⟨hx hw, by omega⟩
 
-/-- **A block anchored at round `ρ + K` or above is anchored on the band of
-`H` from `ρ`.** -/
-theorem AnchoredIn.band (hH : H ⊆ U.ids) {ρ : ℕ} {y : BlockId} (h : AnchoredIn U K H A y) :
-    ρ + K ≤ (U.block y).round → AnchoredIn U K (Band U H ρ) A y := by
+/-- **An anchor point at round `ρ + K` or above is an anchor point on the band
+of `H` from `ρ`.** -/
+theorem AnchoredIn.band (hH : H ⊆ U.ids) {ρ : ℕ} {y : BlockId} {d : ℕ}
+    (h : AnchoredIn U K H A y d) :
+    ρ + K ≤ (U.block y).round → AnchoredIn U K (Band U H ρ) A y d := by
   induction h with
   | anchor h => exact fun hρ => AnchoredIn.anchor (historyUpto_subset_band hH h hρ)
-  | @referenced x S y hy hz href hcard hx ih =>
+  | @referenced x S y d hy hz href hcard hx ih =>
     intro hρ
     have hup : ∀ z ∈ S, ρ + K ≤ (U.block (y z)).round := fun z hzS => by
       have hyz : y z ∈ U.ids := hH ((hy z hzS).window mem_historyUpto_self)
       have hzi : z ∈ U.ids := hH ((hy z hzS).window (hz z hzS))
       have := (U.valid z hzi).predecessor x (href z hzS)
-      have := (round_of_mem_historyUpto K hyz (hz z hzS)).1
+      have := (round_of_mem_historyUpto _ hyz (hz z hzS)).1
       omega
-    exact AnchoredIn.referenced S y (fun z hzS => ih z hzS (hup z hzS)) hz href hcard
+    exact AnchoredIn.referenced S y d (fun z hzS => ih z hzS (hup z hzS)) hz href hcard
       (historyUpto_subset_band hH hx hρ)
+  | @reached x S m y d y' d' hy hz hy' hmz hm href hcard hc hx ih ih' =>
+    intro hρ
+    have hup : ∀ z ∈ S, ρ + K ≤ (U.block (y z)).round ∧ ρ + K ≤ (U.block (y' z)).round :=
+      fun z hzS => by
+        have hyz : y z ∈ U.ids := hH ((hy z hzS).window mem_historyUpto_self)
+        have hyz' : y' z ∈ U.ids := hH ((hy' z hzS).window mem_historyUpto_self)
+        have hzi : z ∈ U.ids := hH ((hy z hzS).window (hz z hzS))
+        have hmi : m z ∈ U.ids := hH ((hy' z hzS).window (hmz z hzS))
+        have := (U.valid (m z) hmi).predecessor x (href z hzS)
+        have := (U.valid z hzi).predecessor (m z) (hm z hzS)
+        have := (round_of_mem_historyUpto _ hyz (hz z hzS)).1
+        have := (round_of_mem_historyUpto _ hyz' (hmz z hzS)).1
+        omega
+    exact AnchoredIn.reached S m y d y' d' (fun z hzS => ih z hzS (hup z hzS).1) hz
+      (fun z hzS => ih' z hzS (hup z hzS).2) hmz hm href hcard hc
+      (historyUpto_subset_band hH hx (by omega))
 
 /-- **The available sub-DAG above round `ρ + K` is read on the band from
 `ρ`.** -/
 theorem availIn_band_iff (hH : H ⊆ U.ids) {ρ : ℕ} {z : BlockId}
     (hz : ρ + K ≤ (U.block z).round) : z ∈ AvailIn U K (Band U H ρ) A ↔ z ∈ AvailIn U K H A := by
-  refine ⟨availIn_mono band_subset, fun ⟨y, hy, hzy⟩ => ⟨y, hy.band hH ?_, hzy⟩⟩
+  refine ⟨availIn_mono band_subset, fun ⟨y, d, hy, hzy⟩ => ⟨y, d, hy.band hH ?_, hzy⟩⟩
   have hyi : y ∈ U.ids := hH (hy.window mem_historyUpto_self)
-  have := (round_of_mem_historyUpto K hyi hzy).1
+  have := (round_of_mem_historyUpto d hyi hzy).1
   omega
 
 /-- **The indirect test for a slot at round `r`, with `ρ + K ≤ r + 1`, is
@@ -100,21 +121,40 @@ theorem linkedIn_band_iff (hH : H ⊆ U.ids) (hrow : Row Validator p) {ρ r : �
 `ρ + K` or above, is read on the band from `ρ`.** -/
 theorem fetchedIn_band_iff (hH : H ⊆ U.ids) {ρ ρ' : ℕ} (hA : ρ + K ≤ (U.block A).round)
     (hρ : ρ + K ≤ ρ') : FetchedIn U K (Band U H ρ) A ρ' ↔ FetchedIn U K H A ρ' := by
+  have up : ∀ {z : BlockId}, ρ' < (U.block z).round →
+      (z ∈ AvailIn U K (Band U H ρ) A ↔ z ∈ AvailIn U K H A) := fun h =>
+    availIn_band_iff hH (by omega)
   constructor
-  · rintro ⟨hwin, hall⟩
-    refine ⟨hwin.trans band_subset, fun S x hS href hcard => ?_⟩
-    refine (hall S x (fun z hzS => ⟨(availIn_band_iff hH (by have := (hS z hzS).2; omega)).mpr
-      (hS z hzS).1, (hS z hzS).2⟩) href hcard).trans band_subset
-  · rintro ⟨hwin, hall⟩
-    refine ⟨historyUpto_subset_band hH hwin hA, fun S x hS href hcard => ?_⟩
-    obtain ⟨c, hc⟩ : (creatorsOf U.block S).Nonempty := Finset.card_pos.mp (by omega)
-    obtain ⟨z, hzS, -⟩ := mem_creatorsOf.mp hc
-    have hzi : z ∈ U.ids := hH (availIn_subset_held (availIn_mono band_subset (hS z hzS).1))
-    have := (U.valid z hzi).predecessor x (href z hzS)
-    have := (hS z hzS).2
-    exact historyUpto_subset_band hH
-      (hall S x (fun z hzS => ⟨availIn_mono band_subset (hS z hzS).1, (hS z hzS).2⟩) href hcard)
-      (by omega)
+  · rintro ⟨hwin, hall, hall₂⟩
+    refine ⟨hwin.trans band_subset, fun S x hS href hcard => ?_,
+      fun S m x hS hm href hcard hc => ?_⟩
+    · exact (hall S x (fun z hzS => ⟨(up (hS z hzS).2).mpr (hS z hzS).1, (hS z hzS).2⟩) href
+        hcard).trans band_subset
+    · refine (hall₂ S m x (fun z hzS => ⟨?_, (up (hS z hzS).2.2).mpr (hS z hzS).2.1,
+        (hS z hzS).2.2⟩) hm href hcard hc).trans band_subset
+      have hzi : z ∈ U.ids := hH (availIn_subset_held (hS z hzS).1)
+      have := (U.valid z hzi).predecessor (m z) (hm z hzS)
+      exact (availIn_band_iff hH (by have := (hS z hzS).2.2; omega)).mpr (hS z hzS).1
+  · rintro ⟨hwin, hall, hall₂⟩
+    refine ⟨historyUpto_subset_band hH hwin hA, fun S x hS href hcard => ?_,
+      fun S m x hS hm href hcard hc => ?_⟩
+    · obtain ⟨c, hc⟩ : (creatorsOf U.block S).Nonempty := Finset.card_pos.mp (by omega)
+      obtain ⟨z, hzS, -⟩ := mem_creatorsOf.mp hc
+      have hzi : z ∈ U.ids := hH (availIn_subset_held (availIn_mono band_subset (hS z hzS).1))
+      have := (U.valid z hzi).predecessor x (href z hzS)
+      have := (hS z hzS).2
+      exact historyUpto_subset_band hH
+        (hall S x (fun z hzS => ⟨availIn_mono band_subset (hS z hzS).1, (hS z hzS).2⟩) href hcard)
+        (by omega)
+    · obtain ⟨c, hcm⟩ : (creatorsOf U.block S).Nonempty := Finset.card_pos.mp (by omega)
+      obtain ⟨z, hzS, -⟩ := mem_creatorsOf.mp hcm
+      have hmi : m z ∈ U.ids := hH (availIn_subset_held (availIn_mono band_subset (hS z hzS).2.1))
+      have := (U.valid (m z) hmi).predecessor x (href z hzS)
+      have := (hS z hzS).2.2
+      exact historyUpto_subset_band hH
+        (hall₂ S m x (fun z hzS => ⟨availIn_mono band_subset (hS z hzS).1,
+          availIn_mono band_subset (hS z hzS).2.1, (hS z hzS).2.2⟩) hm href hcard hc)
+        (by omega)
 
 /-- Blocks of the record at round `ρ + 1` or above are held with their
 references in the band from `ρ` exactly when they are in `H`. -/
@@ -132,26 +172,33 @@ theorem heldWithRefs_band {ρ : ℕ} {s : Finset BlockId}
     have := (U.valid b hbi).predecessor j hj
     omega
 
-/-- A block of the available sub-DAG below a block of the record lies at or
-below it. -/
-theorem AnchoredBelow.round_le (hA : A ∈ U.ids) {y : BlockId} (h : AnchoredBelow U K A y) :
-    (U.block y).round ≤ (U.block A).round := by
+/-- An anchor point below a block of the record lies at or below it. -/
+theorem AnchoredBelow.round_le (hA : A ∈ U.ids) {y : BlockId} {d : ℕ}
+    (h : AnchoredBelow U K A y d) : (U.block y).round ≤ (U.block A).round := by
   induction h with
   | anchor => exact le_rfl
-  | @referenced x S y hy hz href hcard ih =>
+  | @referenced x S y d hy hz href hcard ih =>
     obtain ⟨z, hzS⟩ := nonempty_of_creatorsOf_card_pos (by omega : 0 < (creatorsOf U.block S).card)
     have hyz := (hy z hzS).mem hA
-    have hzi := historyUpto_subset_ids K hyz (hz z hzS)
+    have hzi := historyUpto_subset_ids _ hyz (hz z hzS)
     have := (U.valid z hzi).predecessor x (href z hzS)
-    have := (round_of_mem_historyUpto K hyz (hz z hzS)).1
+    have := (round_of_mem_historyUpto _ hyz (hz z hzS)).1
     have := ih z hzS
+    omega
+  | @reached x S m y d y' d' hy hz hy' hmz hm href hcard hc ih ih' =>
+    obtain ⟨z, hzS⟩ := nonempty_of_creatorsOf_card_pos (by omega : 0 < (creatorsOf U.block S).card)
+    have hyz := (hy' z hzS).mem hA
+    have hmi := historyUpto_subset_ids _ hyz (hmz z hzS)
+    have := (U.valid (m z) hmi).predecessor x (href z hzS)
+    have := (round_of_mem_historyUpto _ hyz (hmz z hzS)).1
+    have := ih' z hzS
     omega
 
 /-- What a leader outputs lies at or below it. -/
 theorem round_le_of_mem_outIn {D : ℕ} {L b : BlockId} (hL : L ∈ U.ids)
     (hb : b ∈ OutIn U K H D L) : (U.block b).round ≤ (U.block L).round := by
-  obtain ⟨y, hy, hby⟩ := availIn_subset hb.1
-  have := (round_of_mem_historyUpto K (hy.mem hL) hby).1
+  obtain ⟨y, d, hy, hby⟩ := availIn_subset hb.1
+  have := (round_of_mem_historyUpto d (hy.mem hL) hby).1
   have := hy.round_le hL
   omega
 
@@ -345,14 +392,14 @@ theorem exists_parent : ∀ (K : ℕ) {y z : BlockId}, z ∈ historyUpto U K y �
     · obtain ⟨p, hp, hzp⟩ := exists_parent K hzj hzj'
       exact ⟨p, mem_historyUpto_succ.mpr (Or.inr ⟨j, hj, hp⟩), hzp⟩
 
-/-- **Every Byzantine block of a history below an anchored block hangs below a
-root**: a block of a correct author or an anchored block, at most as many
+/-- **Every Byzantine block of a history below an anchor point hangs below a
+root**: a block of a correct author or an anchor point, at most as many
 rounds above it as the history's top, reached through Byzantine blocks. -/
-theorem exists_root (hA : A ∈ U.ids) {y : BlockId} (hy : AnchoredBelow U K A y) :
-    ∀ d z, z ∈ historyUpto U K y → (U.block y).round = (U.block z).round + d →
+theorem exists_root (hA : A ∈ U.ids) {y : BlockId} {e : ℕ} (hy : AnchoredBelow U K A y e) :
+    ∀ d z, z ∈ historyUpto U e y → (U.block y).round = (U.block z).round + d →
       (U.block z).creator ∉ (Correct : Finset Validator) →
       ∃ s r, s ≤ d ∧ r ∈ U.ids ∧ (U.block r).round = (U.block z).round + s ∧
-        ((U.block r).creator ∈ (Correct : Finset Validator) ∨ AnchoredBelow U K A r) ∧
+        ((U.block r).creator ∈ (Correct : Finset Validator) ∨ ∃ d', AnchoredBelow U K A r d') ∧
         z ∈ byzLayers U r s := by
   classical
   have hyi := hy.mem hA
@@ -362,12 +409,13 @@ theorem exists_root (hA : A ∈ U.ids) {y : BlockId} (hy : AnchoredBelow U K A y
     intro z hz hdr hzc
     by_cases hzy : z = y
     · subst hzy
-      exact ⟨0, z, Nat.zero_le _, hyi, rfl, Or.inr hy, Finset.mem_singleton_self _⟩
-    obtain ⟨p, hp, hzp⟩ := exists_parent K hz hzy
-    have hpi := historyUpto_subset_ids K hyi hp
+      exact ⟨0, z, Nat.zero_le _, hyi, rfl, Or.inr ⟨e, hy⟩, Finset.mem_singleton_self _⟩
+    obtain ⟨p, hp, hzp⟩ := exists_parent e hz hzy
+    have hpi := historyUpto_subset_ids e hyi hp
     have hpr := (U.valid p hpi).predecessor z hzp
-    have hpy := (round_of_mem_historyUpto K hyi hp).1
-    by_cases hroot : (U.block p).creator ∈ (Correct : Finset Validator) ∨ AnchoredBelow U K A p
+    have hpy := (round_of_mem_historyUpto e hyi hp).1
+    by_cases hroot : (U.block p).creator ∈ (Correct : Finset Validator) ∨
+        ∃ d', AnchoredBelow U K A p d'
     · exact ⟨1, p, by omega, hpi, by omega, hroot, Finset.mem_biUnion.mpr
         ⟨p, Finset.mem_singleton_self _, Finset.mem_filter.mpr ⟨hzp, hzc⟩⟩⟩
     · push Not at hroot
@@ -375,42 +423,79 @@ theorem exists_root (hA : A ∈ U.ids) {y : BlockId} (hy : AnchoredBelow U K A y
       exact ⟨s + 1, r, by omega, hri, by omega, hrt, Finset.mem_biUnion.mpr
         ⟨p, hpr', Finset.mem_filter.mpr ⟨hzp, hzc⟩⟩⟩
 
-/-- **One round holds at most `|C| · |B|` anchored blocks of authors in `B`
-besides the anchor**: each has a correct referencer one round up, which has
+/-- The tags of the ways a correct block anchors a block: by reference, and,
+when validators may crash for good, through a block of each author. -/
+def reachTags : Finset (Option Validator) :=
+  if 1 ≤ Cr.c then Finset.univ else {none}
+
+theorem card_reachTags : (reachTags (Validator := Validator)).card = reachWidth Validator := by
+  unfold reachTags reachWidth
+  split <;> simp [Fintype.card_option]; omega
+
+/-- **One round holds at most `|C| · w · |B|` anchor points of authors in `B`
+besides the anchor**, `w` the reach width: each has a correct referencer
+one round up, or one reaching it through a block two rounds up, which has
 one block there and references one block per author. -/
 theorem card_anchored_le (hA : A ∈ U.ids) {ρ : ℕ} {B : Finset Validator} {X : Finset BlockId}
-    (hX : ∀ x ∈ X, AnchoredBelow U K A x ∧ (U.block x).round = ρ ∧ x ≠ A ∧
+    (hX : ∀ x ∈ X, (∃ d, AnchoredBelow U K A x d) ∧ (U.block x).round = ρ ∧ x ≠ A ∧
       (U.block x).creator ∈ B) :
-    X.card ≤ (Correct : Finset Validator).card * B.card := by
+    X.card ≤ (Correct : Finset Validator).card * reachWidth Validator * B.card := by
   classical
-  have hex : ∀ x ∈ X, ∃ z, z ∈ U.ids ∧ (U.block z).creator ∈ (Correct : Finset Validator) ∧
-      x ∈ (U.block z).refs := by
+  have hex : ∀ x ∈ X, ∃ w, w ∈ U.ids ∧ (U.block w).creator ∈ (Correct : Finset Validator) ∧
+      ∃ t : Option BlockId, (t = none ∧ x ∈ (U.block w).refs) ∨
+        ∃ v, t = some v ∧ v ∈ (U.block w).refs ∧ x ∈ (U.block v).refs ∧ 1 ≤ Cr.c := by
     intro x hx
-    obtain ⟨hxa, -, hxA, -⟩ := hX x hx
-    obtain ⟨w, hw, hwc, hxw⟩ := hxa.eq_or_referenced.resolve_left hxA
-    exact ⟨w, avail_subset_ids hA hw, hwc, hxw⟩
-  choose! zf hzf using hex
-  have hcard : X.card ≤ ((Correct : Finset Validator) ×ˢ B).card :=
-    Finset.card_le_card_of_injOn (fun x => ((U.block (zf x)).creator, (U.block x).creator))
-      (fun x hx => Finset.mem_coe.mpr (Finset.mem_product.mpr ⟨(hzf x hx).2.1, (hX x hx).2.2.2⟩))
-      fun x hx x' hx' hxx => by
-        obtain ⟨hz, hzC, hxz⟩ := hzf x hx
-        obtain ⟨hz', -, hxz'⟩ := hzf x' hx'
-        obtain ⟨h1, h2⟩ := Prod.mk.inj hxx
-        have hr := (U.valid _ hz).predecessor x hxz
-        have hr' := (U.valid _ hz').predecessor x' hxz'
-        have hzz : zf x = zf x' := U.eq_of_creator_eq hz hz' hzC rfl h1.symm
-          (by have := (hX x hx).2.1; have := (hX x' hx').2.1; omega)
-        rw [← hzz] at hxz'
-        exact (U.valid _ hz).clause x hxz x' hxz' h2
-  rwa [Finset.card_product] at hcard
+    obtain ⟨⟨d, hxa⟩, -, hxA, -⟩ := hX x hx
+    rcases hxa.eq_or_referenced with ⟨h, -⟩ | ⟨w, hw, hwc, hxw, -⟩ | ⟨w, hw, hwc, v, hv, hxv, -, hc⟩
+    · exact absurd h hxA
+    · exact ⟨w, avail_subset_ids hA hw, hwc, none, Or.inl ⟨rfl, hxw⟩⟩
+    · exact ⟨w, avail_subset_ids hA hw, hwc, some v, Or.inr ⟨v, rfl, hv, hxv, hc⟩⟩
+  choose! wf hwf using hex
+  choose! tf htf using fun x hx => (hwf x hx).2.2
+  have hround : ∀ {b c : BlockId}, b ∈ U.ids → c ∈ (U.block b).refs →
+      (U.block c).round + 1 = (U.block b).round := fun hb hc =>
+    by have := (U.valid _ hb).predecessor _ hc; omega
+  have hcard : X.card ≤ (((Correct : Finset Validator) ×ˢ reachTags (Validator := Validator)) ×ˢ
+      B).card := by
+    refine Finset.card_le_card_of_injOn
+      (fun x => (((U.block (wf x)).creator, (tf x).map fun v => (U.block v).creator),
+        (U.block x).creator)) (fun x hx => ?_) fun x hx x' hx' hxx => ?_
+    · refine Finset.mem_coe.mpr (Finset.mem_product.mpr ⟨Finset.mem_product.mpr
+        ⟨(hwf x hx).2.1, ?_⟩, (hX x hx).2.2.2⟩)
+      unfold reachTags
+      rcases htf x hx with ⟨h, -⟩ | ⟨v, h, -, -, hc⟩
+      · split <;> simp [h]
+      · simp [h, hc]
+    · obtain ⟨hw, hwC, -⟩ := hwf x hx
+      obtain ⟨hw', -, -⟩ := hwf x' hx'
+      simp only [Prod.mk.injEq] at hxx
+      obtain ⟨⟨h1, h2⟩, h3⟩ := hxx
+      have hxr := (hX x hx).2.1
+      have hxr' := (hX x' hx').2.1
+      rcases htf x hx with ⟨ht, hxw⟩ | ⟨v, ht, hvw, hxv, -⟩ <;>
+        rcases htf x' hx' with ⟨ht', hxw'⟩ | ⟨v', ht', hvw', hxv', -⟩ <;>
+        simp only [ht, ht', Option.map_none, Option.map_some, reduceCtorEq,
+          Option.some.injEq] at h2
+      · have hww : wf x = wf x' := U.eq_of_creator_eq hw hw' hwC rfl h1.symm
+          (by have := hround hw hxw; have := hround hw' hxw'; omega)
+        rw [← hww] at hxw'
+        exact (U.valid _ hw).clause x hxw x' hxw' h3
+      · have hv := U.complete _ hw _ hvw
+        have hww : wf x = wf x' := U.eq_of_creator_eq hw hw' hwC rfl h1.symm
+          (by have := hround hw hvw; have := hround hv hxv; have := hround hw' hvw'
+              have := hround (U.complete _ hw' _ hvw') hxv'; omega)
+        rw [← hww] at hvw'
+        have hvv : v = v' := (U.valid _ hw).clause v hvw v' hvw' h2
+        subst hvv
+        exact (U.valid _ hv).clause x hxv x' hxv' h3
+  rwa [Finset.card_product, Finset.card_product, card_reachTags] at hcard
 
-/-- One round holds at most `|C|(f + 1) + 1` roots: blocks of correct authors,
-and anchored blocks. -/
+/-- One round holds at most `|C|(w f + 1) + 1` roots, `w` the reach width:
+blocks of correct authors, and anchor points. -/
 theorem card_roots_le (hA : A ∈ U.ids) {ρ : ℕ} {X : Finset BlockId}
     (hX : ∀ x ∈ X, x ∈ U.ids ∧ (U.block x).round = ρ ∧
-      ((U.block x).creator ∈ (Correct : Finset Validator) ∨ AnchoredBelow U K A x)) :
-    X.card ≤ (Correct : Finset Validator).card * (F.f + 1) + 1 := by
+      ((U.block x).creator ∈ (Correct : Finset Validator) ∨ ∃ d, AnchoredBelow U K A x d)) :
+    X.card ≤ (Correct : Finset Validator).card * (reachWidth Validator * F.f + 1) + 1 := by
   classical
   have hc := card_round_le (U := U) fun x hx => ⟨(hX x hx).1, (hX x hx).2.1⟩
   have h1 := Finset.pred_card_le_card_erase (s := X.filter
@@ -421,35 +506,37 @@ theorem card_roots_le (hA : A ∈ U.ids) {ρ : ℕ} {X : Finset BlockId}
       obtain ⟨hxX, hxc⟩ := Finset.mem_filter.mp hxf
       obtain ⟨-, hxr, hxa⟩ := hX x hxX
       exact ⟨hxa.resolve_left hxc, hxr, hxA, by simpa [mem_correct] using hxc⟩
-  have := Nat.mul_le_mul_left (Correct : Finset Validator).card F.card_byzantine
-  rw [Nat.mul_add, Nat.mul_one]
+  have := Nat.mul_le_mul_left ((Correct : Finset Validator).card * reachWidth Validator)
+    F.card_byzantine
+  rw [Nat.mul_add, Nat.mul_one, ← Nat.mul_assoc]
   omega
 
-/-- **The available sub-DAG holds at most `|C| + (|C|(f + 1) + 1)(1 + f + ⋯ +
-f^K)` blocks per round**, with no condition on equivocation: its correct
-blocks number at most `|C|`, and each Byzantine block hangs at most `K`
-rounds below a root through Byzantine blocks. -/
+/-- **The available sub-DAG holds at most `|C| + (|C|(w f + 1) + 1)(1 + f + ⋯ +
+f^K)` blocks per round**, `w` the reach width, with no condition on
+equivocation: its correct blocks number at most `|C|`, and each Byzantine
+block hangs at most `K` rounds below a root through Byzantine blocks. -/
 theorem card_avail_round_le (hA : A ∈ U.ids) {ρ : ℕ} {Z : Finset BlockId}
     (hZ : ∀ z ∈ Z, z ∈ Avail U K A ∧ (U.block z).round = ρ) :
     Z.card ≤ (Correct : Finset Validator).card +
-      ((Correct : Finset Validator).card * (F.f + 1) + 1) *
+      ((Correct : Finset Validator).card * (reachWidth Validator * F.f + 1) + 1) *
         ∑ s ∈ Finset.range (K + 1), F.f ^ s := by
   classical
   have hc := card_round_le (U := U) fun z hz => ⟨avail_subset_ids hA (hZ z hz).1, (hZ z hz).2⟩
   let R : ℕ → Finset BlockId := fun t => U.ids.filter fun r => (U.block r).round = t ∧
-    ((U.block r).creator ∈ (Correct : Finset Validator) ∨ AnchoredBelow U K A r)
+    ((U.block r).creator ∈ (Correct : Finset Validator) ∨ ∃ d, AnchoredBelow U K A r d)
   have hsub : Z.filter (fun z => (U.block z).creator ∉ (Correct : Finset Validator)) ⊆
       (Finset.range (K + 1)).biUnion fun s => (R (ρ + s)).biUnion fun r => byzLayers U r s := by
     intro z hz
     obtain ⟨hzZ, hzc⟩ := Finset.mem_filter.mp hz
-    obtain ⟨⟨y, hy, hzy⟩, hzr⟩ := hZ z hzZ
-    have hyz := round_of_mem_historyUpto K (hy.mem hA) hzy
+    obtain ⟨⟨y, e, hy, hzy⟩, hzr⟩ := hZ z hzZ
+    have hyz := round_of_mem_historyUpto e (hy.mem hA) hzy
+    have hek := hy.le
     obtain ⟨s, r, hs, hri, hrr, hrt, hzr'⟩ := exists_root hA hy
       ((U.block y).round - (U.block z).round) z hzy (by omega) hzc
     exact Finset.mem_biUnion.mpr ⟨s, Finset.mem_range.mpr (by omega),
       Finset.mem_biUnion.mpr ⟨r, Finset.mem_filter.mpr ⟨hri, by omega, hrt⟩, hzr'⟩⟩
   have hb : (Z.filter fun z => (U.block z).creator ∉ (Correct : Finset Validator)).card ≤
-      ((Correct : Finset Validator).card * (F.f + 1) + 1) *
+      ((Correct : Finset Validator).card * (reachWidth Validator * F.f + 1) + 1) *
         ∑ s ∈ Finset.range (K + 1), F.f ^ s := by
     refine (Finset.card_le_card hsub).trans (Finset.card_biUnion_le.trans ?_)
     rw [Finset.mul_sum]

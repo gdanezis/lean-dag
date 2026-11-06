@@ -22,7 +22,7 @@ validator that persists the last round it built builds at most one block a
 round. -/
 def Persisted : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [Slots Validator]
+    [Faults Validator] [Crashes Validator] [LinearOrder BlockId] [Slots Validator]
     (ids : Finset BlockId) (block : BlockId → Block Validator BlockId Payload)
     (order : BlockId → ℕ) (next : Validator → ℕ → ℕ),
     Persists ids block order next → ∀ i ∈ ids, ∀ j ∈ ids,
@@ -35,7 +35,7 @@ a time, and builds only above the blocks of its own on its disk persists the
 last round it built, numbering its builds by time. -/
 def OnDisk : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [Slots Validator]
+    [Faults Validator] [Crashes Validator] [LinearOrder BlockId] [Slots Validator]
     (ids : Finset BlockId) (block : BlockId → Block Validator BlockId Payload)
     (tl : Timeline Validator BlockId),
     BuildsAboveDisk ids block tl → ∃ next, Persists ids block tl.built next
@@ -47,7 +47,7 @@ built above round `R` by `G`, there is a round `R' > R` such that, if
 of `T` has reached `R'` by `G + 3δ + 3 max τ μ`. -/
 def Resumes : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [Slots Validator]
+    [Faults Validator] [Crashes Validator] [LinearOrder BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (G δ τ γ μ R N : ℕ),
     NodeRules U tl T G δ τ γ μ R N → ∀ b ∈ U.ids,
@@ -61,7 +61,7 @@ round `N`, every validator of `T` has a block at every round from `R` to
 `N`, or above it. -/
 def Built : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [Slots Validator]
+    [Faults Validator] [Crashes Validator] [LinearOrder BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (G δ τ γ μ R N : ℕ),
     ReactiveRules U tl T G δ τ γ μ R N → ∀ s, R ≤ s → s ≤ N → ∃ t, ReachedBy U tl T s t
@@ -72,7 +72,7 @@ round `s + 1`, from `R + 1` to `N`, by a time `t ≥ G`, every validator of `T`
 has reached round `s + 1` by `t + δ`. -/
 def CatchesUp : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [F : Faults Validator] [LinearOrder BlockId] [Slots Validator]
+    [F : Faults Validator] [Crashes Validator] [LinearOrder BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (G δ τ γ μ R N : ℕ),
     NodeRules U tl T G δ τ γ μ R N → ∀ s t (A : Finset Validator), R ≤ s → s < N → G ≤ t →
@@ -88,7 +88,7 @@ is a reactive run from `R'` to `N`, and every validator of `T` has reached
 `R'` within `2δ + 2 max τ μ` of `G + τ` and of the time all reached `R`. -/
 def Starts : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [Slots Validator]
+    [Faults Validator] [Crashes Validator] [LinearOrder BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (G δ τ γ μ R N : ℕ),
     ReactiveRules U tl T G δ τ γ μ R N → ∃ R', R ≤ R' ∧
@@ -102,7 +102,7 @@ of `T` has reached round `s`, from `R` to below `N`, by `t`, every validator
 of `T` has built at round `s + 1` by `t + δ + max τ μ`. -/
 def Slow : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [Slots Validator]
+    [Faults Validator] [Crashes Validator] [LinearOrder BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (G δ τ γ μ R N : ℕ),
     ReactiveRun U tl T G δ τ γ μ R N → δ < γ → γ ≤ τ → ∀ s t, R ≤ s → s < N →
@@ -115,7 +115,7 @@ at round `s` by `t`, every validator of `T` has built at round `s + 1` by
 `t + δ + max γ μ`. -/
 def Fast : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator]
+    [Faults Validator] [Crashes Validator] [LinearOrder BlockId] [S : Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (G δ τ γ μ R N : ℕ),
     ReactiveRun U tl T G δ τ γ μ R N → 2 * δ ≤ τ → δ < γ → γ ≤ τ → ∀ s t, R + 2 ≤ s → s < N →
@@ -127,7 +127,7 @@ from round `R` to round `N` is responsive among `T` from
 round `R + 1` to `N`. -/
 def Responsive : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [Slots Validator]
+    [Faults Validator] [Crashes Validator] [LinearOrder BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (G δ τ γ μ R N : ℕ),
     ReactiveRun U tl T G δ τ γ μ R N → 2 * δ ≤ τ → δ < γ → γ ≤ τ →
@@ -141,7 +141,8 @@ node of `T` commits the slot directly on what it holds at
 `t + 3δ + 2 max γ μ`. -/
 def Commits : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator] (p : Scheme.Params)
+    [Faults Validator] [Crashes Validator]
+    [LinearOrder BlockId] [S : Slots Validator] (p : Scheme.Params)
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (G δ τ γ μ R K N : ℕ), Row Validator p → LiveRow Validator p →
     ReactiveRun U tl T G δ τ γ μ R N → 2 * δ ≤ τ → δ < γ → γ ≤ τ → ∀ k t,
@@ -157,7 +158,7 @@ from round `R` to round `N` is synchronous among `T` from
 round `R + 1` to `N`. -/
 def Synchronised : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [Slots Validator]
+    [Faults Validator] [Crashes Validator] [LinearOrder BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (G δ τ γ μ R N : ℕ),
     ReactiveRun U tl T G δ τ γ μ R N → 2 * δ ≤ γ → δ < γ → γ ≤ τ →
@@ -169,10 +170,10 @@ available sub-DAG of a voted block is on the disk of a node of any quorum
 `T` of correct nodes from some time on, through any crash. -/
 def Durable : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [Slots Validator]
+    [Faults Validator] [Crashes Validator] [LinearOrder BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (K : ℕ), T ⊆ (Correct : Finset Validator) →
-    quorumCard Validator ≤ T.card → KeepsHistory U tl K → ∀ A ∈ U.ids, Voted U A →
+    quorumCard Validator ≤ T.card → 1 ≤ K → KeepsHistory U tl K → ∀ A ∈ U.ids, Voted U A →
       ∀ z ∈ Avail U K A, ∃ w ∈ T, ∃ t₀, ∀ t, t₀ ≤ t → z ∈ tl.disk w t
 
 /-- **The ledger grows**: at a live row, on a reactive run from round `R` to
@@ -184,7 +185,8 @@ node of `T`, at one time, decides every slot below `b + c` and has fetched
 each leader it commits down to `D` rounds below it. -/
 def Ledger : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator] (p : Scheme.Params)
+    [Faults Validator] [Crashes Validator]
+    [LinearOrder BlockId] [S : Slots Validator] (p : Scheme.Params)
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (G δ τ γ μ R N K D Δ c : ℕ),
     Row Validator p → LiveRow Validator p → ReactiveRun U tl T G δ τ γ μ R N → 2 * δ ≤ τ →

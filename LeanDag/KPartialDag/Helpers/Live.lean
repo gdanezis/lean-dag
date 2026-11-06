@@ -13,6 +13,7 @@ namespace LeanDag
 namespace KPartialDag
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
+variable [Cr : Crashes Validator]
 variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 variable {U : KRecord Validator BlockId Payload} {K : ℕ} {H : Finset BlockId}
 variable {T : Finset Validator} {R : ℕ}

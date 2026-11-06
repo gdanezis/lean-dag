@@ -29,6 +29,9 @@ instance tFaults : Faults (Fin 4) where
   card_validators := by decide
   card_byzantine := by decide
 
+/-- No validator crashes for good. -/
+instance tCrashes : Crashes (Fin 4) := ⟨0, by decide⟩
+
 instance tSlots : Slots (Fin 4) := Slots.identity fun k => ⟨k % 4, Nat.mod_lt _ (by omega)⟩
 
 theorem leader_val (k : ℕ) : (tSlots.leader k).val = k % 4 := rfl
@@ -380,14 +383,14 @@ after they hold the block. -/
 theorem t_fetches (N K : ℕ) : Fetches (tRec N) (tl N) Correct K 3 1 := by
   intro v _ t hG j A hA _ hAv z hz
   have hAi := (bt_le_of_held hAv).1
-  obtain ⟨y, hy, hzy⟩ := hz
+  obtain ⟨y, d, hy, hzy⟩ := hz
   have h1 := hy.round_le hAi
-  have h2 := (round_of_mem_historyUpto K (hy.mem hAi) hzy).1
+  have h2 := (round_of_mem_historyUpto d (hy.mem hAi) hzy).1
   have h1' : y.1 ≤ A.1 := h1
   have h2' : z.1 ≤ y.1 := h2
   have := bt_strictMono.monotone (h2'.trans h1')
   have := (bt_le_of_held hAv).2
-  exact mem_tHeld_of (avail_subset_ids hAi ⟨y, hy, hzy⟩) (by omega) (by omega)
+  exact mem_tHeld_of (avail_subset_ids hAi ⟨y, d, hy, hzy⟩) (by omega) (by omega)
 
 /-- Correct validators build above the blocks of their own on their disk,
 through the restart of validator `2`. -/

@@ -13,6 +13,7 @@ namespace LeanDag
 namespace KPartialDag
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
+variable [Cr : Crashes Validator]
 variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 
 /-- The blocks of `H` at round `ρ` or above. -/
@@ -39,6 +40,12 @@ def Obliged (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockI
 def layerBound (c f : ℕ) : ℕ → ℕ
   | 0 => 1
   | d + 1 => c + f * layerBound c f d
+
+variable (Validator) in
+/-- **The ways a correct block anchors a block of a given author**: by
+reference, and, when validators may crash for good, in two steps through a
+block of any author. -/
+def reachWidth : ℕ := 1 + if 1 ≤ Cr.c then Fintype.card Validator else 0
 
 end KPartialDag
 

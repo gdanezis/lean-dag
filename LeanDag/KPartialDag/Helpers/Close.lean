@@ -16,6 +16,7 @@ namespace LeanDag
 namespace KPartialDag
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
+variable [Cr : Crashes Validator]
 variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 variable {U : KRecord Validator BlockId Payload} {K D : ℕ} {H H' : Finset BlockId} {A : BlockId}
 variable {p : Scheme.Params}
@@ -32,9 +33,16 @@ the round fetched to, the sub-DAG read on more is the record's, and so the
 one read on `H`. -/
 theorem FetchedIn.mono (hH : H ⊆ H') (hH' : H' ⊆ U.ids) {ρ : ℕ} (hf : FetchedIn U K H A ρ) :
     FetchedIn U K H' A ρ := by
-  refine ⟨hf.1.trans hH, fun S x hS href hcard => (hf.2 S x (fun z hz => ?_) href hcard).trans hH⟩
-  exact ⟨avail_subset_availIn (hH.trans hH') hf (availIn_subset (hS z hz).1) (hS z hz).2.le,
-    (hS z hz).2⟩
+  have up : ∀ {z : BlockId}, z ∈ AvailIn U K H' A → ρ ≤ (U.block z).round → z ∈ AvailIn U K H A :=
+    fun hz hρ => avail_subset_availIn (hH.trans hH') hf (availIn_subset hz) hρ
+  refine ⟨hf.1.trans hH, fun S x hS href hcard => (hf.2.1 S x (fun z hz =>
+    ⟨up (hS z hz).1 (hS z hz).2.le, (hS z hz).2⟩) href hcard).trans hH,
+    fun S m x hS hm href hcard hc => (hf.2.2 S m x (fun z hz => ⟨up (hS z hz).1 ?_,
+      up (hS z hz).2.1 (hS z hz).2.2.le, (hS z hz).2.2⟩) hm href hcard hc).trans hH⟩
+  have hzi : z ∈ U.ids := hH' (availIn_subset_held (hS z hz).1)
+  have := (U.valid z hzi).predecessor (m z) (hm z hz)
+  have := (hS z hz).2.2
+  omega
 
 /-- The blocks held with their references grow with what is held. -/
 theorem heldWithRefs_mono (hH : H ⊆ H') (s : Finset BlockId) :

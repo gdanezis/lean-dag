@@ -14,6 +14,7 @@ namespace LeanDag
 namespace KPartialDag
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
+variable [Cr : Crashes Validator]
 variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 variable {U : KRecord Validator BlockId Payload} {K D : ℕ} {H : Finset BlockId}
 variable {T : Finset Validator} {R : ℕ} {p : Scheme.Params}
@@ -121,7 +122,7 @@ theorem anchoredBelow_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card
     (hpop : PopulatedOn U T (m + 1)) {x : BlockId} (hx : x ∈ U.ids)
     (hxr : (U.block x).round = m) (hxc : (U.block x).creator ∈ T)
     (hy : ∀ z ∈ U.ids, (U.block z).round = m + 1 → (U.block z).creator ∈ T → z ∈ Avail U K A) :
-    AnchoredBelow U K A x := by
+    AnchoredBelow U K A x K := by
   classical
   let S := (blocksAt U (m + 1)).filter fun z => (U.block z).creator ∈ T
   have hS : ∀ z ∈ S, z ∈ U.ids ∧ (U.block z).round = m + 1 ∧ (U.block z).creator ∈ T :=
@@ -151,24 +152,24 @@ theorem mem_out_of_synchronisedOn (hK : 1 ≤ K) (hcard : quorumCard Validator �
   refine ⟨?_, hD⟩
   -- the blocks of `T` at least two rounds below `L`, from `R` on, are anchored
   have key : ∀ d x, x ∈ U.ids → (U.block x).creator ∈ T → R ≤ (U.block x).round →
-      (U.block x).round + 2 + d = (U.block L).round → AnchoredBelow U K L x := by
+      (U.block x).round + 2 + d = (U.block L).round → AnchoredBelow U K L x K := by
     intro d
     induction d with
     | zero =>
       intro x hx hxc hRx hxr
       exact anchoredBelow_of_synchronisedOn hcard hs hRx (by omega)
         (hpop _ (by omega) (by omega)) hx rfl hxc fun z hz hzr hzc =>
-          ⟨L, AnchoredBelow.anchor, ref_mem_historyUpto hK
+          ⟨L, _, AnchoredBelow.anchor, ref_mem_historyUpto hK
             (hs _ (by omega) (by omega) L hL (by omega) hLc z hz hzr hzc)⟩
     | succ d ih =>
       intro x hx hxc hRx hxr
       exact anchoredBelow_of_synchronisedOn hcard hs hRx (by omega)
         (hpop _ (by omega) (by omega)) hx rfl hxc fun z hz hzr hzc =>
-          ⟨z, ih z hz hzc (by omega) (by omega), mem_historyUpto_self⟩
+          ⟨z, _, ih z hz hzc (by omega) (by omega), mem_historyUpto_self⟩
   by_cases h : (U.block x).round + 1 = (U.block L).round
-  · exact ⟨L, AnchoredBelow.anchor,
+  · exact ⟨L, _, AnchoredBelow.anchor,
       ref_mem_historyUpto hK (hs _ hRx (by omega) L hL h.symm hLc x hx rfl hxc)⟩
-  · exact ⟨x, key ((U.block L).round - (U.block x).round - 2) x hx hxc hRx (by omega),
+  · exact ⟨x, _, key ((U.block L).round - (U.block x).round - 2) x hx hxc hRx (by omega),
       mem_historyUpto_self⟩
 
 section Slot

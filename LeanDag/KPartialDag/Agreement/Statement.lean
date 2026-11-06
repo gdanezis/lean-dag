@@ -25,7 +25,8 @@ open Scheme
 scheme and `K ≥ 3`. -/
 def Laws : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] (p : Params) (K : ℕ), Row Validator p → 3 ≤ K →
+    [Faults Validator] [Crashes Validator]
+    [LinearOrder BlockId] (p : Params) (K : ℕ), Row Validator p → 3 ≤ K →
     (kRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) p K).Laws
 
 /-- **Two views decide each slot alike**: at a row of the scheme and `K ≥ 3`,
@@ -33,7 +34,7 @@ decisions of a slot by the commit rule on two views of one record are
 equal. -/
 def Agrees : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator] (p : Params)
+    [Faults Validator] [Crashes Validator] [LinearOrder BlockId] [S : Slots Validator] (p : Params)
     (U : KRecord Validator BlockId Payload) (K : ℕ) (V₁ V₂ : U.View) (k : ℕ)
     (v₁ v₂ : Option BlockId), Row Validator p → 3 ≤ K → (kRule p K).Decided (S := S) U V₁ k v₁ →
     (kRule p K).Decided (S := S) U V₂ k v₂ → v₁ = v₂
@@ -44,7 +45,7 @@ slot are the scheme's, and a link through the sub-DAG below a block of the
 record is a scheme link from it. -/
 def Conforms : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [Slots Validator] (p : Params)
+    [Faults Validator] [Crashes Validator] [LinearOrder BlockId] [Slots Validator] (p : Params)
     (σ : VoteSel Validator BlockId Payload (KValid Validator BlockId Payload) Correct)
     (U : KRecord Validator BlockId Payload) (K : ℕ) (A L : BlockId) (k : ℕ), Row Validator p →
     certsAt p σ U L (U.block L).round = certsFor p U L (U.block L).round ∧
@@ -55,7 +56,8 @@ def Conforms : Prop :=
 /-- **Rows of the scheme**: Mysticeti and Cordial Miners are rows of the
 substrate, and Blue Bottle is at `n ≥ 5f + 1`; each is live. -/
 def Rows : Prop :=
-  ∀ (Validator : Type) [Fintype Validator] [DecidableEq Validator] [F : Faults Validator],
+  ∀ (Validator : Type) [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
+    [Crashes Validator],
     (Row Validator (Params.mysticeti (Fintype.card Validator) F.f) ∧
       LiveRow Validator (Params.mysticeti (Fintype.card Validator) F.f)) ∧
     (Row Validator (Params.cordialMinersPS (Fintype.card Validator) F.f) ∧

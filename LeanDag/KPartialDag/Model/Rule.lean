@@ -19,6 +19,7 @@ namespace KPartialDag
 open Scheme
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
+variable [Cr : Crashes Validator]
 variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 
 variable (Validator) in

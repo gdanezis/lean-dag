@@ -16,6 +16,7 @@ namespace LeanDag
 namespace KPartialDag
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
+variable [Cr : Crashes Validator]
 variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 variable [S : Slots Validator]
 variable {U : KRecord Validator BlockId Payload} {tl : Timeline Validator BlockId}
@@ -477,21 +478,26 @@ on disk, every block of the available sub-DAG of a voted block is on the disk
 of a node of a quorum `T` of correct nodes from some time on, through any
 crash. Its `f + 1` voters, or `f + 1` authors, include a node of `T`. -/
 theorem exists_disk_of_avail (hT : T ⊆ (Correct : Finset Validator))
-    (hTq : quorumCard Validator ≤ T.card) {K : ℕ} (hK : KeepsHistory U tl K) {A z : BlockId}
-    (hA : A ∈ U.ids) (hV : Voted U A) (hz : z ∈ Avail U K A) :
+    (hTq : quorumCard Validator ≤ T.card) {K : ℕ} (hK1 : 1 ≤ K) (hK : KeepsHistory U tl K)
+    {A z : BlockId} (hA : A ∈ U.ids) (hV : Voted U A) (hz : z ∈ Avail U K A) :
     ∃ w ∈ T, ∃ t₀, ∀ t, t₀ ≤ t → z ∈ tl.disk w t := by
-  obtain ⟨y, hy, hzy⟩ := hz
+  obtain ⟨y, d, hy, hzy⟩ := hz
   cases hy with
   | anchor =>
     obtain ⟨c, hc, hcT⟩ := exists_mem_of_card hTq hV
     obtain ⟨b, hb, rfl⟩ := mem_creatorsOf.mp hc
     obtain ⟨hbi, -, hbA⟩ := mem_votesFor.mp hb
     exact ⟨_, hcT, _, fun t ht => hK b hbi (hT hcT) t ht A hbA hzy⟩
-  | referenced S yf hyf hzf href hcard =>
+  | referenced S yf df hyf hzf href hcard =>
     obtain ⟨c, hc, hcT⟩ := exists_mem_of_card hTq hcard
     obtain ⟨w, hw, rfl⟩ := mem_creatorsOf.mp hc
-    exact ⟨_, hcT, _, fun t ht => hK w (avail_subset_ids hA ⟨yf w, hyf w hw, hzf w hw⟩)
+    exact ⟨_, hcT, _, fun t ht => hK w (avail_subset_ids hA ⟨yf w, df w, hyf w hw, hzf w hw⟩)
       (hT hcT) t ht y (href w hw) hzy⟩
+  | reached S m yf df yf' df' hyf hzf hyf' hmz hm href hcard hgate =>
+    obtain ⟨c, hc, hcT⟩ := exists_mem_of_card hTq hcard
+    obtain ⟨w, hw, rfl⟩ := mem_creatorsOf.mp hc
+    exact ⟨_, hcT, _, fun t ht => hK w (avail_subset_ids hA ⟨yf w, df w, hyf w hw, hzf w hw⟩)
+      (hT hcT) t ht (m w) (hm w hw) (historyUpto_pred_subset hK1 (href w hw) hzy)⟩
 
 namespace ReactiveRun
 

@@ -18,15 +18,15 @@ namespace Agreement
 open Scheme
 
 theorem laws : Laws := by
-  intro Validator BlockId Payload _ _ _ _ p K hrow hK
+  intro Validator BlockId Payload _ _ _ _ _ p K hrow hK
   exact kRule_laws hrow hK
 
 theorem agrees : Agrees := by
-  intro Validator BlockId Payload _ _ _ _ S p U K V₁ V₂ k v₁ v₂ hrow hK h₁ h₂
+  intro Validator BlockId Payload _ _ _ _ _ S p U K V₁ V₂ k v₁ v₂ hrow hK h₁ h₂
   exact (kRule p K).decided_unique (kRule_laws hrow hK) trivial h₁ V₂ v₂ h₂
 
 theorem conforms : Conforms := by
-  intro Validator BlockId Payload _ _ _ _ _ p σ U K A L k hrow
+  intro Validator BlockId Payload _ _ _ _ _ _ p σ U K A L k hrow
   have hd : ∀ b ∈ U.ids, DistinctRefs U b := fun b hb i hi j hj hc =>
     (U.valid b hb).clause i hi j hj hc
   have hcerts : certsAt p σ U L (U.block L).round = certsFor p U L (U.block L).round := by
@@ -46,7 +46,7 @@ theorem conforms : Conforms := by
   exact Finset.mem_filter.mpr ⟨hcerts ▸ hX hC, mem_history_of_avail hA (hXa C hC).1⟩
 
 theorem rows : Rows := by
-  intro Validator _ _ F
+  intro Validator _ _ F _
   have := F.card_validators
   refine ⟨⟨Or.inr ⟨rfl, rfl, rfl, ?_⟩, ?_⟩, ⟨Or.inr ⟨rfl, rfl, rfl, ?_⟩, ?_⟩, fun h5 =>
     ⟨Or.inl ⟨rfl, rfl, ?_, ?_⟩, ?_⟩⟩ <;>

@@ -20,7 +20,7 @@ round `R` to round `N` gives responsiveness among `T` over the same
 rounds. -/
 def Weaker : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [Slots Validator]
+    [Faults Validator] [Crashes Validator] [LinearOrder BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (T : Finset Validator) (R N : ℕ),
     SyncFrom U T R N → RespondsFrom U T R N
 
@@ -29,7 +29,8 @@ def Weaker : Prop :=
 commits the slot directly on a record responsive among `T`. -/
 def Commits : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator] (p : Scheme.Params)
+    [Faults Validator] [Crashes Validator]
+    [LinearOrder BlockId] [S : Slots Validator] (p : Scheme.Params)
     (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId)
     (T : Finset Validator) (R k : ℕ), Row Validator p → LiveRow Validator p →
     RespondsFrom U T R (S.slotRound k + 2) → R ≤ S.slotRound k → S.leader k ∈ T →
@@ -42,7 +43,8 @@ committed every slot from `b` to `n`, decides every slot below `b` that `n`
 may anchor. -/
 def Descends : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator] (p : Scheme.Params)
+    [Faults Validator] [Crashes Validator]
+    [LinearOrder BlockId] [S : Slots Validator] (p : Scheme.Params)
     (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (b n : ℕ),
     Row Validator p → H ⊆ U.ids → b ≤ n →
     (∀ i, i < b → EligibleAt (S := S) (p.waveLength - 1) i n) →
@@ -56,7 +58,8 @@ to the run's end, a node holding what the run needs decides every slot below
 `b + c`, at a live row. -/
 def Progress : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator] (p : Scheme.Params) (K : ℕ)
+    [Faults Validator] [Crashes Validator]
+    [LinearOrder BlockId] [S : Slots Validator] (p : Scheme.Params) (K : ℕ)
     (T : Finset Validator) (c : ℕ), Row Validator p → LiveRow Validator p → 0 < c →
     (∀ b i, i < b → EligibleAt (S := S) (p.waveLength - 1) i (b + c - 1)) → FairRunOn T c →
     ∀ R k, ∃ b, k ≤ b ∧ R ≤ S.slotRound b ∧

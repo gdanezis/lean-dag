@@ -12,25 +12,34 @@ namespace LeanDag
 namespace KPartialDag
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
+variable [Cr : Crashes Validator]
 variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 
-/-- **The blocks anchored below `A`, read on `H`**: those whose history to
-depth `K` the node holds, and which are `A`, or which blocks of `f + 1`
-distinct authors reference, each `z` in the history to depth `K` of a block
-`y z` anchored in `H`. -/
+/-- **The anchor points below `A`, read on `H`**: those whose history to the
+depth they bring the node holds, anchored as in `AnchoredBelow` from blocks
+read on `H`. -/
 inductive AnchoredIn (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId)
-    (A : BlockId) : BlockId → Prop
-  | anchor : historyUpto U K A ⊆ H → AnchoredIn U K H A A
-  | referenced {x : BlockId} (S : Finset BlockId) (y : BlockId → BlockId)
-      (hy : ∀ z ∈ S, AnchoredIn U K H A (y z)) (hz : ∀ z ∈ S, z ∈ historyUpto U K (y z))
+    (A : BlockId) : BlockId → ℕ → Prop
+  | anchor : historyUpto U K A ⊆ H → AnchoredIn U K H A A K
+  | referenced {x : BlockId} (S : Finset BlockId) (y : BlockId → BlockId) (d : BlockId → ℕ)
+      (hy : ∀ z ∈ S, AnchoredIn U K H A (y z) (d z))
+      (hz : ∀ z ∈ S, z ∈ historyUpto U (d z) (y z))
       (href : ∀ z ∈ S, x ∈ (U.block z).refs)
       (hcard : F.f + 1 ≤ (creatorsOf U.block S).card)
-      (hx : historyUpto U K x ⊆ H) : AnchoredIn U K H A x
+      (hx : historyUpto U K x ⊆ H) : AnchoredIn U K H A x K
+  | reached {x : BlockId} (S : Finset BlockId) (m : BlockId → BlockId)
+      (y : BlockId → BlockId) (d : BlockId → ℕ) (y' : BlockId → BlockId) (d' : BlockId → ℕ)
+      (hy : ∀ z ∈ S, AnchoredIn U K H A (y z) (d z)) (hz : ∀ z ∈ S, z ∈ historyUpto U (d z) (y z))
+      (hy' : ∀ z ∈ S, AnchoredIn U K H A (y' z) (d' z))
+      (hmz : ∀ z ∈ S, m z ∈ historyUpto U (d' z) (y' z))
+      (hm : ∀ z ∈ S, m z ∈ (U.block z).refs) (href : ∀ z ∈ S, x ∈ (U.block (m z)).refs)
+      (hcard : F.f + 1 ≤ (creatorsOf U.block S).card) (hc : 1 ≤ Cr.c)
+      (hx : historyUpto U (K - 1) x ⊆ H) : AnchoredIn U K H A x (K - 1)
 
 /-- **The available sub-DAG below `A`, read on `H`.** -/
 def AvailIn (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (A : BlockId) :
     Set BlockId :=
-  {z | ∃ y, AnchoredIn U K H A y ∧ z ∈ historyUpto U K y}
+  {z | ∃ y d, AnchoredIn U K H A y d ∧ z ∈ historyUpto U d y}
 
 /-- **The indirect test, read on `H`**: the sub-DAG below `A` read on `H`
 holds certificates for `L` from `linkSize` distinct authors, each with its
@@ -44,13 +53,18 @@ def LinkedIn (p : Scheme.Params) (U : KRecord Validator BlockId Payload) (K : �
 /-- **The sub-DAG below `A` is fetched into `H` down to round `ρ`**: `H`
 holds the history to depth `K` of `A`, and of every block that blocks of
 `f + 1` distinct authors of the sub-DAG read on `H` above round `ρ`
-reference. -/
+reference, and, when validators may crash for good, the history to depth
+`K − 1` of every block that blocks of `f + 1` distinct authors of it reach in
+two steps through it, above `ρ`. -/
 def FetchedIn (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId)
     (A : BlockId) (ρ : ℕ) : Prop :=
-  historyUpto U K A ⊆ H ∧ ∀ (S : Finset BlockId) (x : BlockId),
+  historyUpto U K A ⊆ H ∧ (∀ (S : Finset BlockId) (x : BlockId),
     (∀ z ∈ S, z ∈ AvailIn U K H A ∧ ρ < (U.block z).round) →
     (∀ z ∈ S, x ∈ (U.block z).refs) → F.f + 1 ≤ (creatorsOf U.block S).card →
-    historyUpto U K x ⊆ H
+    historyUpto U K x ⊆ H) ∧ ∀ (S : Finset BlockId) (m : BlockId → BlockId) (x : BlockId),
+    (∀ z ∈ S, z ∈ AvailIn U K H A ∧ m z ∈ AvailIn U K H A ∧ ρ < (U.block (m z)).round) →
+    (∀ z ∈ S, m z ∈ (U.block z).refs) → (∀ z ∈ S, x ∈ (U.block (m z)).refs) →
+    F.f + 1 ≤ (creatorsOf U.block S).card → 1 ≤ Cr.c → historyUpto U (K - 1) x ⊆ H
 
 /-- The blocks of `s` the node holds with their references. -/
 def heldWithRefs (U : KRecord Validator BlockId Payload) (H : Finset BlockId)
