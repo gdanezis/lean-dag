@@ -1,9 +1,11 @@
 # K-partial DAGs
 
-This document studies the Mysticeti commit rule on a *K-partial DAG*, a DAG
-substrate in which a correct node holds only part of the history of the
-blocks it references. It states the safety, liveness and order results that
-the Lean development `LeanDag/KPartialDag` proves; §8 lists them.
+This document studies the commit rule of the unified decider
+(`docs/scheme.md`) on a *K-partial DAG*, a DAG substrate in which a correct
+node holds only part of the history of the blocks it references. Mysticeti's
+rule is one row of the decider. The document states the safety, liveness and
+order results that the Lean development `LeanDag/KPartialDag` proves; §8
+lists them.
 
 ## 1. The substrate
 
@@ -34,23 +36,40 @@ block.
 
 ## 2. The commit rule
 
-The direct tests read three rounds. A round-`r` block `L` is directly
-committed when blocks of a quorum of distinct authors at round `r + 2` each
-reference votes for `L` from a quorum (`DirectCommit`). It is directly
-skipped when blocks of a quorum of distinct authors at round `r + 1` do not
-reference it (`DirectSkip`). A node holding those blocks decides as the
-record does.
+The rule is a row of the scheme's decider (`Scheme.Params`): a wave length
+`w`, whether a vote is its own certificate, thresholds for the direct commit,
+the direct skip and a certificate, and a link threshold. The substrate runs
+the rows whose vote lies one round above the slot, at its `q = n − f`
+references a block (`Row`):
 
-Mysticeti's indirect rule decides a slot through the nearest committed
-anchor above it, by whether the anchor's history holds a certificate for
-the slot's block. On a K-partial DAG that history may reach below what a
-correct node holds, since the anchor may lie many rounds above the slot. A
-certificate that lies only on a branch of Byzantine blocks may be held by
-one correct node and not by another, so two nodes reading the anchor's
-history on what they hold may disagree. This is so even when every correct
-node builds a block at every round. The indirect test is therefore read on
-a part of the anchor's history that is fixed by the record and that every
-correct node can fetch.
+* *two-round rows*: a vote is its own certificate, `w = 2`, the two-round
+  inequalities hold at `q`, and the link threshold is `f + 1` or more;
+* *three-round rows*: a certificate carries votes from `certThreshold`
+  distinct authors one round later, `w = 3`, the three-round inequalities
+  hold at `q`, and the link threshold is one certificate.
+
+Mysticeti is the three-round row with every threshold `n − f`; Cordial Miners
+is the three-round row without a direct skip; Blue Bottle is a two-round row
+at `n ≥ 5f + 1` (`Agreement.Rows`). The certificates of a round-`r` block `L`
+are the votes for it at round `r + 1` in a two-round row, and the blocks of
+round `r + 2` carrying votes for it from `certThreshold` distinct authors in
+a three-round row (`certsFor`, `Certifies`). `L` is directly committed when
+its certificates come from `commitThreshold` distinct authors
+(`DirectCommit`), and directly skipped when `skipThreshold` distinct authors
+have a block at round `r + 1` that does not reference it (`DirectSkip`). A
+node holding those blocks decides as the record does.
+
+The indirect rule decides a slot through the nearest committed anchor above
+it, by whether the anchor's history holds certificates for the slot's block
+from `linkSize` distinct authors; when two candidates of a slot are linked,
+the least identifier wins. On a K-partial DAG that history may reach below
+what a correct node holds, since the anchor may lie many rounds above the
+slot. A certificate that lies only on a branch of Byzantine blocks may be
+held by one correct node and not by another, so two nodes reading the
+anchor's history on what they hold may disagree. This is so even when every
+correct node builds a block at every round. The indirect test is therefore
+read on a part of the anchor's history that is fixed by the record and that
+every correct node can fetch.
 
 ## 3. The available sub-DAG
 
@@ -58,60 +77,80 @@ Below a block `A`, a block is *anchored* when it is `A`, or when blocks of
 `f + 1` distinct authors reference it, each in the history to depth `K` of
 an anchored block (`AnchoredBelow`). The *available sub-DAG* below `A` is
 the union of the histories to depth `K` of the anchored blocks (`Avail`).
-The indirect test asks whether the sub-DAG below the anchor holds a
-certificate for the slot's block together with the certificate's
-references, which carry its votes (`AvailLinked`).
+It lies in the anchor's history. The indirect test asks whether the sub-DAG
+below the anchor holds certificates for the slot's block from `linkSize`
+distinct authors, each, in a three-round row, with its references, which
+carry its votes (`AvailLinked`). A block is *voted for* when blocks of
+`f + 1` distinct authors one round above reference it (`Voted`); every
+committed block is.
 
 **Theorem 1 (the available sub-DAG; `Avail.Statement`).**
 
-* *Held* (`Avail.Held`). Below a block with a certificate, every block of
-  the sub-DAG is held by a correct node. Each block of the sub-DAG lies in
-  the history to depth `K` of `A`, which a correct voter of the certificate
-  downloaded, or of a block that a correct author's block of the sub-DAG
-  references; among `f + 1` distinct authors one is correct.
+* *Held* (`Avail.Held`). Below a voted block, every block of the sub-DAG is
+  held by a correct node. Each block of the sub-DAG lies in the history to
+  depth `K` of `A`, which a correct voter downloaded, or of a block that a
+  correct author's block of the sub-DAG references; among `f + 1` distinct
+  authors one is correct.
 * *Broad* (`Avail.Broad`). At `K ≥ 2`, every round two or more below `A`
   holds an anchored block of a correct author. Blocks of a quorum of
   distinct authors at one round reference some correct author's block of
   the round below from `f + 1` of those authors, by a double count: each
   references `n − 2f` or more correct blocks, and a correct author has one
   block a round.
-* *Linked* (`Avail.Linked`). At `K ≥ 3`, if a round-`r` block is directly
-  committed and `A` lies at round `r + 3` or above, the sub-DAG holds a
-  certificate for it with its references. A block of round `r + 3` in the
-  sub-DAG references a certificate of a correct author, since its references
-  and the certificates come from two quorums.
-* *Exclusive* (`Avail.Exclusive`). A block for which the sub-DAG holds a
-  certificate is not directly skipped.
+* *Linked* (`Avail.Linked`). At a row and `K ≥ 3`, if a round-`r` block is
+  directly committed and `A` lies at round `r + w` or above, one round above
+  the decision round, the sub-DAG holds certificates for it from `linkSize`
+  distinct authors, with their references. A block one round above the
+  decision round, with its references and theirs in the sub-DAG, references
+  certificates of `commitThreshold + q − n − f` authors or more, which the
+  inequalities make `linkSize` or more.
+* *Exclusive* (`Avail.Exclusive`). At a row, a block linked through the
+  sub-DAG is not directly skipped: the link's votes, or the votes of one of
+  its certificates, and the blames come from more than `n + f` authors.
 
 ## 4. Agreement
 
 The commit rule is an anchored rule of `Common/Anchored.lean` (`kRule`): the
-direct commit and skip, at wave two, with one rung whose link is
-`AvailLinked`.
+row's direct commit and skip, at wave `w − 1`, with one rung whose link is
+`AvailLinked`, and the least identifier as tie-break.
 
-**Theorem 2 (agreement; `Agreement.Statement`).** At `K ≥ 3` the rule
-satisfies the laws of an anchored rule (`Agreement.Laws`), so two views of
-one record decide each slot alike (`Agreement.Agrees`).
+**Theorem 2 (agreement; `Agreement.Statement`).**
 
-Two certificates for blocks of one author at one round certify the same
-block: their votes come from two quorums, so a correct author's one block of
-the round above references both, and it references one block of each
-author. With Theorem 1, a commit and a skip exclude each other, and a direct
-commit is linked from every eligible anchor.
+* *Laws* (`Agreement.Laws`). At a row and `K ≥ 3` the rule satisfies the
+  laws of an anchored rule.
+* *Agreement* (`Agreement.Agrees`). So two views of one record decide each
+  slot alike.
+* *Conformance* (`Agreement.Conforms`). At a row and every vote-selection
+  rule of the scheme, the certificates of a block and the blames of a slot
+  are the scheme's, and a link through the sub-DAG is a scheme link, since
+  the sub-DAG lies in the anchor's history.
+* *Rows* (`Agreement.Rows`). Mysticeti and Cordial Miners are live rows of
+  the substrate, and Blue Bottle is at `n ≥ 5f + 1`.
+
+The laws are the scheme's counts. In a two-round row, votes for two blocks
+of one slot from more than `n + f` authors share a correct voter, which
+references one block of each author; in a three-round row, so do the votes
+of two certificates, since two certificate thresholds exceed `n + f`. A
+commit and a skip, and a link and a skip, exclude each other the same way,
+and two linked candidates are ordered by identifier. Only the visibility of
+a direct commit from an anchor reads the substrate, and Theorem 1 gives it.
 
 ## 5. What a node reads
 
 A node holds a set `H` of blocks of the record, not closed under histories.
 It reads the available sub-DAG below an anchor on `H` (`AnchoredIn`,
-`AvailIn`), and links a candidate when it holds there a certificate for it
-with its references (`LinkedIn`). It has *fetched the sub-DAG down to round
+`AvailIn`), and links a candidate when it holds there certificates for it
+from `linkSize` distinct authors, with their references in a three-round row
+(`LinkedIn`). It has *fetched the sub-DAG down to round
 `ρ`* when it holds the anchor's history to depth `K` and the history to depth
 `K` of every block that blocks of `f + 1` distinct authors of the sub-DAG
 above round `ρ` reference (`FetchedIn`). It decides by the commit rule read
 on what it holds (`NodeDecided`). The direct tests count the certificates and
-blamers it holds with their references. The indirect skip of a slot at round
-`r` needs the sub-DAG below the anchor fetched down to round `r + 1`, where
-the certificate's references lie.
+blamers it holds with their references. The indirect commit and skip of a
+slot at round `r` need the sub-DAG below the anchor fetched down to round
+`r + 1`, where a three-round certificate's references lie: the skip finds no
+candidate linked, and the commit takes the least linked candidate, which a
+node can know only once it has fetched.
 
 **Theorem 3 (what a node reads; `Node.Statement`).**
 
@@ -122,50 +161,57 @@ the certificate's references lie.
   anchor's round. To decide a slot at round `r` from an anchor `A`, a node
   fetches the sub-DAG between the round of `A` and round `r + 1 − K`, which
   by Theorem 1 it can fetch from correct nodes.
-* *Sound* (`Node.Sound`). A decision a node takes on what it holds is a
-  decision of the commit rule on every view holding `H`. Fetched down to
-  `ρ`, the sub-DAG read on `H` is the record's above `ρ`.
-* *Agreement* (`Node.Agrees`). At `K ≥ 3`, two nodes decide each slot alike.
+* *Sound* (`Node.Sound`). At a row, a decision a node takes on what it holds
+  is a decision of the commit rule on every view holding `H`. Fetched down
+  to `ρ`, the sub-DAG read on `H` is the record's above `ρ`.
+* *Agreement* (`Node.Agrees`). At a row and `K ≥ 3`, two nodes decide each
+  slot alike.
 
 ## 6. Liveness
 
 Liveness is read on the record, from a round `R` on, for a quorum `T` of
 correct validators. The premise is *responsiveness* (`RespondsFrom`): for
-every slot led by `T`, `T` has a block two rounds above the slot, and each
-block of `T` there carries votes from a quorum for one leader block of the
-slot (`Responds`). A node produces this by waiting, before it builds two
-rounds above a slot, until it holds a certificate for the slot's leader
-block. It needs no timer when the leader is correct and the network is
-timely: the voters of `T` are a quorum, so no wait depends on a Byzantine
-validator. *Synchrony* from `R` to `N` means that every block of `T`
-references every block of `T` of the round below (`SynchronisedTo`), and `T`
-has a block at every round (`SyncFrom`).
+every slot led by `T`, `T` has blocks one and two rounds above the slot, and
+for one leader block of the slot each block of `T` one round up votes for it
+and each two rounds up carries votes for it from a quorum (`Responds`). A
+node produces this by waiting, before it builds one round above a slot,
+until it holds the slot's leader block, and before it builds two rounds
+above, until it holds a certificate for it. It needs no timer when the
+leader is correct and the network is timely: the voters of `T` are a quorum,
+so no wait depends on a Byzantine validator. *Synchrony* from `R` to `N`
+means that every block of `T` references every block of `T` of the round
+below (`SynchronisedTo`), and `T` has a block at every round (`SyncFrom`).
 
 The schedule offers runs: past any slot, `c` consecutive slots led by `T`
 (`FairRunOn`), each run spanning eligibility. A node decides once it holds
 the blocks of `T` over the run with their references (`WithRefs`), and the
-available sub-DAG below every leader block with a certificate up to the
-run's end (`AvailBelow`). By Theorem 1 correct nodes hold all of these, and
+available sub-DAG below every voted leader block up to the run's end
+(`AvailBelow`). By Theorem 1 correct nodes hold all of these, and
 the sub-DAG below a block depends only on that block's history, so it does
 not change as the record grows.
+
+A row is *live* when its commit and certificate thresholds are at most
+`n − f` (`LiveRow`).
 
 **Theorem 4 (liveness; `Live.Statement`).** No bound on `K` is needed.
 
 * *Synchrony implies responsiveness* (`Live.Weaker`). After `R`, every block
   of `T` two rounds above a slot led by `T` carries votes from all of `T`
   for the leader's block.
-* *A responsive slot commits* (`Live.Commits`). The blocks of `T` two rounds
-  above the slot are a quorum of certificates, so a node holding those
-  blocks with their references commits the slot directly.
-* *A committed run decides below it* (`Live.Descends`). A committed block
-  has a certificate, so the node has fetched the sub-DAG below each anchor
-  it uses, and its indirect test returns a commit or a skip. Each slot below
+* *A responsive slot commits* (`Live.Commits`). At a live row, the blocks of
+  `T` one round above the slot are `n − f` votes, and those two rounds above
+  `n − f` certificates, so a node holding those blocks with their references
+  commits the slot directly.
+* *A committed run decides below it* (`Live.Descends`). At a row, a committed
+  block is voted for, so the node has fetched the sub-DAG below each anchor
+  it uses, and its indirect test returns a commit of the least linked
+  candidate or a skip. Each slot below
   the run takes its nearest committed eligible anchor, by induction
   downward.
 * *Every slot is decided* (`Live.Progress`). Past any slot `k` and round `R`
   the schedule names a run from `b`, fixed before the record. On every
   record responsive among `T` from `R` to the run's end, a node holding
-  what the run needs decides every slot below `b + c`.
+  what the run needs decides every slot below `b + c`, at a live row.
 
 With Theorem 3, every correct node eventually decides every slot, and all
 decide each slot alike. Under three-round spacing `c = 1`; with one slot a
@@ -214,7 +260,7 @@ correct node.
   slot led by `T`, then after synchrony every block of `T` enters the ledger
   of a node that has decided every slot up to `D` rounds above it, has
   fetched below the leaders it committed, and holds the blocks of `T` from
-  3 to `D + 2` rounds above it with their references.
+  2 to `D + 2` rounds above it with their references, at a live row.
 
 The ledger carries no causal guarantee across slots: a block may enter
 before one of its ancestors, or without it. The order is agreed, so
@@ -242,30 +288,32 @@ built before.
 
 | Theorem | Statement | Assumes |
 |---|---|---|
-| 1 Held | below a certified block, the sub-DAG is held by correct nodes | — |
+| 1 Held | below a voted block, the sub-DAG is held by correct nodes | — |
 | 1 Broad | every round two or more below the anchor has a correct anchored block | `K ≥ 2` |
-| 1 Linked | a direct commit is linked through the sub-DAG of an anchor three rounds up | `K ≥ 3` |
-| 1 Exclusive | a link excludes a direct skip | — |
-| 2 Laws, Agrees | the rule is an anchored rule; views decide each slot alike | `K ≥ 3` |
+| 1 Linked | a direct commit is linked through the sub-DAG of an anchor above the decision round | a row, `K ≥ 3` |
+| 1 Exclusive | a link excludes a direct skip | a row |
+| 2 Laws, Agrees | the rule is an anchored rule; views decide each slot alike | a row, `K ≥ 3` |
+| 2 Conforms | the rule's tests are the scheme's, and its link a scheme link | a row |
+| 2 Rows | Mysticeti, Cordial Miners and Blue Bottle are live rows | `n ≥ 5f + 1` for Blue Bottle |
 | 3 Local | the node's tests read only what it holds | — |
 | 3 Fetchable | holding the sub-DAG down to `ρ − K` fetches it down to `ρ` | — |
-| 3 Sound | a node's decision is the rule's on every view holding it | — |
-| 3 Agrees | two nodes decide each slot alike | `K ≥ 3` |
+| 3 Sound | a node's decision is the rule's on every view holding it | a row |
+| 3 Agrees | two nodes decide each slot alike | a row, `K ≥ 3` |
 | 4 Weaker | synchrony implies responsiveness | — |
-| 4 Commits | a slot led by `T` commits directly | responsiveness |
-| 4 Descends | a committed run decides every slot below it | — |
-| 4 Progress | every slot is eventually decided | responsiveness, fair runs |
+| 4 Commits | a slot led by `T` commits directly | a live row, responsiveness |
+| 4 Descends | a committed run decides every slot below it | a row |
+| 4 Progress | every slot is eventually decided | a live row, responsiveness, fair runs |
 | 5 Local | a node reads a leader's output once fetched `D` rounds down | — |
-| 5 Agrees | ledgers agree across nodes and over time | `K ≥ 3`, fetched below committed leaders |
+| 5 Agrees | ledgers agree across nodes and over time | a row, `K ≥ 3`, fetched below committed leaders |
 | 5 Total | the ledger is a strict total order, causal within a slot | linear orders on authors and ids |
-| 5 Settled | a block not output within `D` rounds never is | — |
-| 5 Excluded | a block settled out of one ledger enters none | `K ≥ 3`, fetched below committed leaders |
+| 5 Settled | a block not output within `D` rounds never is | a row |
+| 5 Excluded | a block settled out of one ledger enters none | a row, `K ≥ 3`, fetched below committed leaders |
 | 5 Outputs | a leader of `T` outputs the blocks of `T` within `D` rounds | synchrony, `K ≥ 1` |
-| 5 Included | every block of `T` enters the ledger | synchrony, a `T` slot every `D` rounds, `K ≥ 3`, fetched below committed leaders, the blocks of `T` above held |
-| 6 Decides | decisions read the band from `K − 1` rounds below the slot | — |
-| 6 Progress | a node decides from a band of bounded length | responsiveness, fair runs |
+| 5 Included | every block of `T` enters the ledger | a live row, synchrony, a `T` slot every `D` rounds, `K ≥ 3`, fetched below committed leaders, the blocks of `T` above held |
+| 6 Decides | decisions read the band from `K − 1` rounds below the slot | a row |
+| 6 Progress | a node decides from a band of bounded length | a live row, responsiveness, fair runs |
 | 6 Builds | building needs the last `K + 1` rounds | — |
-| 6 Resumes | the ledger resumes from the band from `D + K` rounds below | `K ≥ 3`, fetched below committed leaders |
+| 6 Resumes | the ledger resumes from the band from `D + K` rounds below | a row, `K ≥ 3`, fetched below committed leaders |
 | 6 Counts, Window, AvailRound | `n` blocks a round without equivocation; with it, `≈ |C| f^(K−1)` per history and `≈ |C| f^(K+1)` per round of the available sub-DAG | — |
 | 7 Persisted | a node persisting its last round builds once a round | the stored round grows |
 | 7 OnDisk | building above the own blocks on disk persists the last round | one build at a time |
@@ -276,13 +324,13 @@ built before.
 | 7 Slow | each round is built within `δ + max(τ, μ)` | reactive run, `δ < γ ≤ τ` |
 | 7 Fast | a round next to leaders of `T` takes `δ + max(γ, μ)` | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ` |
 | 7 Responsive | the run is responsive among `T` | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ` |
-| 7 Commits | a slot among leaders of `T` commits within `3δ + 2 max(γ, μ)` | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ` |
+| 7 Commits | a slot among leaders of `T` commits within `3δ + 2 max(γ, μ)` | a live row, reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ` |
 | 7 Synchronised | every block of `T` references every block of `T` below | reactive run, `2δ ≤ γ`, `δ < γ ≤ τ` |
-| 7 Ledger | every node of `T` decides every slot up to a run of leaders of `T`, and fetches below its committed leaders | reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ`, fetching, a fair schedule |
-| 7 Durable | every block of a certified block's available sub-DAG stays on the disk of a node of `T` | `T` a quorum of correct nodes, histories to depth `K` on disk |
-| 8 Closes | every node of `T` decides every slot up to the last commit | reactive run, `2δ ≤ γ`, `δ < γ ≤ τ`, `K ≥ 3`, fetching, a fair schedule, a `T` slot every `D` rounds, `T` declares closure |
-| 8 Serves | a node holding what a node at the last commit holds reaches it alike | that node fetched below its committed leaders |
-| 8 Agrees | two nodes reach one last commit with one ledger | `K ≥ 3`, fetched below committed leaders |
+| 7 Ledger | every node of `T` decides every slot up to a run of leaders of `T`, and fetches below its committed leaders | a live row, reactive run, `τ ≥ 2δ`, `δ < γ ≤ τ`, fetching, a fair schedule |
+| 7 Durable | every block of a voted block's available sub-DAG stays on the disk of a node of `T` | `T` a quorum of correct nodes, histories to depth `K` on disk |
+| 8 Closes | every node of `T` decides every slot up to the last commit | a live row, reactive run, `2δ ≤ γ`, `δ < γ ≤ τ`, `K ≥ 3`, fetching, a fair schedule, a `T` slot every `D` rounds, `T` declares closure |
+| 8 Serves | a node holding what a node at the last commit holds reaches it alike | a row, that node fetched below its committed leaders |
+| 8 Agrees | two nodes reach one last commit with one ledger | a row, `K ≥ 3`, fetched below committed leaders |
 
 ## 9. Why a K-partial DAG
 
@@ -299,12 +347,12 @@ is argued only:
   votes and builds, after fetching `K + 1` rounds of history; a validator
   returning from an outage needs those rounds, not all it missed.
 * *Availability without a certification round* (proved). The sub-DAG below
-  a certified block is held by correct nodes (Theorem 1); the rule of
+  a voted block is held by correct nodes (Theorem 1); the rule of
   `f + 1` distinct authors does the work of an availability certificate, and
   a node never depends on Byzantine nodes for data.
-* *Mysticeti's guarantees* (proved). The direct rule, and so the commit
-  latency in rounds, is unchanged; the other guarantees are the results of
-  §8.
+* *The scheme's guarantees* (proved). Each row's direct rule, and so its
+  commit latency in rounds, is unchanged; the other guarantees are the
+  results of §8.
 
 The costs are the loss of causal order across slots, blocks that no leader
 outputs within `D` rounds and must be proposed again, a depth `D` set by the
@@ -319,16 +367,16 @@ blocks. The blocks of `H` at round `ρ` or above are its *band from `ρ`*
 
 **Theorem 6 (bounds; `Bounds.Statement`).**
 
-* *Decisions read a band* (`Bounds.Decides`). A node's decision of a slot at
-  round `ρ + K − 1` or above, and not below `ρ`, is the same on its band from
-  `ρ`. A block anchored at round `ρ + K` or above is anchored on the band,
-  since its derivation reads only blocks above it and their histories to
-  depth `K`, so the available sub-DAG, the indirect test and the fetch test
+* *Decisions read a band* (`Bounds.Decides`). At a row, a node's decision
+  of a slot at round `ρ + K − 1` or above, and not below `ρ`, is the same on
+  its band from `ρ`. A block anchored at round `ρ + K` or above is anchored
+  on the band, since its derivation reads only blocks above it and their
+  histories to depth `K`, so the available sub-DAG, the indirect test and the fetch test
   above round `ρ + K` read only the band; the direct tests read rounds `σ(k)`
   to `σ(k) + 2`, and every slot a decision recurses to lies above.
 * *Progress from a band* (`Bounds.Progress`). On a responsive run, a node holding
   the blocks of `T` over a run with their references, and the available
-  sub-DAG below every certified leader up to the run's end from round `ρ`
+  sub-DAG below every voted leader up to the run's end from round `ρ`
   up, decides every slot below the run's end at round `ρ + K − 1` or above.
   So a node keeps only the rounds from `K − 1` below its lowest undecided
   slot, and the length of that band is bounded after synchrony by the
@@ -339,8 +387,8 @@ blocks. The blocks of `H` at round `ρ` or above are its *band from `ρ`*
   with its band from `r − K`. A restarting node therefore needs, to build,
   the last round at which it built (so as not to build twice at a round)
   and `K + 1` rounds of blocks.
-* *Resuming the ledger* (`Bounds.Resumes`). At `K ≥ 3`, two nodes that
-  decided every slot `D` rounds below `s` and above, and fetched those
+* *Resuming the ledger* (`Bounds.Resumes`). At a row and `K ≥ 3`, two nodes
+  that decided every slot `D` rounds below `s` and above, and fetched those
   slots' leaders down to `D` rounds below `s`, give each block the same entry
   slot from `s` on. Neither needs a verdict of an earlier slot: a leader
   outputs only blocks `D` rounds below it or above, and a block of the
@@ -415,7 +463,7 @@ restart at any time, before or after `G`. Nodes down count against `f` for
 liveness only: a crashed node is correct, and builds at most one block a
 round. From `G` on a node of `T` keeps what it holds, every correct block
 that a node of `T` holds reaches every node of `T` within `δ` (`delivers`),
-and a node of `T` that holds a certified leader block holds its available
+and a node of `T` that holds a voted leader block holds its available
 sub-DAG `Δ` later (`Fetches`), fetching it from the disks that keep it. A
 quorum holds blocks of `f + 1` authors of `T`, which is what the arguments
 below use: the liveness results speak of `T`. With no crash after `G`, `T`
@@ -516,34 +564,35 @@ an earlier block of `T` of its round. Hence:
   responsive among `T` from round `R + 1` to `N`, so
   Theorem 4 applies with `T`.
 * *A slot led by `T` commits within `3δ + 2 max(γ, μ)`*
-  (`Reactive.Commits`). At `τ ≥ 2δ`, when every slot from one round below a
-  slot at round `r ≥ R + 2` to one round above it has a leader in `T`, every
-  node of `T` commits the slot directly on what it holds that long after
+  (`Reactive.Commits`). At a live row and `τ ≥ 2δ`, when every slot from one
+  round below a slot at round `r ≥ R + 2` to one round above it has a leader
+  in `T`, every node of `T` commits the slot directly on what it holds that long after
   the last block of `T` of round `r`.
 * *The run is synchronous* (`Reactive.Synchronised`). At `2δ ≤ γ`, from
   round `R + 1` to `N`, every block of `T` references every block of `T`
   of the round below, so `SyncFrom` holds among `T` and
   Theorem 5's `Outputs` and `Included` apply: no block of `T` from round
   `R + 1` on is late.
-* *The ledger grows* (`Reactive.Ledger`). At `τ ≥ 2δ` and `δ < γ ≤ τ`, when
-  nodes of `T` fetch the available sub-DAG of the certified leaders they
-  hold, and the schedule offers runs of `c` leaders in `T` that span
-  eligibility, past any slot there is a run, starting at slot `b`, such
+* *The ledger grows* (`Reactive.Ledger`). At a live row, `τ ≥ 2δ` and
+  `δ < γ ≤ τ`, when nodes of `T` fetch the available sub-DAG of the voted
+  leaders they hold, and the schedule offers runs of `c` leaders in `T`
+  that span eligibility, past any slot there is a run, starting at slot `b`, such
   that, if the run lies below `N`, every node of `T` at one time decides
   every slot below `b + c`, from slot `0`, and has fetched each leader it
   commits down to `D` rounds below it. These are the premises of Theorem
   5's `Agrees`: every node of `T`'s ledger after `b + c` slots is defined,
-  and the ledgers agree. Every certified leader is referenced by a
-  vote of `T`, which its author keeps on disk and passes on, so every node of `T`
-  holds it and fetches its available sub-DAG; the run is responsive, and
+  and the ledgers agree. Every voted leader is referenced by a vote of
+  `T`, since `f + 1` authors include a node of `T`, which keeps it on disk
+  and passes it on, so every node of `T` holds it and fetches its available
+  sub-DAG; the run is responsive, and
   `Live.Progress` decides every slot below its end.
 
 When correct nodes keep the histories on disk (`KeepsHistory`), nothing a
 leader outputs is lost (`Reactive.Durable`): every block of the available
-sub-DAG of a certified block is on the disk of a node of `T` from some time
-on, through any crash: a quorum of voters keeps the leader's history, and
-`f + 1` authors keep each block anchored below it, and either includes a node
-of `T`. Nodes that crash for good are therefore never needed. With
+sub-DAG of a voted block is on the disk of a node of `T` from some time
+on, through any crash: its `f + 1` voters keep the leader's history, and
+`f + 1` authors keep each block anchored below it, and either includes a
+node of `T`. Nodes that crash for good are therefore never needed. With
 `Resumes`, and `Ledger` when nodes fetch, this argues that the ledger
 resumes after any crash before `G`, of all nodes too, from slot `0`: the
 slots decided before the crash are decided again, alike, on the blocks the
@@ -559,8 +608,8 @@ them. A node building behind holds a block of `T` of the round above built
 earlier, which references them, by induction on build times.
 
 A witness (`LeanDagTest/KPartialDag/Reactive.lean`) shows the rules are
-consistent with time and restarts. Four validators, of which one is
-Byzantine and silent, take leaders in rotation, at `δ = 1`, `γ = 2`, `τ = 4`,
+consistent with time and restarts, at Mysticeti's row. Four validators, of
+which one is Byzantine and silent, take leaders in rotation, at `δ = 1`, `γ = 2`, `τ = 4`,
 `μ = 1` and `G = 3`. A round takes `δ + γ` when the leaders of the round and
 the round below are correct, and `δ + τ` otherwise, the bound of `Slow`; no
 node ever holds blocks of all four, so the grace period runs out every
@@ -624,6 +673,14 @@ the premises of `Closes` (`t_closes`).
 
 ## 13. Open questions
 
+* Rows whose vote lies deeper than one round above the slot, the
+  asynchronous rows of the scheme: a correct voter then holds the leader's
+  history only to depth `K − voteOffset + 1`, so the available sub-DAG would
+  need another anchor clause for `Held`.
+* Rows with crash faults, which read fewer than `n − f` references a block,
+  and so a substrate other than this one.
+* The time bound of a two-round row: `Reactive.Commits` holds at every live
+  row, but a two-round row decides a round earlier than the bound states.
 * Payloads entering the ledger after the last commit, which must be
   proposed again in the next channel.
 * Bounds: the cost of fetching the sub-DAG, and how long correct nodes must
