@@ -17,7 +17,7 @@ namespace KPartialDag
 namespace Avail
 
 /-- **The sub-DAG is held by correct nodes**: at `K ≥ 1`, below a block of the
-record with votes from `f + 1` distinct authors, every block of the available
+record with votes from `f + c + 1` distinct authors, every block of the available
 sub-DAG is held by a correct node. -/
 def Held : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
@@ -47,7 +47,7 @@ def Core : Prop :=
       ∀ w ∈ (U.block z).refs, ∃ v ∈ (U.block w).refs, x ∈ (U.block v).refs
 
 /-- **A direct commit is linked through the sub-DAG**: at a row of the scheme
-and `K ≥ 3`, below a block one round or more above the decision round of a
+and its depth, below a block one round or more above the decision round of a
 directly committed round-`r` block, the sub-DAG holds certificates for it
 from `linkSize` distinct authors, with their references. -/
 def Linked : Prop :=

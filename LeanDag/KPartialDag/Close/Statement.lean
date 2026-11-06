@@ -17,7 +17,7 @@ namespace KPartialDag
 namespace Close
 
 /-- **The channel closes**: at a live row, on a reactive run, at `2δ ≤ γ ≤ τ` and `δ < γ`
-and `K ≥ 3`, when nodes of `T` fetch the available sub-DAG of the voted
+and the row's depth, when nodes of `T` fetch the available sub-DAG of the voted
 leader blocks they hold within `Δ`, the schedule offers runs of `c` leaders
 of `T` spanning eligibility and a slot led by `T` every `D` rounds, and the
 validators of `T` declare the channel closed from round `r₀` on, there is a
@@ -51,7 +51,7 @@ def Serves : Prop :=
     DecidesBelow p U K H D g n → ClosesAfter U K H D closes g n →
     DecidesBelow p U K H' D g n ∧ ClosesAfter U K H' D closes g n
 
-/-- **Nodes agree on the last commit**: at a row and `K ≥ 3`, two nodes that have each
+/-- **Nodes agree on the last commit**: at a row and its depth, two nodes that have each
 decided every slot up to their last commit, and fetched each leader they
 commit down to `D` rounds below it, have the same last commit and the same
 ledger after it. -/

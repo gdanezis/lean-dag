@@ -97,8 +97,8 @@ theorem row_arith (hrow : Row Validator p) {c l : ℕ} (hc : p.commitThreshold �
 
 omit S in
 /-- **Certificates from `linkSize` authors make a block voted**, at a row:
-there are `f + 1` of them, votes, when votes are certificates, and one
-carrying `f + 1` votes or more otherwise. -/
+there are `f + c + 1` of them, votes, when votes are certificates, and one
+carrying `f + c + 1` votes or more otherwise. -/
 theorem voted_of_certs (hrow : Row Validator p) {A : BlockId} {X : Finset BlockId}
     (hX : X ⊆ certsFor p U A (U.block A).round) (hn : p.linkSize ≤ (creatorsOf U.block X).card) :
     Voted U A := by
@@ -147,7 +147,7 @@ theorem kRule_laws (hrow : Row Validator p) {K : ℕ} (hK : kDepth Validator p �
     refine ⟨0, Nat.one_pos, linked hrow hK hA.1 ?_ h.le⟩
     have := (kRule p K).eligible_iff.mp helig
     change S.slotRound k + (p.waveLength - 1) + 1 ≤ S.slotRound j at this
-    have : 2 ≤ p.waveLength := by rcases hrow with ⟨-, h, -⟩ | ⟨-, h, -⟩ <;> omega
+    have := two_le_waveLength hrow
     rw [hA.2.1]
     omega
   commit_link_unique := by

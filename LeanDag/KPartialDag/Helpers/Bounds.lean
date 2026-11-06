@@ -111,7 +111,7 @@ theorem linkedIn_band_iff (hH : H ⊆ U.ids) (hrow : Row Validator p) {ρ r : �
     obtain ⟨hCa, hCc, hrefs⟩ := hX C hC
     have hCi : C ∈ U.ids := hH (availIn_subset_held hCa)
     have hCr := hCc.1
-    have hw : 2 ≤ p.waveLength := by rcases hrow with ⟨-, h, -⟩ | ⟨-, h, -⟩ <;> omega
+    have hw := two_le_waveLength hrow
     refine ⟨(availIn_band_iff hH (by omega)).mpr hCa, hCc, fun hv j hj => ?_⟩
     have := (U.valid C hCi).predecessor j hj
     have := (row_wave hrow).2 hv
@@ -452,9 +452,6 @@ theorem card_anchored_le (hA : A ∈ U.ids) {ρ : ℕ} {B : Finset Validator} {X
     · exact ⟨w, avail_subset_ids hA hw, hwc, some v, Or.inr ⟨v, rfl, hv, hxv, hc⟩⟩
   choose! wf hwf using hex
   choose! tf htf using fun x hx => (hwf x hx).2.2
-  have hround : ∀ {b c : BlockId}, b ∈ U.ids → c ∈ (U.block b).refs →
-      (U.block c).round + 1 = (U.block b).round := fun hb hc =>
-    by have := (U.valid _ hb).predecessor _ hc; omega
   have hcard : X.card ≤ (((Correct : Finset Validator) ×ˢ reachTags (Validator := Validator)) ×ˢ
       B).card := by
     refine Finset.card_le_card_of_injOn
@@ -477,13 +474,15 @@ theorem card_anchored_le (hA : A ∈ U.ids) {ρ : ℕ} {B : Finset Validator} {X
         simp only [ht, ht', Option.map_none, Option.map_some, reduceCtorEq,
           Option.some.injEq] at h2
       · have hww : wf x = wf x' := U.eq_of_creator_eq hw hw' hwC rfl h1.symm
-          (by have := hround hw hxw; have := hround hw' hxw'; omega)
+          (by have := U.round_of_mem_refs hw hxw; have := U.round_of_mem_refs hw' hxw'; omega)
         rw [← hww] at hxw'
         exact (U.valid _ hw).clause x hxw x' hxw' h3
       · have hv := U.complete _ hw _ hvw
         have hww : wf x = wf x' := U.eq_of_creator_eq hw hw' hwC rfl h1.symm
-          (by have := hround hw hvw; have := hround hv hxv; have := hround hw' hvw'
-              have := hround (U.complete _ hw' _ hvw') hxv'; omega)
+          (by
+            have := U.round_of_mem_refs hw hvw; have := U.round_of_mem_refs hv hxv
+            have := U.round_of_mem_refs hw' hvw'
+            have := U.round_of_mem_refs (U.complete _ hw' _ hvw') hxv'; omega)
         rw [← hww] at hvw'
         have hvv : v = v' := (U.valid _ hw).clause v hvw v' hvw' h2
         subst hvv
@@ -562,7 +561,7 @@ theorem nodeDecided_of_agree (hrow : Row Validator p) {H₁ H₂ : Finset BlockI
       (FetchedIn U K H₁ A ρ' ↔ FetchedIn U K H₂ A ρ'))
     {i : ℕ} {v : Option BlockId} (h : NodeDecided p U K H₁ i v) :
     ρ ≤ S.slotRound i → ρ + K ≤ S.slotRound i + 1 → NodeDecided p U K H₂ i v := by
-  have hw : 2 ≤ p.waveLength := by rcases hrow with ⟨-, h, -⟩ | ⟨-, h, -⟩ <;> omega
+  have hw := two_le_waveLength hrow
   induction h with
   | @directCommit k L hL hc =>
     intro h1 h2
@@ -604,7 +603,7 @@ reads only the band from `ρ`.** -/
 theorem nodeDecided_band_iff (hrow : Row Validator p) (hH : H ⊆ U.ids) {ρ i : ℕ}
     {v : Option BlockId} (h1 : ρ ≤ S.slotRound i) (h2 : ρ + K ≤ S.slotRound i + 1) :
     NodeDecided p U K (Band U H ρ) i v ↔ NodeDecided p U K H i v := by
-  have hw : 2 ≤ p.waveLength := by rcases hrow with ⟨-, h, -⟩ | ⟨-, h, -⟩ <;> omega
+  have hw := two_le_waveLength hrow
   exact ⟨fun h => nodeDecided_of_agree hrow (band_subset.trans hH)
       (fun _ hs => heldWithRefs_band hs) (fun _ _ _ hr => linkedIn_band_iff hH hrow hr)
       (fun _ _ hA hρ => fetchedIn_band_iff hH hA hρ) h h1 h2,

@@ -75,7 +75,7 @@ theorem exists_mem_of_quorum (hT : kQuorum Validator ≤ T.card) {X : Finset Blo
   omega
 
 omit S in
-/-- `f + 1` validators include one of a quorum `T`. -/
+/-- `f + c + 1` validators include one of a quorum `T`. -/
 theorem exists_mem_of_card (hT : kQuorum Validator ≤ T.card) {A : Finset Validator}
     (hA : F.f + Cr.c + 1 ≤ A.card) : ∃ v ∈ A, v ∈ T := by
   by_contra hno
@@ -487,7 +487,7 @@ omit S in
 /-- **Nothing a leader outputs is lost**: when correct nodes keep histories
 on disk, every block of the available sub-DAG of a voted block is on the disk
 of a node of a quorum `T` of correct nodes from some time on, through any
-crash. Its `f + 1` voters, or `f + 1` authors, include a node of `T`. -/
+crash. Its `f + c + 1` voters, or `f + c + 1` authors, include a node of `T`. -/
 theorem exists_disk_of_avail (hT : T ⊆ (Correct : Finset Validator))
     (hTq : kQuorum Validator ≤ T.card) {K : ℕ} (hK1 : 1 ≤ K) (hK : KeepsHistory U tl K)
     {A z : BlockId} (hA : A ∈ U.ids) (hV : Voted U A) (hz : z ∈ Avail U K A) :

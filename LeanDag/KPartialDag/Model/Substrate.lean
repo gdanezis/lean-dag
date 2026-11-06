@@ -2,10 +2,11 @@ import LeanDag.Common.History
 /-!
 # K-partial DAG — the substrate
 
-`docs/kpartial.md` §1. The substrate's validity and record (`KValid`,
-`KRecord`), what correct nodes hold of it (`CorrectHeld`), and the available
-sub-DAG below a block, reached from anchor points by reference or in two
-steps (`AnchoredBelow`, `Avail`).
+`docs/kpartial.md` §1. The crash bound (`Crashes`) and the substrate's quorum
+(`kQuorum`), the substrate's validity and record (`KValid`, `KRecord`), the
+spreading condition (`Spread`), what correct nodes hold of the record
+(`CorrectHeld`), and the available sub-DAG below a block, reached from
+anchor points by reference or in two steps (`AnchoredBelow`, `Avail`).
 -/
 
 namespace LeanDag
@@ -45,9 +46,9 @@ authors are the correct validators. -/
 abbrev KRecord := BlockRecord Validator BlockId Payload (KValid Validator BlockId Payload) Correct
 
 variable (Validator) in
-/-- **The spreading condition**: `n − f` correct authors named `f + c` times
-each take fewer names than `n − f − c` authors naming `n − 2f − c` correct
-authors each. It holds without crashes, and at `n ≥ 5f + 3c + 1`. -/
+/-- **The spreading condition** of the double count:
+`(n − f)(f + c) < q(q − f)`, which holds without crashes and at
+`n ≥ 5f + 3c + 1`. -/
 def Spread : Prop :=
   (Fintype.card Validator - F.f) * (F.f + Cr.c) < kQuorum Validator * (kQuorum Validator - F.f)
 
@@ -57,13 +58,10 @@ def CorrectHeld (U : KRecord Validator BlockId Payload) (K : ℕ) : Set BlockId 
   {z | ∃ w ∈ U.ids, (U.block w).creator ∈ (Correct : Finset Validator) ∧
     (z = w ∨ ∃ y ∈ (U.block w).refs, z ∈ historyUpto U K y)}
 
-/-- **The anchor points below `A`, each with the depth of the history it
-brings**: `A` itself, to depth `K`; a block that blocks of `f + 1` distinct
-authors reference, to depth `K`; and, when validators may crash for good, a
-block that blocks of `f + 1` distinct authors reach in two steps, to depth
-`K − 1`. Each referencing block `z`,
-and the block `m z` it reaches through, lies in the history brought by an
-anchor point `y z`. The least such relation. -/
+/-- **The anchor points below `A`, with the depth of history each brings**: `A`
+to depth `K`; a block referenced by blocks of the sub-DAG from `f + c + 1`
+distinct authors, to depth `K`; and, when validators may crash for good, a
+block they reach in two steps through the sub-DAG, to depth `K − 1`. -/
 inductive AnchoredBelow (U : KRecord Validator BlockId Payload) (K : ℕ) (A : BlockId) :
     BlockId → ℕ → Prop
   | anchor : AnchoredBelow U K A A K

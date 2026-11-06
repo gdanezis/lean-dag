@@ -24,12 +24,10 @@ variable [Cr : Crashes Validator]
 variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 
 variable (Validator) in
-/-- **A row of the scheme the substrate runs**: a vote one round above the
-slot, at the substrate's `n − f − c` references a block, either as its own
-certificate at a wave of two, meeting the two-round inequalities at
-`n ≥ 5f + 3c + 1` with a link of `f + c + 1` authors or more, or certified
-one round later at a wave of three, meeting the three-round inequalities
-with a link of one certificate. -/
+/-- **A row of the scheme the substrate runs**, with the vote one round above
+the slot: a two-round row at `n ≥ 5f + 3c + 1` with a link of `f + c + 1`
+authors or more, or a three-round row with a link of one certificate, at the
+substrate's `n − f − c` references. -/
 def Row (p : Params) : Prop :=
   (p.voteIsCert = true ∧ p.waveLength = 2 ∧ F.f + Cr.c + 1 ≤ p.linkSize ∧
       5 * F.f + 3 * Cr.c + 1 ≤ Fintype.card Validator ∧

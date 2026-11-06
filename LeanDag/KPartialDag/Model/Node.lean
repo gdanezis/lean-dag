@@ -52,9 +52,9 @@ def LinkedIn (p : Scheme.Params) (U : KRecord Validator BlockId Payload) (K : �
 
 /-- **The sub-DAG below `A` is fetched into `H` down to round `ρ`**: `H`
 holds the history to depth `K` of `A`, and of every block that blocks of
-`f + 1` distinct authors of the sub-DAG read on `H` above round `ρ`
+`f + c + 1` distinct authors of the sub-DAG read on `H` above round `ρ`
 reference, and, when validators may crash for good, the history to depth
-`K − 1` of every block that blocks of `f + 1` distinct authors of it reach in
+`K − 1` of every block that blocks of `f + c + 1` distinct authors of it reach in
 two steps through it, above `ρ`. -/
 def FetchedIn (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId)
     (A : BlockId) (ρ : ℕ) : Prop :=

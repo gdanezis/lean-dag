@@ -7,10 +7,12 @@ import Mathlib.Tactic.Linarith
 /-!
 # The available sub-DAG — helpers
 
-`docs/kpartial.md` §3. Histories to depth `K` and anchored blocks, and the
+`docs/kpartial.md` §3. Histories to depth `K` and anchor points, and the
 properties of the available sub-DAG: held by correct nodes
-(`avail_correctHeld`), broad (`broad`), linked at a row of the scheme
-(`linked`), and exclusive of a direct skip (`not_directSkip`).
+(`avail_correctHeld`), broad under the spreading condition (`broad`), the
+two-step core (`exists_core`) and the anchor points it gives
+(`exists_cover`), linked at a row of the scheme (`linked`), and exclusive of
+a direct skip (`not_directSkip`).
 -/
 
 namespace LeanDag
@@ -78,7 +80,7 @@ theorem mem_history_of_avail {K : ℕ} {A z : BlockId} (hA : A ∈ U.ids) (hz : 
   exact (mem_history_iff hA).mpr (hy.reaches.trans (reaches_of_mem_historyUpto hzy))
 
 /-- **Anchoring from the sub-DAG**: a block that blocks of the available
-sub-DAG from `f + 1` distinct authors reference is an anchor point. -/
+sub-DAG from `f + c + 1` distinct authors reference is an anchor point. -/
 theorem AnchoredBelow.of_avail {K : ℕ} {A x : BlockId} {S : Finset BlockId}
     (hS : ∀ z ∈ S, z ∈ Avail U K A) (href : ∀ z ∈ S, x ∈ (U.block z).refs)
     (hcard : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card) : AnchoredBelow U K A x K := by
@@ -89,7 +91,7 @@ theorem AnchoredBelow.of_avail {K : ℕ} {A x : BlockId} {S : Finset BlockId}
   exacts [(hS z hz).choose_spec.choose_spec.1, (hS z hz).choose_spec.choose_spec.2]
 
 /-- **Anchoring in two steps from the sub-DAG**: a block that blocks of the
-available sub-DAG from `f + 1` distinct authors reach through blocks of it is
+available sub-DAG from `f + c + 1` distinct authors reach through blocks of it is
 an anchor point. -/
 theorem AnchoredBelow.of_avail_two {K : ℕ} {A x : BlockId} {S : Finset BlockId}
     {m : BlockId → BlockId} (hS : ∀ z ∈ S, z ∈ Avail U K A ∧ m z ∈ Avail U K A)
@@ -106,10 +108,9 @@ theorem AnchoredBelow.of_avail_two {K : ℕ} {A x : BlockId} {S : Finset BlockId
   exacts [(hS z hz).1.choose_spec.choose_spec.1, (hS z hz).1.choose_spec.choose_spec.2,
     (hS z hz).2.choose_spec.choose_spec.1, (hS z hz).2.choose_spec.choose_spec.2]
 
-/-- The arithmetic of the double count: `T ≥ n − f − c` authors at the round
-above, each naming `n − f − c − b` correct authors, cannot spread over the
-`n − b` correct authors with each named `f + c` times or fewer, when
-`(n − f)(f + c) < (n − f − c)(n − 2f − c)`. -/
+/-- The arithmetic of the double count: `T ≥ n − f − c` authors each naming
+`n − f − c − b` correct authors cannot spread over `n − b` correct authors
+named `f + c` times each, under the spreading condition. -/
 theorem count_arith {n f c b T Cc g : ℕ} (hn : 3 * f + 2 * c + 1 ≤ n) (hb : b ≤ f)
     (hC : Cc + b = n) (hT : n - f - c ≤ T) (hbig : T * (n - f - c - b) ≤ Cc * g)
     (hg : g ≤ f + c) (hspread : (n - f) * (f + c) < (n - f - c) * (n - f - c - f)) : False := by
@@ -151,10 +152,8 @@ theorem spread_arith_zero {n f c : ℕ} (hc : c = 0) (h : 3 * f + 1 ≤ n) :
   rw [e1, e2, e3]
   nlinarith [Nat.zero_le (e * f), Nat.zero_le (f * f)]
 
-/-- **A correct block referenced by `f + c + 1` authors of a quorum**, under
-the spreading condition. Blocks of `n − f − c` distinct authors at round
-`ρ + 1` reference some correct author's round-`ρ` block from `f + c + 1` of
-those authors. -/
+/-- **A correct block referenced by `f + c + 1` authors of a quorum**, under the
+spreading condition. -/
 theorem exists_correct_referenced (hsp : Spread Validator) {S : Finset BlockId} {ρ : ℕ}
     (hS : ∀ z ∈ S, z ∈ U.ids ∧ (U.block z).round = ρ + 1)
     (hq : kQuorum Validator ≤ (creatorsOf U.block S).card) :
@@ -290,21 +289,14 @@ theorem exists_descendant : ∀ (k : ℕ) {y : BlockId}, y ∈ U.ids → k ≤ (
     obtain ⟨v, hv, hvr⟩ := exists_descendant k (y := w) (U.complete y hy w hw) (by omega)
     exact ⟨v, mem_historyUpto_succ.mpr (Or.inr ⟨w, hw, hv⟩), by omega⟩
 
-/-- **The two-step core**: three rounds below a block `z` of the record, some
-block is reached from every reference of `z` through a block it references.
-The correct blocks the references of `z` reference number `m`; each
-reference misses at most `m − (q − b)` of them, `b` the Byzantine authors,
-and some correct block three rounds down is referenced by more, since
-`q − b > f + c`. -/
+/-- **The two-step core**: three rounds below a block of the record, some block
+is reached from every reference of it through a block it references. -/
 theorem exists_core {z : BlockId} (hz : z ∈ U.ids) (hzr : 3 ≤ (U.block z).round) :
     ∃ x ∈ U.ids, (U.block x).round + 3 = (U.block z).round ∧
       ∀ w ∈ (U.block z).refs, ∃ v ∈ (U.block w).refs, x ∈ (U.block v).refs := by
   classical
   obtain ⟨hcb, hbf, -⟩ := faults_arith (Validator := Validator)
   have hn := Cr.card_validators
-  have hround : ∀ {b c : BlockId}, b ∈ U.ids → c ∈ (U.block b).refs →
-      (U.block c).round + 1 = (U.block b).round := fun hb hc =>
-    by have := (U.valid _ hb).predecessor _ hc; omega
   -- each block references `q − b` correct authors
   have hcorr : ∀ b ∈ U.ids, 1 ≤ (U.block b).round → kQuorum Validator - F.byzantine.card ≤
       ((U.block b).refs.filter fun j => (U.block j).creator ∈ (Correct : Finset Validator)).card :=
@@ -338,15 +330,15 @@ theorem exists_core {z : BlockId} (hz : z ∈ U.ids) (hzr : 3 ≤ (U.block z).ro
       (U.block v).creator ∈ (Correct : Finset Validator) := fun v hv => by
     obtain ⟨hv, hvc⟩ := Finset.mem_filter.mp hv
     obtain ⟨w, hw, hvw⟩ := Finset.mem_biUnion.mp hv
-    have := hround hz hw
-    have := hround (U.complete z hz w hw) hvw
+    have := U.round_of_mem_refs hz hw
+    have := U.round_of_mem_refs (U.complete z hz w hw) hvw
     exact ⟨U.complete _ (U.complete z hz w hw) v hvw, by omega, hvc⟩
   have hX : ∀ x ∈ X, x ∈ U.ids ∧ (U.block x).round + 3 = (U.block z).round ∧
       (U.block x).creator ∈ (Correct : Finset Validator) := fun x hx => by
     obtain ⟨hx, hxc⟩ := Finset.mem_filter.mp hx
     obtain ⟨v, hv, hxv⟩ := Finset.mem_biUnion.mp hx
     have := (hB v hv).2.1
-    have := hround (hB v hv).1 hxv
+    have := U.round_of_mem_refs (hB v hv).1 hxv
     exact ⟨U.complete _ (hB v hv).1 x hxv, by omega, hxc⟩
   have hBc := hone B (fun v hv => ⟨(hB v hv).1, (hB v hv).2.2⟩) fun v hv v' hv' => by
     have := (hB v hv).2.1; have := (hB v' hv').2.1; omega
@@ -379,7 +371,7 @@ theorem exists_core {z : BlockId} (hz : z ∈ U.ids) (hzr : 3 ≤ (U.block z).ro
       obtain ⟨v, hv⟩ : ∃ v, v ∈ (U.block w).refs.filter
           fun j => (U.block j).creator ∈ (Correct : Finset Validator) :=
         Finset.card_pos.mp (lt_of_lt_of_le (by omega)
-          (hcorr w (U.complete z hz w hw) (by have := hround hz hw; omega)))
+          (hcorr w (U.complete z hz w hw) (by have := U.round_of_mem_refs hz hw; omega)))
       obtain ⟨hvw, hvc⟩ := Finset.mem_filter.mp hv
       have : 0 < B.card := Finset.card_pos.mpr
         ⟨v, Finset.mem_filter.mpr ⟨Finset.mem_biUnion.mpr ⟨w, hw, hvw⟩, hvc⟩⟩
@@ -399,7 +391,7 @@ theorem exists_core {z : BlockId} (hz : z ∈ U.ids) (hzr : 3 ≤ (U.block z).ro
       ⊆ B := fun j hj => by
     obtain ⟨hj, hjc⟩ := Finset.mem_filter.mp hj
     exact Finset.mem_filter.mpr ⟨Finset.mem_biUnion.mpr ⟨w, hw, hj⟩, hjc⟩
-  have hwQ := hcorr w (U.complete z hz w hw) (by have := hround hz hw; omega)
+  have hwQ := hcorr w (U.complete z hz w hw) (by have := U.round_of_mem_refs hz hw; omega)
   obtain ⟨v, hv⟩ : (((U.block w).refs.filter fun j =>
       (U.block j).creator ∈ (Correct : Finset Validator)) ∩
       (B.filter fun v : BlockId => x ∈ (U.block v).refs)).Nonempty := by
@@ -413,10 +405,9 @@ theorem exists_core {z : BlockId} (hz : z ∈ U.ids) (hzr : 3 ≤ (U.block z).ro
   obtain ⟨hv₁, hv₂⟩ := Finset.mem_inter.mp hv
   exact ⟨v, (Finset.mem_filter.mp hv₁).1, (Finset.mem_filter.mp hv₂).2⟩
 
-/-- **The core is an anchor point**, when validators may crash for good: below
-an anchor point `y` bringing `e ≥ 2` rounds, three rounds below a block of
-its history at depth `e − 2` or less, the core of that block is reached in
-two steps by its `n − f − c` references, all in the sub-DAG. -/
+/-- **The core is an anchor point**, when validators may crash for good: the
+core of a block at depth `e − 2` or less in the history an anchor point
+brings is reached in two steps by the block's references. -/
 theorem core_anchored (hc : 1 ≤ Cr.c) {K : ℕ} {A y z : BlockId} {e : ℕ} (hA : A ∈ U.ids)
     (hy : AnchoredBelow U K A y e) (hzy : z ∈ historyUpto U (e - 2) y) (he : 2 ≤ e)
     (hzr : 3 ≤ (U.block z).round) :
@@ -436,11 +427,8 @@ theorem core_anchored (hc : 1 ≤ Cr.c) {K : ℕ} {A y z : BlockId} {e : ℕ} (h
     (fun w hw => (hmf w hw).1) (fun w hw => (hmf w hw).2) ?_ hc, hxr⟩
   exact le_trans (by have := Cr.card_validators; omega) ((U.valid z hz).quorum (by omega))
 
-/-- **An anchor point's history covers a round**, at `K ≥ 4`, when validators
-may crash for good: below `A`, for every round `t ≥ 1` at or below `A`'s,
-some anchor point at round `t` to `t + e − 2` brings `e ≥ 3` rounds. Below
-`A`, cores three rounds apart from a pair of anchor points one round apart
-form another such pair. -/
+/-- **Some anchor point covers each round**, at `K ≥ 4`, when validators may
+crash for good: its history reaches two rounds below a block of the round. -/
 theorem exists_cover (hc : 1 ≤ Cr.c) {K : ℕ} (hK : 4 ≤ K) {A : BlockId} (hA : A ∈ U.ids)
     {t : ℕ} (ht1 : 1 ≤ t) (ht : t ≤ (U.block A).round) :
     ∃ y e, AnchoredBelow U K A y e ∧ 3 ≤ e ∧ t ≤ (U.block y).round ∧
@@ -476,6 +464,11 @@ theorem exists_cover (hc : 1 ≤ Cr.c) {K : ℕ} (hK : 4 ≤ K) {A : BlockId} (h
     (by omega)
   exact pair ((U.block x).round - t) x x' (K - 1) (K - 1) hx hx' (by omega) (by omega) (by omega)
     (by omega)
+
+omit [LinearOrder BlockId] in
+/-- A row's wave is two rounds or more. -/
+theorem two_le_waveLength {p : Scheme.Params} (hrow : Row Validator p) : 2 ≤ p.waveLength := by
+  rcases hrow with ⟨-, h, -⟩ | ⟨-, h, -⟩ <;> omega
 
 omit [LinearOrder BlockId] in
 /-- A row's depth is three rounds or more. -/
@@ -537,21 +530,15 @@ theorem card_refs_filter_ge {v : BlockId} (hv : v ∈ U.ids) {X : Finset BlockId
   have h6 := card_compl_correct_le (Validator := Validator)
   omega
 
-/-- **A directly committed block is linked through the sub-DAG**: at a row
-and the row's depth, below a block `A` one round or more above the decision
-round of a directly committed round-`r` block, the available sub-DAG holds
-`linkSize` authors of its certificates, with their references. A block one
-round above the decision round whose references and theirs lie in the
-sub-DAG references them, since its references and the certificates come
-from two large sets of authors. Such a block lies in the history of `A`, of
-a reference of `A`, or of an anchor point found by the double count, or,
-for a three-round row when validators may crash for good, of an anchor
-point found by the two-step core. -/
+/-- **A directly committed block is linked through the sub-DAG**, at a row and
+its depth, below an anchor one round or more above the decision round: a
+block of the round above the decision round whose references and theirs lie
+in the sub-DAG references `linkSize` authors of the certificates. -/
 theorem linked {p : Scheme.Params} (hrow : Row Validator p) {K : ℕ}
     (hK : kDepth Validator p ≤ K) {A L : BlockId} {r : ℕ} (hA : A ∈ U.ids)
     (hr : r + p.waveLength ≤ (U.block A).round) (hd : DirectCommit p U L r) :
     AvailLinked p U K A L r := by
-  have hw : 2 ≤ p.waveLength := by rcases hrow with ⟨-, h, -⟩ | ⟨-, h, -⟩ <;> omega
+  have hw := two_le_waveLength hrow
   have hK3 : 3 ≤ K := three_le_of_kDepth hK
   obtain ⟨v, hv, hvr, hvrefs⟩ : ∃ v ∈ U.ids, (U.block v).round = r + p.waveLength ∧
       ∀ z ∈ (U.block v).refs, z ∈ Avail U K A ∧ ∀ j ∈ (U.block z).refs, j ∈ Avail U K A := by

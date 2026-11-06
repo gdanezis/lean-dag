@@ -64,7 +64,7 @@ def Builds : Prop :=
     (∀ x ∈ Q, historyUpto U K x ⊆ H) → b.round = r + 1 → b.refs = Q →
     KValid Validator BlockId Payload U.block b ∧ Obliged U K (Band U H (r - K)) b
 
-/-- **Resuming the ledger**: at a row and `K ≥ 3`, two nodes that decided every slot `D`
+/-- **Resuming the ledger**: at a row and its depth, two nodes that decided every slot `D`
 rounds below `s` and above, up to `m`, and fetched those slots' leaders down
 to `D` rounds below `s`, give each block the same entry slot from `s` to
 `m`. Neither needs a verdict of an earlier slot. -/

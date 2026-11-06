@@ -3,7 +3,7 @@ import LeanDag.Scheme.Model.Rule
 /-!
 # Agreement of the commit rule — statement
 
-`docs/kpartial.md` §4, Theorem 2. At a row of the scheme and `K ≥ 3`, the
+`docs/kpartial.md` §4, Theorem 2. At a row of the scheme and its depth, the
 commit rule (`kRule`) satisfies the laws of an anchored rule (`Laws`), so any
 two views of one record decide each slot alike (`Agrees`). Its direct tests
 are the scheme's at every vote-selection rule, and its link is a scheme
@@ -23,14 +23,14 @@ namespace Agreement
 open Scheme
 
 /-- **The laws of an anchored rule** hold of the commit rule at a row of the
-scheme and `K ≥ 3`. -/
+scheme and its depth. -/
 def Laws : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [Crashes Validator]
     [LinearOrder BlockId] (p : Params) (K : ℕ), Row Validator p → kDepth Validator p ≤ K →
     (kRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) p K).Laws
 
-/-- **Two views decide each slot alike**: at a row of the scheme and `K ≥ 3`,
+/-- **Two views decide each slot alike**: at a row of the scheme and its depth,
 decisions of a slot by the commit rule on two views of one record are
 equal. -/
 def Agrees : Prop :=

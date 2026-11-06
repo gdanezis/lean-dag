@@ -77,7 +77,7 @@ theorem entersIn_of {H₁ H₂ : Finset BlockId} {g₁ g₂ : ℕ → Option Blo
   have hL₁ : g₁ j = some L' := by rw [hg j (by omega)]; exact hL'
   exact hmin j hj L' hL₁ (by rw [hout j L' (by omega) hL₁]; exact hb')
 
-/-- **Two nodes have one ledger, and one entry slot per block**, at `K ≥ 3`,
+/-- **Two nodes have one ledger, and one entry slot per block**, at a row and its depth,
 once each has fetched down to `D` rounds below the leaders it committed. -/
 theorem ledgerIn_agree (hrow : Row Validator p) (hK : kDepth Validator p ≤ K)
     {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
@@ -100,7 +100,7 @@ theorem ledgerIn_agree (hrow : Row Validator p) (hK : kDepth Validator p ≤ K)
 
 /-- **No retraction**: what a node outputs after slots `0, …, n-1`, it, or any
 other node, outputs at the same slot after `n'` slots, for `n ≤ n'`, at
-`K ≥ 3`, once each has fetched below the leaders it committed. -/
+a row and its depth, once each has fetched below the leaders it committed. -/
 theorem ledgerIn_grows (hrow : Row Validator p) (hK : kDepth Validator p ≤ K)
     {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
     (hH₂ : H₂ ⊆ U.ids) [S : Slots Validator] {g₁ g₂ : ℕ → Option BlockId} {n n' : ℕ}
@@ -233,7 +233,7 @@ theorem precedesIn_of_ref {g : ℕ → Option BlockId} {n k : ℕ} {b b' : Block
   ⟨k, k, hk, hk, he', he, Or.inr ⟨rfl, keyLt_of_ref hb h⟩⟩
 
 /-- **The ledger order is kept**: as a node settles more slots, and across
-nodes, at `K ≥ 3`, once each has fetched below the leaders it committed. -/
+nodes, at a row and its depth, once each has fetched below the leaders it committed. -/
 theorem precedesIn_grows (hrow : Row Validator p) (hK : kDepth Validator p ≤ K)
     {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
     (hH₂ : H₂ ⊆ U.ids) [S : Slots Validator] {g₁ g₂ : ℕ → Option BlockId} {n n' : ℕ}
@@ -251,7 +251,7 @@ end Slot
 variable [S : Slots Validator]
 
 /-- **After synchrony, a node deciding a slot led by `T` outputs every block of
-`T` at most `D` rounds below the slot**, from round `R` on, at `K ≥ 3`, once
+`T` at most `D` rounds below the slot**, from round `R` on, at a row and its depth, once
 it holds the blocks of `T` one and two rounds above the slot with their
 references
 and has fetched below the slot's leader. -/
@@ -290,7 +290,7 @@ theorem mem_ledgerIn_settled (hrow : Row Validator p) (hH : H ⊆ U.ids) {g : �
   have hLk := ((hL ▸ hdec k hk : NodeDecided p U K H k (some L)).voted hrow hH).1
   exact ⟨k, hn k (by have := hbL.2; rw [hLk.2.1] at this; omega), L, hL, hbL⟩
 
-/-- **Settled out everywhere**: at `K ≥ 3`, a block missing from a node's
+/-- **Settled out everywhere**: at a row and its depth, a block missing from a node's
 ledger once the node has decided every slot at most `D` rounds above it is in
 no node's ledger, once each has fetched below the leaders it committed. -/
 theorem notMem_ledgerIn_of_settled (hrow : Row Validator p) (hK : kDepth Validator p ≤ K)

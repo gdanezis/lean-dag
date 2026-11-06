@@ -4,8 +4,8 @@ import LeanDag.KPartialDag.Model.Order
 
 `docs/kpartial.md` §10. The band of rounds from `ρ` (`Band`), the blocks
 between two rounds (`Between`), equivocation-free records (`EquivFree`), a
-node's obligation when it builds (`Obliged`), and the layer bound
-(`layerBound`).
+node's obligation when it builds (`Obliged`), the layer bound
+(`layerBound`), and the reach width (`reachWidth`).
 -/
 
 namespace LeanDag

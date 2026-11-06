@@ -100,7 +100,7 @@ theorem closesAfter_mono (hH : H ⊆ H') (hH' : H' ⊆ U.ids) {closes : Payload 
     hc.2 m hm ((closedIn_iff_of_mono hH hH' h hm.le).mpr hm')⟩
 
 /-- Two nodes read closure alike after slots they have both decided, at
-`K ≥ 3`. -/
+its depth. -/
 theorem closedIn_iff_of_agree (hrow : Row Validator p) (hK : kDepth Validator p ≤ K)
     {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
     (hH₂ : H₂ ⊆ U.ids) {closes : Payload → Prop} {g₁ g₂ : ℕ → Option BlockId} {n₁ n₂ m : ℕ}
@@ -112,7 +112,7 @@ theorem closedIn_iff_of_agree (hrow : Row Validator p) (hK : kDepth Validator p 
   unfold ClosedIn
   rw [heq]
 
-/-- **Two nodes reach one last commit with one ledger**, at `K ≥ 3`. -/
+/-- **Two nodes reach one last commit with one ledger**, at its depth. -/
 theorem closesAfter_agree (hrow : Row Validator p) (hK : kDepth Validator p ≤ K)
     {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
     (hH₂ : H₂ ⊆ U.ids) {closes : Payload → Prop} {g₁ g₂ : ℕ → Option BlockId} {n₁ n₂ : ℕ}
@@ -137,7 +137,7 @@ namespace ReactiveRun
 variable (h : ReactiveRun U tl T G δ τ γ μ R N)
 include h
 
-/-- **The channel closes**, at `2δ ≤ γ ≤ τ` and `δ < γ`, `K ≥ 3`, when nodes of
+/-- **The channel closes**, at `2δ ≤ γ ≤ τ` and `δ < γ` and the row's depth, when nodes of
 `T` fetch, the schedule offers runs of `c` leaders of `T` spanning
 eligibility and a slot led by `T` every `D` rounds, and `T` declares the
 channel closed from round `r₀` on: there is a slot `b` such that, if the run

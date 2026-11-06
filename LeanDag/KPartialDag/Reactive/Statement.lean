@@ -67,7 +67,7 @@ def Built : Prop :=
     ReactiveRules U tl T G δ τ γ μ R N → ∀ s, R ≤ s → s ≤ N → ∃ t, ReachedBy U tl T s t
 
 /-- **Nodes behind catch up within `δ`**: under the rules for nodes from round
-`R` to round `N`, once a set `A` of `f + 1` validators of `T` have built at
+`R` to round `N`, once a set `A` of `f + c + 1` validators of `T` have built at
 round `s + 1`, from `R + 1` to `N`, by a time `t ≥ G`, every validator of `T`
 has reached round `s + 1` by `t + δ`. -/
 def CatchesUp : Prop :=

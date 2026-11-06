@@ -237,7 +237,7 @@ theorem avail_linkedIn (hH : H ⊆ U.ids) {p : Scheme.Params} (hrow : Row Valida
   refine ⟨X, fun C hC => ?_, hXn⟩
   obtain ⟨hCi, hCc⟩ := mem_certsFor_iff.mp (hXs hC)
   have hCr := hCc.1
-  have hw : 2 ≤ p.waveLength := by cases hv : p.voteIsCert <;> simp_all
+  have hw := two_le_waveLength hrow
   refine ⟨avail_subset_availIn hH hf (hX C hC).1 (by omega), hCc, fun hv j hj => ?_⟩
   have := (U.valid C hCi).predecessor j hj
   have := hw3 hv
@@ -295,7 +295,7 @@ theorem NodeDecided.decided {p : Scheme.Params} (hrow : Row Validator p) (hH : H
     exact AnchoredRule.Decided.indirectSkip_single rfl hkj helig ihj ihm
       (fun L hL hlink => hnone L hL (avail_linkedIn hH hrow hf hlink))
 
-/-- **Two nodes decide each slot alike**, at a row and `K ≥ 3`. -/
+/-- **Two nodes decide each slot alike**, at a row and its depth. -/
 theorem NodeDecided.agree {p : Scheme.Params} (hrow : Row Validator p) (hK : kDepth Validator p ≤ K)
     {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids) (hH₂ : H₂ ⊆ U.ids) {k : ℕ}
     {v₁ v₂ : Option BlockId} (h₁ : NodeDecided p U K H₁ k v₁)

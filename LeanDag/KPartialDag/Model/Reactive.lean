@@ -39,7 +39,7 @@ def WaitsFor (U : KRecord Validator BlockId Payload) (H : Finset BlockId) (r : �
     ∀ k, S.slotRound k + 1 = r → ∃ L, IsLeaderBlock U k L ∧ CertIn U H r L
 
 /-- **Behind round `r + 1` in `H`, for `v`**: blocks of `H` at round `r + 1`
-by `f + 1` distinct authors other than `v`. -/
+by `f + c + 1` distinct authors other than `v`. -/
 def BehindIn (U : KRecord Validator BlockId Payload) (H : Finset BlockId) (v : Validator)
     (r : ℕ) : Prop :=
   F.f + Cr.c + 1 ≤ ((creatorsOf U.block (H.filter fun b => (U.block b).round = r + 1)).erase v).card

@@ -286,7 +286,7 @@ correct node.
   of `T` outputs every block of `T` from round `R` on at most `D` rounds
   below it. The round just below lies in the leader's history to depth `K`.
   Each block of `T` further down is referenced by the blocks of `T` of the
-  round above, `q` distinct authors in the sub-DAG, so it is anchored,
+  round above, `q` distinct authors in the sub-DAG, so it is an anchor point,
   round by round downward.
 * *Inclusion* (`Order.Included`). If every `D` consecutive rounds hold a
   slot led by `T`, then after synchrony every block of `T` enters the ledger
@@ -401,13 +401,13 @@ blocks. The blocks of `H` at round `ρ` or above are its *band from `ρ`*
 
 **Theorem 6 (bounds; `Bounds.Statement`).**
 
-* *Decisions read a band* (`Bounds.Decides`). At a row, a node's decision
-  of a slot at round `ρ + K − 1` or above, and not below `ρ`, is the same on
-  its band from `ρ`. A block anchored at round `ρ + K` or above is anchored
-  on the band, since its derivation reads only blocks above it and their
-  histories to depth `K`, so the available sub-DAG, the indirect test and the fetch test
-  above round `ρ + K` read only the band; the direct tests read rounds `σ(k)`
-  to `σ(k) + 2`, and every slot a decision recurses to lies above.
+* *Decisions read a band* (`Bounds.Decides`). At a row, a node's decision of a
+  slot at round `ρ + K − 1` or above, and not below `ρ`, is the same on its
+  band from `ρ`. An anchor point at round `ρ + K` or above is one on the band,
+  since its derivation reads only blocks above it and their histories to depth
+  `K`, so the available sub-DAG, the indirect test and the fetch test above
+  round `ρ + K` read only the band; the direct tests read rounds `σ(k)` to
+  `σ(k) + 2`, and every slot a decision recurses to lies above.
 * *Progress from a band* (`Bounds.Progress`). On a responsive run, a node holding
   the blocks of `T` over a run with their references, and the available
   sub-DAG below every voted leader up to the run's end from round `ρ`
@@ -456,12 +456,12 @@ blocks. The blocks of `H` at round `ρ` or above are its *band from `ρ`*
   | 3 | 114,646 | 84,459,807 |
   | 4 | 3,783,587 | 2,787,173,766 |
 
-  The per-round bound is of order `|C| f^(K+1)`. An adversary appears able
-  to reach that order: in each of `|C|` partitions it makes every Byzantine
+  The per-round bound is of order `|C| f^(K+1)`. An adversary appears able to
+  reach that order: in each of `|C|` partitions it makes every Byzantine
   validator equivocate once per round, one correct validator references that
-  partition's blocks, and the Byzantine blocks of the partition reference
-  each other, so each is anchored by `f + 1` distinct authors, and each
-  anchored Byzantine block has up to `f^K` Byzantine blocks in its history to
+  partition's blocks, and the Byzantine blocks of the partition reference each
+  other, so each is an anchor point by `f + 1` distinct authors, and each
+  Byzantine anchor point has up to `f^K` Byzantine blocks in its history to
   depth `K`. This construction is not formalised. A bound near `n` per round
   therefore needs a rule for equivocating authors.
 

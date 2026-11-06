@@ -45,7 +45,7 @@ def Sound : Prop :=
     (v : Option BlockId), Row Validator p → H ⊆ U.ids → H ⊆ V.ids → NodeDecided p U K H k v →
     (kRule p K).Decided (S := S) U V k v
 
-/-- **Two nodes decide each slot alike**, at a row and `K ≥ 3`. -/
+/-- **Two nodes decide each slot alike**, at a row and its depth. -/
 def Agrees : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [Crashes Validator]
