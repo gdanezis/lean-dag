@@ -31,10 +31,10 @@ leaders it committed. -/
 def Agrees : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder Validator] [Faults Validator] [LinearOrder BlockId]
-    [Slots Validator] (U : KRecord Validator BlockId Payload) (K D : ℕ)
-    (H₁ H₂ : Finset BlockId) (g₁ g₂ : ℕ → Option BlockId) (n n' : ℕ), 3 ≤ K →
-    H₁ ⊆ U.ids → H₂ ⊆ U.ids → n ≤ n' → (∀ k, k < n → NodeDecided U K H₁ k (g₁ k)) →
-    (∀ k, k < n' → NodeDecided U K H₂ k (g₂ k)) →
+    [Slots Validator] (p : Scheme.Params) (U : KRecord Validator BlockId Payload) (K D : ℕ)
+    (H₁ H₂ : Finset BlockId) (g₁ g₂ : ℕ → Option BlockId) (n n' : ℕ), Row Validator p → 3 ≤ K →
+    H₁ ⊆ U.ids → H₂ ⊆ U.ids → n ≤ n' → (∀ k, k < n → NodeDecided p U K H₁ k (g₁ k)) →
+    (∀ k, k < n' → NodeDecided p U K H₂ k (g₂ k)) →
     (∀ k L, k < n → g₁ k = some L → FetchedIn U K H₁ L ((U.block L).round - D)) →
     (∀ k L, k < n' → g₂ k = some L → FetchedIn U K H₂ L ((U.block L).round - D)) →
     LedgerIn U K H₁ D g₁ n ⊆ LedgerIn U K H₂ D g₂ n' ∧
@@ -60,9 +60,9 @@ is decided: if it is not in the ledger then, it never enters. -/
 def Settled : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [LinearOrder BlockId] [S : Slots Validator]
-    (U : KRecord Validator BlockId Payload) (K D : ℕ) (H : Finset BlockId)
-    (g : ℕ → Option BlockId) (n n' : ℕ) (b : BlockId), H ⊆ U.ids →
-    (∀ k, k < n' → NodeDecided U K H k (g k)) →
+    (p : Scheme.Params) (U : KRecord Validator BlockId Payload) (K D : ℕ) (H : Finset BlockId)
+    (g : ℕ → Option BlockId) (n n' : ℕ) (b : BlockId), Row Validator p → H ⊆ U.ids →
+    (∀ k, k < n' → NodeDecided p U K H k (g k)) →
     (∀ k, S.slotRound k ≤ (U.block b).round + D → k < n) →
     b ∈ LedgerIn U K H D g n' → b ∈ LedgerIn U K H D g n
 
@@ -73,10 +73,11 @@ fetched below the leaders it committed. -/
 def Excluded : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [LinearOrder BlockId] [S : Slots Validator]
-    (U : KRecord Validator BlockId Payload) (K D : ℕ) (H₁ H₂ : Finset BlockId)
-    (g₁ g₂ : ℕ → Option BlockId) (n n' : ℕ) (b : BlockId), 3 ≤ K →
-    H₁ ⊆ U.ids → H₂ ⊆ U.ids → (∀ k, k < n → NodeDecided U K H₁ k (g₁ k)) →
-    (∀ k, k < n' → NodeDecided U K H₂ k (g₂ k)) →
+    (p : Scheme.Params) (U : KRecord Validator BlockId Payload) (K D : ℕ)
+    (H₁ H₂ : Finset BlockId) (g₁ g₂ : ℕ → Option BlockId) (n n' : ℕ) (b : BlockId),
+    Row Validator p → 3 ≤ K →
+    H₁ ⊆ U.ids → H₂ ⊆ U.ids → (∀ k, k < n → NodeDecided p U K H₁ k (g₁ k)) →
+    (∀ k, k < n' → NodeDecided p U K H₂ k (g₂ k)) →
     (∀ k L, k < n → g₁ k = some L → FetchedIn U K H₁ L ((U.block L).round - D)) →
     (∀ k L, k < n' → g₂ k = some L → FetchedIn U K H₂ L ((U.block L).round - D)) →
     (∀ k, S.slotRound k ≤ (U.block b).round + D → k < n) →
@@ -99,16 +100,16 @@ hold a slot led by `T`, at `K ≥ 3`. -/
 def Included : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [LinearOrder BlockId] [S : Slots Validator]
-    (U : KRecord Validator BlockId Payload) (K D : ℕ) (H : Finset BlockId)
+    (p : Scheme.Params) (U : KRecord Validator BlockId Payload) (K D : ℕ) (H : Finset BlockId)
     (T : Finset Validator) (R : ℕ) (g : ℕ → Option BlockId) (n : ℕ) (x : BlockId),
-    3 ≤ K → H ⊆ U.ids →
+    Row Validator p → LiveRow Validator p → 3 ≤ K → H ⊆ U.ids →
     (∀ r, ∃ k, r < S.slotRound k ∧ S.slotRound k ≤ r + D ∧ S.leader k ∈ T) →
-    (∀ k, k < n → NodeDecided U K H k (g k)) →
+    (∀ k, k < n → NodeDecided p U K H k (g k)) →
     (∀ k L, k < n → g k = some L → FetchedIn U K H L ((U.block L).round - D)) →
     x ∈ U.ids → (U.block x).creator ∈ T → R ≤ (U.block x).round →
     (∀ k, S.slotRound k ≤ (U.block x).round + D → k < n) →
     SyncFrom U T R ((U.block x).round + D + 2) →
-    WithRefs U T ((U.block x).round + 3) ((U.block x).round + D + 2) ⊆ ↑H →
+    WithRefs U T ((U.block x).round + 2) ((U.block x).round + D + 2) ⊆ ↑H →
     x ∈ LedgerIn U K H D g n
 
 /-- The order. -/

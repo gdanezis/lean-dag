@@ -33,13 +33,16 @@ def SyncFrom (U : KRecord Validator BlockId Payload) (T : Finset Validator) (R N
 
 variable [S : Slots Validator]
 
-/-- **Slot `k` responds among `T`**: `T` has a block two rounds above the
-slot, and each block of `T` there carries votes from a quorum for one leader
-block of the slot. -/
+/-- **Slot `k` responds among `T`**: `T` has blocks one and two rounds above
+the slot, and for one leader block of the slot each block of `T` one round
+up votes for it and each two rounds up carries votes for it from a
+quorum. -/
 def Responds (U : KRecord Validator BlockId Payload) (T : Finset Validator) (k : ℕ) : Prop :=
   PopulatedOn U T (S.slotRound k + 2) ∧ ∃ L, IsLeaderBlock U k L ∧
-    ∀ C ∈ U.ids, (U.block C).creator ∈ T → (U.block C).round = S.slotRound k + 2 →
-      CarriesVotes U (IsVote U) (quorumCard Validator) C L
+    (∀ C ∈ U.ids, (U.block C).creator ∈ T → (U.block C).round = S.slotRound k + 2 →
+      CarriesVotes U (IsVote U) (quorumCard Validator) C L) ∧
+    PopulatedOn U T (S.slotRound k + 1) ∧
+    ∀ b ∈ U.ids, (U.block b).creator ∈ T → (U.block b).round = S.slotRound k + 1 → IsVote U b L
 
 /-- **Responsiveness among `T` from round `R` to round `N`**: `T` is a quorum,
 and every slot led by `T` from round `R` to round `N − 2` responds. -/
@@ -55,13 +58,11 @@ def WithRefs (U : KRecord Validator BlockId Payload) (T : Finset Validator) (lo 
   {z | ∃ c ∈ U.ids, (U.block c).creator ∈ T ∧ lo ≤ (U.block c).round ∧
     (U.block c).round ≤ hi ∧ (z = c ∨ z ∈ (U.block c).refs)}
 
-/-- The available sub-DAG below every leader block of a slot up to `n` that
-has a certificate. -/
+/-- The available sub-DAG below every voted leader block of a slot up to
+`n`. -/
 def AvailBelow (U : KRecord Validator BlockId Payload) (K n : ℕ) :
     Set BlockId :=
-  {z | ∃ j A, j ≤ n ∧ IsLeaderBlock U j A ∧
-    (certificatesAt U (IsVote U) (quorumCard Validator) A (S.slotRound j + 2)).Nonempty ∧
-    z ∈ Avail U K A}
+  {z | ∃ j A, j ≤ n ∧ IsLeaderBlock U j A ∧ Voted U A ∧ z ∈ Avail U K A}
 
 end KPartialDag
 

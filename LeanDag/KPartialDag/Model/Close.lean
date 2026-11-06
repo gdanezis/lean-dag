@@ -38,11 +38,11 @@ def DeclaresFrom (U : KRecord Validator BlockId Payload) (T : Finset Validator)
 
 variable [S : Slots Validator]
 
-/-- **A node has decided every slot below `n`** on `H`, and fetched each
+/-- **A node has decided every slot below `n`** at a row on `H`, and fetched each
 leader it commits down to `D` rounds below it. -/
-def DecidesBelow (U : KRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (D : ℕ)
-    (g : ℕ → Option BlockId) (n : ℕ) : Prop :=
-  ∀ i, i < n → NodeDecided U K H i (g i) ∧
+def DecidesBelow (p : Scheme.Params) (U : KRecord Validator BlockId Payload) (K : ℕ)
+    (H : Finset BlockId) (D : ℕ) (g : ℕ → Option BlockId) (n : ℕ) : Prop :=
+  ∀ i, i < n → NodeDecided p U K H i (g i) ∧
     ∀ L, g i = some L → FetchedIn U K H L ((U.block L).round - D)
 
 end KPartialDag

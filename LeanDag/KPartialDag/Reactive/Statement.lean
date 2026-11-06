@@ -133,7 +133,7 @@ def Responsive : Prop :=
     ReactiveRun U tl T G δ τ γ μ R N → 2 * δ ≤ τ → δ < γ → γ ≤ τ →
       RespondsFrom U T (R + 1) N
 
-/-- **A slot led by `T` commits within `3δ + 2 max γ μ`**: at
+/-- **A slot led by `T` commits within `3δ + 2 max γ μ`**: at a live row,
 `τ ≥ 2δ` and `δ < γ ≤ τ`, when every slot from one round below a slot at
 round `r`, from `R + 2` to `N − 2`, to one round above it has a leader in
 `T`, and every validator of `T` has built at round `r` by `t`, every
@@ -141,16 +141,16 @@ node of `T` commits the slot directly on what it holds at
 `t + 3δ + 2 max γ μ`. -/
 def Commits : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator]
+    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator] (p : Scheme.Params)
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
-    (T : Finset Validator) (G δ τ γ μ R K N : ℕ),
+    (T : Finset Validator) (G δ τ γ μ R K N : ℕ), Row Validator p → LiveRow Validator p →
     ReactiveRun U tl T G δ τ γ μ R N → 2 * δ ≤ τ → δ < γ → γ ≤ τ → ∀ k t,
       R + 2 ≤ S.slotRound k → S.slotRound k + 2 ≤ N →
       (∀ j, S.slotRound k ≤ S.slotRound j + 1 → S.slotRound j ≤ S.slotRound k + 1 →
         S.leader j ∈ T) →
       BuiltBy U tl T (S.slotRound k) t → ∀ v ∈ T,
         ∃ L, IsLeaderBlock U k L ∧
-          NodeDecided U K (tl.held v (t + 3 * δ + 2 * max γ μ)) k (some L)
+          NodeDecided p U K (tl.held v (t + 3 * δ + 2 * max γ μ)) k (some L)
 
 /-- **The run is synchronous**: at `2δ ≤ γ ≤ τ` and `δ < γ`, a reactive run
 from round `R` to round `N` is synchronous among `T` from
@@ -165,34 +165,34 @@ def Synchronised : Prop :=
 
 /-- **Nothing a leader outputs is lost**: when correct nodes keep on disk the
 histories to depth `K` of their blocks' references, every block of the
-available sub-DAG of a certified block is on the disk of a node of any quorum
+available sub-DAG of a voted block is on the disk of a node of any quorum
 `T` of correct nodes from some time on, through any crash. -/
 def Durable : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [LinearOrder BlockId] [Slots Validator]
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (K : ℕ), T ⊆ (Correct : Finset Validator) →
-    quorumCard Validator ≤ T.card → KeepsHistory U tl K → ∀ A ∈ U.ids, ∀ r,
-      (certificatesAt U (IsVote U) (quorumCard Validator) A r).Nonempty → ∀ z ∈ Avail U K A,
-      ∃ w ∈ T, ∃ t₀, ∀ t, t₀ ≤ t → z ∈ tl.disk w t
+    quorumCard Validator ≤ T.card → KeepsHistory U tl K → ∀ A ∈ U.ids, Voted U A →
+      ∀ z ∈ Avail U K A, ∃ w ∈ T, ∃ t₀, ∀ t, t₀ ≤ t → z ∈ tl.disk w t
 
-/-- **The ledger grows**: on a reactive run from round `R` to round `N`, at
-`τ ≥ 2δ` and `δ < γ ≤ τ`, when nodes of `T` fetch the available sub-DAG of
-the certified leader blocks they hold within `Δ`, and the schedule offers
+/-- **The ledger grows**: at a live row, on a reactive run from round `R` to
+round `N`, at `τ ≥ 2δ` and `δ < γ ≤ τ`, when nodes of `T` fetch the available
+sub-DAG of the voted leader blocks they hold within `Δ`, and the schedule offers
 runs of `c` leaders of `T` spanning eligibility, past any slot `k` there is
 a slot `b` such that, if the run reaches round `σ(b + c − 1) + 2`, every
 node of `T`, at one time, decides every slot below `b + c` and has fetched
 each leader it commits down to `D` rounds below it. -/
 def Ledger : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator]
+    [Faults Validator] [LinearOrder BlockId] [S : Slots Validator] (p : Scheme.Params)
     (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (G δ τ γ μ R N K D Δ c : ℕ),
-    ReactiveRun U tl T G δ τ γ μ R N → 2 * δ ≤ τ → δ < γ → γ ≤ τ → Fetches U tl T K G Δ →
-    0 < c → (∀ b i, i < b → EligibleAt (S := S) 2 i (b + c - 1)) →
+    Row Validator p → LiveRow Validator p → ReactiveRun U tl T G δ τ γ μ R N → 2 * δ ≤ τ →
+    δ < γ → γ ≤ τ → Fetches U tl T K G Δ →
+    0 < c → (∀ b i, i < b → EligibleAt (S := S) (p.waveLength - 1) i (b + c - 1)) →
     FairRunOn T c → ∀ k, ∃ b, k ≤ b ∧
       (S.slotRound (b + c - 1) + 2 ≤ N → ∃ t, ∀ v ∈ T,
-        ∃ g : ℕ → Option BlockId, ∀ i, i < b + c → NodeDecided U K (tl.held v t) i (g i) ∧
+        ∃ g : ℕ → Option BlockId, ∀ i, i < b + c → NodeDecided p U K (tl.held v t) i (g i) ∧
           ∀ L, g i = some L → FetchedIn U K (tl.held v t) L ((U.block L).round - D))
 
 /-- Reactive nodes in time. -/

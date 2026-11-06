@@ -16,7 +16,7 @@ namespace KPartialDag
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
 variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 variable {U : KRecord Validator BlockId Payload} {K D : ℕ} {H : Finset BlockId}
-variable {T : Finset Validator} {R : ℕ}
+variable {T : Finset Validator} {R : ℕ} {p : Scheme.Params}
 
 /-- What a node reads of a leader's output lies in the output. -/
 theorem outIn_subset {L : BlockId} : OutIn U K H D L ⊆ Out U K D L :=
@@ -78,15 +78,16 @@ theorem entersIn_of {H₁ H₂ : Finset BlockId} {g₁ g₂ : ℕ → Option Blo
 
 /-- **Two nodes have one ledger, and one entry slot per block**, at `K ≥ 3`,
 once each has fetched down to `D` rounds below the leaders it committed. -/
-theorem ledgerIn_agree (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
+theorem ledgerIn_agree (hrow : Row Validator p) (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId}
+    (hH₁ : H₁ ⊆ U.ids)
     (hH₂ : H₂ ⊆ U.ids) [S : Slots Validator] {g₁ g₂ : ℕ → Option BlockId} {n : ℕ}
-    (h₁ : ∀ k, k < n → NodeDecided U K H₁ k (g₁ k))
-    (h₂ : ∀ k, k < n → NodeDecided U K H₂ k (g₂ k))
+    (h₁ : ∀ k, k < n → NodeDecided p U K H₁ k (g₁ k))
+    (h₂ : ∀ k, k < n → NodeDecided p U K H₂ k (g₂ k))
     (hf₁ : ∀ k L, k < n → g₁ k = some L → FetchedIn U K H₁ L ((U.block L).round - D))
     (hf₂ : ∀ k L, k < n → g₂ k = some L → FetchedIn U K H₂ L ((U.block L).round - D)) :
     LedgerIn U K H₁ D g₁ n = LedgerIn U K H₂ D g₂ n ∧
       ∀ b k, k < n → (EntersIn U K H₁ D g₁ b k ↔ EntersIn U K H₂ D g₂ b k) := by
-  have hg : ∀ k, k < n → g₁ k = g₂ k := fun k hk => (h₁ k hk).agree hK hH₁ hH₂ (h₂ k hk)
+  have hg : ∀ k, k < n → g₁ k = g₂ k := fun k hk => (h₁ k hk).agree hrow hK hH₁ hH₂ (h₂ k hk)
   have hg' : ∀ k, k < n → g₂ k = g₁ k := fun k hk => (hg k hk).symm
   have hout : ∀ k L, k < n → g₁ k = some L → OutIn U K H₁ D L = OutIn U K H₂ D L :=
     fun k L hk hL => (outIn_eq hH₁ (hf₁ k L hk hL)).trans
@@ -99,15 +100,16 @@ theorem ledgerIn_agree (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId} (hH₁ : H₁
 /-- **No retraction**: what a node outputs after slots `0, …, n-1`, it, or any
 other node, outputs at the same slot after `n'` slots, for `n ≤ n'`, at
 `K ≥ 3`, once each has fetched below the leaders it committed. -/
-theorem ledgerIn_grows (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
+theorem ledgerIn_grows (hrow : Row Validator p) (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId}
+    (hH₁ : H₁ ⊆ U.ids)
     (hH₂ : H₂ ⊆ U.ids) [S : Slots Validator] {g₁ g₂ : ℕ → Option BlockId} {n n' : ℕ}
-    (hn : n ≤ n') (h₁ : ∀ k, k < n → NodeDecided U K H₁ k (g₁ k))
-    (h₂ : ∀ k, k < n' → NodeDecided U K H₂ k (g₂ k))
+    (hn : n ≤ n') (h₁ : ∀ k, k < n → NodeDecided p U K H₁ k (g₁ k))
+    (h₂ : ∀ k, k < n' → NodeDecided p U K H₂ k (g₂ k))
     (hf₁ : ∀ k L, k < n → g₁ k = some L → FetchedIn U K H₁ L ((U.block L).round - D))
     (hf₂ : ∀ k L, k < n' → g₂ k = some L → FetchedIn U K H₂ L ((U.block L).round - D)) :
     LedgerIn U K H₁ D g₁ n ⊆ LedgerIn U K H₂ D g₂ n' ∧
       ∀ b k, k < n → EntersIn U K H₁ D g₁ b k → EntersIn U K H₂ D g₂ b k := by
-  obtain ⟨hl, he⟩ := ledgerIn_agree hK hH₁ hH₂ h₁ (fun k hk => h₂ k (by omega)) hf₁
+  obtain ⟨hl, he⟩ := ledgerIn_agree hrow hK hH₁ hH₂ h₁ (fun k hk => h₂ k (by omega)) hf₁
     (fun k L hk => hf₂ k L (by omega))
   exact ⟨hl ▸ ledgerIn_mono hn, fun b k hk h => (he b k hk).mp h⟩
 
@@ -231,15 +233,16 @@ theorem precedesIn_of_ref {g : ℕ → Option BlockId} {n k : ℕ} {b b' : Block
 
 /-- **The ledger order is kept**: as a node settles more slots, and across
 nodes, at `K ≥ 3`, once each has fetched below the leaders it committed. -/
-theorem precedesIn_grows (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
+theorem precedesIn_grows (hrow : Row Validator p) (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId}
+    (hH₁ : H₁ ⊆ U.ids)
     (hH₂ : H₂ ⊆ U.ids) [S : Slots Validator] {g₁ g₂ : ℕ → Option BlockId} {n n' : ℕ}
-    (hn : n ≤ n') (h₁ : ∀ k, k < n → NodeDecided U K H₁ k (g₁ k))
-    (h₂ : ∀ k, k < n' → NodeDecided U K H₂ k (g₂ k))
+    (hn : n ≤ n') (h₁ : ∀ k, k < n → NodeDecided p U K H₁ k (g₁ k))
+    (h₂ : ∀ k, k < n' → NodeDecided p U K H₂ k (g₂ k))
     (hf₁ : ∀ k L, k < n → g₁ k = some L → FetchedIn U K H₁ L ((U.block L).round - D))
     (hf₂ : ∀ k L, k < n' → g₂ k = some L → FetchedIn U K H₂ L ((U.block L).round - D))
     {b b' : BlockId} (h : PrecedesIn U K H₁ D g₁ n b b') : PrecedesIn U K H₂ D g₂ n' b b' := by
   obtain ⟨k, k', hk, hk', he, he', hlt⟩ := h
-  have hgrow := (ledgerIn_grows hK hH₁ hH₂ hn h₁ h₂ hf₁ hf₂).2
+  have hgrow := (ledgerIn_grows hrow hK hH₁ hH₂ hn h₁ h₂ hf₁ hf₂).2
   exact ⟨k, k', by omega, by omega, hgrow b k hk he, hgrow b' k' hk' he', hlt⟩
 
 end Slot
@@ -248,22 +251,24 @@ variable [S : Slots Validator]
 
 /-- **After synchrony, a node deciding a slot led by `T` outputs every block of
 `T` at most `D` rounds below the slot**, from round `R` on, at `K ≥ 3`, once
-it holds the blocks of `T` two rounds above the slot with their references
+it holds the blocks of `T` one and two rounds above the slot with their
+references
 and has fetched below the slot's leader. -/
-theorem mem_ledgerIn_of_leader_mem (hK : 3 ≤ K) (hcard : quorumCard Validator ≤ T.card)
+theorem mem_ledgerIn_of_leader_mem (hrow : Row Validator p) (hlive : LiveRow Validator p)
+    (hK : 3 ≤ K) (hcard : quorumCard Validator ≤ T.card)
     {k : ℕ} (hs : SynchronisedTo U T R (S.slotRound k + 2)) (hH : H ⊆ U.ids)
     {g : ℕ → Option BlockId}
     (hlead : S.leader k ∈ T) (hpop : ∀ r, R ≤ r → r ≤ S.slotRound k + 2 → PopulatedOn U T r)
-    (hW : WithRefs U T (S.slotRound k + 2) (S.slotRound k + 2) ⊆ ↑H)
-    (hk : NodeDecided U K H k (g k))
+    (hW : WithRefs U T (S.slotRound k + 1) (S.slotRound k + 2) ⊆ ↑H)
+    (hk : NodeDecided p U K H k (g k))
     (hf : ∀ L, g k = some L → FetchedIn U K H L ((U.block L).round - D))
     {x : BlockId} (hx : x ∈ U.ids) (hxc : (U.block x).creator ∈ T)
     (hRx : R ≤ (U.block x).round) (hxk : (U.block x).round < S.slotRound k)
     (hD : S.slotRound k ≤ (U.block x).round + D) : x ∈ LedgerIn U K H D g (k + 1) := by
-  obtain ⟨L, hL, hdec⟩ := nodeDecided_of_responds (K := K) hcard
+  obtain ⟨L, hL, hdec⟩ := nodeDecided_of_responds (K := K) hrow hlive hcard
     (responds_of_synchronisedOn hcard hs (by omega) le_rfl hlead
       fun r h1 h2 => hpop r (by omega) h2) hW
-  have hg : g k = some L := hk.agree hK hH hH hdec
+  have hg : g k = some L := hk.agree hrow hK hH hH hdec
   have hLc : (U.block L).creator ∈ T := by rw [hL.2.2]; exact hlead
   have hLr := hL.2.1
   refine ⟨k, by omega, L, hg, ?_⟩
@@ -274,21 +279,23 @@ theorem mem_ledgerIn_of_leader_mem (hK : 3 ≤ K) (hcard : quorumCard Validator 
 
 /-- **A block's fate is settled** once every slot at most `D` rounds above it
 is decided: if it is not in the ledger then, it never enters. -/
-theorem mem_ledgerIn_settled (hH : H ⊆ U.ids) {g : ℕ → Option BlockId} {n n' : ℕ}
-    (hdec : ∀ k, k < n' → NodeDecided U K H k (g k)) {b : BlockId}
+theorem mem_ledgerIn_settled (hrow : Row Validator p) (hH : H ⊆ U.ids) {g : ℕ → Option BlockId}
+    {n n' : ℕ}
+    (hdec : ∀ k, k < n' → NodeDecided p U K H k (g k)) {b : BlockId}
     (hn : ∀ k, S.slotRound k ≤ (U.block b).round + D → k < n)
     (hb : b ∈ LedgerIn U K H D g n') : b ∈ LedgerIn U K H D g n := by
   obtain ⟨k, hk, L, hL, hbL⟩ := hb
-  have hLk := ((hL ▸ hdec k hk : NodeDecided U K H k (some L)).certified hH).1
+  have hLk := ((hL ▸ hdec k hk : NodeDecided p U K H k (some L)).voted hrow hH).1
   exact ⟨k, hn k (by have := hbL.2; rw [hLk.2.1] at this; omega), L, hL, hbL⟩
 
 /-- **Settled out everywhere**: at `K ≥ 3`, a block missing from a node's
 ledger once the node has decided every slot at most `D` rounds above it is in
 no node's ledger, once each has fetched below the leaders it committed. -/
-theorem notMem_ledgerIn_of_settled (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
+theorem notMem_ledgerIn_of_settled (hrow : Row Validator p) (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId}
+    (hH₁ : H₁ ⊆ U.ids)
     (hH₂ : H₂ ⊆ U.ids) {g₁ g₂ : ℕ → Option BlockId} {n n' : ℕ}
-    (h₁ : ∀ k, k < n → NodeDecided U K H₁ k (g₁ k))
-    (h₂ : ∀ k, k < n' → NodeDecided U K H₂ k (g₂ k))
+    (h₁ : ∀ k, k < n → NodeDecided p U K H₁ k (g₁ k))
+    (h₂ : ∀ k, k < n' → NodeDecided p U K H₂ k (g₂ k))
     (hf₁ : ∀ k L, k < n → g₁ k = some L → FetchedIn U K H₁ L ((U.block L).round - D))
     (hf₂ : ∀ k L, k < n' → g₂ k = some L → FetchedIn U K H₂ L ((U.block L).round - D))
     {b : BlockId} (hn : ∀ k, S.slotRound k ≤ (U.block b).round + D → k < n)
@@ -296,28 +303,29 @@ theorem notMem_ledgerIn_of_settled (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId} (
   intro hb₂
   have hm : b ∈ LedgerIn U K H₂ D g₂ (min n n') := by
     rcases le_total n n' with h | h
-    · rw [min_eq_left h]; exact mem_ledgerIn_settled hH₂ h₂ hn hb₂
+    · rw [min_eq_left h]; exact mem_ledgerIn_settled hrow hH₂ h₂ hn hb₂
     · rw [min_eq_right h]; exact hb₂
   have hle := min_le_right n n'
-  exact hb ((ledgerIn_grows hK hH₂ hH₁ (min_le_left n n') (fun k hk => h₂ k (by omega)) h₁
+  exact hb ((ledgerIn_grows hrow hK hH₂ hH₁ (min_le_left n n') (fun k hk => h₂ k (by omega)) h₁
     (fun k L hk => hf₂ k L (by omega)) hf₁).1 hm)
 
 /-- **After synchrony, a block of `T` enters the ledger** of a node that has
 decided every slot at most `D` rounds above it, when every `D` rounds hold a
 slot led by `T`. -/
-theorem mem_ledgerIn_of_gap (hK : 3 ≤ K) (hcard : quorumCard Validator ≤ T.card)
+theorem mem_ledgerIn_of_gap (hrow : Row Validator p) (hlive : LiveRow Validator p)
+    (hK : 3 ≤ K) (hcard : quorumCard Validator ≤ T.card)
     {x : BlockId} (hs : SynchronisedTo U T R ((U.block x).round + D + 2)) (hH : H ⊆ U.ids)
     (hgap : ∀ r, ∃ k, r < S.slotRound k ∧ S.slotRound k ≤ r + D ∧ S.leader k ∈ T)
-    {g : ℕ → Option BlockId} {n : ℕ} (hdec : ∀ k, k < n → NodeDecided U K H k (g k))
+    {g : ℕ → Option BlockId} {n : ℕ} (hdec : ∀ k, k < n → NodeDecided p U K H k (g k))
     (hf : ∀ k L, k < n → g k = some L → FetchedIn U K H L ((U.block L).round - D))
     (hx : x ∈ U.ids) (hxc : (U.block x).creator ∈ T)
     (hRx : R ≤ (U.block x).round) (hn : ∀ k, S.slotRound k ≤ (U.block x).round + D → k < n)
     (hpop : ∀ r, R ≤ r → r ≤ (U.block x).round + D + 2 → PopulatedOn U T r)
-    (hW : WithRefs U T ((U.block x).round + 3) ((U.block x).round + D + 2) ⊆ ↑H) :
+    (hW : WithRefs U T ((U.block x).round + 2) ((U.block x).round + D + 2) ⊆ ↑H) :
     x ∈ LedgerIn U K H D g n := by
   obtain ⟨k, hxk, hkD, hlead⟩ := hgap (U.block x).round
   have hkn := hn k hkD
-  exact ledgerIn_mono (by omega) (mem_ledgerIn_of_leader_mem hK hcard
+  exact ledgerIn_mono (by omega) (mem_ledgerIn_of_leader_mem hrow hlive hK hcard
     (fun m h1 h2 => hs m h1 (by omega)) hH hlead
     (fun r h1 h2 => hpop r h1 (by omega))
     (fun z hz => hW (withRefs_mono (by omega) (by omega) hz)) (hdec k hkn)

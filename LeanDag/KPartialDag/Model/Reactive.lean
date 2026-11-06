@@ -166,12 +166,10 @@ def KeepsHistory (U : KRecord Validator BlockId Payload) (tl : Timeline Validato
     ∀ y ∈ (U.block b).refs, historyUpto U K y ⊆ tl.disk (U.block b).creator t
 
 /-- **Fetching the available sub-DAG**: from `G` on, a node of `T` that holds
-a leader block with a certificate holds the block's available sub-DAG `Δ`
-later. -/
+a voted leader block holds the block's available sub-DAG `Δ` later. -/
 def Fetches (U : KRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (K G Δ : ℕ) : Prop :=
-  ∀ v ∈ T, ∀ t, G ≤ t → ∀ j A, IsLeaderBlock U j A →
-    (certificatesAt U (IsVote U) (quorumCard Validator) A (S.slotRound j + 2)).Nonempty →
+  ∀ v ∈ T, ∀ t, G ≤ t → ∀ j A, IsLeaderBlock U j A → Voted U A →
     A ∈ tl.held v t → ∀ z ∈ Avail U K A, z ∈ tl.held v (t + Δ)
 
 /-- **Persisting the last round built**: the builds of each correct

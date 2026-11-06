@@ -72,28 +72,46 @@ theorem availIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i) :
     ⟨y, hy.congr hb, by rw [historyUpto_eq_of_subset hb hy.window]; exact hzy⟩
   exact (sub hb).antisymm (sub fun i hi => (hb i hi).symm)
 
-/-- **The indirect test read on `H` reads only `H`.** -/
-theorem linkedIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i) {L : BlockId} {r : ℕ} :
-    LinkedIn U K H A L r → LinkedIn U' K H A L r := by
-  rintro ⟨C, hC, hCr, hrefs, hv⟩
-  have hav := availIn_congr (K := K) (A := A) hb
-  have hCH := availIn_subset_held hC
-  rw [hav] at hC
-  refine ⟨C, hC, by rw [← hb C hCH]; exact hCr, fun j hj => ?_, ?_⟩
-  · rw [← hb C hCH] at hj; rw [← hav]; exact hrefs j hj
-  · unfold CarriesVotes carriedVotes at hv ⊢
+/-- **Certifying reads only `H`**, for a block of `H` whose references, when
+votes are certified apart, are in `H`. -/
+theorem certifies_congr (hb : ∀ i ∈ H, U.block i = U'.block i) {p : Scheme.Params}
+    {C L : BlockId} {r : ℕ} (hC : C ∈ H) (hrefs : p.voteIsCert = false → ∀ j ∈ (U.block C).refs,
+      j ∈ H) : Certifies p U C L r → Certifies p U' C L r := by
+  rintro ⟨hCr, hcv⟩
+  refine ⟨by rw [← hb C hC]; exact hCr, ?_⟩
+  cases hv : p.voteIsCert
+  · simp only [hv, Bool.false_eq_true, if_false] at hcv ⊢
+    unfold CarriesVotes carriedVotes at hcv ⊢
     have hset : ((U'.block C).refs.filter fun b => IsVote U' b L) =
         ((U.block C).refs.filter fun b => IsVote U b L) := by
-      rw [← hb C hCH]
+      rw [← hb C hC]
       refine Finset.filter_congr fun b hbC => ?_
       change L ∈ (U'.block b).refs ↔ L ∈ (U.block b).refs
-      rw [hb b (availIn_subset_held (hrefs b hbC))]
+      rw [hb b (hrefs hv b hbC)]
     rw [hset]
     have : creatorsOf U'.block ((U.block C).refs.filter fun b => IsVote U b L) =
         creatorsOf U.block ((U.block C).refs.filter fun b => IsVote U b L) :=
-      Finset.image_congr fun b hbC => by
-        rw [hb b (availIn_subset_held (hrefs b (Finset.mem_filter.mp hbC).1))]
-    rw [this]; exact hv
+      Finset.image_congr fun b hbC => by rw [hb b (hrefs hv b (Finset.mem_filter.mp hbC).1)]
+    rw [this]; exact hcv
+  · simp only [hv, if_true] at hcv ⊢
+    change L ∈ (U'.block C).refs
+    rw [← hb C hC]; exact hcv
+
+/-- **The indirect test read on `H` reads only `H`.** -/
+theorem linkedIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i) {p : Scheme.Params} {L : BlockId}
+    {r : ℕ} : LinkedIn p U K H A L r → LinkedIn p U' K H A L r := by
+  rintro ⟨X, hX, hXn⟩
+  have hav := availIn_congr (K := K) (A := A) hb
+  have hXH : ∀ C ∈ X, C ∈ H := fun C hC => availIn_subset_held (hX C hC).1
+  refine ⟨X, fun C hC => ?_, ?_⟩
+  · obtain ⟨hCa, hCc, hrefs⟩ := hX C hC
+    refine ⟨hav ▸ hCa, certifies_congr hb (hXH C hC)
+      (fun hv j hj => availIn_subset_held (hrefs hv j hj)) hCc, fun hv j hj => ?_⟩
+    rw [← hb C (hXH C hC)] at hj
+    exact hav ▸ hrefs hv j hj
+  · have : creatorsOf U'.block X = creatorsOf U.block X :=
+      Finset.image_congr fun C hC => by rw [hb C (hXH C hC)]
+    rw [this]; exact hXn
 
 /-- **The fetch test reads only `H`.** -/
 theorem fetchedIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i) {ρ : ℕ} :
@@ -122,11 +140,12 @@ theorem availIn_subset {z : BlockId} (hz : z ∈ AvailIn U K H A) : z ∈ Avail 
   exact ⟨y, hy.toBelow, hzy⟩
 
 /-- **A link read on `H` is the record's**, for blocks of the record. -/
-theorem linkedIn_avail (hH : H ⊆ U.ids) {L : BlockId} {r : ℕ} (h : LinkedIn U K H A L r) :
-    AvailLinked U K A L r := by
-  obtain ⟨C, hC, hCr, hrefs, hv⟩ := h
-  exact ⟨C, mem_certificatesAt.mpr ⟨hH (availIn_subset_held hC), hCr, hv⟩, availIn_subset hC,
-    fun j hj => availIn_subset (hrefs j hj)⟩
+theorem linkedIn_avail (hH : H ⊆ U.ids) {p : Scheme.Params} {L : BlockId} {r : ℕ}
+    (h : LinkedIn p U K H A L r) : AvailLinked p U K A L r := by
+  obtain ⟨X, hX, hXn⟩ := h
+  exact ⟨X, fun C hC => mem_certsFor_iff.mpr ⟨hH (availIn_subset_held (hX C hC).1), (hX C hC).2.1⟩,
+    fun C hC => ⟨availIn_subset (hX C hC).1, fun hv j hj => availIn_subset ((hX C hC).2.2 hv j hj)⟩,
+    hXn⟩
 
 /-- **A block of the history to depth `n` of a block of the record** lies at
 most `n` rounds below it. -/
@@ -165,14 +184,20 @@ theorem avail_subset_availIn (hH : H ⊆ U.ids) {ρ : ℕ} (hf : FetchedIn U K H
       (hf.2 S x (fun z hzS => ⟨⟨y z, ih' z hzS, hz z hzS⟩, (hzr z hzS).1⟩) href hcard)
 
 /-- **Fetched down to the round above the slot's, the record's link is read on
-`H`.** -/
-theorem avail_linkedIn (hH : H ⊆ U.ids) {L : BlockId} {r : ℕ} (hf : FetchedIn U K H A (r + 1))
-    (h : AvailLinked U K A L r) : LinkedIn U K H A L r := by
-  obtain ⟨C, hC, hCa, hrefs⟩ := h
-  obtain ⟨hCi, hCr, hv⟩ := mem_certificatesAt.mp hC
-  refine ⟨C, avail_subset_availIn hH hf hCa (by omega), hCr, fun j hj => ?_, hv⟩
+`H`**, at a row. -/
+theorem avail_linkedIn (hH : H ⊆ U.ids) {p : Scheme.Params} (hrow : Row Validator p) {L : BlockId}
+    {r : ℕ} (hf : FetchedIn U K H A (r + 1)) (h : AvailLinked p U K A L r) :
+    LinkedIn p U K H A L r := by
+  obtain ⟨X, hXs, hX, hXn⟩ := h
+  obtain ⟨hw2, hw3⟩ := row_wave hrow
+  refine ⟨X, fun C hC => ?_, hXn⟩
+  obtain ⟨hCi, hCc⟩ := mem_certsFor_iff.mp (hXs hC)
+  have hCr := hCc.1
+  have hw : 2 ≤ p.waveLength := by cases hv : p.voteIsCert <;> simp_all
+  refine ⟨avail_subset_availIn hH hf (hX C hC).1 (by omega), hCc, fun hv j hj => ?_⟩
   have := (U.valid C hCi).predecessor j hj
-  exact avail_subset_availIn hH hf (hrefs j hj) (by omega)
+  have := hw3 hv
+  exact avail_subset_availIn hH hf ((hX C hC).2 hv j hj) (by omega)
 
 /-- **Holding the record's sub-DAG to depth `K` below round `ρ` fetches it down
 to `ρ`**, for an anchor of the record at or above `ρ`. -/
@@ -194,33 +219,35 @@ variable [S : Slots Validator]
 omit S in
 /-- Blocks a node holds with their references are held by a view holding
 what the node holds. -/
-theorem holdsAtLeast_of_held {V : U.View} (hHV : H ⊆ V.ids) {s : Finset BlockId}
-    (h : quorumCard Validator ≤ (creatorsOf U.block (heldWithRefs U H s)).card) :
-    HoldsAtLeast U V (quorumCard Validator) s :=
+theorem holdsAtLeast_of_held {V : U.View} (hHV : H ⊆ V.ids) {s : Finset BlockId} {t : ℕ}
+    (h : t ≤ (creatorsOf U.block (heldWithRefs U H s)).card) : HoldsAtLeast U V t s :=
   h.trans (Finset.card_le_card (Finset.image_subset_image fun b hb => by
     obtain ⟨hbs, hbH, -⟩ := Finset.mem_filter.mp hb
     exact Finset.mem_inter.mpr ⟨hbs, hHV hbH⟩))
 
 /-- **A node's decision is a decision on every view holding what it holds**,
-for a node holding blocks of the record. -/
-theorem NodeDecided.decided (hH : H ⊆ U.ids) {V : U.View} (hHV : H ⊆ V.ids) {k : ℕ}
-    {v : Option BlockId} (h : NodeDecided U K H k v) : (kRule K).Decided U V k v := by
+at a row, for a node holding blocks of the record. -/
+theorem NodeDecided.decided {p : Scheme.Params} (hrow : Row Validator p) (hH : H ⊆ U.ids)
+    {V : U.View} (hHV : H ⊆ V.ids) {k : ℕ} {v : Option BlockId} (h : NodeDecided p U K H k v) :
+    (kRule p K).Decided U V k v := by
   induction h with
   | directCommit hL hc => exact AnchoredRule.Decided.directCommit hL (holdsAtLeast_of_held hHV hc)
   | directSkip hs => exact AnchoredRule.Decided.directSkip (holdsAtLeast_of_held hHV hs)
-  | indirectCommit hkj helig _ _ hL hlink ihj ihm =>
-    exact AnchoredRule.Decided.indirectCommit_single rfl (fun _ _ h => h) hkj helig ihj ihm hL
-      (linkedIn_avail hH hlink)
+  | indirectCommit hkj helig _ _ hf hL hlink hleast ihj ihm =>
+    exact AnchoredRule.Decided.indirectCommit (i := 0) hkj helig ihj ihm Nat.one_pos
+      (fun i' hi' => absurd hi' (Nat.not_lt_zero _)) hL (linkedIn_avail hH hlink)
+      fun L' hL' hl' hlt => hleast L' hL' hlt (avail_linkedIn hH hrow hf hl')
   | indirectSkip hkj helig _ _ hf hnone ihj ihm =>
     exact AnchoredRule.Decided.indirectSkip_single rfl hkj helig ihj ihm
-      (fun L hL hlink => hnone L hL (avail_linkedIn hH hf hlink))
+      (fun L hL hlink => hnone L hL (avail_linkedIn hH hrow hf hlink))
 
-/-- **Two nodes decide each slot alike**, at `K ≥ 3`. -/
-theorem NodeDecided.agree (hK : 3 ≤ K) {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids)
-    (hH₂ : H₂ ⊆ U.ids) {k : ℕ} {v₁ v₂ : Option BlockId} (h₁ : NodeDecided U K H₁ k v₁)
-    (h₂ : NodeDecided U K H₂ k v₂) : v₁ = v₂ :=
-  (kRule K).decided_agree (kRule_laws hK) trivial
-    (h₁.decided (V := View.full U) hH₁ hH₁) (h₂.decided (V := View.full U) hH₂ hH₂)
+/-- **Two nodes decide each slot alike**, at a row and `K ≥ 3`. -/
+theorem NodeDecided.agree {p : Scheme.Params} (hrow : Row Validator p) (hK : 3 ≤ K)
+    {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids) (hH₂ : H₂ ⊆ U.ids) {k : ℕ}
+    {v₁ v₂ : Option BlockId} (h₁ : NodeDecided p U K H₁ k v₁)
+    (h₂ : NodeDecided p U K H₂ k v₂) : v₁ = v₂ :=
+  (kRule p K).decided_agree (kRule_laws hrow hK) trivial
+    (h₁.decided hrow (V := View.full U) hH₁ hH₁) (h₂.decided hrow (V := View.full U) hH₂ hH₂)
 
 end KPartialDag
 

@@ -9,8 +9,8 @@ import Mathlib.Tactic.Linarith
 
 `docs/kpartial.md` §3. Histories to depth `K` and anchored blocks, and the
 properties of the available sub-DAG: held by correct nodes
-(`avail_correctHeld`), broad (`broad`), linked (`linked`), and exclusive of a
-direct skip (`not_directSkip`).
+(`avail_correctHeld`), broad (`broad`), linked at a row of the scheme
+(`linked`), and exclusive of a direct skip (`not_directSkip`).
 -/
 
 namespace LeanDag
@@ -47,6 +47,23 @@ theorem AnchoredBelow.mem {K : ℕ} {A : BlockId} (hA : A ∈ U.ids) {x : BlockI
   | @referenced x S y hy hz href hcard ih =>
     obtain ⟨z, hzS⟩ := nonempty_of_creatorsOf_card_pos (by omega : 0 < (creatorsOf U.block S).card)
     exact U.complete z (historyUpto_subset_ids K (ih z hzS) (hz z hzS)) _ (href z hzS)
+
+/-- **An anchored block is in `A`'s history.** -/
+theorem AnchoredBelow.reaches {K : ℕ} {A x : BlockId} (h : AnchoredBelow U K A x) :
+    Reaches U A x := by
+  induction h with
+  | anchor => exact Reaches.refl
+  | @referenced x S y hy hz href hcard ih =>
+    obtain ⟨z, hzS⟩ := nonempty_of_creatorsOf_card_pos (by omega : 0 < (creatorsOf U.block S).card)
+    exact (ih z hzS).trans
+      ((reaches_of_mem_historyUpto (hz z hzS)).trans (Reaches.single (href z hzS)))
+
+/-- **The available sub-DAG lies in the history of `A`**, a block of the
+record. -/
+theorem mem_history_of_avail {K : ℕ} {A z : BlockId} (hA : A ∈ U.ids) (hz : z ∈ Avail U K A) :
+    z ∈ history U A := by
+  obtain ⟨y, hy, hzy⟩ := hz
+  exact (mem_history_iff hA).mpr (hy.reaches.trans (reaches_of_mem_historyUpto hzy))
 
 /-- **Anchoring from the sub-DAG**: a block that blocks of the available
 sub-DAG from `f + 1` distinct authors reference is anchored. -/
@@ -184,21 +201,78 @@ theorem broad {K : ℕ} (hK : 2 ≤ K) {A : BlockId} (hA : A ∈ U.ids) :
     have := (U.valid v hv).predecessor z hz
     omega
 
-/-- **A directly committed block is linked through the sub-DAG**: below a
-block `A` at round `r + 3` or above, at `K ≥ 3`, the available sub-DAG holds
-a certificate of a directly committed round-`r` block and its references. A
-block of round `r + 3` whose references and theirs lie in the sub-DAG
-references a certificate of a correct author, since its references and the
-certificates come from two quorums. -/
-theorem linked {K : ℕ} (hK : 3 ≤ K) {A L : BlockId} {r : ℕ} (hA : A ∈ U.ids)
-    (hr : r + 3 ≤ (U.block A).round) (hd : DirectCommit U L r) : AvailLinked U K A L r := by
-  obtain ⟨v, hv, hvr, hvrefs⟩ : ∃ v ∈ U.ids, (U.block v).round = r + 3 ∧
+omit [LinearOrder BlockId] in
+/-- **The wave of a row**: two when a vote is its own certificate, three
+otherwise. -/
+theorem row_wave {p : Scheme.Params} (hrow : Row Validator p) :
+    (p.voteIsCert = true → p.waveLength = 2) ∧ (p.voteIsCert = false → p.waveLength = 3) := by
+  rcases hrow with ⟨hv, hw, -⟩ | ⟨hv, hw, -⟩
+  · exact ⟨fun _ => hw, fun h => absurd (hv.symm.trans h) (by simp)⟩
+  · exact ⟨fun h => absurd (hv.symm.trans h) (by simp), fun _ => hw⟩
+
+/-- **A certificate is a block of the record that certifies.** -/
+theorem mem_certsFor_iff {p : Scheme.Params} {L C : BlockId} {r : ℕ} :
+    C ∈ certsFor p U L r ↔ C ∈ U.ids ∧ Certifies p U C L r := by
+  unfold certsFor Certifies
+  cases p.voteIsCert <;> simp [mem_votesFor, mem_certificatesAt]
+
+/-- A certificate lies in the record at the decision round. -/
+theorem mem_certsFor {p : Scheme.Params} {L C : BlockId} {r : ℕ} (hC : C ∈ certsFor p U L r) :
+    C ∈ U.ids ∧ (U.block C).round = r + (p.waveLength - 1) := by
+  unfold certsFor at hC
+  split at hC
+  · exact ⟨(mem_votesFor.mp hC).1, (mem_votesFor.mp hC).2.1⟩
+  · exact ⟨(mem_certificatesAt.mp hC).1, (mem_certificatesAt.mp hC).2.1⟩
+
+/-- **A block meets a set of the round below**: it references the blocks of
+`|authors X| + q − n − f` authors of `X` or more, `q` the authors it
+references. -/
+theorem card_refs_filter_ge {v : BlockId} (hv : v ∈ U.ids) {X : Finset BlockId}
+    (hX : ∀ x ∈ X, x ∈ U.ids ∧ (U.block x).round + 1 = (U.block v).round) :
+    (creatorsOf U.block X).card + (creatorsOf U.block (U.block v).refs).card ≤
+      Fintype.card Validator + F.f +
+        (creatorsOf U.block (X.filter fun x => x ∈ (U.block v).refs)).card := by
+  set R := creatorsOf U.block (U.block v).refs
+  set CX := creatorsOf U.block X
+  have hsub : (R ∩ CX) ∩ (Correct : Finset Validator) ⊆
+      creatorsOf U.block (X.filter fun x => x ∈ (U.block v).refs) := by
+    intro w hw
+    obtain ⟨hwRC, hwC⟩ := Finset.mem_inter.mp hw
+    obtain ⟨hwR, hwX⟩ := Finset.mem_inter.mp hwRC
+    obtain ⟨b, hb, hbc⟩ := mem_creatorsOf.mp hwR
+    obtain ⟨x, hx, hxc⟩ := mem_creatorsOf.mp hwX
+    have hbr := (U.valid v hv).predecessor b hb
+    obtain ⟨hxU, hxr⟩ := hX x hx
+    obtain rfl : b = x := U.eq_of_creator_eq (U.complete v hv b hb) hxU hwC hbc hxc (by omega)
+    exact mem_creatorsOf.mpr ⟨b, Finset.mem_filter.mpr ⟨hx, hb⟩, hbc⟩
+  have h1 := Finset.card_union_add_card_inter R CX
+  have h2 := Finset.card_le_univ (R ∪ CX)
+  have h3 := Finset.card_inter_add_card_sdiff (R ∩ CX) (Correct : Finset Validator)
+  have h4 : ((R ∩ CX) \ (Correct : Finset Validator)).card ≤
+      (Correct : Finset Validator)ᶜ.card :=
+    Finset.card_le_card fun w hw => Finset.mem_compl.mpr (Finset.mem_sdiff.mp hw).2
+  have h5 := Finset.card_le_card hsub
+  have h6 := card_compl_correct_le (Validator := Validator)
+  omega
+
+/-- **A directly committed block is linked through the sub-DAG**: at a row
+and `K ≥ 3`, below a block `A` one round or more above the decision round of
+a directly committed round-`r` block, the available sub-DAG holds `linkSize`
+authors of its certificates, with their references. A block one round above
+the decision round whose references and theirs lie in the sub-DAG
+references them, since its references and the certificates come from two
+large sets of authors. -/
+theorem linked {p : Scheme.Params} (hrow : Row Validator p) {K : ℕ} (hK : 3 ≤ K)
+    {A L : BlockId} {r : ℕ} (hA : A ∈ U.ids) (hr : r + p.waveLength ≤ (U.block A).round)
+    (hd : DirectCommit p U L r) : AvailLinked p U K A L r := by
+  have hw : 2 ≤ p.waveLength := by rcases hrow with ⟨-, h, -⟩ | ⟨-, h, -⟩ <;> omega
+  obtain ⟨v, hv, hvr, hvrefs⟩ : ∃ v ∈ U.ids, (U.block v).round = r + p.waveLength ∧
       ∀ z ∈ (U.block v).refs, z ∈ Avail U K A ∧ ∀ j ∈ (U.block z).refs, j ∈ Avail U K A := by
-    by_cases h₃ : (U.block A).round = r + 3
+    by_cases h₃ : (U.block A).round = r + p.waveLength
     · exact ⟨A, hA, h₃, fun z hz =>
         ⟨⟨A, AnchoredBelow.anchor, ref_mem_historyUpto (K := K) (by omega) hz⟩,
           fun j hj => ⟨A, AnchoredBelow.anchor, ref_ref_mem_historyUpto (K := K) (by omega) hz hj⟩⟩⟩
-    by_cases h₄ : (U.block A).round = r + 4
+    by_cases h₄ : (U.block A).round = r + p.waveLength + 1
     · obtain ⟨w, hw⟩ := nonempty_of_creatorsOf_card_pos (blk := U.block) (s := (U.block A).refs)
         (lt_of_lt_of_le (by have := F.card_validators; omega) ((U.valid A hA).quorum (by omega)))
       obtain ⟨k, rfl⟩ : ∃ k, K = k + 1 := ⟨K - 1, by omega⟩
@@ -209,34 +283,65 @@ theorem linked {K : ℕ} (hK : 3 ≤ K) {A L : BlockId} {r : ℕ} (hA : A ∈ U.
       have := (U.valid A hA).predecessor w hw
       omega
     obtain ⟨y, hy, hyr, -, hya⟩ :=
-      broad (K := K) (by omega) hA ((U.block A).round - (r + 5)) (by omega)
+      broad (K := K) (by omega) hA ((U.block A).round - (r + p.waveLength + 2)) (by omega)
     exact ⟨y, hy, by omega, fun z hz => ⟨⟨y, hya, ref_mem_historyUpto (K := K) (by omega) hz⟩,
       fun j hj => ⟨y, hya, ref_ref_mem_historyUpto (K := K) (by omega) hz hj⟩⟩⟩
-  -- a reference of `v` and a certificate, from two quorums, share a block
-  have hq : quorumCard Validator ≤ (creatorsOf U.block (U.block v).refs).card :=
-    (U.valid v hv).quorum (by omega)
-  obtain ⟨z, hz, hC⟩ := exists_common_block U.noEquivOn_honest card_compl_correct_le
-    (t := certificatesAt U (IsVote U) (quorumCard Validator) L (r + 2))
-    (fun z hz => ⟨U.complete v hv z hz, by have := (U.valid v hv).predecessor z hz; omega⟩)
-    (fun C hC => (mem_certificatesAt.mp hC).imp_right And.left)
-    (by have := F.card_validators; unfold DirectCommit at hd; omega)
-  exact ⟨z, hC, hvrefs z hz⟩
+  -- the certificates `v` references
+  refine ⟨(certsFor p U L r).filter fun C => C ∈ (U.block v).refs, Finset.filter_subset _ _,
+    fun C hC => ?_, ?_⟩
+  · have hCv := (Finset.mem_filter.mp hC).2
+    exact ⟨(hvrefs C hCv).1, fun _ => (hvrefs C hCv).2⟩
+  · have hq : quorumCard Validator ≤ (creatorsOf U.block (U.block v).refs).card :=
+      (U.valid v hv).quorum (by omega)
+    have hcount := card_refs_filter_ge hv (X := certsFor p U L r)
+      fun x hx => ⟨(mem_certsFor hx).1, by have := (mem_certsFor hx).2; omega⟩
+    unfold DirectCommit at hd
+    rcases hrow with ⟨-, -, -, -, -, hc⟩ | ⟨-, -, hl, -, -, hc⟩ <;> omega
 
-/-- **A certificate excludes a direct skip**: its votes and the blames come
-from two quorums, so a correct author would have a round-`(r+1)` block that
-references the block and one that does not. -/
-theorem not_directSkip {L C : BlockId} {r : ℕ}
-    (hC : C ∈ certificatesAt U (IsVote U) (quorumCard Validator) L (r + 2)) :
-    ¬ DirectSkip U L r := by
-  intro hs
-  unfold DirectSkip at hs
+/-- **Votes and blames exclude each other**, when votes are certificates at a
+wave of two: authors of votes for a block and of blames of it number at most
+`n + f`. -/
+theorem card_votes_add_blames_le {p : Scheme.Params} (hv : p.voteIsCert = true)
+    (hw : p.waveLength = 2) {L : BlockId} {r : ℕ} {X : Finset BlockId}
+    (hX : X ⊆ certsFor p U L r) :
+    (creatorsOf U.block X).card + (blames U L (r + 1)).card ≤ Fintype.card Validator + F.f := by
+  have hsub : creatorsOf U.block X ⊆ supporters U L (r + 1) := by
+    unfold certsFor at hX
+    rw [if_pos hv, hw] at hX
+    exact Finset.image_subset_image hX
+  have := Finset.card_le_card hsub
+  have := card_supporters_add_card_blames_le U.noEquivOn_honest card_compl_correct_le
+    (L := L) (n := r + 1)
+  omega
+
+/-- **A certificate and blames exclude each other**, when votes are certified
+apart at a wave of three: its voters and the blamers number at most
+`n + f`. -/
+theorem card_cert_add_blames_le {p : Scheme.Params} (hv : p.voteIsCert = false)
+    (hw : p.waveLength = 3) {L C : BlockId} {r : ℕ} (hC : C ∈ certsFor p U L r) :
+    p.certThreshold + (blames U L (r + 1)).card ≤ Fintype.card Validator + F.f := by
+  unfold certsFor at hC
+  rw [if_neg (by simp [hv]), hw] at hC
   obtain ⟨hCi, hCr, hcv⟩ := mem_certificatesAt.mp hC
   unfold CarriesVotes at hcv
   have := Finset.card_le_card (creatorsOf_carriedVotes_subset_supporters (L := L) hCi hCr)
   have := card_supporters_add_card_blames_le U.noEquivOn_honest card_compl_correct_le
     (L := L) (n := r + 1)
-  have := F.card_validators
   omega
+
+/-- **A link excludes a direct skip**, at a row: the link's certificates, or
+the votes of one, and the blames come from two large sets of authors. -/
+theorem not_directSkip {p : Scheme.Params} (hrow : Row Validator p) {K : ℕ} {A L : BlockId}
+    {r : ℕ} (hl : AvailLinked p U K A L r) : ¬ DirectSkip p U L r := by
+  intro hs
+  unfold DirectSkip at hs
+  obtain ⟨X, hX, -, hXn⟩ := hl
+  rcases hrow with ⟨hv, hw, -, ha, -, -⟩ | ⟨hv, hw, hl1, -, hb, -⟩
+  · have := card_votes_add_blames_le hv hw hX
+    omega
+  · obtain ⟨C, hC⟩ := nonempty_of_creatorsOf_card_pos (blk := U.block) (s := X) (by omega)
+    have := card_cert_add_blames_le hv hw (hX hC)
+    omega
 
 /-- An anchored block is `A`, or referenced by a correct author's block of the
 sub-DAG. -/
@@ -266,23 +371,16 @@ theorem avail_subset_ids {K : ℕ} {A z : BlockId} (hA : A ∈ U.ids) (hz : z �
   obtain ⟨y, hy, hzy⟩ := hz
   exact historyUpto_subset_ids K (hy.mem hA) hzy
 
-/-- **The available sub-DAG below a certified block is held by correct
-nodes**: it lies in the history to depth `K` of a block that a correct voter
-of the certificate, or a correct author's block of the sub-DAG, references. -/
-theorem avail_correctHeld {K : ℕ} {A z : BlockId} {r : ℕ} (hA : A ∈ U.ids)
-    (hC : (certificatesAt U (IsVote U) (quorumCard Validator) A r).Nonempty)
+/-- **The available sub-DAG below a voted block is held by correct nodes**:
+it lies in the history to depth `K` of a block that a correct voter, or a
+correct author's block of the sub-DAG, references. -/
+theorem avail_correctHeld {K : ℕ} {A z : BlockId} (hA : A ∈ U.ids) (hV : Voted U A)
     (hz : z ∈ Avail U K A) : z ∈ CorrectHeld U K := by
-  obtain ⟨C, hC⟩ := hC
   obtain ⟨y, -, hzy, hyA | ⟨w, hw, hwc, hyw⟩⟩ := held hz
-  · obtain ⟨hCi, -, hv⟩ := mem_certificatesAt.mp hC
-    obtain ⟨u, hu, hucorr⟩ := exists_correct_of_card
-      (S := creatorsOf U.block (carriedVotes U (IsVote U) C A))
-      (by have := F.card_validators; unfold CarriesVotes at hv; omega)
+  · obtain ⟨u, hu, hucorr⟩ := exists_correct_of_card hV
     obtain ⟨b, hb, hbc⟩ := mem_creatorsOf.mp hu
-    obtain ⟨hbC, hbA⟩ := mem_carriedVotes.mp hb
-    refine ⟨b, U.complete C hCi b hbC, by rw [hbc]; exact hucorr, Or.inr ⟨y, ?_, hzy⟩⟩
-    rw [hyA]
-    exact hbA
+    obtain ⟨hbi, -, hbA⟩ := mem_votesFor.mp hb
+    exact ⟨b, hbi, by rw [hbc]; exact hucorr, Or.inr ⟨y, hyA ▸ hbA, hzy⟩⟩
   · exact ⟨w, avail_subset_ids hA hw, hwc, Or.inr ⟨y, hyw, hzy⟩⟩
 
 end KPartialDag

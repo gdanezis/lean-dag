@@ -13,24 +13,24 @@ namespace KPartialDag
 namespace Bounds
 
 theorem decides : Decides := by
-  intro Validator BlockId Payload _ _ _ _ S U K H ρ i v hH h1 h2
-  exact nodeDecided_band_iff hH h1 h2
+  intro Validator BlockId Payload _ _ _ _ S p U K H ρ i v hrow hH h1 h2
+  exact nodeDecided_band_iff hrow hH h1 h2
 
 theorem progress : Progress := by
-  intro Validator BlockId Payload _ _ _ _ S K T c hc hspan fair R k
+  intro Validator BlockId Payload _ _ _ _ S p K T c hrow hlive hc hspan fair R k
   obtain ⟨b, hkb, hRb, hrun⟩ := Slots.exists_run_past fair k R
   exact ⟨b, hkb, hRb, fun U h H ρ hH hW hav =>
-    nodeDecided_of_run_band h.1 hH hc hspan (responds_of_run hc hRb hrun h) hW hav⟩
+    nodeDecided_of_run_band hrow hlive h.1 hH hc hspan (responds_of_run hc hRb hrun h) hW hav⟩
 
 theorem builds : Builds := by
   intro Validator BlockId Payload _ _ _ _ U K H Q r b hQ hd hq hwin hbr hbQ
   exact ⟨validAt_of_quorum (fun x hx => (hQ x hx).2) hd hq hbr hbQ, obliged_band hQ hbQ hwin⟩
 
 theorem resumes : Resumes := by
-  intro Validator BlockId Payload _ _ _ _ S U K D H₁ H₂ g₁ g₂ s m hK hH₁ hH₂ hg₁ hg₂ hdec hf₁ hf₂
-    b k hsk hkm
+  intro Validator BlockId Payload _ _ _ _ S p U K D H₁ H₂ g₁ g₂ s m hrow hK hH₁ hH₂ hg₁ hg₂ hdec
+    hf₁ hf₂ b k hsk hkm
   have hagree : ∀ j, j < m → S.slotRound s ≤ S.slotRound j + D → g₁ j = g₂ j :=
-    fun j hj hr => (hdec j hj hr).1.agree hK hH₁ hH₂ (hdec j hj hr).2
+    fun j hj hr => (hdec j hj hr).1.agree hrow hK hH₁ hH₂ (hdec j hj hr).2
   exact ⟨entersIn_resume hH₁ hH₂ hg₁ hg₂ hagree hf₁ hf₂ hsk hkm,
     entersIn_resume hH₂ hH₁ hg₂ hg₁ (fun j hj hr => (hagree j hj hr).symm) hf₂ hf₁ hsk hkm⟩
 

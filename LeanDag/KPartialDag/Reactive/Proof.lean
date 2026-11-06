@@ -53,22 +53,22 @@ theorem responsive : Responsive := by
   exact h.respondsFrom hτ hδ hγτ
 
 theorem commits : Commits := by
-  intro Validator BlockId Payload _ _ _ _ S U tl T G δ τ γ μ R K N h hτ hδ hγτ k t hk hN hlead hb
-    v hv
-  exact h.nodeDecided_fast hτ hδ hγτ K hk hN hlead hb hv
+  intro Validator BlockId Payload _ _ _ _ S p U tl T G δ τ γ μ R K N hrow hlive h hτ hδ hγτ k t hk
+    hN hlead hb v hv
+  exact h.nodeDecided_fast hrow hlive hτ hδ hγτ K hk hN hlead hb hv
 
 theorem synchronised : Synchronised := by
   intro Validator BlockId Payload _ _ _ _ _ U tl T G δ τ γ μ R N h hγ hδ hγτ
   exact h.syncFrom hγ hδ hγτ
 
 theorem durable : Durable := by
-  intro Validator BlockId Payload _ _ _ _ _ U tl T K hT hTq hK A hA r hC z hz
-  exact exists_disk_of_avail hT hTq hK hA hC hz
+  intro Validator BlockId Payload _ _ _ _ _ U tl T K hT hTq hK A hA hV z hz
+  exact exists_disk_of_avail hT hTq hK hA hV hz
 
 theorem ledger : Ledger := by
-  intro Validator BlockId Payload _ _ _ _ S U tl T G δ τ γ μ R N K D Δ c h hτ hδ hγτ hF hc hspan
-    fair k
-  exact h.exists_ledger hτ hδ hγτ D hF hc hspan fair k
+  intro Validator BlockId Payload _ _ _ _ S p U tl T G δ τ γ μ R N K D Δ c hrow hlive h hτ hδ hγτ hF
+    hc hspan fair k
+  exact h.exists_ledger hrow hlive hτ hδ hγτ D hF hc hspan fair k
 
 theorem holds : Statement :=
   ⟨persisted, onDisk, resumes, built, catchesUp, starts, slow, fast, responsive, commits,

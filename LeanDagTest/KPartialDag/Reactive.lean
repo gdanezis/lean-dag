@@ -1,5 +1,6 @@
 import LeanDag.KPartialDag.Reactive.Proof
 import LeanDag.KPartialDag.Close.Proof
+import LeanDag.KPartialDag.Agreement.Proof
 import LeanDag.KPartialDag.Helpers.Bounds
 /-!
 # Reactive nodes in time — a timed witness
@@ -410,16 +411,24 @@ restart, by `Reactive.OnDisk`. -/
 theorem t_persists (N : ℕ) : ∃ next, Persists (tRec N).ids (tRec N).block (tl N).built next :=
   Reactive.onDisk (Fin 4) Id Unit _ _ _ (t_buildsAboveDisk N)
 
+/-- The commit rule is Mysticeti's, at four validators and one fault. -/
+abbrev mysticeti : Scheme.Params := Scheme.Params.mysticeti 4 1
+
+/-- **Mysticeti is a live row** of the witness's validators, by `Agreement.Rows`. -/
+theorem t_row : Row (Fin 4) mysticeti ∧ LiveRow (Fin 4) mysticeti :=
+  (Agreement.rows (Fin 4)).1
+
 /-- **Slot `5` commits by time `27`**: its leader and the leaders next to it
 are correct, the blocks of round `5` are built at time `20`, and by
 `Reactive.Commits` every correct node commits the slot directly on what it
 holds at `20 + 3δ + 2 max γ μ = 27`. -/
 theorem t_commits {N : ℕ} (hN : 7 ≤ N) (K : ℕ) {v : Fin 4}
     (hv : v ∈ (Correct : Finset (Fin 4))) :
-    ∃ L, IsLeaderBlock (tRec N) 5 L ∧ NodeDecided (tRec N) K (tHeld N v 27) 5 (some L) :=
-  Reactive.commits (Fin 4) Id Unit (tRec N) (tl N) Correct 3 1 4 2 1 2 K N (t_run (by omega))
-    (by norm_num) (by norm_num) (by norm_num) 5 20 (by rw [slotRound_eq]; omega)
-    (by rw [slotRound_eq]; omega)
+    ∃ L, IsLeaderBlock (tRec N) 5 L ∧
+      NodeDecided mysticeti (tRec N) K (tHeld N v 27) 5 (some L) :=
+  Reactive.commits (Fin 4) Id Unit mysticeti (tRec N) (tl N) Correct 3 1 4 2 1 2 K N t_row.1
+    t_row.2 (t_run (by omega)) (by norm_num) (by norm_num) (by norm_num) 5 20
+    (by rw [slotRound_eq]; omega) (by rw [slotRound_eq]; omega)
     (fun j h1 h2 => mem_correct_four.mpr
       (leader_ne.mpr (by simp only [slotRound_eq] at h1 h2; omega)))
     (fun w hw => ⟨(5, w), mem_tIds.mpr ⟨by omega, mem_correct_four.mp hw⟩, rfl, rfl,
@@ -443,21 +452,28 @@ commits. -/
 theorem t_ledger {N : ℕ} (hN : 2 ≤ N) (K D k : ℕ) : ∃ b, k ≤ b ∧
     (b + 3 - 1 + 2 ≤ N → ∃ t, ∀ v ∈ (Correct : Finset (Fin 4)),
       ∃ g : ℕ → Option Id, ∀ i, i < b + 3 →
-        NodeDecided (tRec N) K (tHeld N v t) i (g i) ∧
+        NodeDecided mysticeti (tRec N) K (tHeld N v t) i (g i) ∧
         ∀ L, g i = some L → FetchedIn (tRec N) K (tHeld N v t) L (L.1 - D)) :=
-  Reactive.ledger (Fin 4) Id Unit (tRec N) (tl N) Correct 3 1 4 2 1 2 N K D 1 3 (t_run hN)
-    (by norm_num) (by norm_num) (by norm_num) (t_fetches N K) (by norm_num)
-    (fun b i hi => by unfold EligibleAt; rw [slotRound_eq, slotRound_eq]; omega) t_fair k
+  Reactive.ledger (Fin 4) Id Unit mysticeti (tRec N) (tl N) Correct 3 1 4 2 1 2 N K D 1 3 t_row.1
+    t_row.2 (t_run hN) (by norm_num) (by norm_num) (by norm_num) (t_fetches N K) (by norm_num)
+    (fun b i hi => by
+      unfold EligibleAt; rw [slotRound_eq, slotRound_eq]; simp [mysticeti, Scheme.Params.mysticeti]
+      omega)
+    t_fair k
 
 /-- **The channel closes**, by `Close.Closes`, when every block declares it
 closed: every two rounds hold a slot led by a correct validator. -/
 theorem t_closes {N : ℕ} (hN : 2 ≤ N) : ∃ b, b + 3 - 1 + 2 ≤ N → ∃ t,
     ∀ v ∈ (Correct : Finset (Fin 4)), ∃ (g : ℕ → Option Id) (n : ℕ),
-      DecidesBelow (tRec N) 3 (tHeld N v t) 2 g n ∧
+      DecidesBelow mysticeti (tRec N) 3 (tHeld N v t) 2 g n ∧
       ClosesAfter (tRec N) 3 (tHeld N v t) 2 (fun _ => True) g n :=
-  Close.closes (Fin 4) Id Unit (tRec N) (tl N) Correct 3 1 4 2 1 2 N 3 2 1 3 0 (fun _ => True)
-    (t_run hN) (by norm_num) (by norm_num) (by norm_num) le_rfl (t_fetches N 3) (by norm_num)
-    (fun b i hi => by unfold EligibleAt; rw [slotRound_eq, slotRound_eq]; omega) t_fair
+  Close.closes (Fin 4) Id Unit mysticeti (tRec N) (tl N) Correct 3 1 4 2 1 2 N 3 2 1 3 0
+    (fun _ => True) t_row.1 t_row.2 (t_run hN) (by norm_num) (by norm_num) (by norm_num) le_rfl
+    (t_fetches N 3) (by norm_num)
+    (fun b i hi => by
+      unfold EligibleAt; rw [slotRound_eq, slotRound_eq]; simp [mysticeti, Scheme.Params.mysticeti]
+      omega)
+    t_fair
     (fun r => by
       by_cases hr : (r + 1) % 4 = 3
       · exact ⟨r + 2, by rw [slotRound_eq]; omega, (slotRound_eq _).le,

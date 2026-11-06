@@ -13,8 +13,8 @@ namespace KPartialDag
 namespace Avail
 
 theorem held : Held := by
-  intro Validator BlockId Payload _ _ _ _ U K A r hA hC z hz
-  exact avail_correctHeld hA hC hz
+  intro Validator BlockId Payload _ _ _ _ U K A hA hV z hz
+  exact avail_correctHeld hA hV hz
 
 theorem broad : Broad := by
   intro Validator BlockId Payload _ _ _ _ U K A ρ hK hA hρ
@@ -22,13 +22,12 @@ theorem broad : Broad := by
   exact ⟨x, hx, by omega, hxc, hxa⟩
 
 theorem linked : Linked := by
-  intro Validator BlockId Payload _ _ _ _ U K A L r hK hA hr hd
-  exact KPartialDag.linked hK hA hr hd
+  intro Validator BlockId Payload _ _ _ _ p U K A L r hrow hK hA hr hd
+  exact KPartialDag.linked hrow hK hA hr hd
 
 theorem exclusive : Exclusive := by
-  intro Validator BlockId Payload _ _ _ _ U K A L r hl
-  obtain ⟨C, hC, -, -⟩ := hl
-  exact not_directSkip hC
+  intro Validator BlockId Payload _ _ _ _ p U K A L r hrow hl
+  exact not_directSkip hrow hl
 
 theorem holds : Statement := ⟨held, broad, linked, exclusive⟩
 

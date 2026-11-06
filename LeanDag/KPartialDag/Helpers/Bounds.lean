@@ -17,6 +17,7 @@ namespace KPartialDag
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
 variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 variable {U : KRecord Validator BlockId Payload} {K : ℕ} {H : Finset BlockId} {A : BlockId}
+variable {p : Scheme.Params}
 
 omit [LinearOrder BlockId] in
 theorem mem_band {ρ : ℕ} {b : BlockId} : b ∈ Band U H ρ ↔ b ∈ H ∧ ρ ≤ (U.block b).round :=
@@ -76,18 +77,24 @@ theorem availIn_band_iff (hH : H ⊆ U.ids) {ρ : ℕ} {z : BlockId}
   omega
 
 /-- **The indirect test for a slot at round `r`, with `ρ + K ≤ r + 1`, is
-read on the band from `ρ`.** -/
-theorem linkedIn_band_iff (hH : H ⊆ U.ids) {ρ r : ℕ} (hr : ρ + K ≤ r + 1) {L : BlockId} :
-    LinkedIn U K (Band U H ρ) A L r ↔ LinkedIn U K H A L r := by
+read on the band from `ρ`**, at a row. -/
+theorem linkedIn_band_iff (hH : H ⊆ U.ids) (hrow : Row Validator p) {ρ r : ℕ}
+    (hr : ρ + K ≤ r + 1) {L : BlockId} :
+    LinkedIn p U K (Band U H ρ) A L r ↔ LinkedIn p U K H A L r := by
   constructor
-  · rintro ⟨C, hC, hCr, hrefs, hv⟩
-    exact ⟨C, availIn_mono band_subset hC, hCr, fun j hj => availIn_mono band_subset (hrefs j hj),
-      hv⟩
-  · rintro ⟨C, hC, hCr, hrefs, hv⟩
-    have hCi : C ∈ U.ids := hH (availIn_subset_held hC)
-    refine ⟨C, (availIn_band_iff hH (by omega)).mpr hC, hCr, fun j hj => ?_, hv⟩
+  · rintro ⟨X, hX, hXn⟩
+    exact ⟨X, fun C hC => ⟨availIn_mono band_subset (hX C hC).1, (hX C hC).2.1,
+      fun hv j hj => availIn_mono band_subset ((hX C hC).2.2 hv j hj)⟩, hXn⟩
+  · rintro ⟨X, hX, hXn⟩
+    refine ⟨X, fun C hC => ?_, hXn⟩
+    obtain ⟨hCa, hCc, hrefs⟩ := hX C hC
+    have hCi : C ∈ U.ids := hH (availIn_subset_held hCa)
+    have hCr := hCc.1
+    have hw : 2 ≤ p.waveLength := by rcases hrow with ⟨-, h, -⟩ | ⟨-, h, -⟩ <;> omega
+    refine ⟨(availIn_band_iff hH (by omega)).mpr hCa, hCc, fun hv j hj => ?_⟩
     have := (U.valid C hCi).predecessor j hj
-    exact (availIn_band_iff hH (by omega)).mpr (hrefs j hj)
+    have := (row_wave hrow).2 hv
+    exact (availIn_band_iff hH (by omega)).mpr (hrefs hv j hj)
 
 /-- **The fetch test down to `ρ'`, with `ρ + K ≤ ρ'`, below an anchor at round
 `ρ + K` or above, is read on the band from `ρ`.** -/
@@ -459,20 +466,22 @@ variable [S : Slots Validator]
 `ρ + K − 1` or above, and not below `ρ`, when they agree above `ρ` on the
 blocks held with their references, on the indirect test and on the fetch
 test. -/
-theorem nodeDecided_of_agree {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.ids) {ρ : ℕ}
+theorem nodeDecided_of_agree (hrow : Row Validator p) {H₁ H₂ : Finset BlockId}
+    (hH₁ : H₁ ⊆ U.ids) {ρ : ℕ}
     (hheld : ∀ s : Finset BlockId, (∀ b ∈ s, b ∈ U.ids ∧ ρ + 1 ≤ (U.block b).round) →
       heldWithRefs U H₁ s = heldWithRefs U H₂ s)
-    (hlink : ∀ A L r, ρ + K ≤ r + 1 → (LinkedIn U K H₁ A L r ↔ LinkedIn U K H₂ A L r))
+    (hlink : ∀ A L r, ρ + K ≤ r + 1 → (LinkedIn p U K H₁ A L r ↔ LinkedIn p U K H₂ A L r))
     (hfetch : ∀ A ρ', ρ + K ≤ (U.block A).round → ρ + K ≤ ρ' →
       (FetchedIn U K H₁ A ρ' ↔ FetchedIn U K H₂ A ρ'))
-    {i : ℕ} {v : Option BlockId} (h : NodeDecided U K H₁ i v) :
-    ρ ≤ S.slotRound i → ρ + K ≤ S.slotRound i + 1 → NodeDecided U K H₂ i v := by
+    {i : ℕ} {v : Option BlockId} (h : NodeDecided p U K H₁ i v) :
+    ρ ≤ S.slotRound i → ρ + K ≤ S.slotRound i + 1 → NodeDecided p U K H₂ i v := by
+  have hw : 2 ≤ p.waveLength := by rcases hrow with ⟨-, h, -⟩ | ⟨-, h, -⟩ <;> omega
   induction h with
   | @directCommit k L hL hc =>
     intro h1 h2
     refine NodeDecided.directCommit hL ?_
     rw [← hheld _ fun b hb => by
-      obtain ⟨hbi, hbr, -⟩ := mem_certificatesAt.mp hb
+      obtain ⟨hbi, hbr⟩ := mem_certsFor hb
       exact ⟨hbi, by omega⟩]
     exact hc
   | @directSkip k hs =>
@@ -482,16 +491,20 @@ theorem nodeDecided_of_agree {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.id
       obtain ⟨hbi, hbr⟩ := mem_blocksAt.mp (Finset.mem_filter.mp hb).1
       exact ⟨hbi, by omega⟩]
     exact hs
-  | @indirectCommit k j A L hkj helig hj hmid hL hl ihj ihm =>
+  | @indirectCommit k j A L hkj helig hj hmid hf hL hl hleast ihj ihm =>
     intro h1 h2
     have hkj' := S.mono hkj.le
+    have hA := (hj.voted hrow hH₁).1
+    have hAr : ρ + K ≤ (U.block A).round := by
+      rw [hA.2.1]; have := eligibleAt_iff.mp helig; omega
     exact NodeDecided.indirectCommit hkj helig (ihj (by omega) (by omega))
       (fun m h3 h4 h5 => ihm m h3 h4 h5 (by have := S.mono h3.le; omega)
-        (by have := S.mono h3.le; omega)) hL ((hlink A L _ h2).mp hl)
+        (by have := S.mono h3.le; omega)) ((hfetch A _ hAr (by omega)).mp hf) hL
+      ((hlink A L _ h2).mp hl) fun L' hL' hlt hl' => hleast L' hL' hlt ((hlink A L' _ h2).mpr hl')
   | @indirectSkip k j A hkj helig hj hmid hf hnone ihj ihm =>
     intro h1 h2
     have hkj' := S.mono hkj.le
-    have hA := (hj.certified hH₁).1
+    have hA := (hj.voted hrow hH₁).1
     have hAr : ρ + K ≤ (U.block A).round := by
       rw [hA.2.1]; have := eligibleAt_iff.mp helig; omega
     exact NodeDecided.indirectSkip hkj helig (ihj (by omega) (by omega))
@@ -501,28 +514,30 @@ theorem nodeDecided_of_agree {H₁ H₂ : Finset BlockId} (hH₁ : H₁ ⊆ U.id
 
 /-- **A decision of a slot at round `ρ + K − 1` or above, and not below `ρ`,
 reads only the band from `ρ`.** -/
-theorem nodeDecided_band_iff (hH : H ⊆ U.ids) {ρ i : ℕ} {v : Option BlockId}
-    (h1 : ρ ≤ S.slotRound i) (h2 : ρ + K ≤ S.slotRound i + 1) :
-    NodeDecided U K (Band U H ρ) i v ↔ NodeDecided U K H i v :=
-  ⟨fun h => nodeDecided_of_agree (band_subset.trans hH) (fun _ hs => heldWithRefs_band hs)
-      (fun _ _ _ hr => linkedIn_band_iff hH hr) (fun _ _ hA hρ => fetchedIn_band_iff hH hA hρ)
-      h h1 h2,
-    fun h => nodeDecided_of_agree hH (fun _ hs => (heldWithRefs_band hs).symm)
-      (fun _ _ _ hr => (linkedIn_band_iff hH hr).symm)
+theorem nodeDecided_band_iff (hrow : Row Validator p) (hH : H ⊆ U.ids) {ρ i : ℕ}
+    {v : Option BlockId} (h1 : ρ ≤ S.slotRound i) (h2 : ρ + K ≤ S.slotRound i + 1) :
+    NodeDecided p U K (Band U H ρ) i v ↔ NodeDecided p U K H i v := by
+  have hw : 2 ≤ p.waveLength := by rcases hrow with ⟨-, h, -⟩ | ⟨-, h, -⟩ <;> omega
+  exact ⟨fun h => nodeDecided_of_agree hrow (band_subset.trans hH)
+      (fun _ hs => heldWithRefs_band hs) (fun _ _ _ hr => linkedIn_band_iff hH hrow hr)
+      (fun _ _ hA hρ => fetchedIn_band_iff hH hA hρ) h h1 h2,
+    fun h => nodeDecided_of_agree hrow hH (fun _ hs => (heldWithRefs_band hs).symm)
+      (fun _ _ _ hr => (linkedIn_band_iff hH hrow hr).symm)
       (fun _ _ hA hρ => (fetchedIn_band_iff hH hA hρ).symm) h h1 h2⟩
 
 /-- **Progress from a band**: on a responsive run, a node holding the blocks
 of `T` over the run with their references, and the available sub-DAG below
-every certified leader up to the run's end from round `ρ` up, decides every
+every voted leader up to the run's end from round `ρ` up, decides every
 slot up to the run's end at round `ρ + K − 1` or above, and not below `ρ`. -/
-theorem nodeDecided_of_run_band {T : Finset Validator}
-    (hcard : quorumCard Validator ≤ T.card) (hH : H ⊆ U.ids)
-    {b c ρ : ℕ} (hc : 0 < c) (hspan : ∀ b i, i < b → EligibleAt (S := S) 2 i (b + c - 1))
+theorem nodeDecided_of_run_band (hrow : Row Validator p) (hlive : LiveRow Validator p)
+    {T : Finset Validator} (hcard : quorumCard Validator ≤ T.card) (hH : H ⊆ U.ids)
+    {b c ρ : ℕ} (hc : 0 < c)
+    (hspan : ∀ b i, i < b → EligibleAt (S := S) (p.waveLength - 1) i (b + c - 1))
     (hresp : ∀ j, b ≤ j → j ≤ b + c - 1 → Responds U T j)
     (hW : WithRefs U T (S.slotRound b) (S.slotRound (b + c - 1) + 2) ⊆ ↑H)
     (hav : ∀ z ∈ AvailBelow U K (b + c - 1), ρ ≤ (U.block z).round → z ∈ H) :
     ∀ i, i < b + c → ρ ≤ S.slotRound i → ρ + K ≤ S.slotRound i + 1 →
-      ∃ v, NodeDecided U K H i v := by
+      ∃ v, NodeDecided p U K H i v := by
   classical
   let H' := H ∪ U.ids.filter (· ∈ AvailBelow U K (b + c - 1))
   have hH' : H' ⊆ U.ids := Finset.union_subset hH (Finset.filter_subset _ _)
@@ -538,10 +553,10 @@ theorem nodeDecided_of_run_band {T : Finset Validator}
     obtain ⟨hz, hρ⟩ := Finset.mem_filter.mp hz
     exact mem_band.mpr ⟨hav z (Finset.mem_filter.mp hz).2 hρ, hρ⟩
   intro i hi h1 h2
-  obtain ⟨v, hv⟩ := nodeDecided_of_run hcard hH' hc hspan hresp hheld i hi
-  have := (nodeDecided_band_iff hH' h1 h2).mpr hv
+  obtain ⟨v, hv⟩ := nodeDecided_of_run hrow hlive hcard hH' hc hspan hresp hheld i hi
+  have := (nodeDecided_band_iff hrow hH' h1 h2).mpr hv
   rw [heq] at this
-  exact ⟨v, (nodeDecided_band_iff hH h1 h2).mp this⟩
+  exact ⟨v, (nodeDecided_band_iff hrow hH h1 h2).mp this⟩
 
 /-! ## Resuming the ledger -/
 

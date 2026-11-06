@@ -20,7 +20,7 @@ variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 variable [S : Slots Validator]
 variable {U : KRecord Validator BlockId Payload} {tl : Timeline Validator BlockId}
 variable {T : Finset Validator}
-variable {G δ τ γ μ R N : ℕ}
+variable {G δ τ γ μ R N : ℕ} {p : Scheme.Params}
 
 omit [LinearOrder BlockId] S in
 theorem creatorsOf_filter_mono {H H' : Finset BlockId} (hH : H ⊆ H') (p : BlockId → Prop)
@@ -473,23 +473,20 @@ end NodeRules
 
 omit S in
 /-- **Nothing a leader outputs is lost**: when correct nodes keep histories
-on disk, every block of the available sub-DAG of a certified block is on the
-disk of a node of a quorum `T` of correct nodes from some time on, through
-any crash. A quorum of voters, or `f + 1` authors, include a node of `T`. -/
+on disk, every block of the available sub-DAG of a voted block is on the disk
+of a node of a quorum `T` of correct nodes from some time on, through any
+crash. Its `f + 1` voters, or `f + 1` authors, include a node of `T`. -/
 theorem exists_disk_of_avail (hT : T ⊆ (Correct : Finset Validator))
-    (hTq : quorumCard Validator ≤ T.card) {K : ℕ} (hK : KeepsHistory U tl K) {A z : BlockId} {r : ℕ}
-    (hA : A ∈ U.ids) (hC : (certificatesAt U (IsVote U) (quorumCard Validator) A r).Nonempty)
-    (hz : z ∈ Avail U K A) :
+    (hTq : quorumCard Validator ≤ T.card) {K : ℕ} (hK : KeepsHistory U tl K) {A z : BlockId}
+    (hA : A ∈ U.ids) (hV : Voted U A) (hz : z ∈ Avail U K A) :
     ∃ w ∈ T, ∃ t₀, ∀ t, t₀ ≤ t → z ∈ tl.disk w t := by
   obtain ⟨y, hy, hzy⟩ := hz
   cases hy with
   | anchor =>
-    obtain ⟨C, hC⟩ := hC
-    obtain ⟨hCi, -, hv⟩ := mem_certificatesAt.mp hC
-    obtain ⟨b, hb, hbT⟩ := exists_mem_of_quorum hTq hv
-    obtain ⟨hbC, hbA⟩ := mem_carriedVotes.mp hb
-    exact ⟨_, hbT, _, fun t ht =>
-      hK b (U.complete C hCi b hbC) (hT hbT) t ht A hbA hzy⟩
+    obtain ⟨c, hc, hcT⟩ := exists_mem_of_card hTq hV
+    obtain ⟨b, hb, rfl⟩ := mem_creatorsOf.mp hc
+    obtain ⟨hbi, -, hbA⟩ := mem_votesFor.mp hb
+    exact ⟨_, hcT, _, fun t ht => hK b hbi (hT hcT) t ht A hbA hzy⟩
   | referenced S yf hyf hzf href hcard =>
     obtain ⟨c, hc, hcT⟩ := exists_mem_of_card hTq hcard
     obtain ⟨w, hw, rfl⟩ := mem_creatorsOf.mp hc
@@ -704,33 +701,39 @@ theorem respondsFrom (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ) :
   refine ⟨h.large, fun k hk hN hlead => ?_⟩
   obtain ⟨L, hL, hLc, hLr⟩ := h.populatedOn hδ hγτ hk (by omega) _ hlead
   exact ⟨h.populatedOn hδ hγτ (by omega) hN, L, ⟨hL, hLr, hLc⟩, fun C hC hCT hCr =>
-    h.carriesVotes_of_leader hτ hδ hγτ hk hN hlead hC hCT hCr ⟨hL, hLr, hLc⟩⟩
+    h.carriesVotes_of_leader hτ hδ hγτ hk hN hlead hC hCT hCr ⟨hL, hLr, hLc⟩,
+    h.populatedOn hδ hγτ (by omega) (by omega), fun b hb hbT hbr =>
+    h.mem_refs_of_leader hτ hδ hγτ hk hN hlead hb hbT hbr ⟨hL, hLr, hLc⟩⟩
 
 /-- **A slot led by `T` commits within `3δ + 2 max γ μ`**, at `τ ≥ 2δ` and
 `δ < γ ≤ τ`: when every slot from one round below a slot at round `r`, from
 `R + 2` to `N − 2`, to one round above it has a leader in `T`, and every
 validator of `T` has built at round `r` by `t`, every node of `T` commits the
 slot directly by `t + 3δ + 2 max γ μ`. -/
-theorem nodeDecided_fast (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ) (K : ℕ) {k t : ℕ}
+theorem nodeDecided_fast (hrow : Row Validator p) (hlive : LiveRow Validator p)
+    (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ) (K : ℕ) {k t : ℕ}
     (hk : R + 2 ≤ S.slotRound k) (hN : S.slotRound k + 2 ≤ N)
     (hlead : ∀ j, S.slotRound k ≤ S.slotRound j + 1 → S.slotRound j ≤ S.slotRound k + 1 →
       S.leader j ∈ T)
     (hb : BuiltBy U tl T (S.slotRound k) t) {v : Validator} (hv : v ∈ T) :
     ∃ L, IsLeaderBlock U k L ∧
-      NodeDecided U K (tl.held v (t + 3 * δ + 2 * max γ μ)) k (some L) := by
+      NodeDecided p U K (tl.held v (t + 3 * δ + 2 * max γ μ)) k (some L) := by
   have h1 := h.builtBy_succ_fast hτ hδ hγτ hk (by omega) hb fun j hj =>
     hlead j (by omega) (by omega)
   have h2 := h.builtBy_succ_fast hτ hδ hγτ (by omega) (by omega) h1 fun j hj =>
     hlead j (by omega) (by omega)
   have hlk := hlead k (by omega) (by omega)
-  refine nodeDecided_of_responds h.large
+  refine nodeDecided_of_responds hrow hlive h.large
     ((h.respondsFrom hτ hδ hγτ).2 k (by omega) hN hlk) ?_
   rintro z ⟨c, hc, hcT, hlo, hhi, hz⟩
-  obtain ⟨c', hc', hcc', hcr', hct'⟩ := h2 _ hcT
-  have hcc'' : c = c' := U.eq_of_creator_eq hc hc' (h.stable hcT) rfl hcc' (by omega)
-  subst hcc''
-  have hheld : c ∈ tl.held v (t + 3 * δ + 2 * max γ μ) :=
-    h.mem_held_of_round hc hcT (by omega) hv hct' (by omega)
+  have hheld : c ∈ tl.held v (t + 3 * δ + 2 * max γ μ) := by
+    rcases Nat.eq_or_lt_of_le hlo with hr | hr
+    · obtain ⟨c', hc', hcc', hcr', hct'⟩ := h1 _ hcT
+      obtain rfl : c = c' := U.eq_of_creator_eq hc hc' (h.stable hcT) rfl hcc' (by omega)
+      exact h.mem_held_of_round hc hcT (by omega) hv hct' (by omega)
+    · obtain ⟨c', hc', hcc', hcr', hct'⟩ := h2 _ hcT
+      obtain rfl : c = c' := U.eq_of_creator_eq hc hc' (h.stable hcT) rfl hcc' (by omega)
+      exact h.mem_held_of_round hc hcT (by omega) hv hct' (by omega)
   rcases hz with rfl | hz
   · exact hheld
   · exact h.closed v (h.stable hv) _ c hheld (h.stable hcT) hz
@@ -788,19 +791,21 @@ theorem withRefs_subset_held {lo hi t : ℕ} (hlo : R ≤ lo) {v : Validator} (h
   · exact h.closed v (h.stable hv) _ x hxv (h.stable hxT) hzx
 
 /-- **The ledger grows**, at `τ ≥ 2δ` and `δ < γ ≤ τ`, when nodes of `T`
-fetch the available sub-DAG of the certified leader blocks they hold within
+fetch the available sub-DAG of the voted leader blocks they hold within
 `Δ`, and the schedule offers runs of `c` leaders of `T` spanning eligibility:
 past any slot `k` there is a slot `b` such that, if the run reaches round
 `σ(b + c − 1) + 2`, every node of `T`, from `Δ + δ` after every block of the
 record is built, decides every slot below `b + c` and has fetched each leader
 it commits down to `D` rounds below it. -/
-theorem exists_ledger_from (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ) {K Δ : ℕ} (D : ℕ)
+theorem exists_ledger_from (hrow : Row Validator p) (hlive : LiveRow Validator p)
+    (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ) {K Δ : ℕ} (D : ℕ)
     (hF : Fetches U tl T K G Δ) {c : ℕ} (hc : 0 < c)
-    (hspan : ∀ b i, i < b → EligibleAt (S := S) 2 i (b + c - 1)) (fair : FairRunOn T c)
+    (hspan : ∀ b i, i < b → EligibleAt (S := S) (p.waveLength - 1) i (b + c - 1))
+    (fair : FairRunOn T c)
     (k : ℕ) :
     ∃ b, k ≤ b ∧ (S.slotRound (b + c - 1) + 2 ≤ N → ∀ t,
       max G (U.ids.sup tl.built) + δ + Δ ≤ t → ∀ v ∈ T,
-      ∃ g : ℕ → Option BlockId, ∀ i, i < b + c → NodeDecided U K (tl.held v t) i (g i) ∧
+      ∃ g : ℕ → Option BlockId, ∀ i, i < b + c → NodeDecided p U K (tl.held v t) i (g i) ∧
         ∀ L, g i = some L → FetchedIn U K (tl.held v t) L ((U.block L).round - D)) := by
   classical
   obtain ⟨b, hkb, hRb, hrun⟩ := Slots.exists_run_past fair k (R + 1)
@@ -812,34 +817,35 @@ theorem exists_ledger_from (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤
     fun j h1 h2 h3 => (h.respondsFrom hτ hδ hγτ).2 j h1 (h2.trans hN) h3⟩
   have hheld : WithRefs U T (S.slotRound b) (S.slotRound (b + c - 1) + 2) ∪
       AvailBelow U K (b + c - 1) ⊆ ↑(tl.held v t) := by
-    rintro z (hz | ⟨j, A, hj, hA, ⟨C, hC⟩, hzA⟩)
+    rintro z (hz | ⟨j, A, hj, hA, hV, hzA⟩)
     · exact h.withRefs_subset_held (by omega) hv (by omega) hz
-    · obtain ⟨hCi, -, hvC⟩ := mem_certificatesAt.mp hC
-      obtain ⟨y, hyC, hyT⟩ := exists_mem_of_quorum h.large hvC
-      obtain ⟨hyref, hyA⟩ := mem_carriedVotes.mp hyC
-      have hy := U.complete C hCi y hyref
-      have hyc := h.stable hyT
+    · obtain ⟨u, hu, huT⟩ := exists_mem_of_card h.large hV
+      obtain ⟨y, hyV, rfl⟩ := mem_creatorsOf.mp hu
+      obtain ⟨hy, -, hyA⟩ := mem_votesFor.mp hyV
+      have hyc := h.stable huT
       have hyw := h.own hy hyc (hT₀ y hy)
-      have hyv := h.mem_held_of_held hyT (le_max_left _ _) hyw hyc hv le_rfl
-      exact h.mono v hv _ _ (by omega) (by omega) (hF v hv (T₀ + δ) (by omega) j A hA ⟨C, hC⟩
+      have hyv := h.mem_held_of_held huT (le_max_left _ _) hyw hyc hv le_rfl
+      exact h.mono v hv _ _ (by omega) (by omega) (hF v hv (T₀ + δ) (by omega) j A hA hV
         (h.closed v (h.stable hv) _ y hyv hyc hyA) z hzA)
-  have hdec := nodeDecided_of_run h.large (h.held_ids v _) hc hspan hresp hheld
+  have hdec := nodeDecided_of_run hrow hlive h.large (h.held_ids v _) hc hspan hresp hheld
   refine ⟨fun i => if hi : i < b + c then (hdec i hi).choose else none, fun i hi => ?_⟩
   simp only [dif_pos hi]
   refine ⟨(hdec i hi).choose_spec, fun L hL => ?_⟩
-  obtain ⟨hlead, hcert⟩ := NodeDecided.certified (h.held_ids v _) (hL ▸ (hdec i hi).choose_spec)
+  obtain ⟨hlead, hV⟩ := NodeDecided.voted hrow (h.held_ids v _) (hL ▸ (hdec i hi).choose_spec)
   exact fetchedIn_of_subset hlead.1 (Nat.sub_le _ _) fun z hz _ =>
-    hheld (Set.mem_union_right _ ⟨i, L, by omega, hlead, hcert, hz⟩)
+    hheld (Set.mem_union_right _ ⟨i, L, by omega, hlead, hV, hz⟩)
 
 /-- **The ledger grows**: `exists_ledger_from` at one time. -/
-theorem exists_ledger (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ) {K Δ : ℕ} (D : ℕ)
+theorem exists_ledger (hrow : Row Validator p) (hlive : LiveRow Validator p)
+    (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ) {K Δ : ℕ} (D : ℕ)
     (hF : Fetches U tl T K G Δ) {c : ℕ} (hc : 0 < c)
-    (hspan : ∀ b i, i < b → EligibleAt (S := S) 2 i (b + c - 1)) (fair : FairRunOn T c)
+    (hspan : ∀ b i, i < b → EligibleAt (S := S) (p.waveLength - 1) i (b + c - 1))
+    (fair : FairRunOn T c)
     (k : ℕ) :
     ∃ b, k ≤ b ∧ (S.slotRound (b + c - 1) + 2 ≤ N → ∃ t, ∀ v ∈ T,
-      ∃ g : ℕ → Option BlockId, ∀ i, i < b + c → NodeDecided U K (tl.held v t) i (g i) ∧
+      ∃ g : ℕ → Option BlockId, ∀ i, i < b + c → NodeDecided p U K (tl.held v t) i (g i) ∧
         ∀ L, g i = some L → FetchedIn U K (tl.held v t) L ((U.block L).round - D)) := by
-  obtain ⟨b, hkb, hb⟩ := h.exists_ledger_from hτ hδ hγτ D hF hc hspan fair k
+  obtain ⟨b, hkb, hb⟩ := h.exists_ledger_from hrow hlive hτ hδ hγτ D hF hc hspan fair k
   exact ⟨b, hkb, fun hN => ⟨_, fun v hv => hb hN _ le_rfl v hv⟩⟩
 
 end ReactiveRun
