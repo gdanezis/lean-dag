@@ -6,7 +6,7 @@ import LeanDag.Mysticeti.Liveness
 # Helpers — the counting layer
 
 Generated lemma infrastructure for `Counting/Statement.lean`; not part of
-the audit surface. The common core is the core's T3c carried upward;
+the audit surface. The common core is `Common/CommonCore.lean`'s at the core's quorum;
 reaching a correct block is voting for it; a decision-round block whose
 references all reach a correct candidate certifies it; and a reliable set
 at the decision round then commits it. The two bounds and the
@@ -26,19 +26,6 @@ theorem mem_goodAt {w r : ℕ} {v : Validator} :
     v ∈ goodAt U w r ↔ ∃ L ∈ U.ids,
       (U.block L).round = r ∧ (U.block L).creator = v ∧ DirectCommit U w L r := by
   simp [goodAt]
-
-omit [LinearOrder BlockId] in
-/-- The core's common correct ancestor (T3c), carried to every round
-`≥ r + 2` through references. -/
-theorem exists_commonCore {r : ℕ} {c₀ : BlockId}
-    (hc₀ : c₀ ∈ U.ids) (hc₀r : (U.block c₀).round = r + 2) :
-    ∃ b ∈ U.ids, (U.block b).round = r ∧ (U.block b).creator ∈ (Correct : Finset Validator) ∧
-      ∀ c ∈ U.ids, r + 2 ≤ (U.block c).round → Reaches U c b := by
-  obtain ⟨b, hb, hbr, hbc, hreach⟩ := exists_common_correct_ancestor hc₀ hc₀r
-  refine ⟨b, hb, hbr, hbc, fun c hc hcr => ?_⟩
-  obtain ⟨b', rfl, hreach'⟩ := reaches_pred_of_round_le (U := U) (Q := fun x => x = b) (N := r + 2)
-    (fun c' hc' hc'r => ⟨b, rfl, hreach c' hc' hc'r⟩) hc hcr
-  exact hreach'
 
 /-- Reaching a correct block is voting for it: it is in the cone, and no
 other block of that author and round exists to be smaller. -/
@@ -103,7 +90,7 @@ theorem goodNonempty {w : ℕ} {T : Finset Validator} {r : ℕ} (hw : 4 ≤ w)
     (goodAt U w r ∩ (Correct : Finset Validator)).Nonempty := by
   obtain ⟨v₀, hv₀⟩ := nonempty_of_quorum hcard
   obtain ⟨c₀, hc₀, -, hc₀r⟩ := hpop2 v₀ hv₀
-  obtain ⟨b, hb, hbr, hbc, hreach⟩ := exists_commonCore hc₀ hc₀r
+  obtain ⟨b, hb, hbr, hbc, hreach⟩ := exists_commonCore card_compl_correct_le card_add_f_lt_two_mul_quorum hc₀ hc₀r
   refine ⟨(U.block b).creator, Finset.mem_inter.mpr ⟨?_, hbc⟩⟩
   rw [mem_goodAt]
   refine ⟨b, hb, hbr, rfl, ?_⟩
@@ -122,7 +109,8 @@ theorem goodCard {w : ℕ} {T : Finset Validator} {r : ℕ} (hw : 5 ≤ w)
   obtain ⟨v₀, hv₀⟩ := nonempty_of_quorum hcard
   obtain ⟨c₀, hc₀, -, hc₀r⟩ := hpop3 v₀ hv₀
   obtain ⟨b', hb', hb'r, -, hreach⟩ :=
-    exists_commonCore (r := r + 1) hc₀ (by omega)
+    exists_commonCore (r := r + 1) card_compl_correct_le card_add_f_lt_two_mul_quorum hc₀
+      (by omega)
   have hq : quorumCard Validator ≤ (creatorsOf U.block (U.block b').refs).card :=
     U.creators_quorum hb' (by omega)
   have hsub : creatorsOf U.block (U.block b').refs ∩ (Correct : Finset Validator) ⊆

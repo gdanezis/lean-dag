@@ -233,9 +233,10 @@ it skips directly where Nemo waits for an anchor. Both are safe.
 
 ## 5. The rows as carriers
 
-`Scheme.ReadAlike` is what `Decided` reads; `ReadAlike.decided_iff`
-proves that two rules agreeing on it decide alike, and `toDagRule_eq`
-that their carriers are equal. One round above the candidate, a vote is a
+`AnchoredRule.ReadAlike` (`Common/Anchored/ReadAlike.lean`) is what
+`Decided` reads; `ReadAlike.decided_iff` proves that two rules agreeing
+on it decide alike, and `AnchoredRule.toDagRule_eq` that their carriers
+are equal. One round above the candidate, a vote is a
 reference and a blame a reference to no candidate (`votes_iff`,
 `blamersAt_eq`). `Scheme/Equiv/Statement.lean` then states, at every
 `VoteSel`:
@@ -321,7 +322,7 @@ authors number more than `n + f` together share a block
 slot and does not blame a slot it selects in: this gives each inequality
 of the form `n + f + 1 ≤ a + b`. A block above `c` authors'
 decision-round blocks holds at least `c + q − n − f` of them in its
-history (`card_inHistory_ge`): this gives visibility, the inequality
+history (`card_inHistory_ge`, `Common/History.lean`): this gives visibility, the inequality
 with `q`. In the two-round family the third inequality and `q ≤ n` give
 `commit ≥ link + f`, which the cases of two direct commits, and of a
 direct commit and a direct skip, need.
@@ -546,6 +547,43 @@ reliable vote-round block (certificate rows, at a wave of at least
 three). Neither law reads the vote beyond that, so the family lives at
 every vote.
 
+**Checkpoints.** The checkpoint bridge reads `Agree` and the support's
+`Commits`, so it holds at the family's carrier
+(`Integration/SchemeCheckpoint.lean`). At every tolerated row a commit
+settled on every rule-following validator's view has a finality
+certificate (`commitFinalized_scheme`), one slot has one checkpoint
+content (`checkpointUnique_scheme`), and at `commit ≤ n − slack` a slot
+led by a rule-following validator reaches finality from production and
+certification (`liveCommitFinalized_scheme`). The `*_classes` forms tie
+the row to the checkpoint layer's fault model
+(`Integration/FaultClasses.lean`): Byzantine, crash-prone and
+alive-but-corrupt sets at `3f + 2c + f_a < n`, the row covered at the
+classes' `f`, the honest set leaving out Byzantine validators only, the
+checkpoint quorum `n − f − c`, and the reliability quorum discharged
+with alive-but-corrupt validators in it. The liveness hypothesis is the
+commit conjunct of `Params.Live` alone; the full `Live` is not available
+at the rows with no direct skip, whose skip threshold is `n`. The slack
+is arithmetic:
+a two-round committee `n ≥ 5f + 3c + 1` admits any `f_a ≤ 2f + c`
+(`resilient_of_twoRound`), a three-round committee at `3f + 2c + 1`
+admits none (`resilient_threeRound_iff`). The wave is constant, so the
+rule is a Barnacle base rule and the bridge runs over leader-scheduling
+runs (`commitFinalized_barnacle_scheme`), for an update rule with
+`Anchored`. `LeanDagTest/Scheme/Checkpoint.lean` witnesses the three
+forms on Mysticeti's `U7` and Mahi-Mahi's `full4`, with distinct views
+per validator and proposals carried in blocks.
+`LeanDagTest/Scheme/CheckpointAbC.lean` runs liveness with `f_a > 0`:
+the Hybrid Mahi-Mahi row on four validators at `f = 0`, `c = 1`,
+`f_a = 1`, one above the row's committee, where the alive-but-corrupt
+validator leads the slot, is counted in both quorums and proposes a
+fork that has no certificate. The same file runs the commit path
+through `commitFinalized_classes` and inhabits the classes at Hybrid
+Mysticeti's, Nemo-Nemo's and Blue Bottle's committees, the last with a
+Byzantine and two alive-but-corrupt validators.
+`LeanDagTest/Scheme/CheckpointBarnacle.lean` applies
+`commitFinalized_barnacle_scheme` to a run of the Mysticeti row on `U7`
+under the constant update rule.
+
 ### 9.2 The gaps to the concrete algorithms
 
 * **The buffer-round rows.** Mahi-Mahi, Blue Bottle Async and Cordial
@@ -689,12 +727,13 @@ row and vote:
 
 **The count, with no network hypothesis.**
 
-* **The common core** (`CommonCore`, from `exists_commonCore`): at
-  `2q ≥ n + f + 1`, a block at round `r + 2` gives an honest round-`r`
-  block in the history of every block from round `r + 2` up. This is the
-  core's double count (`Common/CommonCore.lean`, at `q = n − f`) at a
-  general quorum: some honest author collects so many honest supporters
-  that every round-`(r+2)` block names one (`core_arith`). Every
+* **The common core** (`CommonCore`, from `exists_commonCore`,
+  `Common/CommonCore.lean`): at `2q ≥ n + f + 1`, a block at round
+  `r + 2` gives an honest round-`r` block in the history of every block
+  from round `r + 2` up. Some honest author collects so many honest
+  supporters that every round-`(r+2)` block names one
+  (`commonCore_arith`). The core's T3a and T3c are the case
+  `q = n − f`. Every
   asynchronous row meets the condition at `q = n − f − c`: Mahi-Mahi,
   Cordial Miners Async, Async Nemo-Nemo and Hybrid Mahi-Mahi at
   equality, Blue Bottle Async and Async Orcaella above it.
