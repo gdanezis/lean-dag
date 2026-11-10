@@ -315,17 +315,21 @@ on it.
   the highest validated checkpoint history. The paper's deterministic
   extension with delivered VoteQCs up to the first gap is not modeled,
   so theorem names claim checkpoint preservation only.
-- **Checkpoint signatures carried in blocks.** `SigningRule.proposes`
-  and `witnesses` are protocol rules over an abstract `E.emitted`;
-  checkpoint messages have no delivery model, and `Execution` has no
-  witness-emission predicate, so `ChkWitness` is dischargeable from
-  `E.recorded`. `Block.payload` is inert in every rule, so the next step
-  is to carry the proposal as block content: `emitted` becomes block
-  authorship, `proposes` follows from a content rule plus `PopulatedOn`,
-  and a round-later block referencing `q` proposals is the witness,
-  derived from the support's certification as `Commits` is. This
-  constructs the `Execution` from `(U, vm)` and proves its invariants
-  instead of assuming them.
+- **Checkpoint witnesses carried in blocks.** Proposals are carried:
+  `Checkpoint/CarrySpec.lean` reads an optional proposal off each block
+  payload, `emitted` is block authorship, and `CarryProofs.lean` builds
+  the `Execution` and the `SigningRule` from the per-block storage
+  clauses. What remains is the second phase. `Execution` has no
+  witness-emission predicate, so `ChkWitness` is discharged from
+  `recorded`, and `CarriedSigning.stores` records a checkpoint once a
+  quorum of carrying blocks exists anywhere in the universe, not in the
+  validator's own view. A first-phase certificate is therefore already
+  a witness from each available signer. The remaining step is a
+  round-later block referencing `q` proposals as the witness, derived
+  from the support's certification as `Commits` is, or `stores`
+  conditioned on the validator's view with a coverage hypothesis.
+  `proposes` also asks only for some block by the validator carrying
+  the checkpoint, not that the block's history contain the commit.
 - **DAG rejoin after recovery.** Safe Skip addresses a crash-prone
   validator that returns (report §12). The checkpoint subarc proves the
   recovered prefix safe; composing it with the subsequent DAG fill is

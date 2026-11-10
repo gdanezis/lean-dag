@@ -120,25 +120,37 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   emitted from append-only per-validator protocol state. The layer is
   a mechanism in the sense of `Properties/`: it names no protocol.
   `SigningFaults` is what its counting needs of a fault model, a quorum
-  threshold, the reliable signers, the recovery-correct validators and
-  two bounds, as `Reliability` is for density; the standalone safety
-  layer accepts forked histories as execution inputs. `CommitSpec.lean`
+  threshold, the reliable signers, the recovery-correct validators, the
+  rule-following (`alive`) validators and two bounds, as `Reliability`
+  is for density; the standalone safety layer accepts forked histories
+  as execution inputs and never reads `alive`. `CommitSpec.lean`
   is the bridge from any `DagRule`: a deterministic VM maps each commit
   to one checkpoint, and a `SigningRule` states the protocol as two
   rules, sign what you commit on your own view and witness what you
-  proposed. `CommitProofs.lean` ties every online correct validator's
+  proposed. `CommitProofs.lean` ties every rule-following validator's
   proposal to a given commit through `Properties.Agree`, and composes
   with a `Support`'s `Commits` law so that production and certification
-  alone yield a finalized checkpoint for a correctly led slot. Hybrid's
-  instance is `Integration/HybridCheckpoint.lean`: the paper's
-  `FlexibleFaults`, the hybrid classes plus alive-but-corrupt signers at
-  `fabc < n − 3·fb − 2·fc`, is one `SigningFaults`, and at `abc = ∅` the
-  online correct validators are a quorum of both the signing threshold
-  and the core reliability. The bridge composes with the schedule
+  alone yield a finalized checkpoint for a correctly led slot.
+  Alive-but-corrupt validators are live for the rule and sign what they
+  commit, so they count in every hypothesis of the bridge and in no
+  hypothesis of safety. `Integration/FaultClasses.lean` is the paper's
+  three classes on plain sets: Byzantine, crash-prone and
+  alive-but-corrupt validators at `3f + 2c + f_a < n` are one
+  `SigningFaults` at quorum `n − f − c` and one `Reliability`, and the
+  rule-following validators are a quorum of both, at every committee of
+  the scheme's table. Hybrid's `FlexibleFaults`
+  (`Integration/HybridCheckpoint.lean`) is that structure at Hybrid's
+  classes. `Integration/SchemeCheckpoint.lean` is the bridge at the
+  unified decider, for every tolerated row: existence from a commit,
+  liveness and uniqueness, with the fault model a parameter and at the
+  fault classes. `CarrySpec.lean` and `CarryProofs.lean` carry
+  proposals as block content, so emission is block authorship; the
+  witness phase reads storage. The bridge composes with the schedule
   mechanism through its own agreement theorems: one Barnacle `Run` per
   validator, at any boundary, so the segmented adaptive run too,
   finalizes what any of them commits in a configuration
-  (`Integration/BarnacleCheckpoint.lean`, by `configAgree`).
+  (`Integration/BarnacleCheckpoint.lean`, by `configAgree`; at the
+  unified decider, `commitFinalized_barnacle_scheme`).
   The `*Spec.lean` files are the human-review trust boundary.
   `CommitSpec.lean` also states its theorems as `Prop`-valued claims, so
   `CommitProofs.lean` needs no reading; the safety and recovery pairs

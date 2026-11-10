@@ -12786,10 +12786,30 @@ per-validator histories and messages are execution inputs, and from
 them it machine-checks same-epoch checkpoint uniqueness, prefix
 consistency, resilient finality, and highest-checkpoint recovery under
 alive-but-corrupt signing faults. It does not derive an AbC-induced
-fork from OrcDAG or compose checkpoint safety with the DAG proofs. It
-treats `BaseSpec.lean` and `RecoverySpec.lean` as the human-reviewed
-trust boundary, with derivations isolated in the two `*Proofs.lean`
-modules. It
+fork from OrcDAG: the forks are inputs. It composes with the DAG proofs
+through a bridge that reads two properties of a rule
+(`Checkpoint/CommitSpec.lean`). From agreement, a commit settled on
+every rule-following validator's view has a finality certificate
+(`commitFinalized`) and one slot has one checkpoint content
+(`commitCheckpointUnique`). From the support's commit law, a slot led
+by a rule-following validator reaches finality with no commit assumed
+(`liveCommitFinalized`). Alive-but-corrupt validators are live for the
+rule, so they count in every hypothesis of both, and Hybrid discharges
+the two quorums with them present (`quorum_alive`, `isQuorum_alive`).
+The bridge is instantiated at the unified decider for every tolerated
+row (`Integration/SchemeCheckpoint.lean`): with the fault model a
+parameter, at the three fault classes on plain sets
+(`Integration/FaultClasses.lean`, `3f + 2c + f_a < n` at quorum
+`n − f − c`, inhabited at every committee of the table), and over
+leader-scheduling runs. Proposals can ride in blocks
+(`Checkpoint/CarrySpec.lean`, `CarryProofs.lean`): emission is block
+authorship, and the witness phase reads storage under a
+global-visibility contract rather than a second block round. The
+bridge assumes agreement, so it says nothing of a validator whose
+blocks fork the DAG; that regime has the safety theorems only. The arc
+treats `BaseSpec.lean`, `RecoverySpec.lean`, `CommitSpec.lean` and
+`CarrySpec.lean` as the human-reviewed trust boundary, with derivations
+isolated in the `*Proofs.lean` modules. It
 treats authenticated Byzantine broadcast through its agreement,
 integrity, and correct-input delivery contract; the Dolev--Strong
 implementation and executable cryptographic parsing remain outside the
@@ -13179,7 +13199,7 @@ reused.
 | MM1b | two certified candidates of one author and round coincide | `MahiMahi.eq_of_certificates_nonempty` *(MahiMahi/Helpers/Rules)* |
 | MM1c | two views agree on every slot | `MahiMahi.mahiMahiLaws` *(MahiMahi/Helpers/Decision)*, `MahiMahi.Safety.holds` *(MahiMahi/Safety/Proof)* |
 | MM1d | at `w = 3` every derivation is the core's | `MahiMahi.core_decided_of_decided` *(MahiMahi/Helpers/Decision)* |
-| MM2 | the counting lemma: the common core; some correct block commits at `w ≥ 4`; `n − f − |byzantine|` of them at `w ≥ 5` | `MahiMahi.Counting.holds`, `MahiMahi.exists_commonCore`, `MahiMahi.goodNonempty`, `MahiMahi.goodCard` *(MahiMahi/Helpers/Counting)* |
+| MM2 | the counting lemma: the common core; some correct block commits at `w ≥ 4`; `n − f − |byzantine|` of them at `w ≥ 5` | `MahiMahi.Counting.holds`, `MahiMahi.goodNonempty`, `MahiMahi.goodCard` *(MahiMahi/Helpers/Counting)*, `exists_commonCore` *(Common/CommonCore)* |
 | MM2b | `2f + 1` distinct leaders at a round include a good one | `MahiMahi.multiLeader` *(MahiMahi/Helpers/Counting)* |
 | MM2′ | `good` depends only on the rounds up to the decision round | `MahiMahi.AgreeUpto.goodAt_eq` *(MahiMahi/Helpers/Liveness)* |
 | MM3 | liveness under the clause: a good leader commits; commits within every window; every slot below a run decided; local liveness | `MahiMahi.Liveness.holds`, `MahiMahi.decided_of_mem_good`, `MahiMahi.allDecidedBelow`, `MahiMahi.localCommit` *(MahiMahi/Helpers/Liveness)* |
@@ -20765,7 +20785,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 634 theorems the body or Appendix A names, each
+The 642 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -26469,6 +26489,54 @@ theorem bluestreakLaws :
 
 **Bluestreak's laws**, under `Disciplined`: every case by certification.
 
+#### `commitFinalized`
+
+*theorem, `Checkpoint.CarryProofs.lean`*
+
+```lean
+theorem commitFinalized (ha : Agree R) {V : R.View U} {slot : ℕ} {block : BlockId}
+    (commit : R.Decided S V slot (some block))
+    (hall : ∀ v ∈ M.alive,
+      ∃ b, R.Decided S (C.view v) slot (some b)) :
+    Nonempty (SigningFaults.Execution.FinalityQC M C.execution
+      (vm.checkpointAfterCommit slot block))
+```
+
+**A carried run finalizes every settled commit**: the commit bridge at the derived execution and rule.
+
+#### `commitFinalized`
+
+*theorem, `Checkpoint.CommitProofs.lean`*
+
+```lean
+theorem commitFinalized : CommitFinalized M E R vm
+```
+
+Proof of `CommitFinalized`.
+
+#### `liveCommitFinalized`
+
+*theorem, `Checkpoint.CommitProofs.lean`*
+
+```lean
+theorem liveCommitFinalized (sp : Support R) (rel : Reliability Validator) :
+    LiveCommitFinalized M E R sp rel vm
+```
+
+Proof of `LiveCommitFinalized`: `Commits` on the leader's own view supplies the commit, and on each rule-following validator's view supplies the settled-everywhere hypothesis.
+
+#### `commitCheckpointUnique`
+
+*theorem, `Checkpoint.CommitProofs.lean`*
+
+```lean
+theorem commitCheckpointUnique
+    (vm : DeterministicVM (BlockId := BlockId) (Value := Value)) :
+    CommitCheckpointUnique R vm
+```
+
+Proof of `CommitCheckpointUnique`: rewrite with agreement.
+
 #### `agree`
 
 *theorem, `Common.Anchored.Band.lean`*
@@ -27457,6 +27525,47 @@ theorem progress : LeanDag.Properties.Support.Progresses
 ```lean
 theorem holds : Statement
 ```
+
+#### `quorum_alive`
+
+*theorem, `Integration.FaultClasses.lean`*
+
+```lean
+theorem quorum_alive : F.signing.q ≤ F.signing.alive.card
+```
+
+The rule-following validators form the signing quorum, AbC validators included.
+
+#### `isQuorum_alive`
+
+*theorem, `Integration.FaultClasses.lean`*
+
+```lean
+theorem isQuorum_alive : F.reliability.IsQuorum F.signing.alive
+```
+
+The rule-following validators are a quorum of the reliability, AbC validators included.
+
+#### `quorum_alive`
+
+*theorem, `Integration.HybridCheckpoint.lean`*
+
+```lean
+theorem quorum_alive : M.signing.q ≤ M.signing.alive.card
+```
+
+The rule-following validators form the signing quorum. AbC validators count: this is the bridge's `quorum` with AbC present.
+
+#### `isQuorum_alive`
+
+*theorem, `Integration.HybridCheckpoint.lean`*
+
+```lean
+theorem isQuorum_alive :
+    (coreReliability Validator).IsQuorum M.signing.alive
+```
+
+The rule-following validators are a quorum of the core reliability, whatever the AbC population: the liveness bridge's DAG premise with AbC present.
 
 #### `not_synchronisedOn_copyFill_hz`
 
