@@ -56,18 +56,18 @@ theorem cordialMinersAsyncRow : CordialMinersAsyncRow := by
 
 theorem voteFree : VoteFree := by
   intro Validator BlockId Payload _ _ _ P _ honest p σ σ'
-  exact toDagRuleOn_eq _ fun S U hU V k v => (readAlike_noEquiv (S := S) p σ σ' hU).decided_iff
+  exact AnchoredRule.toDagRuleOn_eq _ fun S U hU V k v => (readAlike_noEquiv (S := S) p σ σ' hU).decided_iff
 
 theorem bufferedRowsNoEquiv : BufferedRowsNoEquiv := by
   intro Validator BlockId Payload _ _ _
   refine ⟨fun σ w hw => ?_, fun σ => ?_, fun σ => ?_⟩
-  · exact toDagRuleOn_eq _ fun S U hU V k v =>
+  · exact AnchoredRule.toDagRuleOn_eq _ fun S U hU V k v =>
       ((readAlike_noEquiv (S := S) _ σ leastSel hU).decided_iff).trans
         (readAlike_mahiMahi (S := S) hw U).decided_iff
-  · exact toDagRuleOn_eq _ fun S U hU V k v =>
+  · exact AnchoredRule.toDagRuleOn_eq _ fun S U hU V k v =>
       ((readAlike_noEquiv (S := S) _ σ leastSel hU).decided_iff).trans
         (readAlike_blueBottleAsync (S := S) U).decided_iff
-  · exact toDagRuleOn_eq _ fun S U hU V k v =>
+  · exact AnchoredRule.toDagRuleOn_eq _ fun S U hU V k v =>
       ((readAlike_noEquiv (S := S) _ σ leastSel hU).decided_iff).trans
         (readAlike_cordialAsync (Validator := Validator) (BlockId := BlockId)
           (Payload := Payload) (S := S) U).decided_iff

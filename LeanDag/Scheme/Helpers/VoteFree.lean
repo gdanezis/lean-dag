@@ -1,4 +1,4 @@
-import LeanDag.Scheme.Helpers.Transfer
+import LeanDag.Common.Anchored.ReadAlike
 import LeanDag.Scheme.Model.Rule
 import LeanDag.Common.History
 /-!
@@ -68,7 +68,7 @@ theorem blamersAt_noEquiv [S : Slots Validator] (p : Params)
 in which no validator equivocates. -/
 theorem readAlike_noEquiv [S : Slots Validator] (p : Params)
     (σ σ' : VoteSel Validator BlockId Payload P honest) (hU : U.NoEquivOn Finset.univ) :
-    ReadAlike (schemeAnchored p σ) (schemeAnchored p σ') U where
+    AnchoredRule.ReadAlike (schemeAnchored p σ) (schemeAnchored p σ') U where
   waveAt := fun _ => rfl
   rungs := rfl
   commit := fun V k L _ => by

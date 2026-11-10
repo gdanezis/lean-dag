@@ -13584,7 +13584,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 427 definitions and structures the report names, in
+The 434 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -20987,7 +20987,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 642 theorems the body or Appendix A names, each
+The 646 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
