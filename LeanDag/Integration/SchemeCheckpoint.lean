@@ -41,6 +41,37 @@ variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type} {Value : Type*}
 variable {P : Validity Validator BlockId Payload} [P.Mechanised] {honest : Finset Validator}
 variable {p : Params} {σ : VoteSel Validator BlockId Payload P honest}
 
+/-! ## The commit bound at every row
+
+`hlive` of the liveness bridge is the commit conjunct of `Params.Live`. It
+holds at every row of the table at the row's own committee, so the bridge
+needs no free hypothesis there. `Row p n f c` lists the rows with the
+committees `Table.RowsCovered` uses. -/
+
+/-- `p` is a row of the table at committee size `n`, Byzantine bound `f` and
+crash bound `c`: Byzantine rows at `c = 0` from `3f + 1` (Mysticeti, Mahi-Mahi,
+Cordial Miners) or `5f + 1` (Blue Bottle), Orcaella and Async Orcaella from
+`5f + 3c + 1`, Hybrid Mysticeti and Hybrid Mahi-Mahi from `3f + 2c + 1`, and
+Nemo-Nemo and Async Nemo-Nemo at `f = 0` from `2c + 1`. -/
+def Row (p : Params) (n f c : ℕ) : Prop :=
+  (c = 0 ∧ 3 * f + 1 ≤ n ∧ (p = Params.mysticeti n f ∨ (∃ w, p = Params.mahiMahi w n f) ∨
+    p = Params.cordialMinersPS n f ∨ p = Params.cordialMinersAsync n f)) ∨
+  (c = 0 ∧ 5 * f + 1 ≤ n ∧ (p = Params.blueBottlePS n f ∨ p = Params.blueBottleAsync n f)) ∨
+  (5 * f + 3 * c + 1 ≤ n ∧ (p = Params.orcaella n f c ∨ p = Params.asyncOrcaella n f c)) ∨
+  (3 * f + 2 * c + 1 ≤ n ∧ (p = Params.hybridMysticeti n f c ∨
+    ∃ w, p = Params.hybridMahiMahi w n f c)) ∨
+  (f = 0 ∧ 2 * c + 1 ≤ n ∧ (p = Params.nemoNemo n c ∨ p = Params.asyncNemoNemo n c))
+
+/-- **The commit threshold fits the reliable set at every row.** -/
+theorem Row.commitThreshold_le {p : Params} {n f c : ℕ} (h : Row p n f c) :
+    p.commitThreshold ≤ n - f - c := by
+  rcases h with ⟨hc, hn, rfl | ⟨w, rfl⟩ | rfl | rfl⟩ | ⟨hc, hn, rfl | rfl⟩ |
+    ⟨hn, rfl | rfl⟩ | ⟨hn, rfl | ⟨w, rfl⟩⟩ | ⟨hf, hn, rfl | rfl⟩ <;>
+  simp only [Params.mysticeti, Params.mahiMahi, Params.cordialMinersPS,
+    Params.cordialMinersAsync, Params.blueBottlePS, Params.blueBottleAsync, Params.orcaella,
+    Params.asyncOrcaella, Params.hybridMysticeti, Params.hybridMahiMahi, Params.nemoNemo,
+    Params.asyncNemoNemo] <;> omega
+
 section Generic
 
 variable (M : SigningFaults Validator) (E : M.Execution Value)
@@ -164,6 +195,27 @@ theorem liveCommitFinalized_classes {q : ℕ} [P.Quorate q] (hh : honestᶜ ⊆ 
   liveCommitFinalized_scheme F.signing E vm (tolerates_of_classes F hh hq hrow)
     (rel := F.reliability) (by rw [F.reliability_slack]; omega) S Pr F.isQuorum_alive
     hpop hcert hcov hlead
+
+/-- Liveness at the classes at a row of the table: `hlive` is discharged by
+`Row.commitThreshold_le` at the classes' committee. -/
+theorem liveCommitFinalized_classes_row {q : ℕ} [P.Quorate q] (hh : honestᶜ ⊆ F.byzantine)
+    (hq : q ≤ Fintype.card Validator) (hrow : p.Covered (Fintype.card Validator) F.f q)
+    (hr : Row p (Fintype.card Validator) F.f F.c)
+    (S : Slots Validator) {U : (schemeRule p σ).Universe}
+    (Pr : SigningFaults.Execution.SigningRule F.signing E (schemeRule p σ) S U vm) {slot : ℕ}
+    (hpop : ∀ n, S.slotRound slot ≤ n →
+      n ≤ S.slotRound slot + (familySupport p σ).waveAt (S.kind slot) →
+      Properties.PopulatedOn (schemeRule p σ) U F.signing.alive n)
+    (hcert : ∀ L, (schemeRule p σ).IsCandidate S U slot L →
+      (familySupport p σ).certifiesAt U F.signing.alive (S.slotRound slot)
+        (S.kind slot) L)
+    (hcov : ∀ v ∈ F.signing.alive, Properties.CoversUpto (schemeRule p σ) (Pr.view v)
+      (S.slotRound slot + (familySupport p σ).waveAt (S.kind slot)))
+    (hlead : S.leader slot ∈ F.signing.alive) :
+    ∃ L, (schemeRule p σ).IsCandidate S U slot L ∧
+      Nonempty (SigningFaults.Execution.FinalityQC F.signing E
+        (vm.checkpointAfterCommit slot L)) :=
+  liveCommitFinalized_classes F E vm hh hq hrow hr.commitThreshold_le S Pr hpop hcert hcov hlead
 
 end Classes
 
