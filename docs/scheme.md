@@ -1067,8 +1067,33 @@ not one of them. Barnacle's liveness reads `Timed.Good`, partial
 synchrony; the asynchronous rows are safe under Barnacle and HammerHead
 by `Safe`, but their liveness rests on a coin the adversary cannot
 predict (§11), and a reputation schedule is computed from the committed
-history. Round-robin liveness needs `waveLength` consecutive reliable
-heads, which `n ≥ waveLength · (f + c) + 1` guarantees; at Hybrid
-Mysticeti's `3f + 2c + 1 ≤ n < 3f + 3c + 1` the argument does not apply,
-as for Hydrozoan (`LeanDagTest/Barnacle/Rules/HydrozoanLive`).
+history. The heads argument needs `waveLength` consecutive reliable heads, which
+`n ≥ waveLength · (f + c) + 1` guarantees under round-robin.
+
+**Silent crashes.** After every crash has happened a crashed validator
+authors no block. `Timed.SilentGood rel fb` adds to `Timed.Good` a set `Z`
+of validators with no block from the good round on, with at most `fb`
+validators outside the synchronised quorum and `Z`. A slot led by a member
+of `Z` has no candidate, so at a vote round one above the proposal and a
+skip threshold within `n − rel.slack` it is skipped directly
+(`Scheme.skipsUnsupported`). `schemeLiveSilent p σ rel fb` is the decider
+with this goodness, and it is `LiveRule.Decisive`: the quorum commits the
+slots it leads and the quorum with `Z` decides the slots it leads
+(`SilentDescends`). A slot is then decided below `w − 1` rounds of decided
+slots and a committed head (`Barnacle.liveOn_of_skipRun`, the stretch
+descent over the whole run), and on one slot per round a permutation of
+round-robin has such runs once `(w − 1)·fb + slack + 1 ≤ n`
+(`Barnacle.skipRun_perm_roundRobin`: positions whose head is outside the
+quorum number at most `slack`, and positions with a head outside `D` among
+the `w − 1` before them inject into `Fin (w − 1) × Dᶜ`). Every update rule
+that keeps one slot per round and the heads a permutation of round-robin,
+HammerHead's scores among them, reaches every height (`SilentLive`,
+`HammerHeadSilent`) at `Params.SkipScheduled`, which Mysticeti, Blue Bottle
+PS, Orcaella and Hybrid Mysticeti meet at their committees with `fb = f`
+(`RowsSkipScheduled`; Hybrid Mysticeti needs `3f + c + 1 ≤ n`). Cordial
+Miners PS and Nemo-Nemo have no direct skip and meet `Params.Scheduled` at
+their committees. With several leaders per round the run would need every
+slot of its rounds decided, so Barnacle's AIMD rule keeps
+`n ≥ waveLength · (f + c) + 1`, which Hybrid Mysticeti meets from
+`3f + 3c + 1`.
 

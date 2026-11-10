@@ -4,6 +4,7 @@ import LeanDag.Barnacle.Agreement.Proof
 import LeanDag.Barnacle.Ledger.Proof
 import LeanDag.Barnacle.Live.Proof
 import LeanDag.Adaptive.Score.Proof
+import LeanDag.Barnacle.Helpers.Skips
 /-!
 # The decider under Barnacle and HammerHead schedules — proof
 
@@ -107,7 +108,91 @@ theorem rowsScheduled : RowsScheduled := by
     Scheme.Params.blueBottlePS, Scheme.Params.orcaella, Scheme.Params.nemoNemo,
     Scheme.Params.hybridMysticeti] <;> omega
 
-theorem holds : Statement := ⟨safe, descends, runsExist, aimd, hammerHead, rowsScheduled⟩
+theorem silentDescends : SilentDescends := by
+  intro Validator BlockId Payload _ _ _ P _ honest p σ rel fb hsub hw hw3 hcert hlive
+  have hcov := familySupport_ofCoverage (σ := σ) hsub hw hw3 hcert
+  have hlc := familySupport_commits (σ := σ) (rel := rel) hlive
+  have hwl : (schemeLiveSilent p σ rel fb).waveLength = p.waveLength - 1 + 1 := rfl
+  refine ⟨Timed.descent_of_support _ _ _ (familySupport p σ) hcov hlc Scheme.indirect
+    (fun _ => Nat.le_succ _) (fun _ _ _ h => h.good), fun hv hskip => ?_⟩
+  intro U Rnd N ⟨T, Z, hq, hs, hpop, hsil, hcard⟩
+  have hcom : ∀ (S : Slots Validator) (V : (schemeLiveSilent p σ rel fb).View U) (κ : ℕ),
+      (schemeLiveSilent p σ rel fb).toBaseRule.CoversUpto U V N → Rnd ≤ S.slotRound κ →
+      S.slotRound κ + (schemeLiveSilent p σ rel fb).waveLength ≤ N → S.leader κ ∈ T →
+      ∃ L, (schemeLiveSilent p σ rel fb).Decided S V κ (some L) := by
+    intro S V κ hV hRnd hN hl
+    obtain ⟨L, hL⟩ := Timed.exists_decided_of_coverage (familySupport p σ) hcov hlc hq hs hpop
+      S V κ hV hRnd (fun j hj => by
+        have := S.mono hj
+        change S.slotRound j + (p.waveLength - 1) ≤ N
+        omega) hl
+    exact ⟨L, hL.2.1⟩
+  refine ⟨T, T ∪ Z, Finset.subset_union_left, by have := hq.2; omega, hcard, hcom,
+    fun S V κ hV hRnd hN hl => ?_⟩
+  rcases Finset.mem_union.mp hl with hT | hZ
+  · obtain ⟨L, hL⟩ := hcom S V κ hV hRnd hN hT
+    exact ⟨some L, hL⟩
+  · have hN' : S.slotRound κ + (p.waveLength - 1 + 1) ≤ N := hN
+    refine ⟨none, Scheme.skipsUnsupported (σ := σ) hv S U V T κ (le_trans hskip hq.2)
+      (fun v hvT => ?_) (fun c _ _ _ L hL _ => ?_)⟩
+    · obtain ⟨b, hb, hbc, hbr⟩ := hpop (S.slotRound κ + 1) (by omega) (by omega) v hvT
+      have hbr' : (U.block b).round = S.slotRound κ + 1 := hbr
+      exact ⟨b, hV b hb (by change (U.block b).round ≤ N; omega), hbc, hbr⟩
+    · obtain ⟨hLU, hLr, hLc⟩ := hL
+      have hLc' : (U.block L).creator = S.leader κ := hLc
+      have hLr' : (U.block L).round = S.slotRound κ := hLr
+      have := hsil L hLU (by change (U.block L).creator ∈ Z; rw [hLc']; exact hZ)
+      change (U.block L).round < Rnd at this
+      omega
+
+theorem silentLive : SilentLive := by
+  intro n hn BlockId Payload _ P _ q _ honest f p σ rel fb ht hsub ⟨hcert, hlive, hskip, hv,
+    hbound⟩ B Bd upd hbnd hkeep C₀ hC₀ h₀
+  obtain ⟨hw, hw3⟩ := waves_of_tolerates ht
+  have hwl : (schemeLiveSilent p σ rel fb).waveLength = p.waveLength :=
+    show p.waveLength - 1 + 1 = p.waveLength by omega
+  have hcard : Fintype.card (Fin n) = n := Fintype.card_fin n
+  obtain ⟨hD, hK⟩ := silentDescends _ _ _ P honest p σ rel fb hsub hw hw3
+    (by rw [hcard]; exact hcert) (by rw [hcard]; exact hlive)
+  have hK := hK hv (by rw [hcard]; exact hskip)
+  have hev := (Progress.holds _ _ _ (schemeLiveSilent p σ rel fb) (Scheme.agree ht) B Bd upd
+    hbnd C₀ (SinglePermRR hn) hkeep (n + (schemeLiveSilent p σ rel fb).waveLength - 1)).2
+    (fun C _ ⟨h1, π, hπ⟩ => liveOn_of_skipRun C hD hK (by omega)
+      fun T D _ hT hDc => skipRun_perm_roundRobin hn C h1 π hπ T D rel.slack fb _ (by omega)
+        (by simpa using hT) (by simpa using hDc) (by rw [hwl]; exact hbound)) h₀ hC₀
+  rwa [hwl] at hev
+
+theorem hammerHeadSilent : HammerHeadSilent := by
+  intro n hn BlockId Payload _ P _ q _ honest f p σ rel fb ht hsub hsch B score C₀ hkeep hQ
+    hC₀ h₀
+  obtain ⟨hcert, hlive, hskip, hv, hbound⟩ := hsch
+  obtain ⟨hw, hw3⟩ := waves_of_tolerates ht
+  have hwl : (schemeLiveSilent p σ rel fb).waveLength = p.waveLength :=
+    show p.waveLength - 1 + 1 = p.waveLength by omega
+  have hcard : Fintype.card (Fin n) = n := Fintype.card_fin n
+  obtain ⟨hD, hK⟩ := silentDescends _ _ _ P honest p σ rel fb hsub hw hw3
+    (by rw [hcard]; exact hcert) (by rw [hcard]; exact hlive)
+  have hK := hK hv (by rw [hcard]; exact hskip)
+  have hQ' : ∀ U V v C, SinglePermRR hn C → SinglePermRR hn (score U V v C) :=
+    fun U V v C ⟨h1, hp⟩ => ⟨fun r => by rw [(hkeep U V v C).1]; exact h1 r, hQ U V v C hp⟩
+  have hev := (Progress.holds _ _ _ (schemeLiveSilent p σ rel fb) (Scheme.agree ht) B
+    Boundary.atThreshold (Adaptive.rule score) (Adaptive.Score.rule_bounded B score hkeep) C₀
+    (SinglePermRR hn) (Adaptive.Score.rule_keeps score _ hQ')
+    (n + (schemeLiveSilent p σ rel fb).waveLength - 1)).2
+    (fun C _ ⟨h1, π, hπ⟩ => liveOn_of_skipRun C hD hK (by omega)
+      fun T D _ hT hDc => skipRun_perm_roundRobin hn C h1 π hπ T D rel.slack fb _ (by omega)
+        (by simpa using hT) (by simpa using hDc) (by rw [hwl]; exact hbound)) h₀ hC₀
+  rwa [hwl] at hev
+
+theorem rowsSkipScheduled : RowsSkipScheduled := by
+  intro n f c
+  refine ⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩ <;>
+  simp [Scheme.Params.SkipScheduled, Scheme.Params.voteOffset, Scheme.Params.mysticeti,
+    Scheme.Params.blueBottlePS, Scheme.Params.orcaella, Scheme.Params.hybridMysticeti] <;> omega
+
+theorem holds : Statement :=
+  ⟨safe, descends, runsExist, aimd, hammerHead, rowsScheduled, silentDescends, silentLive,
+    hammerHeadSilent, rowsSkipScheduled⟩
 
 end Schedules
 

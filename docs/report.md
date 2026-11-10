@@ -12217,6 +12217,22 @@ Cordial Miners PS, Blue Bottle PS, Orcaella and Nemo-Nemo meet
 (`Scheme.Schedules.rowsScheduled`). Barnacle's liveness is partially
 synchronous (`Timed.Good`), so the asynchronous rows get the safety half.
 
+The last bound is the heads argument's, not the protocol's. When the
+crashed validators author no block from the good round on
+(`Timed.SilentGood`), a crashed leader's slot is skipped directly at a vote
+round one above the proposal, so `Scheme.schemeLiveSilent` decides every
+slot a synchronised or silent validator leads
+(`Scheme.Schedules.silentDescends`, `Barnacle.LiveRule.Decisive`). A slot is
+decided below `w − 1` rounds of decided slots and a committed head
+(`Barnacle.liveOn_of_skipRun`), and on one slot per round a permutation of
+round-robin has such runs at `(w − 1)·fb + slack + 1 ≤ n`
+(`Barnacle.skipRun_perm_roundRobin`). Update rules that keep this shape,
+HammerHead's scores among them, reach every height
+(`Scheme.Schedules.silentLive`, `Scheme.Schedules.hammerHeadSilent`) at
+`Scheme.Params.SkipScheduled`, which Mysticeti, Blue Bottle PS, Orcaella
+and Hybrid Mysticeti meet at their committees
+(`Scheme.Schedules.rowsSkipScheduled`).
+
 ### 27.16 What the arc does not contain
 
 The properties of Mahi-Mahi and Async BlueBottle that are proved of
@@ -13490,7 +13506,7 @@ reused.
 | SC25 | every row safe and live: Cordial Miners on the core's universes; Orcaella, Async Orcaella, Hybrid Mysticeti, Hybrid Mahi-Mahi, Nemo-Nemo and Async Nemo-Nemo under the hybrid fault model with self-reference; the asynchronous rows ready for the count | `Scheme.HybridRow.onHydrozoan`, `Scheme.HybridRow.withSelfParent`, `Scheme.Rows.coreRows`, `Scheme.Rows.hybridRows`, `Scheme.Rows.asyncRows`, `Scheme.Rows.holds` *(Scheme/HybridRow, Scheme/Rows)* |
 | SC26 | the family run reactively, pacing at a quorum `q`: a reliable block reaches the leader block round by round, votes and certifies; that is the family support's precondition at any reliability, so a reliably-led slot commits, at the hybrid committees too; with self-reference no reliable block is censored; Reactive Mysticeti is an instance | `Scheme.SchemeReactive.toAsyncPace`, `Scheme.SchemeReactive.driftOn`, `Scheme.SchemeReactive.arrives`, `Scheme.SchemeReactive.reaches`, `Scheme.SchemeReactive.votes`, `Scheme.SchemeReactive.certifies`, `Scheme.live_of_reactiveLive`, `Scheme.leaderCommits_reactive`, `Scheme.includes_reactive`, `Scheme.ofReactiveM`, `Scheme.ReactiveRun.holds` *(Scheme/Helpers/Reactive, Scheme/Helpers/ReactiveMysticeti, Scheme/Reactive)* |
 | SC27 | the asynchronous rows on a validator's own view, under eventual delivery with no time bound: a uniform coin names a leader whose slot commits on every reliable validator's own view with probability at least `1/n` at one buffer round and `(q − f)/n` at two; every reliable block is held by every reliable validator from some time on, rounds are populated, and a safe leader's slot commits on every reliable validator's own view; windows commit and slots below a run are decided there; every timed run is an asynchronous one | `Scheme.AsyncPace.coin_eventuallyCommits`, `Scheme.AsyncPace.exists_time`, `Scheme.AsyncPace.delivered`, `Scheme.AsyncPace.reached`, `Scheme.AsyncPace.populated`, `Scheme.decided_of_safe_of_holds`, `Scheme.AsyncPace.decided_of_safe`, `Scheme.AsyncPace.commitsWithin`, `Scheme.AsyncPace.allDecidedBelow`, `Scheme.AsyncPace.ofPaceCore`, `Scheme.AsyncLocal.holds` *(Scheme/Helpers/AsyncPace, Scheme/AsyncLocal)* |
-| SC28 | the decider under Barnacle and HammerHead: safe under every update rule at every tolerated row; descent laws at slack `rel.slack`; every height under a schedule whose heads come in runs, under Barnacle's AIMD rule on round-robin and under every HammerHead score permuting round-robin; the partially synchronous rows meet `Params.Scheduled` | `Scheme.Schedules.safe`, `Scheme.Schedules.descends`, `Scheme.Schedules.runsExist`, `Scheme.Schedules.aimd`, `Scheme.Schedules.hammerHead`, `Scheme.Schedules.rowsScheduled`, `Scheme.Schedules.holds` *(Scheme/Schedules)* |
+| SC28 | the decider under Barnacle and HammerHead: safe under every update rule at every tolerated row; descent laws at slack `rel.slack`; every height under a schedule whose heads come in runs, under Barnacle's AIMD rule on round-robin and under every HammerHead score permuting round-robin; the partially synchronous rows meet `Params.Scheduled`; with silent crashes, on one slot per round, every row with a direct skip at its committee | `Scheme.Schedules.safe`, `Scheme.Schedules.descends`, `Scheme.Schedules.runsExist`, `Scheme.Schedules.aimd`, `Scheme.Schedules.hammerHead`, `Scheme.Schedules.rowsScheduled`, `Scheme.Schedules.silentDescends`, `Scheme.Schedules.silentLive`, `Scheme.Schedules.hammerHeadSilent`, `Scheme.Schedules.rowsSkipScheduled`, `Barnacle.liveOn_of_skipRun`, `Barnacle.skipRun_perm_roundRobin`, `Scheme.Schedules.holds` *(Scheme/Schedules, Barnacle/Helpers/Skips, Timed/Silent)* |
 | SC29 | one buffer round: against a population at least `q` strong `q·(q − f) ≤ G·(2q − n) + |honest|·(n − q)`; a third of the validators safe at `n ≥ 5f + 3c + 1`, `q = n − f − c`, and a coin probability of `1/3`; exactly two safe validators in an execution at `n = b + 2k + 1`, `q = b + k + 1` | `Scheme.card_safeAt_oneBuffer`, `Scheme.card_safeAt_third`, `Scheme.third_le_coin`, `Scheme.TwoSafe.card_safeAt_twoSafe`, `Scheme.TwoSafe.twoPace`, `Scheme.TwoSafe.refs_eq_held`, `Scheme.Async.safeOneBuffer`, `Scheme.Async.safeThird`, `Scheme.Async.twoSafe`, `Scheme.Async.coinThird` *(Scheme/Helpers/OneBuffer, Scheme/Helpers/TwoSafe, Scheme/Async)* |
 | SC30 | across waves, against an adversary that does not see the coin: the slots below `M` blocks of `d` coins stay undecided with probability at most `((n^d − c^d)/n^d)^M`, which vanishes; floors `1`, `q − f` and `⌈n/3⌉` at the rows ready for the count | `Scheme.eventually_decided_of_good_block`, `Scheme.undecided_le`, `Scheme.floors`, `Scheme.badBlockBound_tendsto_zero`, `Scheme.AsyncLive.tail`, `Scheme.AsyncLive.vanishes`, `Scheme.AsyncLive.live`, `Scheme.AsyncLive.holds` *(Scheme/Helpers/AsyncLive, Scheme/AsyncLive)* |
 | SC31 | where no validator equivocates, every vote-selection rule selects alike, any two give one carrier, and the three rows with buffer rounds are their rules at every vote | `Scheme.sel_eq_of_noEquiv`, `Scheme.readAlike_noEquiv`, `Scheme.Equiv.voteFree`, `Scheme.Equiv.bufferedRowsNoEquiv` *(Scheme/Helpers/VoteFree, Scheme/Equiv)* |
@@ -29250,5 +29266,15 @@ theorem synchronisedOn_of_extends {U U' : R.Universe} (he : Extends R U U')
 ```
 
 **An extension preserves coverage** for a set holding no author of a novel block: every block the clause reaches is old, and old blocks are unchanged.
+
+#### `SilentGood.good`
+
+*theorem, `Timed.Silent.lean`*
+
+```lean
+theorem SilentGood.good {R : Properties.DagRule Validator BlockId Payload}
+    {rel : Reliability Validator} {fb : ℕ} {U : R.Universe} {Rnd N : ℕ}
+    (h : SilentGood R rel fb U Rnd N) : Good R rel U Rnd N
+```
 
 <!-- END GENERATED REFERENCE -->
