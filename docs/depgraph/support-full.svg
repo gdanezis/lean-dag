@@ -750,9 +750,9 @@
 <rect x="294.0" y="956.0" width="158" height="36" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="373.0" y="968.0" text-anchor="middle">SC3</text>
 <text class="nm" x="373.0" y="982.0" text-anchor="middle">votes_iff</text></g>
-<g><title>LeanDag.Scheme.deliverSeq — the delivered sequence keeps one block per round and author, grows, and meets Sailfish&#x27;s integrity, total order, agreement and validity and Sui and Duan&#x27;s integrity, total order, agreement and liveness at every tolerated row; validity partially synchronously when the author leads a slot past GST followed by a reliably-led run, and asynchronously, against a coin-blind adversary, with vanishing failure probability once the author&#x27;s block is on time at one round</title>
-<rect x="294.0" y="1004.0" width="158" height="36" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
-<text class="lbl" x="373.0" y="1016.0" text-anchor="middle">SC32</text>
+<g><title>LeanDag.Scheme.deliverSeq — and one Byzantine anchor below suffices to order two reliable authors&#x27; blocks oppositely, refuting Total order</title>
+<rect x="294.0" y="1004.0" width="158" height="36" rx="5" fill="#fbe9d6" stroke="#c0844a" stroke-width="1.2"/>
+<text class="lbl" x="373.0" y="1016.0" text-anchor="middle">BMT4</text>
 <text class="nm" x="373.0" y="1030.0" text-anchor="middle">deliverSeq</text></g>
 <g><title>LeanDag.ExposedIn — exposure, and the DoS condition</title>
 <rect x="294.0" y="1052.0" width="158" height="36" rx="5" fill="#fbe9d6" stroke="#c0844a" stroke-width="1.2"/>

@@ -3,6 +3,7 @@ import LeanDag.Scheme.Helpers.Deliver
 import LeanDag.Scheme.Loop.Proof
 import LeanDag.Scheme.Helpers.Validity
 import LeanDag.Scheme.Reactive.Proof
+import LeanDag.Steelhead.Helpers.Liveness
 /-!
 # Byzantine atomic broadcast — proof
 
@@ -139,8 +140,51 @@ theorem validityPS : ValidityPS := by
 theorem livenessPS : LivenessPS := by
   intro Validator BlockId Payload _ _ _ _ P _ q _ honest f p σ S U T N R qr d rs ht hcf hcm hTh
     hqr hgst htime hP hd hspan P_k hk m k b₀ hm hmc hlead hRk hmk hkb hrun hN
-  exact validityPS Validator BlockId Payload P q honest f p σ U T N R qr d rs ht hcf hcm hTh hqr hgst
-    htime hP hd hspan P_k m k b₀ hk hm hmc hlead hRk hmk hkb hrun hN P_k hk
+  exact validityPS Validator BlockId Payload P q honest f p σ U T N R qr d rs ht hcf hcm hTh hqr
+    hgst htime hP hd hspan P_k m k b₀ hk hm hmc hlead hRk hmk hkb hrun hN P_k hk
+
+/-- **Round-robin repeats every rotation**: a run of `c` reliably-led
+slots exists within a rotation past any slot. -/
+theorem roundRobin_run_within {n : ℕ} [NeZero n] {T : Finset (Fin n)} {c : ℕ}
+    (h : c * (n - T.card) < n) (a : ℕ) :
+    ∃ b, a ≤ b ∧ b < a + n ∧ ∀ i, i < c → (roundRobinSlots n).leader (b + i) ∈ T := by
+  have hn := NeZero.pos n
+  obtain ⟨k', hk', hrun⟩ := Steelhead.roundRobin_fairRun hn h a
+  refine ⟨a + (k' - a) % n, by omega, by have := Nat.mod_lt (k' - a) hn; omega, fun i hi => ?_⟩
+  have hmod : (a + (k' - a) % n + i) % n = (k' + i) % n := by
+    have := ((Nat.mod_modEq (k' - a) n).add_left a).add_right i
+    rw [show a + (k' - a) = k' by omega] at this
+    exact this
+  have := hrun i hi
+  have heq : (roundRobinSlots n).leader (a + (k' - a) % n + i) =
+      (⟨(k' + i) % n, Nat.mod_lt _ hn⟩ : Fin n) := Fin.ext hmod
+  rw [heq]
+  exact this
+
+theorem validityRoundRobin : ValidityRoundRobin := by
+  intro n _ BlockId Payload _ P _ q _ honest f p σ U T N R qr rs ht hcf hcm hTh hqr hgst htime hP
+    hfair P_k m hk hm hmc hN P_j hj
+  letI S : Slots (Fin n) := roundRobinSlots n
+  have hn := NeZero.pos n
+  have hw := hcf.1
+  set K := max R (U.block m).round
+  have hkl : S.leader (n * K + P_k.val) = P_k := by
+    apply Fin.ext
+    change (n * K + P_k.val) % n = P_k.val
+    rw [Nat.mul_add_mod, Nat.mod_eq_of_lt P_k.isLt]
+  have hKk : K ≤ n * K + P_k.val := le_trans (Nat.le_mul_of_pos_left K hn) (Nat.le_add_right _ _)
+  obtain ⟨b₀, hb₁, hb₂, hrun⟩ := roundRobin_run_within hfair (n * K + P_k.val + 1)
+  have hspan : (schemeAnchored p σ).SpansEligible (S := S) p.waveLength := by
+    have := AnchoredRule.spansEligible_of_identity (R := schemeAnchored p σ) (S := S)
+      (fun _ => rfl) (w := p.waveLength - 1) (fun _ => le_rfl)
+    rwa [show p.waveLength - 1 + 1 = p.waveLength by omega] at this
+  have hPk := P_k.isLt
+  exact validityPS (Fin n) BlockId Payload P q honest f p σ U T N R qr p.waveLength rs ht hcf hcm
+    hTh hqr hgst htime hP (by omega) hspan P_k m (n * K + P_k.val) b₀ hk hm hmc hkl
+    (le_trans (le_max_left _ _) hKk) (le_trans (le_max_right _ _) hKk) (by omega) hrun
+    (by change b₀ + p.waveLength - 1 + (p.waveLength - 1) ≤ N
+        have : n * (K + 2) = n * K + 2 * n := by ring
+        omega) P_j hj
 
 theorem validityAsync : ValidityAsync := by
   intro Validator BlockId Payload _ _ _ _ P _ q _ honest f p σ U T N qp ap S₀ hS dflt s₀ d M c
@@ -173,7 +217,8 @@ theorem validityAsync : ValidityAsync := by
       rw [hLB.2.1]
       exact le_trans hr2 (S₀.mono (by omega))
     have hreach : Reaches U L m :=
-      (reaches_of_onTime hqT (x := x) (r := r) (fun c hc hcT hcr => Reaches.single (hon c hc hcT hcr))
+      (reaches_of_onTime hqT (x := x) (r := r)
+        (fun c hc hcT hcr => Reaches.single (hon c hc hcT hcr))
         L hLB.1 hLr).trans hxm
     obtain ⟨N₀, hN₀⟩ := mem_deliverSeq_of_decided σ ht hall' hdec hm hreach hmh
     exact delivers_of_mem σ ap ht hk (t := t) hN₀ hj
@@ -192,7 +237,7 @@ theorem livenessAsync : LivenessAsync := by
 
 theorem holds : Statement :=
   ⟨grows, runGrows, integrity, integritySD, totalOrder, totalOrderSD, agreement, validityPS,
-    livenessPS, validityAsync, livenessAsync⟩
+    livenessPS, validityRoundRobin, validityAsync, livenessAsync⟩
 
 end AtomicBroadcast
 

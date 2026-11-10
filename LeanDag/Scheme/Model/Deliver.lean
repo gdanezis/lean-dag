@@ -2,6 +2,7 @@ import LeanDag.Scheme.Model.TryDecide
 import LeanDag.Scheme.Model.AsyncPace
 import LeanDag.Common.CausalHistory
 import Mathlib.Data.Prod.Lex
+import LeanDag.Barnacle.Model.Schedule
 /-!
 # The delivered sequence
 
@@ -20,6 +21,7 @@ delivered message is a block, which carries its round `r` and its author
   scanned to slot `N` on the view `V`.
 * `AsyncPace.deliverAt`: a reliable validator's delivered sequence at
   time `t` of a run, its loop scanning to slot `M` on its own view.
+* `roundRobinSlots n`: round-robin on one slot per round.
 * `AsyncPace.Delivers`: a reliable validator eventually delivers a block.
 * `Before s x y`: `x` occurs before `y` in `s`.
 
@@ -72,6 +74,11 @@ variable (p : Params) (σ : VoteSel Validator BlockId Payload P honest) [S : Slo
 noncomputable def deliverSeq (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
     (N : ℕ) : List BlockId :=
   deliverOf U (tryDecide p σ U V 0 N)
+
+/-- **Round-robin on one slot per round**: slot `k` at round `k`, led by
+validator `k mod n`. -/
+@[reducible] def roundRobinSlots (n : ℕ) [NeZero n] : Slots (Fin n) :=
+  Slots.identity (Barnacle.roundRobin n (NeZero.pos n))
 
 /-- **A reliable validator's delivered sequence at time `t`** of the run
 `ap`, its loop scanning to slot `M` on its own view. -/

@@ -1110,7 +1110,7 @@ each Lean statement reads against one clause of a paper:
 | Sailfish, Total order: `x` before `y` at `P_i` ⇒ not `y` before `x` at `P_j` | `AtomicBroadcast.TotalOrder` |
 | Sui–Duan, Total order: `x` before `y` at one ⇒ `y` at another only after `x` | `AtomicBroadcast.TotalOrderSD` |
 | Sailfish and Sui–Duan, Agreement | `AtomicBroadcast.Agreement` |
-| Sailfish, Validity: an honest sender's message delivered by every honest party | `AtomicBroadcast.ValidityPS`, `AtomicBroadcast.ValidityAsync` |
+| Sailfish, Validity: an honest sender's message delivered by every honest party | `AtomicBroadcast.ValidityPS`, `AtomicBroadcast.ValidityRoundRobin`, `AtomicBroadcast.ValidityAsync` |
 | Sui–Duan, Liveness: an honest sender eventually delivers its own message | `AtomicBroadcast.LivenessPS`, `AtomicBroadcast.LivenessAsync` |
 
 A delivered message is a block; `deliverSeq` delivers committed leaders'
@@ -1126,7 +1126,10 @@ deduplication are out of scope.
 or above its block's round, followed within the horizon by a run of
 reliably-led slots spanning eligibility: the slot commits on the author's
 own view, the run decides every slot below it, and the leader block
-reaches the block by self-reference. Asynchronously, against a coin-blind
+reaches the block by self-reference. Under round-robin on one slot per
+round, at `waveLength · (n − |T|) < n`, every rotation holds such a run, so
+the premise reduces to a horizon of `n · (max R r + 2) + 2 · waveLength`
+(`ValidityRoundRobin`). Asynchronously, against a coin-blind
 adversary, the author's block of some round `r` is referenced by every
 reliable block of round `r + 1`; the failure probability over `M` blocks
 of coins from round `r + 2` is at most `badBlockBoundAt c d ^ M`. That
