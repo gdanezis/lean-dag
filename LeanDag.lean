@@ -565,6 +565,9 @@ import LeanDag.Scheme.Async.Statement
 import LeanDag.Scheme.Async.Proof
 import LeanDag.Scheme.Rows.Statement
 import LeanDag.Scheme.Rows.Proof
+import LeanDag.Scheme.Model.Schedules
+import LeanDag.Scheme.Schedules.Statement
+import LeanDag.Scheme.Schedules.Proof
 import LeanDag.Scheme.Reactive.Statement
 import LeanDag.Scheme.Reactive.Proof
 import LeanDag.Scheme.AsyncLocal.Statement

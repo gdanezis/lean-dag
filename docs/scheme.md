@@ -515,8 +515,8 @@ and dropped.
 `OnRecord` is `Scheme/Record.lean`, with the prompt skip after an
 extension; chain quality at the carrier is
 `LeanDagTest/Quality/Generic.lean`. In `audit-conformance.py` and
-`audit-mechanisms.py` the family shows every obligation, and every
-mechanism but adaptive leaders, which no rule of the development has.
+`audit-mechanisms.py` the family shows every obligation and has every
+mechanism; adaptive leaders (Barnacle and HammerHead) are §14.
 
 **The local vote.** `Banded` asks that a slot's verdict survive a
 truncation or a round shift of the record, so the vote must survive it.
@@ -951,3 +951,55 @@ a reliably-led slot commits. On both witnesses a reliable validator's
 round-`1` block enters the ledger through a slot its author leads
 (`ugrowScheme_includes`, `hyReactive_includes`); on the second, replica
 `0` never builds.
+
+## 14. The family under Barnacle and HammerHead schedules
+
+Barnacle (`LeanDag/Barnacle/`) and HammerHead (`LeanDag/Adaptive/`) are
+stated over any Barnacle live rule. `Scheme/Model/Schedules.lean` reads
+the decider as one, `schemeLive p σ rel`, through
+`Barnacle.liveOfAnchored`; the decider's wave does not depend on the slot,
+so the adapter's wave condition is `rfl`, and `schemeLive`'s wave length
+is `p.waveLength`. `Scheme/Schedules/Statement.lean` states, and
+`Proof.lean` proves, at every vote:
+
+* **safety under every update rule** (`Safe`): at every row with
+  `p.Tolerates honest f q`, two runs agree on the configurations, the
+  anchors and the verdicts, and under an update rule that does not read
+  the view the ledger is agreed, grows by appending, and holds no block
+  twice. The only laws read are `Scheme.agree` and
+  `Scheme.commitsCandidate`;
+* **the descent laws at slack `rel.slack`** (`Descends`), when
+  `rel.correct ⊆ honest`, the wave is at least two (three where votes are
+  certified a round later), and `n − rel.slack` meets the certificate and
+  commit thresholds. This is `Timed.descent_of_support` at
+  `familySupport`, with the gap of `Scheme.indirect`;
+* **every height under a schedule whose heads come in runs**
+  (`RunsExist`, Barnacle's BN11): if every set missing at most `rel.slack`
+  validators leads `p.waveLength` consecutive heads within every `c₀ + 1`
+  rounds, an update rule that keeps the heads and the bounds reaches every
+  height whose horizon fits;
+* **Barnacle's AIMD rule** (`Aimd`) and **every HammerHead score**
+  (`HammerHead`) over the decider: at a row meeting `Params.Scheduled n
+  rel.slack` (`cert ≤ n − slack`, `commit ≤ n − slack`,
+  `waveLength · slack + 1 ≤ n`), the AIMD rule on a leader function whose
+  first leader is round-robin, and a score that keeps the shape and whose
+  output's heads are a permutation of round-robin (`PermRR`), reach every
+  height with gap `n + waveLength − 1`. A HammerHead score is safe at every
+  tolerated row with no clause on the score;
+* **the partially synchronous rows meet `Params.Scheduled`**
+  (`RowsScheduled`): Mysticeti and Cordial Miners PS at slack `f` from
+  `3f + 1`, Blue Bottle PS from `5f + 1`, Orcaella at slack `f + c` from
+  `5f + 3c + 1`, Nemo-Nemo at slack `c` from `2c + 1`, and Hybrid
+  Mysticeti at slack `f + c` from `3f + 3c + 1`.
+
+Three limits. Barnacle's configurations have a slot in every round, so
+the schedules it emits are pipelined; a row run with one slot per wave is
+not one of them. Barnacle's liveness reads `Timed.Good`, partial
+synchrony; the asynchronous rows are safe under Barnacle and HammerHead
+by `Safe`, but their liveness rests on a coin the adversary cannot
+predict (§11), and a reputation schedule is computed from the committed
+history. Round-robin liveness needs `waveLength` consecutive reliable
+heads, which `n ≥ waveLength · (f + c) + 1` guarantees; at Hybrid
+Mysticeti's `3f + 2c + 1 ≤ n < 3f + 3c + 1` the argument does not apply,
+as for Hydrozoan (`LeanDagTest/Barnacle/Rules/HydrozoanLive`).
+

@@ -12154,7 +12154,29 @@ commits with probability at least `1/2`. The hybrid
 three-replica run of SC26, its clock forgotten, commits every slot on
 each live replica's own view.
 
-### 27.15 What the arc does not contain
+### 27.15 The family under Barnacle and HammerHead schedules
+
+SC28: the decider read as a Barnacle live rule, `Scheme.schemeLive p σ rel`
+(`Barnacle.liveOfAnchored` at `schemeAnchored p σ`), meets what Barnacle
+and HammerHead ask. At every row with `p.Tolerates honest f q`, two runs
+under any update rule agree on the configurations and verdicts, and under
+an update rule that does not read the view the ledger is agreed, grows by
+appending and holds no block twice (`Scheme.Schedules.safe`). When
+`rel.correct ⊆ honest` and `n − rel.slack` meets the certificate and
+commit thresholds the decider has the descent laws at slack `rel.slack`
+(`Scheme.Schedules.descends`), so every height is reached under a
+schedule whose heads come in runs of a wave (`Scheme.Schedules.runsExist`).
+At a row meeting `Scheme.Params.Scheduled n rel.slack`, which adds
+`waveLength · rel.slack + 1 ≤ n`, Barnacle's AIMD rule on a round-robin
+first leader and every HammerHead score whose heads are a permutation of
+round-robin reach every height with gap `n + waveLength − 1`
+(`Scheme.Schedules.aimd`, `Scheme.Schedules.hammerHead`). Mysticeti,
+Cordial Miners PS, Blue Bottle PS, Orcaella and Nemo-Nemo meet
+`Scheduled` at their committees, Hybrid Mysticeti from `3f + 3c + 1`
+(`Scheme.Schedules.rowsScheduled`). Barnacle's liveness is partially
+synchronous (`Timed.Good`), so the asynchronous rows get the safety half.
+
+### 27.16 What the arc does not contain
 
 The properties of Mahi-Mahi and Async BlueBottle that are proved of
 those rules alone reach the rows of §27.5 at the least vote only; the
@@ -12458,7 +12480,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Quality/Inclusion.lean` | post-`R` inclusion (CQ5, CQ6) |
 | `Quality/Capstone.lean` | the windowed bounds and `chain_quality` (CQ7) |
 | `LeanDagTest/` | the models of §28 and the witness files of every arc |
-| `Scheme/Model/` | the unified decider's parameters and rows, its rule `schemeAnchored` over a vote-selection rule, the least vote `leastSel`, the scheme's vote `votedBlock`, the local vote `VoteSel.Local`, the carrier `schemeRule` and its support `familySupport`, the commit loop, and the three rule variants its rows name |
+| `Scheme/Model/` | the unified decider's parameters and rows, its rule `schemeAnchored` over a vote-selection rule, the least vote `leastSel`, the scheme's vote `votedBlock`, the local vote `VoteSel.Local`, the carrier `schemeRule` and its support `familySupport`, the commit loop, the three rule variants its rows name, and the decider as a Barnacle live rule `schemeLive` |
 | `Scheme/Table/` | the table's inequalities and the claims of its reading paragraph, SC1 |
 | `Scheme/Helpers/` | two rules that read alike decide alike (SC2); votes one round up (SC3); votes further up (SC8); the rows' readings and the variants' laws; the scheme's search (SC10); the laws from the inequalities (SC12); the loop's soundness and completeness; local votes, band laws and the support's laws (SC16–SC18) |
 | `Scheme/Equiv/` | eight rows as carriers, SC4–SC6 and SC9 |
@@ -12466,6 +12488,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Scheme/Sufficiency/` | the table's inequalities give agreement at every vote, and the derived rows agree, SC12 |
 | `Scheme/Properties.lean`, `Scheme/Record.lean` | the family as a carrier: every property the mechanisms read, its support, its record instance, SC16–SC18 |
 | `Scheme/Loop/` | the commit loop outputs exactly the derivable verdicts, and two validators' outputs are prefix-comparable, SC13–SC15 |
+| `Scheme/Schedules/` | the decider under Barnacle's and HammerHead's schedules: safety under every update rule, the descent laws, every height under round-robin and its permutations, SC28 |
 
 **The support graph, extracted.** The dependency structure of the
 development is not documented by hand: `scripts/DepGraph.lean` walks
@@ -13426,6 +13449,7 @@ reused.
 | SC25 | every row safe and live: Cordial Miners on the core's universes; Orcaella, Async Orcaella, Hybrid Mysticeti, Hybrid Mahi-Mahi, Nemo-Nemo and Async Nemo-Nemo under the hybrid fault model with self-reference; the asynchronous rows ready for the count | `Scheme.HybridRow.onHydrozoan`, `Scheme.HybridRow.withSelfParent`, `Scheme.Rows.coreRows`, `Scheme.Rows.hybridRows`, `Scheme.Rows.asyncRows`, `Scheme.Rows.holds` *(Scheme/HybridRow, Scheme/Rows)* |
 | SC26 | the family run reactively, pacing at a quorum `q`: a reliable block reaches the leader block round by round, votes and certifies; that is the family support's precondition at any reliability, so a reliably-led slot commits, at the hybrid committees too; with self-reference no reliable block is censored; Reactive Mysticeti is an instance | `Scheme.SchemeReactive.toAsyncPace`, `Scheme.SchemeReactive.driftOn`, `Scheme.SchemeReactive.arrives`, `Scheme.SchemeReactive.reaches`, `Scheme.SchemeReactive.votes`, `Scheme.SchemeReactive.certifies`, `Scheme.live_of_reactiveLive`, `Scheme.leaderCommits_reactive`, `Scheme.includes_reactive`, `Scheme.ofReactiveM`, `Scheme.ReactiveRun.holds` *(Scheme/Helpers/Reactive, Scheme/Helpers/ReactiveMysticeti, Scheme/Reactive)* |
 | SC27 | the asynchronous rows on a validator's own view, under eventual delivery with no time bound: a uniform coin names a leader whose slot commits on every reliable validator's own view with probability at least `1/n` at one buffer round and `(q − f)/n` at two; every reliable block is held by every reliable validator from some time on, rounds are populated, and a safe leader's slot commits on every reliable validator's own view; windows commit and slots below a run are decided there; every timed run is an asynchronous one | `Scheme.AsyncPace.coin_eventuallyCommits`, `Scheme.AsyncPace.exists_time`, `Scheme.AsyncPace.delivered`, `Scheme.AsyncPace.reached`, `Scheme.AsyncPace.populated`, `Scheme.decided_of_safe_of_holds`, `Scheme.AsyncPace.decided_of_safe`, `Scheme.AsyncPace.commitsWithin`, `Scheme.AsyncPace.allDecidedBelow`, `Scheme.AsyncPace.ofPaceCore`, `Scheme.AsyncLocal.holds` *(Scheme/Helpers/AsyncPace, Scheme/AsyncLocal)* |
+| SC28 | the decider under Barnacle and HammerHead: safe under every update rule at every tolerated row; descent laws at slack `rel.slack`; every height under a schedule whose heads come in runs, under Barnacle's AIMD rule on round-robin and under every HammerHead score permuting round-robin; the partially synchronous rows meet `Params.Scheduled` | `Scheme.Schedules.safe`, `Scheme.Schedules.descends`, `Scheme.Schedules.runsExist`, `Scheme.Schedules.aimd`, `Scheme.Schedules.hammerHead`, `Scheme.Schedules.rowsScheduled`, `Scheme.Schedules.holds` *(Scheme/Schedules)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
@@ -20564,6 +20588,29 @@ def schemeAnchored : AnchoredRule Validator BlockId Payload P honest where
 
 **The decider as an anchored rule** (Algorithm 2): the supported-leader test is the direct commit, the skipped-leader test the direct skip, the certified-link test the single rung, and the least identifier breaks ties.
 
+#### `schemeLive`
+
+*def, `Scheme.Model.Schedules.lean`*
+
+```lean
+def schemeLive (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
+    (rel : Reliability Validator) : Barnacle.LiveRule Validator BlockId Payload :=
+  Barnacle.liveOfAnchored (schemeAnchored p σ) (fun _ => rfl) rel
+```
+
+**The decider as a live rule**, at reliability `rel`.
+
+#### `Params.Scheduled`
+
+*def, `Scheme.Model.Schedules.lean`*
+
+```lean
+def Params.Scheduled (p : Params) (n slack : ℕ) : Prop :=
+  p.certThreshold ≤ n - slack ∧ p.commitThreshold ≤ n - slack ∧ p.waveLength * slack + 1 ≤ n
+```
+
+**The row fits round-robin scheduling** on `n` validators, at most `slack` unreliable: `n − slack` meets the certificate and commit thresholds, and `waveLength · slack + 1 ≤ n`.
+
 #### `tryDirect`
 
 *def, `Scheme.Model.TryDecide.lean`*
@@ -20722,6 +20769,46 @@ def onRecord (p : Params) (σ : VoteSel Validator BlockId Payload P honest) :
 ```
 
 **The family's carrier, read as block records.**
+
+#### `Safe`
+
+*def, `Scheme.Schedules.Statement.lean`*
+
+```lean
+def Safe : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised] (q : ℕ)
+    [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) (rel : Reliability Validator),
+    p.Tolerates honest f q →
+    ∀ (B : Barnacle.Params) (Bd : Boundary Validator)
+      (upd : UpdateRule (schemeLive p σ rel).toBaseRule) (C₀ : Config Validator),
+      Barnacle.Agreement.RunAgreement (schemeLive p σ rel).toBaseRule B Bd upd C₀ ∧
+      (Barnacle.Anchored (schemeLive p σ rel).toBaseRule upd →
+        Barnacle.Ledger.LedgerAgreement (schemeLive p σ rel).toBaseRule B Bd upd C₀ ∧
+        Barnacle.Ledger.LedgerPrefix (schemeLive p σ rel).toBaseRule B Bd upd C₀ ∧
+        Barnacle.Ledger.LedgerNodup (schemeLive p σ rel).toBaseRule B Bd upd C₀)
+```
+
+**The decider is safe under every update rule.**
+
+#### `Descends`
+
+*def, `Scheme.Schedules.Statement.lean`*
+
+```lean
+def Descends : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
+    (honest : Finset Validator) (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
+    (rel : Reliability Validator),
+    rel.correct ⊆ honest → 2 ≤ p.waveLength → (p.voteIsCert = false → 3 ≤ p.waveLength) →
+    p.certThreshold ≤ Fintype.card Validator - rel.slack →
+    p.commitThreshold ≤ Fintype.card Validator - rel.slack →
+    (schemeLive p σ rel).Descent rel.slack
+```
+
+**The decider has the descent laws at slack `rel.slack`**, when the reliable validators are honest and `n − rel.slack` meets the certificate and commit thresholds.
 
 #### `SynchronisedOn`
 
@@ -28954,6 +29041,14 @@ theorem holds : Statement
 #### `holds`
 
 *theorem, `Scheme.Safety.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `Scheme.Schedules.Proof.lean`*
 
 ```lean
 theorem holds : Statement
