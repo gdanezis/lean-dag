@@ -88,12 +88,12 @@ supplies the settled-everywhere hypothesis. -/
 theorem liveCommitFinalized (sp : Support R) (rel : Reliability Validator) :
     LiveCommitFinalized M E R sp rel vm := by
   intro ha hcand hc S U P slot hq hpop hcert hcov hlead
-  obtain ⟨L, hL⟩ := hc S (P.view (S.leader slot)) M.recoveryCorrect slot hq hpop hcert
-    (hcov _ (M.recoveryCorrect_subset_alive hlead)) hlead
+  obtain ⟨L, hL⟩ := hc S (P.view (S.leader slot)) M.alive slot hq hpop hcert
+    (hcov _ hlead) hlead
   refine ⟨L, hcand S U _ slot L hL.toDecided, ?_⟩
   refine commitFinalized M E vm ha S P hL.toDecided ?_
   intro v hv
-  obtain ⟨b, hb⟩ := hc S (P.view v) M.recoveryCorrect slot hq hpop hcert (hcov v hv) hlead
+  obtain ⟨b, hb⟩ := hc S (P.view v) M.alive slot hq hpop hcert (hcov v hv) hlead
   exact ⟨b, hb.toDecided⟩
 
 end Execution

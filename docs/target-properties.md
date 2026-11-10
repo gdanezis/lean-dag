@@ -4830,7 +4830,11 @@ production. Both are what `Properties/` already names.
 `LeanDag.Checkpoint`, importing nothing under `Hybrid/`. The layering
 rule of `Properties/Carrier.lean` applies to them as to garbage
 collection: a mechanism reads `DagRule` and the properties, and a
-protocol's instance lives under `Integration/`.
+protocol's instance lives under `Integration/`. Two modules were added
+since, `CarrySpec.lean` and `CarryProofs.lean` (proposals carried in
+blocks, below), and three instances sit under `Integration/`:
+`FaultClasses.lean`, `HybridCheckpoint.lean` and
+`SchemeCheckpoint.lean`.
 
 **The fault model is a parameter.** `SigningFaults` is to the signing
 counts what `Reliability` is to density: the quorum threshold `q`, the
@@ -4843,11 +4847,32 @@ ones), the `alive` set that follows the signing rule
 unreliable validators and `|recoveryCorrectᶜ| < q` so that a quorum
 holds an available one. The three `exists_*_mem*` lemmas of
 `SafetyProofs.lean` are those two bounds; the derivations above them
-are unchanged, and none reads `alive`. The paper's three-class
-`FlexibleFaults` is `Integration/HybridCheckpoint.lean`, and its
-`signing` instance is the resilience bound `fabc + 3·fb + 2·fc < n`
-read at `q = n − fb − fc`, with `alive = Correct`: the AbC validators
-follow the rule and complete quorums without being reliable.
+are unchanged, and none reads `alive`. `recoveryCorrect ⊆ reliableSigner`
+is not a law: a recovery-correct validator is trusted to store and
+resubmit certificates, and reliability enters recovery through the
+certificates' signers, by `intersect` on two valid certificates
+(`recorded_certified`, `checkpointQC_compatible`).
+
+**The fault classes are plain sets.** `Integration/FaultClasses.lean`
+is the paper's three-class model with no carrier: Byzantine, crash-prone
+and alive-but-corrupt sets under `f`, `c`, `fa`, at
+`3·f + 2·c + fa < n`. Its `signing` is the two counting laws read at
+`q = n − f − c`, with `alive = (byzantine ∪ crash)ᶜ`: the AbC validators
+follow the rule and complete quorums without being reliable. Its
+`reliability` has the same set as its correct validators at slack
+`f + c`, and the rule-following validators are a quorum of both
+(`quorum_alive`, `isQuorum_alive`). It assumes nothing else of the
+committee, so it is inhabited at Hybrid Mysticeti's `3f + 2c + 1` and
+Nemo-Nemo's `2c + 1`, which `HybridFaults.card_validators` excludes.
+The slack is arithmetic: `resilient_iff_intersect` (the bound is the
+intersection law at that quorum, with the classes at their bounds),
+`resilient_of_twoRound` (`n ≥ 5f + 3c + 1` admits any `fa ≤ 2f + c`)
+and `resilient_threeRound_iff` (`n = 3f + 2c + 1` admits none). The
+last is arithmetic on the bound, not an attack: at a row whose rule
+agrees, one slot has one checkpoint content whatever the signers do, so
+the intersection law is needed only where the inputs fork. Hybrid's
+`FlexibleFaults` (`Integration/HybridCheckpoint.lean`) is `FaultClasses`
+at Hybrid's classes, where `alive` is Hybrid's `Correct`.
 
 **The bridge reads the properties.** `SigningRule` is over a `DagRule`,
 a schedule and a universe; `proposes` is stated at `R.Decided`.
@@ -4861,10 +4886,46 @@ the wave, a quorum-member leader. `SynchronisedOn` is gone from the
 statement, as §11.16 requires of a mechanism. The `noAbC` field became
 `quorum : M.q ≤ M.alive.card`, the fact it was there to supply; Hybrid
 discharges it with no hypothesis in `FlexibleFaults.quorum_alive`, and
-`rel.IsQuorum M.recoveryCorrect` from `abc = ∅` in `isQuorum_of_noAbC`.
-`proposes`, `witnesses` and the settled-on-its-own-view hypothesis of
-the claims range over `alive`; `ChkWitness.recorded` and the recovery
-layer stay on `recoveryCorrect`.
+`rel.IsQuorum M.alive` likewise in `isQuorum_alive`.
+`proposes`, `witnesses`, the settled-on-its-own-view hypothesis of
+the claims and every hypothesis of `LiveCommitFinalized` range over
+`alive`; `ChkWitness.recorded` and the recovery layer stay on
+`recoveryCorrect`. The liveness claim took the reliable set of
+`Commits` to be `recoveryCorrect`, which made Hybrid's liveness an
+`abc = ∅` fact; nothing recovery-specific was used, and AbC validators
+are live for the rule, so the set is `alive` and the restriction is
+gone. `recoveryCorrect ⊆ alive` has no consumer left and stays as a
+statement of the model. `Agree R` is a premise of every claim of the
+bridge: a validator whose blocks fork the DAG is outside it, and that
+regime has the safety theorems only.
+
+**The bridge at the unified decider.** `Integration/SchemeCheckpoint.lean`
+states it at `schemeRule p σ` for every tolerated row, from
+`Scheme.agree` and `familySupport_commits`, in three forms. With the
+fault model a parameter: `commitFinalized_scheme`,
+`liveCommitFinalized_scheme`, `checkpointUnique_scheme`. At the fault
+classes: `commitFinalized_classes` and `liveCommitFinalized_classes`
+take the row covered at the classes' `f` and an honest set leaving out
+Byzantine validators only (`tolerates_of_classes`), and discharge the
+reliability quorum, so the row and the checkpoint layer read one fault
+model. Their liveness hypothesis is `commitThreshold ≤ n − f − c`, the
+first conjunct of `Params.Live`, since the full `Live` is false at the
+rows with no direct skip. Over leader-scheduling runs:
+`commitFinalized_barnacle_scheme` is `commitFinalized_barnacle` at
+`Barnacle.ofAnchored (schemeAnchored p σ)`, the wave being constant, for
+any update rule with `Anchored`.
+
+**Proposals carried in blocks.** `CarrySpec.lean` reads an optional
+proposal off each block payload through a `content` map, so emission is
+block authorship and decidable on a record. The `Execution` invariants
+are restated per block at the same strength, `proposes` is the one
+protocol rule, and `CarryProofs.lean` builds the `Execution` and the
+`SigningRule`. The second phase is not carried: `stores` records a
+checkpoint once a quorum of carrying blocks exists in the universe, not
+in the validator's view, so a first-phase certificate is already a
+witness from each available signer. `proposes` asks for some block by
+the validator carrying the checkpoint, and does not tie that block's
+history to the commit.
 
 **The schedule mechanism composes with the bridge as it is.** A
 Barnacle validator decides each configuration's slots against that
@@ -4893,7 +4954,9 @@ under decidable certification, which `voteSupport` supplies.
 the generic bridge at `hybridRule 4` over `Uhyb9` and `Usync9`, with
 `HybridProperties.agree`, `commitsCandidate` and `voteSupport_commits`
 as the properties; the `Usync9` liveness witness discharges
-`certifiesAt` by `decide` where it discharged `SynchronisedOn`.
+`certifiesAt` by `decide` where it discharged `SynchronisedOn`, and
+runs with validator `7` alive-but-corrupt and equivocating, so liveness
+is witnessed with an AbC validator in the reliability quorum.
 `LeanDagTest/Hybrid/Checkpoint.lean` instantiates `FlexibleFaults` as
 before and runs the safety and recovery layer at its `signing`.
 `LeanDagTest/Integration/BarnacleCheckpoint.lean` applies
@@ -4904,6 +4967,28 @@ different views and finalize the anchor slot `5`. At
 configuration `2`, which outputs it, and from configuration `0`, which
 decides it above its boundary and does not output it. A Byzantine
 validator proposes a forked checkpoint, and the fork has no certificate.
+`LeanDagTest/Scheme/Checkpoint.lean` runs the bridge at the scheme: the
+commit path on Mysticeti's `U7`, with an indirect commit; liveness on
+Mahi-Mahi's `full4` through `liveCommitFinalized_classes`, with one
+validator holding the record up to the wave's last round and the others
+all of it; and a carried run on `full4c`, with two views, storage stated
+independently of `stores`, and a fork carried by the unreliable
+validator's block, emitted and uncertified.
+`LeanDagTest/Scheme/CheckpointAbC.lean` runs liveness at the scheme with
+`f_a > 0`: `full4`'s blocks at the Hybrid Mahi-Mahi row, wave four, with
+nobody Byzantine, one crash-prone validator and one alive-but-corrupt
+validator, `3f + 2c + f_a = 3 < 4`. The alive-but-corrupt validator
+leads slot `1`, is counted in the signing quorum and the reliability
+quorum, and proposes a fork; the slot reaches finality through
+`liveCommitFinalized_classes` and the fork has no certificate. The same
+file runs the commit path through `commitFinalized_classes` and inhabits
+`FaultClasses` at Hybrid Mysticeti's committee `3f + 2c + 1`, Nemo-Nemo's
+`2c + 1` and Blue Bottle's `5f + 1`, the last with one Byzantine and two
+alive-but-corrupt validators and the row's parameter hypotheses checked
+beside it. `LeanDagTest/Scheme/CheckpointBarnacle.lean` applies
+`commitFinalized_barnacle_scheme` to a one-configuration run of the
+Mysticeti row on `U7` under the constant update rule, so the scheduling
+form is instantiated at the scheme's base rule.
 
 ### 11.45 Bluestreak, and what a committed anchor is
 

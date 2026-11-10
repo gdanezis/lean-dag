@@ -55,8 +55,17 @@ which model: the quorum threshold of both phases, the validators whose
 signing state is enforced, the validators that store certificates and
 take part in recovery, the validators that follow the signing rule, and
 the two bounds that let a quorum reach one reliable and one available
-signer. No proof relates `reliableSigner` and `recoveryCorrect`; an
-instance may make one a subset of the other, as `HybridCheckpoint` does. -/
+signer.
+
+There is no law `recoveryCorrect ⊆ reliableSigner`, and safety does not
+need one. A recovery-correct validator is trusted to store and resubmit
+certificates, not to have signed from enforced state: what it records
+carries a quorum certificate (`recorded_certified`), every recipient
+validates a submitted certificate locally, and any two valid
+certificates share a reliable signer by `intersect`, whoever submitted
+them (`checkpointQC_compatible`). Reliability enters recovery through
+the certificates' signers only. Instances take the recovery-correct
+validators among the reliable ones, as `FaultClasses.signing` does. -/
 structure SigningFaults (Validator : Type*) [Fintype Validator]
     [DecidableEq Validator] where
   /-- The quorum threshold of both signing phases. -/

@@ -160,6 +160,8 @@ import LeanDagTest.Scheme.LeastSel
 import LeanDagTest.Scheme.VotedBlock
 import LeanDagTest.Scheme.TryDecide
 import LeanDagTest.Scheme.Checkpoint
+import LeanDagTest.Scheme.CheckpointAbC
+import LeanDagTest.Scheme.CheckpointBarnacle
 import LeanDagTest.Scheme.HybridRow
 import LeanDagTest.Scheme.Async
 import LeanDagTest.Scheme.Reactive

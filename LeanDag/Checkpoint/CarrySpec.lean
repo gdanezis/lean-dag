@@ -6,7 +6,7 @@ import LeanDag.Checkpoint.CommitSpec
 This file closes the gap between abstract checkpoint emissions and the DAG.
 A `content` map reads an optional checkpoint proposal off every block payload,
 making emission equivalent to block authorship. Proposals become DAG data:
-decidable, disseminated with blocks, and auditable.
+decidable and disseminated with blocks.
 
 `CarryProofs.lean` uses these clauses to construct the `Execution` and
 `SigningRule`. The `Execution` invariants are not weakened: they are
@@ -73,10 +73,16 @@ structure CarriedSigning (R : DagRule Validator BlockId Payload) (S : Slots Vali
   checkpoint it carried: once a signing quorum of blocks carries `x` and
   its own block does, `x` is recorded. Recording is conditioned on the
   quorum because recovery (`RecoveryRound.submits_recorded`) must
-  produce a valid certificate for every recorded checkpoint. -/
-  stores : ∀ v ∈ M.recoveryCorrect, ∀ {x : CheckpointData Value} {S : Finset Validator},
-    M.q ≤ S.card →
-    (∀ w ∈ S, ∃ b ∈ R.ids U, (R.block U b).creator = w ∧
+  produce a valid certificate for every recorded checkpoint.
+
+  The quorum is read in the universe `U`, not in `view v`: the clause
+  assumes every carrying block reaches every available signer. Under it
+  a first-phase certificate is already a witness from each of its
+  available signers, so the carried model has no second round and says
+  nothing about when a validator learns of the quorum. -/
+  stores : ∀ v ∈ M.recoveryCorrect, ∀ {x : CheckpointData Value} {signers : Finset Validator},
+    M.q ≤ signers.card →
+    (∀ w ∈ signers, ∃ b ∈ R.ids U, (R.block U b).creator = w ∧
       content ((R.block U b).payload) = some x) →
     (∃ b ∈ R.ids U, (R.block U b).creator = v ∧
       content ((R.block U b).payload) = some x) →

@@ -88,7 +88,8 @@ private theorem reliable_not_faulty {v : Fin 9}
     v ∉ ({0, 1} : Finset (Fin 9)) := by
   have hv' :
       v ≠ 1 ∧ v ∉ checkpointFaults.byzantine := by
-    simpa [checkpointSigning, checkpointFlexible, FlexibleFaults.signing] using hv
+    simpa [checkpointSigning, checkpointFlexible, FlexibleFaults.signing,
+      FlexibleFaults.classes, FaultClasses.signing] using hv
   have h0 : v ≠ 0 := by
     have hb := hv'.2
     change v ∉ ({0} : Finset (Fin 9)) at hb

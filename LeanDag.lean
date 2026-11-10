@@ -75,6 +75,7 @@ import LeanDag.Checkpoint.SafetyProofs
 import LeanDag.Checkpoint.RecoveryProofs
 import LeanDag.Checkpoint.CommitProofs
 import LeanDag.Integration.Preservation
+import LeanDag.Integration.FaultClasses
 import LeanDag.Integration.HybridCheckpoint
 import LeanDag.Checkpoint.CarrySpec
 import LeanDag.Checkpoint.CarryProofs

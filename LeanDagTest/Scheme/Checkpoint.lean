@@ -174,7 +174,10 @@ theorem u7_checkpoint_unique {V : View (Fin 4) (Fin 24) Unit U7} {block : Fin 24
 `full4` references every block of the round below, so production,
 certification and coverage all hold by `decide`. No commit is supplied:
 slot `1`, led by the correct validator `1`, reaches second-tier finality
-from the hypotheses of `liveCommitFinalized_scheme` alone. -/
+from the hypotheses of `liveCommitFinalized_scheme` alone. The views
+differ: validator `2` holds the record up to round `4`, the wave's last
+round, and the others hold all of it, so coverage and the
+settled-on-its-own-view step are each discharged on two views. -/
 
 section Live
 
@@ -251,28 +254,55 @@ theorem full4_decided_eq {V : View (Fin 4) (Fin 24) Unit full4} {s : ℕ} {b : F
   · exact absurd h (hdead 4 (by omega) (by omega))
   · exact absurd h (hdead 5 (by omega) (by omega))
 
-/-- Quorum `3`; the non-Byzantine validators reliable and available. -/
-def liveSigning : SigningFaults (Fin 4) where
-  q := 3
-  reliableSigner := {1, 2, 3}
-  recoveryCorrect := {1, 2, 3}
-  alive := {1, 2, 3}
-  recoveryCorrect_subset_alive := Finset.Subset.rfl
-  intersect := by decide
-  reach := by decide
+/-- The row's fault classes: validator `0` Byzantine, nobody crash-prone,
+no AbC. At `n = 3f + 1` the resilience bound leaves no room for one. -/
+def liveClasses : FaultClasses (Fin 4) where
+  f := 1
+  c := 0
+  fa := 0
+  byzantine := {0}
+  crash := ∅
+  abc := ∅
+  card_byzantine := by decide
+  card_crash := by decide
+  card_abc := by decide
+  resilient := by decide
+
+/-- The signing faults the classes give: quorum `3`, the non-Byzantine
+validators reliable, available and rule-following. -/
+def liveSigning : SigningFaults (Fin 4) := liveClasses.signing
+
+example : liveSigning.q = 3 := by decide
+example : liveSigning.alive = {1, 2, 3} := by decide
+example : liveSigning.reliableSigner = {1, 2, 3} := by decide
 
 /-- The ledger prefix below the slot, then the committed block. -/
 def liveVM : DeterministicVM (BlockId := Fin 24) (Value := ℕ) where
   checkpointAfterCommit := fun k b => ⟨k + 1, 0, [(0 : ℕ), 5, 10].take k ++ [b.val]⟩
 
-/-- Proposals follow the signing rule on the full view. -/
+/-- The record up to round `4`: what a validator holds when slot `1`'s
+wave has just closed. -/
+def full4Upto4 : View (Fin 4) (Fin 24) Unit full4 where
+  ids := Finset.univ.filter fun b => (full4.block b).round ≤ 4
+  subset_ids := Finset.subset_univ _
+  complete := by decide
+
+/-- Validator `2` holds the record up to round `4`; everyone else holds
+the full one. -/
+def liveView (v : Fin 4) : View (Fin 4) (Fin 24) Unit full4 :=
+  if v = 2 then full4Upto4 else View.full full4
+
+example : (liveView 2).ids ≠ (liveView 1).ids := by decide
+
+/-- Proposals follow the signing rule on each validator's own view. -/
 def full4Execution : liveSigning.Execution ℕ where
   genesis := fun _ => []
   localHistory := fun _ _ height => [(0 : ℕ), 5, 10].take height
   emitted := fun message =>
     message.sender ∈ liveSigning.alive ∧
       ∃ slot block,
-        (schemeRule mm4 σL).Decided inferInstance (View.full full4) slot (some block) ∧
+        (schemeRule mm4 σL).Decided inferInstance (liveView message.sender) slot
+          (some block) ∧
         message.checkpoint = liveVM.checkpointAfterCommit slot block
   recorded := fun validator checkpoint =>
     validator ∈ liveSigning.recoveryCorrect ∧
@@ -303,11 +333,11 @@ local instance : ∀ (U : (schemeRule mm4 σL).Universe) (c L : Fin 24),
     Decidable ((familySupport mm4 σL).Certifies U c L) := fun U c L =>
   inferInstanceAs (Decidable (IsCert mm4 σL U c L))
 
-/-- Every candidate of slot `1` is certified by every available signer's
-decision-round block. -/
+/-- Every candidate of slot `1` is certified by every rule-following
+validator's decision-round block. -/
 theorem full4_certified : ∀ L : Fin 24,
     (schemeRule mm4 σL).IsCandidate inferInstance full4 1 L →
-    (familySupport mm4 σL).certifiesAt full4 liveSigning.recoveryCorrect
+    (familySupport mm4 σL).certifiesAt full4 liveSigning.alive
       (Slots.slotRound (Fin 4) 1) (Slots.kind (Fin 4) 1) L := by
   decide
 
@@ -318,6 +348,21 @@ theorem full4_covers (N : ℕ) :
     change b ∈ (View.full full4).ids
     rw [View.full_ids]
     exact hb
+
+/-- The record up to round `4` covers slot `1`'s wave, rounds `1` to `4`. -/
+theorem full4Upto4_covers :
+    Properties.CoversUpto (schemeRule mm4 σL) full4Upto4 4 :=
+  fun b _ hr => by
+    change b ∈ full4Upto4.ids
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hr⟩
+
+/-- Each validator's own view covers slot `1`'s wave. -/
+theorem liveView_covers (v : Fin 4) :
+    Properties.CoversUpto (schemeRule mm4 σL) (liveView v) 4 := by
+  unfold liveView
+  split
+  · exact full4Upto4_covers
+  · exact full4_covers 4
 
 /-- Every proposal names one of the three committed checkpoints. -/
 theorem full4Execution_emitted {message : ChkProp (Fin 4) ℕ}
@@ -331,13 +376,13 @@ theorem full4Execution_emitted {message : ChkProp (Fin 4) ℕ}
   · exact Or.inr (Or.inl hc)
   · exact Or.inr (Or.inr hc)
 
-/-- The signing rule on `full4`: every rule-following validator holds
-the full view. -/
+/-- The signing rule on `full4`: each rule-following validator proposes
+what its own view settles. -/
 def full4Rule :
     SigningFaults.Execution.SigningRule liveSigning full4Execution
       (schemeRule mm4 σL) inferInstance full4 liveVM where
   quorum := by decide
-  view := fun _ => View.full full4
+  view := liveView
   proposes := fun v hv _ _ hdec => ⟨hv, _, _, hdec, rfl⟩
   witnesses := fun v hv _ he Q =>
     ⟨{ sender := v
@@ -346,15 +391,17 @@ def full4Rule :
      rfl⟩
 
 /-- **Liveness delivers the checkpoint**: production, certification,
-coverage and a correct leader, no commit supplied. -/
+coverage and a correct leader, no commit supplied. The row and the
+checkpoint layer read one fault model, `liveClasses`, which supplies the
+signing quorum and the reliability quorum. -/
 theorem full4_live :
     ∃ L, (schemeRule mm4 σL).IsCandidate inferInstance full4 1 L ∧
       Nonempty (SigningFaults.Execution.FinalityQC liveSigning full4Execution
         (liveVM.checkpointAfterCommit 1 L)) :=
-  liveCommitFinalized_scheme liveSigning full4Execution liveVM mm4Tolerates
-    (rel := coreReliability (Fin 4)) (by decide) _ full4Rule
-    (by decide) (fun n h1 h2 => by revert h1 h2; revert n; decide)
-    full4_certified (fun v _ => full4_covers _) (by decide)
+  liveCommitFinalized_classes liveClasses full4Execution liveVM (by decide)
+    mm4Tolerates.2.1 mm4Tolerates.2.2 (by decide) _ full4Rule
+    (fun n h1 h2 => by revert h1 h2; revert n; decide)
+    full4_certified (fun v _ => liveView_covers v) (by decide)
 
 /-- The block liveness finds is slot `1`'s candidate, so the finalized
 checkpoint is the committed one. -/
@@ -376,11 +423,16 @@ round-`k+4` blocks; the content map is the identity. The chronology is
 causal: at wave four, slot `k` is decided by the certificate blocks of
 round `k+3`, so a validator observes the commit when it has those
 blocks and carries the checkpoint in its next block, which references
-them. Each validator's view is the record up to round `4`, on which
-slots `0` and `1` are decided and slot `2` is not; rounds `4` and `5`
-carry slots `0` and `1`. Emission is block authorship, so it is
-decidable on the record, and the carried run finalizes the slot-`1`
-commit through the derived execution and rule. -/
+them. Each validator's view is the record up to round `4`, and
+validator `3`'s also holds one round-`5` block; on both, slots `0` and
+`1` are decided and slot `2` is not. Rounds `4` and `5` carry slots `0`
+and `1`. Emission is block authorship, so it is decidable on the record,
+and the carried run finalizes the slot-`1` commit through the derived
+execution and rule.
+
+The unreliable validator `0` equivocates as block content: its round-`4`
+block carries slot `0`'s checkpoint and its round-`5` block carries a
+fork of slot `1`'s. The fork is emitted and has no certificate. -/
 
 section Carried
 
@@ -391,13 +443,22 @@ local instance carrySlots : Slots (Fin 4) :=
 def carryProp (k : ℕ) : Checkpoint.CheckpointData ℕ :=
   liveVM.checkpointAfterCommit k (if k = 0 then 0 else if k = 1 then 5 else 10)
 
+/-- A checkpoint at slot `1`'s height with a different history. -/
+def carryFork : Checkpoint.CheckpointData ℕ := ⟨2, 0, [0, 99]⟩
+
+example : carryFork.height = (carryProp 1).height ∧ carryFork.epoch = (carryProp 1).epoch ∧
+    carryFork ≠ carryProp 1 := by decide
+
 /-- `full4`'s blocks, with the round-`k+4` blocks carrying slot `k`'s
-checkpoint. -/
+checkpoint, except validator `0`'s round-`5` block (id `20`), which
+carries the fork. -/
 def full4cBlk : Fin 24 → Block (Fin 4) (Fin 24) (Option (Checkpoint.CheckpointData ℕ)) :=
   fun i =>
     let b := mmFullBlk i
     { round := b.round, creator := b.creator, refs := b.refs,
-      payload := if 4 ≤ b.round then some (carryProp (b.round - 4)) else none }
+      payload :=
+        if b.creator = 0 ∧ b.round = 5 then some carryFork
+        else if 4 ≤ b.round then some (carryProp (b.round - 4)) else none }
 
 def full4c : BlockUniverse (Fin 4) (Fin 24) (Option (Checkpoint.CheckpointData ℕ)) where
   ids := Finset.univ
@@ -481,12 +542,14 @@ def upto4 : View (Fin 4) (Fin 24) (Option (Checkpoint.CheckpointData ℕ)) full4
   complete := by decide
 
 /-- **Chronology.** A block carries a checkpoint only from round `4` on,
-and the round-`k+4` block carries slot `k`'s; slot `k` is decided by the
+and the round-`k+4` block of a rule-following validator carries slot
+`k`'s; slot `k` is decided by the
 round-`k+3` certificate blocks (`certsAt` at wave four), which the
 carrying block references. -/
 example : ∀ b : Fin 24, (full4c.block b).payload ≠ none ↔ 4 ≤ (full4c.block b).round := by
   decide
 example : ∀ b : Fin 24, 4 ≤ (full4c.block b).round →
+    (full4c.block b).creator ∈ liveSigning.alive →
     (full4c.block b).payload = some (carryProp ((full4c.block b).round - 4)) := by
   decide
 example : ∀ b : Fin 24, 4 ≤ (full4c.block b).round →
@@ -501,36 +564,79 @@ theorem upto4_slot0 : (schemeAnchored mm4 σC).Decided full4c upto4 0 (some 0) :
 theorem upto4_slot1 : (schemeAnchored mm4 σC).Decided full4c upto4 1 (some 5) :=
   AnchoredRule.Decided.directCommit (by decide) (by decide)
 
-/-- On the view up to round `4`, slot `2` is not decided: its certificate
-blocks are at round `5`, and no higher slot is decided to anchor it. -/
-theorem upto4_decided_eq {s : ℕ} {b : Fin 24}
-    (h : (schemeRule mm4 σC).Decided inferInstance upto4 s (some b)) :
+/-- On a view that does not commit slot `2` directly, slot `2` is not
+decided: no higher slot is decided to anchor it. -/
+theorem carried_decided_eq
+    {V : View (Fin 4) (Fin 24) (Option (Checkpoint.CheckpointData ℕ)) full4c}
+    (hno : ¬ (schemeAnchored mm4 σC).Commit full4c V 10
+      (Slots.slotRound (Fin 4) 2) (Slots.kind (Fin 4) 2))
+    {s : ℕ} {b : Fin 24}
+    (h : (schemeRule mm4 σC).Decided inferInstance V s (some b)) :
     (s = 0 ∧ b = 0) ∨ (s = 1 ∧ b = 5) := by
   rcases full4c_decided_eq h with h0 | h1 | ⟨rfl, rfl⟩
   · exact Or.inl h0
   · exact Or.inr h1
   · exfalso
     cases h with
-    | directCommit _ hc =>
-      have hno : ¬ (schemeAnchored mm4 σC).Commit full4c upto4 10
-          (Slots.slotRound (Fin 4) 2) (Slots.kind (Fin 4) 2) := by decide
-      exact hno hc
+    | directCommit _ hc => exact hno hc
     | @indirectCommit _ j _ _ _ hlt _ hj _ _ _ _ _ _ =>
       rcases full4c_decided_eq hj with ⟨rfl, -⟩ | ⟨rfl, -⟩ | ⟨rfl, -⟩ <;> omega
 
+/-- The record up to round `4` with validator `1`'s round-`5` block
+(id `21`): one of slot `2`'s three certificates, not enough to commit it. -/
+def upto4plus : View (Fin 4) (Fin 24) (Option (Checkpoint.CheckpointData ℕ)) full4c where
+  ids := Finset.univ.filter fun b => (full4c.block b).round ≤ 4 ∨ b = 21
+  subset_ids := Finset.subset_univ _
+  complete := by decide
+
+theorem upto4plus_slot1 : (schemeAnchored mm4 σC).Decided full4c upto4plus 1 (some 5) :=
+  AnchoredRule.Decided.directCommit (by decide) (by decide)
+
+/-- Validator `3` holds the larger view; everyone else holds the record
+up to round `4`. -/
+def carryView (v : Fin 4) :
+    View (Fin 4) (Fin 24) (Option (Checkpoint.CheckpointData ℕ)) full4c :=
+  if v = 3 then upto4plus else upto4
+
+example : (carryView 3).ids ≠ (carryView 1).ids := by decide
+
+/-- Every validator's own view decides slots `0` and `1` only. -/
+theorem carryView_decided_eq {v : Fin 4} {s : ℕ} {b : Fin 24}
+    (h : (schemeRule mm4 σC).Decided inferInstance (carryView v) s (some b)) :
+    (s = 0 ∧ b = 0) ∨ (s = 1 ∧ b = 5) := by
+  unfold carryView at h
+  split at h
+  · exact carried_decided_eq (by decide) h
+  · exact carried_decided_eq (by decide) h
+
+/-- Every validator's own view decides slot `1`. -/
+theorem carryView_slot1 (v : Fin 4) :
+    (schemeAnchored mm4 σC).Decided full4c (carryView v) 1 (some 5) := by
+  unfold carryView
+  split
+  · exact upto4plus_slot1
+  · exact upto4_slot1
+
+/-- What a rule-following validator's block carries: nothing, or one of
+the two committed checkpoints. -/
+theorem full4c_alive_payload : ∀ b : Fin 24,
+    (full4c.block b).creator ∈ liveSigning.alive →
+      (full4c.block b).payload = none ∨
+      (full4c.block b).payload = some (carryProp 0) ∨
+      (full4c.block b).payload = some (carryProp 1) := by
+  decide
+
 /-- The carried run: proposals ride in blocks, the identity content map
-reads them off, every validator decides on the record up to round `4`,
-and storage retains what a quorum of blocks carried. -/
+reads them off, every validator decides on its own view, and storage
+holds the two committed checkpoints. `recorded` is stated on its own, so
+`stores` is proved from what the blocks carry. -/
 def carriedRun :
     liveSigning.CarriedSigning (schemeRule mm4 σC) inferInstance full4c liveVM id where
   genesis := fun _ => []
   localHistory := fun _ _ height => [(0 : ℕ), 5, 10].take height
   recorded := fun v x =>
-    v ∈ liveSigning.recoveryCorrect ∧
-      ∃ S : Finset (Fin 4), liveSigning.q ≤ S.card ∧
-        ∀ w ∈ S, ∃ b ∈ full4c.ids, (full4c.block b).creator = w ∧
-          (full4c.block b).payload = some x
-  view := fun _ => upto4
+    v ∈ liveSigning.recoveryCorrect ∧ (x = carryProp 0 ∨ x = carryProp 1)
+  view := carryView
   quorum := by decide
   content_from_state := by decide
   local_extension := by
@@ -539,11 +645,17 @@ def carriedRun :
     rwa [List.take_take, Nat.min_eq_left le] at h
   proposes := by
     intro v hv slot block hdec
-    rcases upto4_decided_eq hdec with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;>
-      (revert hv; revert v; decide)
+    rcases carryView_decided_eq hdec with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;>
+      (clear hdec; revert hv; revert v; decide)
   stores := by
-    intro v hv x S hS hall _
-    exact ⟨hv, S, hS, hall⟩
+    intro v hv x signers _ _ hown
+    obtain ⟨b, -, hc, hx⟩ := hown
+    have hc' : (full4c.block b).creator = v := hc
+    have hx' : (full4c.block b).payload = some x := hx
+    rcases full4c_alive_payload b (by rw [hc']; exact hv) with h | h | h
+    · rw [h] at hx'; cases hx'
+    · rw [h] at hx'; exact ⟨hv, Or.inl (Option.some.inj hx').symm⟩
+    · rw [h] at hx'; exact ⟨hv, Or.inr (Option.some.inj hx').symm⟩
 
 /-- **Emission is observable**: validator `1`'s round-`4` block (id `17`)
 carries slot `0`'s checkpoint, as data. -/
@@ -551,12 +663,44 @@ example : carriedRun.execution.emitted ⟨1, liveVM.checkpointAfterCommit 0 0⟩
   ⟨17, Finset.mem_univ _, rfl, rfl⟩
 
 /-- **The carried run finalizes the slot-`1` commit** through the derived
-execution and rule: no abstract emission anywhere in the hypotheses. -/
+execution and rule: no abstract emission anywhere in the hypotheses, and
+each validator settles the slot on its own view. -/
 theorem carried_finality :
     Nonempty (SigningFaults.Execution.FinalityQC liveSigning carriedRun.execution
       (liveVM.checkpointAfterCommit 1 5)) :=
   carriedRun.commitFinalized (Scheme.agree mm4Tolerates) upto4_slot1
-    (fun _ _ => ⟨5, upto4_slot1⟩)
+    (fun v _ => ⟨5, carryView_slot1 v⟩)
+
+/-- **A conflicting proposal, carried.** Validator `0` equivocates as
+block content: its round-`4` block (id `16`) carries slot `0`'s
+checkpoint and its round-`5` block (id `20`) the fork. -/
+example : carriedRun.execution.emitted ⟨0, carryProp 0⟩ :=
+  ⟨16, Finset.mem_univ _, rfl, rfl⟩
+example : carriedRun.execution.emitted ⟨0, carryFork⟩ :=
+  ⟨20, Finset.mem_univ _, rfl, rfl⟩
+
+/-- The fork has no first-phase certificate: validator `0`'s is the only
+block carrying it, two signers short of the quorum. -/
+theorem carried_fork_uncertified :
+    IsEmpty (SigningFaults.Execution.CheckpointQC liveSigning carriedRun.execution
+      carryFork) := by
+  refine ⟨fun Q => ?_⟩
+  have key : ∀ b : Fin 24, (full4c.block b).payload = some carryFork →
+      (full4c.block b).creator = 0 := by decide
+  have hsub : Q.signers ⊆ {0} := by
+    intro v hv
+    obtain ⟨b, -, hc, hx⟩ := Q.messages v hv
+    have hc' : (full4c.block b).creator = v := hc
+    exact Finset.mem_singleton.mpr (hc'.symm.trans (key b hx))
+  have hcard := Finset.card_le_card hsub
+  have hq := Q.quorum
+  have h3 : liveSigning.q = 3 := by decide
+  simp at hcard
+  omega
+
+/-- Nor is it stored by anyone. -/
+example : ∀ v, ¬ carriedRun.execution.recorded v carryFork := by
+  rintro v ⟨-, h | h⟩ <;> exact absurd h (by decide)
 
 end Carried
 
@@ -564,8 +708,11 @@ end Carried
 #print axioms u7Finality1
 #print axioms full4_live_committed
 #print axioms carried_finality
+#print axioms carried_fork_uncertified
 #print axioms LeanDag.Integration.commitFinalized_scheme
 #print axioms LeanDag.Integration.liveCommitFinalized_scheme
+#print axioms LeanDag.Integration.liveCommitFinalized_classes
+#print axioms LeanDag.Integration.commitFinalized_barnacle_scheme
 #print axioms LeanDag.Integration.checkpointUnique_scheme
 #print axioms LeanDag.Checkpoint.SigningFaults.CarriedSigning.commitFinalized
 

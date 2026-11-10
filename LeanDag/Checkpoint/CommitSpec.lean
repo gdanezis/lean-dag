@@ -19,7 +19,7 @@ properties beside it: `Agree` ties every validator's own verdict to the
 commit, and a `Support` with `Commits` supplies the verdicts from
 production and certification. A protocol that shows those properties
 has the bridge; `Integration/HybridCheckpoint.lean` is Hybrid's
-instance.
+instance and `Integration/SchemeCheckpoint.lean` the unified decider's.
 
 The VM and the rule are contract obligations, not consequences of the
 DAG rule. The claims at the end of this file are the bridge's theorem
@@ -116,25 +116,29 @@ def CommitFinalized (R : DagRule Validator BlockId Payload)
       (vm.checkpointAfterCommit slot block))
 
 /-- Claim: liveness delivers a finalized checkpoint. Under `Commits` for
-the rule's support at a reliability whose quorum the online correct
-validators form, a slot they lead, populated across the wave and with
-every candidate certified, reaches checkpoint finality once every
-rule-following validator's view has caught up to the wave. No commit is
-assumed; the proof derives the decisions it needs from the support's
-law. -/
+the rule's support at a reliability whose quorum the rule-following
+validators form, a slot they lead, populated by them across the wave and
+with every candidate certified by them, reaches checkpoint finality once
+each of their views has caught up to the wave. No commit is assumed; the
+proof derives the decisions it needs from the support's law.
+
+Every hypothesis ranges over `M.alive`: alive-but-corrupt validators are
+live for the DAG rule, so they produce, certify and lead as the others
+do. `Agree R` is still a premise. A validator whose blocks fork the DAG
+is outside what this claim covers. -/
 def LiveCommitFinalized (R : DagRule Validator BlockId Payload) (sp : Support R)
     (rel : Reliability Validator)
     (vm : DeterministicVM (BlockId := BlockId) (Value := Value)) : Prop :=
   Agree R → CommitsCandidate R → sp.Commits rel →
   ∀ (S : Slots Validator) {U : R.Universe} (P : SigningRule M E R S U vm) {slot : ℕ},
-    rel.IsQuorum M.recoveryCorrect →
+    rel.IsQuorum M.alive →
     (∀ n, S.slotRound slot ≤ n → n ≤ S.slotRound slot + sp.waveAt (S.kind slot) →
-      Properties.PopulatedOn R U M.recoveryCorrect n) →
+      Properties.PopulatedOn R U M.alive n) →
     (∀ L, R.IsCandidate S U slot L →
-      sp.certifiesAt U M.recoveryCorrect (S.slotRound slot) (S.kind slot) L) →
+      sp.certifiesAt U M.alive (S.slotRound slot) (S.kind slot) L) →
     (∀ v ∈ M.alive,
       Properties.CoversUpto R (P.view v) (S.slotRound slot + sp.waveAt (S.kind slot))) →
-    S.leader slot ∈ M.recoveryCorrect →
+    S.leader slot ∈ M.alive →
     ∃ L, R.IsCandidate S U slot L ∧
       Nonempty (SigningFaults.Execution.FinalityQC M E
         (vm.checkpointAfterCommit slot L))

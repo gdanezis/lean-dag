@@ -1,23 +1,25 @@
 import LeanDag.Hybrid.Properties
 import LeanDag.Checkpoint.CommitProofs
+import LeanDag.Integration.FaultClasses
 
 /-!
 # Resilient checkpoints for Hybrid
 
 The paper's flexible fault model is the hybrid Byzantine and crash
 classes plus alive-but-corrupt signers, at the resilience bound
-`fabc + 3·fb + 2·fc < n`. It is one `SigningFaults` instance: the quorum
-is the hybrid `q`, the reliable signers are everyone outside the
+`fabc + 3·fb + 2·fc < n`. It is `FaultClasses` at Hybrid's classes
+(`Integration/FaultClasses.lean`), so one `SigningFaults` instance: the
+quorum is the hybrid `q`, the reliable signers are everyone outside the
 Byzantine and AbC classes, the recovery-correct validators are the
 reliable signers that do not crash, and the rule-following validators
 are everyone outside the Byzantine and crash classes, AbC included. The
 two counting laws are the resilience bound read at the quorum.
 
-The rule-following validators are the fully-correct class `Correct`, a
-signing quorum by the hybrid bound alone (`quorum_alive`), so AbC
-validators complete checkpoint quorums. At `abc = ∅` the
-recovery-correct validators are `Correct` too and form a quorum of the
-core reliability, which the liveness bridge asks of the DAG.
+The rule-following validators are Hybrid's `Correct`, which under this
+model contains the AbC validators. They are a signing quorum by the
+hybrid bound alone (`quorum_alive`) and a quorum of the core reliability
+(`isQuorum_alive`), so AbC validators complete checkpoint quorums and
+count toward the liveness bridge's DAG premise.
 `LeanDagTest/Hybrid/CheckpointCommit.lean` assembles the pieces.
 -/
 
@@ -59,70 +61,48 @@ namespace FlexibleFaults
 
 variable (M : FlexibleFaults Validator)
 
-/-- The Byzantine and AbC classes together stay under their bounds. -/
-theorem card_byzantine_union_abc :
-    (H.byzantine ∪ M.abc).card ≤ H.fb + M.fabc :=
-  le_trans (Finset.card_union_le _ _)
-    (Nat.add_le_add H.card_byzantine M.card_abc)
+/-- The flexible model as fault classes on plain sets: Hybrid's
+Byzantine and crash classes and their bounds, with the AbC class. -/
+def classes : FaultClasses Validator where
+  f := H.fb
+  c := H.fc
+  fa := M.fabc
+  byzantine := H.byzantine
+  crash := H.crash
+  abc := M.abc
+  card_byzantine := H.card_byzantine
+  card_crash := H.card_crash
+  card_abc := M.card_abc
+  resilient := by have := M.resilient; omega
 
 /-- The flexible model as signing faults: the hybrid quorum, reliable
 signers outside the Byzantine and AbC classes, recovery-correct
 validators that also do not crash, and rule-following validators
-outside the Byzantine and crash classes. -/
-def signing : SigningFaults Validator where
-  q := Hybrid.q Validator
-  reliableSigner := (H.byzantine ∪ M.abc)ᶜ
-  recoveryCorrect := (H.byzantine ∪ M.abc)ᶜ \ H.crash
-  alive := (H.byzantine ∪ H.crash)ᶜ
-  recoveryCorrect_subset_alive := by
-    intro v hv
-    simp only [Finset.mem_sdiff, Finset.mem_compl, Finset.mem_union] at hv ⊢
-    tauto
-  intersect := by
-    rw [compl_compl]
-    have := M.card_byzantine_union_abc
-    have := M.resilient
-    unfold Hybrid.q
-    omega
-  reach := by
-    have heq : ((H.byzantine ∪ M.abc)ᶜ \ H.crash)ᶜ = H.byzantine ∪ M.abc ∪ H.crash := by
-      ext v
-      simp only [Finset.mem_compl, Finset.mem_sdiff, Finset.mem_union]
-      tauto
-    rw [heq]
-    have hcard : (H.byzantine ∪ M.abc ∪ H.crash).card ≤ H.fb + M.fabc + H.fc :=
-      le_trans (Finset.card_union_le _ _)
-        (Nat.add_le_add M.card_byzantine_union_abc H.card_crash)
-    have := M.resilient
-    unfold Hybrid.q
-    omega
+outside the Byzantine and crash classes. It is `FaultClasses.signing`
+at Hybrid's classes. -/
+def signing : SigningFaults Validator := M.classes.signing
 
-/-- The rule-following validators are the fully-correct class, whatever
-the AbC population. -/
+/-- The signing quorum is the hybrid quorum. -/
+theorem signing_q : M.signing.q = Hybrid.q Validator := rfl
+
+/-- The rule-following validators are Hybrid's `Correct`, the validators
+outside the Byzantine and crash classes, whatever the AbC population:
+AbC validators are among them. -/
 theorem alive_eq : M.signing.alive = (Correct : Finset Validator) := by
   ext v
-  simp [signing, Correct]
+  simp [signing, classes, FaultClasses.signing, Correct]
 
-/-- The rule-following validators form the signing quorum, by the
-inherited `fb`, `fc` bounds through `card_correct`. AbC validators
-count: this is the bridge's `quorum` with AbC present. -/
-theorem quorum_alive : M.signing.q ≤ M.signing.alive.card := by
+/-- The rule-following validators form the signing quorum. AbC
+validators count: this is the bridge's `quorum` with AbC present. -/
+theorem quorum_alive : M.signing.q ≤ M.signing.alive.card :=
+  M.classes.quorum_alive
+
+/-- The rule-following validators are a quorum of the core reliability,
+whatever the AbC population: the liveness bridge's DAG premise with AbC
+present. -/
+theorem isQuorum_alive :
+    (coreReliability Validator).IsQuorum M.signing.alive := by
   rw [alive_eq]
-  have := card_correct (Validator := Validator)
-  simpa [signing, Hybrid.q] using this
-
-/-- Without an AbC population the recovery-correct validators are the
-fully-correct class. -/
-theorem recoveryCorrect_eq (hno : M.abc = ∅) :
-    M.signing.recoveryCorrect = (Correct : Finset Validator) := by
-  ext v
-  simp [signing, hno, Correct]
-
-/-- Without an AbC population the online correct validators are a quorum
-of the core reliability. -/
-theorem isQuorum_of_noAbC (hno : M.abc = ∅) :
-    (coreReliability Validator).IsQuorum M.signing.recoveryCorrect := by
-  rw [recoveryCorrect_eq M hno]
   exact (coreReliability Validator).isQuorum_correct
 
 end FlexibleFaults
