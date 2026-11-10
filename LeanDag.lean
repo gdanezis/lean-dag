@@ -583,5 +583,6 @@ import LeanDag.Scheme.AsyncLocal.Statement
 import LeanDag.Scheme.AsyncLocal.Proof
 import LeanDag.Scheme.Model.Deliver
 import LeanDag.Scheme.Helpers.Deliver
+import LeanDag.Scheme.Helpers.Validity
 import LeanDag.Scheme.AtomicBroadcast.Statement
 import LeanDag.Scheme.AtomicBroadcast.Proof

@@ -20,6 +20,7 @@ delivered message is a block, which carries its round `r` and its author
   scanned to slot `N` on the view `V`.
 * `AsyncPace.deliverAt`: a reliable validator's delivered sequence at
   time `t` of a run, its loop scanning to slot `M` on its own view.
+* `AsyncPace.Delivers`: a reliable validator eventually delivers a block.
 * `Before s x y`: `x` occurs before `y` in `s`.
 
 Definitions only; the claims are `Scheme/AtomicBroadcast/Statement.lean`.
@@ -78,6 +79,13 @@ noncomputable def AsyncPace.deliverAt {q N : ℕ} {U : BlockRecord Validator Blo
     {T : Finset Validator} (ap : AsyncPace q U T N) {v : Validator} (hv : v ∈ T) (M t : ℕ) :
     List BlockId :=
   deliverSeq p σ U (ap.viewAt hv t) M
+
+/-- **The reliable validator `v` eventually delivers `b`** in the run `ap`:
+scanning far enough, `b` is in its delivered sequence from some time on. -/
+def AsyncPace.Delivers {q N : ℕ} {U : BlockRecord Validator BlockId Payload P honest}
+    {T : Finset Validator} (ap : AsyncPace q U T N) {v : Validator} (hv : v ∈ T) (b : BlockId) :
+    Prop :=
+  ∃ M₀, ∀ M, M₀ ≤ M → ∃ t, ∀ t', t ≤ t' → b ∈ ap.deliverAt p σ hv M t'
 
 end Scheme
 

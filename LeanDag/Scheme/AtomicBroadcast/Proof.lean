@@ -1,6 +1,8 @@
 import LeanDag.Scheme.AtomicBroadcast.Statement
 import LeanDag.Scheme.Helpers.Deliver
 import LeanDag.Scheme.Loop.Proof
+import LeanDag.Scheme.Helpers.Validity
+import LeanDag.Scheme.Reactive.Proof
 /-!
 # Byzantine atomic broadcast — proof
 
@@ -10,6 +12,19 @@ which preserves prefixes and keeps one block per round and author
 (`Helpers/Deliver.lean`). Agreement is eventual delivery among the
 reliable validators: the view of one is eventually inside the view of
 another, whose delivered sequence then extends the first one's.
+
+Validity commits a slot whose leader block reaches the block, on the
+author's own view, with every slot below decided; the loop then outputs
+that slot (`Loop.outputComplete`) and agreement carries the delivery to
+every reliable validator. Under partial synchrony the slot is one the
+author leads past GST, certified by every reliable block
+(`ReactiveRun.certifies`), and the slots below it are decided by the run
+of reliably-led slots after it; its leader block reaches the author's
+earlier blocks by self-reference. Under asynchrony a block of safe coins
+commits a slot from round `r + 2`, whose leader block reaches every
+reliable block of round `r + 1` by quorum intersection, and so the
+author's on-time block; the draws with no such block are Steelhead's
+count (`Steelhead.no_good_block_prob_le`).
 -/
 
 namespace LeanDag
@@ -70,8 +85,114 @@ theorem agreement : Agreement := by
     hd.trans (ap.holds_mono P_j _ _ ht'')
   exact (grows Validator BlockId Payload P q honest f p σ U _ _ M M ht hsub le_rfl).subset hb
 
+/-- **One delivery spreads**: a block in a reliable validator's delivered
+sequence at time `t` at every scan from `N₀` on is eventually delivered by
+every reliable validator. -/
+theorem delivers_of_mem {Validator BlockId Payload : Type} [Fintype Validator]
+    [DecidableEq Validator] [LinearOrder BlockId] {P : Validity Validator BlockId Payload}
+    [P.Mechanised] {q : ℕ} [P.Quorate q] {honest : Finset Validator} {f : ℕ} {p : Params}
+    (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
+    {U : BlockRecord Validator BlockId Payload P honest} {T : Finset Validator} {N qp : ℕ}
+    (ap : AsyncPace qp U T N) (ht : p.Tolerates honest f q) {v : Validator} (hv : v ∈ T)
+    {t N₀ : ℕ} {m : BlockId} (h : ∀ M, N₀ ≤ M → m ∈ ap.deliverAt p σ hv M t) {w : Validator}
+    (hw : w ∈ T) : ap.Delivers p σ hw m :=
+  ⟨N₀, fun M hM => agreement Validator BlockId Payload P q honest f p σ U T N qp ap M ht v hv t m
+    (h M hM) w hw⟩
+
+theorem validityPS : ValidityPS := by
+  intro Validator BlockId Payload _ _ _ _ P _ q _ honest f p σ S U T N R qr d rs ht hcf hcm hTh
+    hqr hgst htime hP hd hspan P_k m k b₀ hk hm hmc hlead hRk hmk hkb hrun hN P_j hj
+  set ap := rs.toAsyncPace
+  obtain ⟨t, hdel⟩ := ap.delivered
+  have hcommit : ∀ j, S.leader j ∈ T → R ≤ S.slotRound j →
+      S.slotRound j + (p.waveLength - 1) ≤ N →
+      ∃ L, IsLeaderBlock U j L ∧ ∀ V : U.View,
+        (∀ b ∈ U.ids, (U.block b).creator ∈ T → b ∈ V.ids) →
+        (schemeAnchored p σ).Decided U V j (some L) := by
+    intro j hjT hRj hjN
+    obtain ⟨L, hL, hLc, hLr⟩ := ap.populated hqr (S.slotRound j) (by omega) (S.leader j) hjT
+    have hLB : IsLeaderBlock U j L := ⟨hL, hLr, hLc⟩
+    refine ⟨L, hLB, fun V hV => decided_of_certified σ hcm (ap.populated hqr _ hjN) hLB ?_ hV⟩
+    intro C hC hCT hCr
+    exact ReactiveRun.certifies Validator BlockId Payload P honest p σ U T N R qr rs j L hcf hTh hqr
+      hgst htime hRj hjN hjT hLB _ hCT C hC rfl hCr
+  have hlast : ∀ j, j ≤ b₀ + d - 1 → S.slotRound j + (p.waveLength - 1) ≤ N := fun j hj => by
+    have := S.mono hj; omega
+  set V := ap.viewAt hk t
+  have hV : ∀ b ∈ U.ids, (U.block b).creator ∈ T → b ∈ V.ids := fun b hb hbT =>
+    hdel t le_rfl P_k hk b hb hbT
+  have hbelow : ∀ i, i < b₀ → ∃ v, (schemeAnchored p σ).Decided U V i v :=
+    AnchoredRule.decided_below_of_run
+      (fun _ h => AnchoredRule.exists_least_of_lt (fun _ _ => Iff.rfl) h) hd hspan
+      (b := b₀) (Led := fun j => S.leader j ∈ T) hrun fun j h1 h2 hjT => by
+        have := S.mono (show k ≤ j by omega)
+        obtain ⟨L, -, hL⟩ := hcommit j hjT (by omega) (hlast j h2)
+        exact ⟨L, hL V hV⟩
+  obtain ⟨L, hLB, hL⟩ := hcommit k (hlead ▸ hk) hRk (hlast k (by omega))
+  have hmh : (U.block m).creator ∈ honest := by rw [hmc]; exact hTh hk
+  have hreach : Reaches U L m := reaches_own hP hm hLB.1 hmh (hLB.2.2.trans (hlead.trans hmc.symm))
+    (by rw [hLB.2.1]; exact hmk)
+  obtain ⟨N₀, hN₀⟩ := mem_deliverSeq_of_decided σ ht (fun i hi => hbelow i (by omega)) (hL V hV)
+    hm hreach hmh
+  exact delivers_of_mem σ ap ht hk (t := t) hN₀ hj
+
+theorem livenessPS : LivenessPS := by
+  intro Validator BlockId Payload _ _ _ _ P _ q _ honest f p σ S U T N R qr d rs ht hcf hcm hTh
+    hqr hgst htime hP hd hspan P_k hk m k b₀ hm hmc hlead hRk hmk hkb hrun hN
+  exact validityPS Validator BlockId Payload P q honest f p σ U T N R qr d rs ht hcf hcm hTh hqr hgst
+    htime hP hd hspan P_k m k b₀ hk hm hmc hlead hRk hmk hkb hrun hN P_k hk
+
+theorem validityAsync : ValidityAsync := by
+  intro Validator BlockId Payload _ _ _ _ P _ q _ honest f p σ U T N qp ap S₀ hS dflt s₀ d M c
+    ht hcf hcm hqp hTh hqT hd hspan hN hfloor hP P_k m x r hk hm hmc hmr hx hxc hxr hon hr2
+  letI : Faults Validator := noFaults
+  set G : Fin M → Fin d → Finset Validator :=
+    fun j i => safeAt p U (S₀.slotRound (s₀ + j * d + i))
+  have hG : ∀ j i, c ≤ (G j i).card := fun j i => by
+    have hj := j.isLt
+    have hi := i.isLt
+    have : (j : ℕ) * d + i < M * d := by
+      have := Nat.mul_le_mul_right d (show (j : ℕ) + 1 ≤ M by omega)
+      rw [Nat.add_mul, one_mul] at this; omega
+    exact hfloor _ (by omega) (by omega)
+  have hmh : (U.block m).creator ∈ honest := by rw [hmc]; exact hTh hk
+  have hxm : Reaches U x m := reaches_own hP hm hx hmh (hxc.trans hmc.symm) (by rw [hxr]; exact hmr)
+  have hsub : {g : Fin M → Fin d → Validator | ¬ ∀ (P_j : Validator) (hj : P_j ∈ T),
+        ap.Delivers (S := coinSlots S₀ hS (Steelhead.coinOfBlocksFrom s₀ g dflt)) p σ hj m} ⊆
+      {g | ∀ j ∈ (Finset.univ : Finset (Fin M)), ∃ i, g j i ∉ G j i} := by
+    intro g hg j _
+    by_contra hall
+    push Not at hall
+    apply hg
+    intro P_j hj
+    letI S' := coinSlots S₀ hS (Steelhead.coinOfBlocksFrom s₀ g dflt)
+    obtain ⟨L, hLB, t, hev⟩ := eventually_committed_of_good_block σ ap S₀ hS dflt g hcf hcm hqp hd
+      hspan hN j hall
+    obtain ⟨hdec, hall'⟩ := hev t le_rfl P_k hk
+    have hLr : r + 2 ≤ (U.block L).round := by
+      rw [hLB.2.1]
+      exact le_trans hr2 (S₀.mono (by omega))
+    have hreach : Reaches U L m :=
+      (reaches_of_onTime hqT (x := x) (r := r) (fun c hc hcT hcr => Reaches.single (hon c hc hcT hcr))
+        L hLB.1 hLr).trans hxm
+    obtain ⟨N₀, hN₀⟩ := mem_deliverSeq_of_decided σ ht hall' hdec hm hreach hmh
+    exact delivers_of_mem σ ap ht hk (t := t) hN₀ hj
+  refine le_trans (MeasureTheory.measure_mono hsub) ?_
+  have := Steelhead.no_good_block_prob_le (Finset.univ : Finset (Fin M)) G hG
+  rwa [Finset.card_univ, Fintype.card_fin] at this
+
+theorem livenessAsync : LivenessAsync := by
+  intro Validator BlockId Payload _ _ _ _ P _ q _ honest f p σ U T N qp ap S₀ hS dflt s₀ d M c
+    ht hcf hcm hqp hTh hqT hd hspan hN hfloor hP P_k hk m x r hm hmc hmr hx hxc hxr hon hr2
+  refine le_trans (MeasureTheory.measure_mono ?_) (validityAsync Validator BlockId Payload P q
+    honest f p σ U T N qp ap S₀ hS dflt s₀ d M c ht hcf hcm hqp hTh hqT hd hspan hN hfloor hP P_k m
+    x r hk hm hmc hmr hx hxc hxr hon hr2)
+  intro g hg hall
+  exact hg (hall P_k hk)
+
 theorem holds : Statement :=
-  ⟨grows, runGrows, integrity, integritySD, totalOrder, totalOrderSD, agreement⟩
+  ⟨grows, runGrows, integrity, integritySD, totalOrder, totalOrderSD, agreement, validityPS,
+    livenessPS, validityAsync, livenessAsync⟩
 
 end AtomicBroadcast
 

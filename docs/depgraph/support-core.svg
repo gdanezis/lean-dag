@@ -331,7 +331,7 @@
 <rect x="294.0" y="2252.0" width="158" height="36" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="373.0" y="2264.0" text-anchor="middle">SC15</text>
 <text class="nm" x="373.0" y="2278.0" text-anchor="middle">decisionAt_complete</text></g>
-<g><title>LeanDag.Scheme.deliverSeq — the delivered sequence keeps one block per round and author, grows, and meets Sailfish&#x27;s integrity, total order and agreement and Sui and Duan&#x27;s integrity, total order and agreement at every tolerated row</title>
+<g><title>LeanDag.Scheme.deliverSeq — the delivered sequence keeps one block per round and author, grows, and meets Sailfish&#x27;s integrity, total order, agreement and validity and Sui and Duan&#x27;s integrity, total order, agreement and liveness at every tolerated row; validity partially synchronously when the author leads a slot past GST followed by a reliably-led run, and asynchronously, against a coin-blind adversary, with vanishing failure probability once the author&#x27;s block is on time at one round</title>
 <rect x="294.0" y="2300.0" width="158" height="36" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="373.0" y="2312.0" text-anchor="middle">SC32</text>
 <text class="nm" x="373.0" y="2326.0" text-anchor="middle">deliverSeq</text></g>

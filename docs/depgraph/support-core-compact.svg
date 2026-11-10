@@ -285,7 +285,7 @@
 <g><title>LeanDag.Scheme.decisionAt_complete — at the rows of SC12, the loop decides every verdict `Decided` derives once its scan reaches far enough, and outputs it once every slot from `lo` is decided</title>
 <rect x="134.0" y="1554.0" width="62" height="24" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="165.0" y="1566.0" text-anchor="middle">SC15</text></g>
-<g><title>LeanDag.Scheme.deliverSeq — the delivered sequence keeps one block per round and author, grows, and meets Sailfish&#x27;s integrity, total order and agreement and Sui and Duan&#x27;s integrity, total order and agreement at every tolerated row</title>
+<g><title>LeanDag.Scheme.deliverSeq — the delivered sequence keeps one block per round and author, grows, and meets Sailfish&#x27;s integrity, total order, agreement and validity and Sui and Duan&#x27;s integrity, total order, agreement and liveness at every tolerated row; validity partially synchronously when the author leads a slot past GST followed by a reliably-led run, and asynchronously, against a coin-blind adversary, with vanishing failure probability once the author&#x27;s block is on time at one round</title>
 <rect x="134.0" y="1587.0" width="62" height="24" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="165.0" y="1599.0" text-anchor="middle">SC32</text></g>
 <g><title>LeanDag.Scheme.leastSel — a vote-selection rule exists: the least block of the slot in the voter&#x27;s history</title>

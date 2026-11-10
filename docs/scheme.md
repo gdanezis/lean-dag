@@ -1110,8 +1110,8 @@ each Lean statement reads against one clause of a paper:
 | Sailfish, Total order: `x` before `y` at `P_i` ⇒ not `y` before `x` at `P_j` | `AtomicBroadcast.TotalOrder` |
 | Sui–Duan, Total order: `x` before `y` at one ⇒ `y` at another only after `x` | `AtomicBroadcast.TotalOrderSD` |
 | Sailfish and Sui–Duan, Agreement | `AtomicBroadcast.Agreement` |
-| Sailfish, Validity: an honest sender's message delivered by every honest party | not yet stated |
-| Sui–Duan, Liveness: an honest sender eventually delivers its own message | not yet stated |
+| Sailfish, Validity: an honest sender's message delivered by every honest party | `AtomicBroadcast.ValidityPS`, `AtomicBroadcast.ValidityAsync` |
+| Sui–Duan, Liveness: an honest sender eventually delivers its own message | `AtomicBroadcast.LivenessPS`, `AtomicBroadcast.LivenessAsync` |
 
 A delivered message is a block; `deliverSeq` delivers committed leaders'
 histories in order of round and block id, keeping the first block of each
@@ -1122,7 +1122,15 @@ of a delivered sequence is the order of output, since sequences only grow
 reliable validators of a run. The adversary's adaptivity and payload-level
 deduplication are out of scope.
 
-**Remaining.** Validity under partial synchrony from `ReactiveRun.Includes`
-on a reliable validator's own view, and under asynchrony, which needs a
-rule for what a reliable block references: without one the adversary can
-keep a reliable validator's blocks out of every committed history.
+**Validity.** Partially synchronously, the author leads a slot past GST at
+or above its block's round, followed within the horizon by a run of
+reliably-led slots spanning eligibility: the slot commits on the author's
+own view, the run decides every slot below it, and the leader block
+reaches the block by self-reference. Asynchronously, against a coin-blind
+adversary, the author's block of some round `r` is referenced by every
+reliable block of round `r + 1`; the failure probability over `M` blocks
+of coins from round `r + 2` is at most `badBlockBoundAt c d ^ M`. That
+condition cannot be dropped: references reach one round down
+(`Validity.Mechanised.pred`), so a reliable validator the adversary keeps
+late at every round builds blocks that no later block references, and
+Sailfish's weak edges to older rounds have no counterpart in the model.

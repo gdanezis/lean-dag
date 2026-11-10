@@ -88,6 +88,7 @@ theorem exists_keepFirst {l : List α} {a : α} (ha : a ∈ l) {seen : List β}
         obtain ⟨c, hc, hca⟩ := ih hal hs'
         exact ⟨c, by simp [keepFirst, h, hc], hca⟩
 
+omit [DecidableEq β] in
 /-- **Distinct keys leave at most one element of a key class.** -/
 theorem length_filter_le_one {l : List α} (hn : (l.map key).Nodup) (q : α → Bool)
     (hq : ∀ a c, q a → q c → key a = key c) : (l.filter q).length ≤ 1 := by
@@ -100,7 +101,7 @@ theorem length_filter_le_one {l : List α} (hn : (l.map key).Nodup) (q : α → 
         refine List.eq_nil_iff_forall_not_mem.mpr fun c hc => ?_
         obtain ⟨hcl, hqc⟩ := List.mem_filter.mp hc
         exact hn.1 (List.mem_map.mpr ⟨c, hcl, hq c a hqc ha⟩)
-      simp [List.filter_cons, ha, hnil]
+      simp [ha, hnil]
     · simpa [List.filter_cons, ha] using ih hn.2
 
 end KeepFirst

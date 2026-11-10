@@ -12259,8 +12259,35 @@ Sailfish), and a validator delivering `y` has delivered `x` before it
 (`Scheme.AtomicBroadcast.totalOrderSD`, Sui and Duan). If a reliable
 validator of a run delivers `b`, every reliable validator delivers `b`
 from some time on (`Scheme.AtomicBroadcast.agreement`, both), in an
-asynchronous run and in a reactive one with its clock forgotten. Validity
-and Sui and Duan's liveness are not yet stated.
+asynchronous run and in a reactive one with its clock forgotten.
+
+Validity and Sui and Duan's liveness are stated on records whose blocks
+reference their author's previous block. A validator eventually delivers
+`m` (`Scheme.AsyncPace.Delivers`) when, scanning far enough, `m` is in its
+delivered sequence from some time on. Partially synchronously, in a
+reactive run past GST whose reliable set meets the certificate and commit
+thresholds, a block `m` of a reliable validator is eventually
+delivered by every reliable validator when its author leads a slot `k` past GST
+at or above `m`'s round and `d` reliably-led slots follow `k` within the
+horizon, `d` spanning eligibility (`Scheme.AtomicBroadcast.validityPS`,
+Sailfish; `Scheme.AtomicBroadcast.livenessPS`, Sui and Duan). Every reliable
+decision-round block certifies `k`'s leader block, which commits on
+the author's own view; the run decides every slot below it; the leader block
+reaches `m` by self-reference (`Scheme.reaches_own`); and agreement carries
+the delivery to every reliable validator. Asynchronously, against an
+adversary that does not see the coin, when the author's block of a round `r` at
+or above `m`'s is referenced by every reliable block of round `r + 1`,
+`m` fails to be eventually delivered with probability at most
+`badBlockBoundAt c d ^ M` over `M` blocks of `d` coins from round `r + 2`
+on (`Scheme.AtomicBroadcast.validityAsync`,
+`Scheme.AtomicBroadcast.livenessAsync`), which vanishes as `M` grows
+(`Scheme.badBlockBound_tendsto_zero`). A block of safe coins commits a slot
+from round `r + 2` and decides every slot below it
+(`Scheme.eventually_committed_of_good_block`), and when the quorum and the
+reliable set together exceed `n` every block from round `r + 2` on reaches
+the on-time block (`Scheme.reaches_of_onTime`). Without such a round the
+claim fails: references reach one round down, so a reliable validator
+kept late at every round builds blocks no later block references.
 
 ### 27.17 What the arc does not contain
 
@@ -12575,7 +12602,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Scheme/Properties.lean`, `Scheme/Record.lean` | the family as a carrier: every property the mechanisms read, its support, its record instance, SC16–SC18 |
 | `Scheme/Loop/` | the commit loop outputs exactly the derivable verdicts, and two validators' outputs are prefix-comparable, SC13–SC15 |
 | `Scheme/Schedules/` | the decider under Barnacle's and HammerHead's schedules: safety under every update rule, the descent laws, every height under round-robin and its permutations, SC28 |
-| `Scheme/AtomicBroadcast/` | the delivered sequence against Sailfish's and Sui and Duan's definitions of Byzantine atomic broadcast: integrity, total order and agreement, SC32 |
+| `Scheme/AtomicBroadcast/` | the delivered sequence against Sailfish's and Sui and Duan's definitions of Byzantine atomic broadcast: integrity, total order, agreement, validity and liveness, SC32 |
 
 **The support graph, extracted.** The dependency structure of the
 development is not documented by hand: `scripts/DepGraph.lean` walks
@@ -13540,7 +13567,7 @@ reused.
 | SC29 | one buffer round: against a population at least `q` strong `q·(q − f) ≤ G·(2q − n) + |honest|·(n − q)`; a third of the validators safe at `n ≥ 5f + 3c + 1`, `q = n − f − c`, and a coin probability of `1/3`; exactly two safe validators in an execution at `n = b + 2k + 1`, `q = b + k + 1` | `Scheme.card_safeAt_oneBuffer`, `Scheme.card_safeAt_third`, `Scheme.third_le_coin`, `Scheme.TwoSafe.card_safeAt_twoSafe`, `Scheme.TwoSafe.twoPace`, `Scheme.TwoSafe.refs_eq_held`, `Scheme.Async.safeOneBuffer`, `Scheme.Async.safeThird`, `Scheme.Async.twoSafe`, `Scheme.Async.coinThird` *(Scheme/Helpers/OneBuffer, Scheme/Helpers/TwoSafe, Scheme/Async)* |
 | SC30 | across waves, against an adversary that does not see the coin: the slots below `M` blocks of `d` coins stay undecided with probability at most `((n^d − c^d)/n^d)^M`, which vanishes; floors `1`, `q − f` and `⌈n/3⌉` at the rows ready for the count | `Scheme.eventually_decided_of_good_block`, `Scheme.undecided_le`, `Scheme.floors`, `Scheme.badBlockBound_tendsto_zero`, `Scheme.AsyncLive.tail`, `Scheme.AsyncLive.vanishes`, `Scheme.AsyncLive.live`, `Scheme.AsyncLive.holds` *(Scheme/Helpers/AsyncLive, Scheme/AsyncLive)* |
 | SC31 | where no validator equivocates, every vote-selection rule selects alike, any two give one carrier, and the three rows with buffer rounds are their rules at every vote | `Scheme.sel_eq_of_noEquiv`, `Scheme.readAlike_noEquiv`, `Scheme.Equiv.voteFree`, `Scheme.Equiv.bufferedRowsNoEquiv` *(Scheme/Helpers/VoteFree, Scheme/Equiv)* |
-| SC32 | the delivered sequence keeps one block per round and author, grows, and meets Sailfish's integrity, total order and agreement and Sui and Duan's integrity, total order and agreement at every tolerated row | `Scheme.deliverSeq`, `Scheme.deliverOf_prefix`, `Scheme.mem_deliverOf_of`, `Scheme.AtomicBroadcast.grows`, `Scheme.AtomicBroadcast.runGrows`, `Scheme.AtomicBroadcast.integrity`, `Scheme.AtomicBroadcast.integritySD`, `Scheme.AtomicBroadcast.totalOrder`, `Scheme.AtomicBroadcast.totalOrderSD`, `Scheme.AtomicBroadcast.agreement`, `Scheme.AtomicBroadcast.holds` *(Scheme/Model/Deliver, Scheme/Helpers/Deliver, Scheme/AtomicBroadcast)* |
+| SC32 | the delivered sequence keeps one block per round and author, grows, and meets Sailfish's integrity, total order, agreement and validity and Sui and Duan's integrity, total order, agreement and liveness at every tolerated row; validity partially synchronously when the author leads a slot past GST followed by a reliably-led run, and asynchronously, against a coin-blind adversary, with vanishing failure probability once the author's block is on time at one round | `Scheme.deliverSeq`, `Scheme.deliverOf_prefix`, `Scheme.mem_deliverOf_of`, `Scheme.reaches_own`, `Scheme.reaches_of_onTime`, `Scheme.mem_deliverSeq_of_decided`, `Scheme.eventually_committed_of_good_block`, `Scheme.AtomicBroadcast.grows`, `Scheme.AtomicBroadcast.runGrows`, `Scheme.AtomicBroadcast.integrity`, `Scheme.AtomicBroadcast.integritySD`, `Scheme.AtomicBroadcast.totalOrder`, `Scheme.AtomicBroadcast.totalOrderSD`, `Scheme.AtomicBroadcast.agreement`, `Scheme.AtomicBroadcast.validityPS`, `Scheme.AtomicBroadcast.livenessPS`, `Scheme.AtomicBroadcast.validityAsync`, `Scheme.AtomicBroadcast.livenessAsync`, `Scheme.AtomicBroadcast.holds` *(Scheme/Model/Deliver, Scheme/Helpers/Deliver, Scheme/Helpers/Validity, Scheme/AtomicBroadcast)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
