@@ -12233,7 +12233,36 @@ HammerHead's scores among them, reach every height
 and Hybrid Mysticeti meet at their committees
 (`Scheme.Schedules.rowsSkipScheduled`).
 
-### 27.16 What the arc does not contain
+### 27.16 Byzantine atomic broadcast
+
+SC32: the family against the definitions of Byzantine atomic broadcast of
+Sailfish (IEEE S&P 2025, Definition 1, after Bullshark) and of Sui and Duan
+(IEEE S&P 2025, Definition 2.1). A delivered message `a_deliver(m, r, P_k)`
+is a block, carrying its round and author. A validator's delivered
+sequence `Scheme.deliverSeq p σ U V N` is the loop's output from slot `0`
+on its view: each committed leader's causal history in order of round and
+block id (`Scheme.flush`), keeping the first block of each round and author
+(`keepFirst`). Keeping one block per round and author is what Sailfish's
+integrity asks of an uncertified DAG, where a Byzantine author's two
+blocks of one round can both lie in a committed leader's history.
+
+Delivered sequences only grow, as the view grows and the scan reaches
+further and along a reliable validator's run
+(`Scheme.AtomicBroadcast.grows`, `Scheme.AtomicBroadcast.runGrows`), so
+the order of a sequence is the order of output. A validator delivers at
+most one block of each round and author (`Scheme.AtomicBroadcast.integrity`,
+Sailfish), and each block at most once and only blocks of the record
+(`Scheme.AtomicBroadcast.integritySD`, Sui and Duan). At every row with
+`p.Tolerates honest f q`, if one validator delivers `x` before `y`, no
+validator delivers `y` before `x` (`Scheme.AtomicBroadcast.totalOrder`,
+Sailfish), and a validator delivering `y` has delivered `x` before it
+(`Scheme.AtomicBroadcast.totalOrderSD`, Sui and Duan). If a reliable
+validator of a run delivers `b`, every reliable validator delivers `b`
+from some time on (`Scheme.AtomicBroadcast.agreement`, both), in an
+asynchronous run and in a reactive one with its clock forgotten. Validity
+and Sui and Duan's liveness are not yet stated.
+
+### 27.17 What the arc does not contain
 
 The properties of Mahi-Mahi and Async BlueBottle that are proved of
 those rules alone reach the rows of §27.5 at the least vote only; the
@@ -12546,6 +12575,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Scheme/Properties.lean`, `Scheme/Record.lean` | the family as a carrier: every property the mechanisms read, its support, its record instance, SC16–SC18 |
 | `Scheme/Loop/` | the commit loop outputs exactly the derivable verdicts, and two validators' outputs are prefix-comparable, SC13–SC15 |
 | `Scheme/Schedules/` | the decider under Barnacle's and HammerHead's schedules: safety under every update rule, the descent laws, every height under round-robin and its permutations, SC28 |
+| `Scheme/AtomicBroadcast/` | the delivered sequence against Sailfish's and Sui and Duan's definitions of Byzantine atomic broadcast: integrity, total order and agreement, SC32 |
 
 **The support graph, extracted.** The dependency structure of the
 development is not documented by hand: `scripts/DepGraph.lean` walks
@@ -13510,6 +13540,7 @@ reused.
 | SC29 | one buffer round: against a population at least `q` strong `q·(q − f) ≤ G·(2q − n) + |honest|·(n − q)`; a third of the validators safe at `n ≥ 5f + 3c + 1`, `q = n − f − c`, and a coin probability of `1/3`; exactly two safe validators in an execution at `n = b + 2k + 1`, `q = b + k + 1` | `Scheme.card_safeAt_oneBuffer`, `Scheme.card_safeAt_third`, `Scheme.third_le_coin`, `Scheme.TwoSafe.card_safeAt_twoSafe`, `Scheme.TwoSafe.twoPace`, `Scheme.TwoSafe.refs_eq_held`, `Scheme.Async.safeOneBuffer`, `Scheme.Async.safeThird`, `Scheme.Async.twoSafe`, `Scheme.Async.coinThird` *(Scheme/Helpers/OneBuffer, Scheme/Helpers/TwoSafe, Scheme/Async)* |
 | SC30 | across waves, against an adversary that does not see the coin: the slots below `M` blocks of `d` coins stay undecided with probability at most `((n^d − c^d)/n^d)^M`, which vanishes; floors `1`, `q − f` and `⌈n/3⌉` at the rows ready for the count | `Scheme.eventually_decided_of_good_block`, `Scheme.undecided_le`, `Scheme.floors`, `Scheme.badBlockBound_tendsto_zero`, `Scheme.AsyncLive.tail`, `Scheme.AsyncLive.vanishes`, `Scheme.AsyncLive.live`, `Scheme.AsyncLive.holds` *(Scheme/Helpers/AsyncLive, Scheme/AsyncLive)* |
 | SC31 | where no validator equivocates, every vote-selection rule selects alike, any two give one carrier, and the three rows with buffer rounds are their rules at every vote | `Scheme.sel_eq_of_noEquiv`, `Scheme.readAlike_noEquiv`, `Scheme.Equiv.voteFree`, `Scheme.Equiv.bufferedRowsNoEquiv` *(Scheme/Helpers/VoteFree, Scheme/Equiv)* |
+| SC32 | the delivered sequence keeps one block per round and author, grows, and meets Sailfish's integrity, total order and agreement and Sui and Duan's integrity, total order and agreement at every tolerated row | `Scheme.deliverSeq`, `Scheme.deliverOf_prefix`, `Scheme.mem_deliverOf_of`, `Scheme.AtomicBroadcast.grows`, `Scheme.AtomicBroadcast.runGrows`, `Scheme.AtomicBroadcast.integrity`, `Scheme.AtomicBroadcast.integritySD`, `Scheme.AtomicBroadcast.totalOrder`, `Scheme.AtomicBroadcast.totalOrderSD`, `Scheme.AtomicBroadcast.agreement`, `Scheme.AtomicBroadcast.holds` *(Scheme/Model/Deliver, Scheme/Helpers/Deliver, Scheme/AtomicBroadcast)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
@@ -13584,7 +13615,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 434 definitions and structures the report names, in
+The 436 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -20548,6 +20579,31 @@ def viewAt (ap : AsyncPace q U T N) {v : Validator} (hv : v ∈ T) (t : ℕ) : U
 
 **A reliable validator's view at time `t`**: its holdings.
 
+#### `keepFirst`
+
+*def, `Scheme.Model.Deliver.lean`*
+
+```lean
+def keepFirst {α β : Type*} [DecidableEq β] (key : α → β) : List β → List α → List α
+  | _, [] => []
+  | seen, a :: l =>
+    if key a ∈ seen then keepFirst key seen l else a :: keepFirst key (key a :: seen) l
+```
+
+**The first element of each key**: the elements of `l` in order, each kept unless `seen` or an earlier kept element has its key.
+
+#### `deliverSeq`
+
+*def, `Scheme.Model.Deliver.lean`*
+
+```lean
+noncomputable def deliverSeq (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
+    (N : ℕ) : List BlockId :=
+  deliverOf U (tryDecide p σ U V 0 N)
+```
+
+**The delivered sequence** on the view `V`, the loop scanning from slot `0` to slot `N`.
+
 #### `hydrozoanSlowAnchored`
 
 *def, `Scheme.Model.Hydrozoan.lean`*
@@ -20987,7 +21043,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 646 theorems the body or Appendix A names, each
+The 647 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -28949,6 +29005,14 @@ theorem holds : Statement
 #### `holds`
 
 *theorem, `Scheme.AsyncLocal.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `Scheme.AtomicBroadcast.Proof.lean`*
 
 ```lean
 theorem holds : Statement

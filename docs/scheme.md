@@ -1097,3 +1097,32 @@ slot of its rounds decided, so Barnacle's AIMD rule keeps
 `n ≥ waveLength · (f + c) + 1`, which Hybrid Mysticeti meets from
 `3f + 3c + 1`.
 
+
+## 15. Byzantine atomic broadcast
+
+Issue #57. The family is checked against two definitions, stated so that
+each Lean statement reads against one clause of a paper:
+
+| Paper clause | Lean |
+|---|---|
+| Sailfish, Def. 1, Integrity: per round `r` and author `P_k`, at most one `a_deliver` | `AtomicBroadcast.Integrity` |
+| Sui–Duan, Def. 2.1, Integrity: each message at most once, and only a broadcast one | `AtomicBroadcast.IntegritySD` |
+| Sailfish, Total order: `x` before `y` at `P_i` ⇒ not `y` before `x` at `P_j` | `AtomicBroadcast.TotalOrder` |
+| Sui–Duan, Total order: `x` before `y` at one ⇒ `y` at another only after `x` | `AtomicBroadcast.TotalOrderSD` |
+| Sailfish and Sui–Duan, Agreement | `AtomicBroadcast.Agreement` |
+| Sailfish, Validity: an honest sender's message delivered by every honest party | not yet stated |
+| Sui–Duan, Liveness: an honest sender eventually delivers its own message | not yet stated |
+
+A delivered message is a block; `deliverSeq` delivers committed leaders'
+histories in order of round and block id, keeping the first block of each
+round and author, so a Byzantine author's equivocating blocks are
+delivered once. An honest party is a validator holding a view; the order
+of a delivered sequence is the order of output, since sequences only grow
+(`Grows`, `RunGrows`). Agreement and, when stated, validity are for the
+reliable validators of a run. The adversary's adaptivity and payload-level
+deduplication are out of scope.
+
+**Remaining.** Validity under partial synchrony from `ReactiveRun.Includes`
+on a reliable validator's own view, and under asynchrony, which needs a
+rule for what a reliable block references: without one the adversary can
+keep a reliable validator's blocks out of every committed history.
