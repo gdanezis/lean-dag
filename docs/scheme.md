@@ -267,6 +267,14 @@ as Mahi-Mahi's `Votes` (`leastSel_votes_iff`). Mahi-Mahi has no
 tie-break; two linked candidates are one block by
 `MahiMahi.eq_of_hasCertificate`.
 
+On a record in which no validator equivocates, every vote-selection rule
+selects the slot's one block (`sel_eq_of_noEquiv`), so any two give one
+carrier (`VoteFree`, `readAlike_noEquiv`), and the three rows with buffer
+rounds are their rules at every vote there (`BufferedRowsNoEquiv`). The
+choice of vote matters only where a voter holds two blocks of an
+equivocating leader: it decides which twin, if any, reaches the
+certificate threshold.
+
 Async Nemo-Nemo agrees by the inequalities where nobody equivocates
 (§7.1).
 
@@ -767,10 +775,39 @@ row and vote:
   each references every block of the round below it holds and the starved
   validators' blocks arrive one round late (`Starve.starvePace`,
   `Starve.refs_starve_eq_held`).
+* **One buffer round against a population of `q`** (`SafeOneBuffer`,
+  `card_safeAt_oneBuffer`): with an honest population of the buffer round
+  at least `q` strong and `n ≤ 2q`, the double count reads
+  `q·(q − f) ≤ G·(2q − n) + |honest|·(n − q)`.
+* **A third at the five-`f` committees** (`SafeThird`,
+  `card_safeAt_third`): at `n ≥ 5f + 3c + 1` and `q = n − f − c`, one
+  buffer round gives `n ≤ 3G`. This covers Blue Bottle Async (`c = 0`) and
+  Async Orcaella.
+* **Two at the three-`f` committees** (`TwoSafe`,
+  `Scheme/Helpers/TwoSafe.lean`): at every `b ≤ k` with `k ≥ 2`, on
+  `n = b + 2k + 1` validators with `q = b + k + 1` and `b` Byzantine, some
+  execution under eventual delivery has exactly two safe validators at one
+  buffer round. These are the committees `2q = n + f + 1` of Mahi-Mahi at
+  wave four (`b = k = f`), Hybrid Mahi-Mahi at wave four (`b = f`,
+  `k = f + c`) and Async Nemo-Nemo (`b = 0`, `k = c`). Validators `b` and
+  `b + 1` are `x₁` and `x₂`; the other `2k − 1` honest validators carry
+  labels on a cycle. A round-`1` block references the Byzantine round-`0`
+  blocks, `x₁`, `x₂`, and the `k − 1` labels from a centre: its own label,
+  `0` for `x₁`, `k − 1` for `x₂`. A Byzantine validator has one round-`1`
+  block per label `x`, centred one past `x`. At round `2` the validator
+  labelled `x + 1` references the Byzantine blocks for `x`, the honest
+  blocks of the `k` labels from `x + 1`, and the block of `x₁` or `x₂`
+  whose window misses `x`; no round-`2` block reaches label `x`, while
+  every round-`2` block reaches `x₁` and `x₂`. The safe set is `{x₁, x₂}`
+  (`TwoSafe.card_safeAt_twoSafe`), and the coin finds a safe leader with
+  probability `2/n`. A constant fraction of safe validators therefore
+  needs two buffer rounds, or one buffer round at the five-`f`
+  committees.
 **The coin** (`CoinCommit`, `CoinTail`, through Steelhead's counts,
 `Steelhead/Helpers/Coin.lean`, whose fault model a fault-free instance
 supplies inside the proofs): a uniform coin names a safe leader with
-probability at least `1/n` at one buffer round and `(q − f)/n` at two;
+probability at least `1/n` at one buffer round and `(q − f)/n` at two,
+and at least `1/3` where a third of the validators is safe (`CoinThird`);
 `m` independent coins over rounds whose safe sets hold `c` validators all
 miss with probability at most `((n − c)/n)^m`, which vanishes.
 
@@ -837,9 +874,41 @@ slot, commits on each live replica's own view from some time on. On the
 starving execution of four validators at the Mahi-Mahi row of wave five,
 `CoinLive` gives probability at least `1/2`.
 
-**Not formalised.** Measurability of the safe set (it reads only rounds up
-to the vote round, which is what makes the clause the coin's
-consequence), and the hypergeometric probability for `K` leaders.
+### 11.2 Across waves
+
+The record and its pacing are fixed before the coins are drawn: the
+adversary does not see the coin. `Scheme/Model/AsyncLive.lean` defines
+`coinSlots S₀ h coin`, the schedule on the rounds and kinds of `S₀`,
+whose rounds strictly increase, in which slot `s` is led by `coin s`. The
+coins of `M` blocks of `d` consecutive slots from slot `s₀` are uniform and
+independent (`Steelhead.coinOfBlocksFrom`), and `AsyncPace.UndecidedBelow`
+is the set of draws under which some slot below `s₀` is not decided on
+every reliable validator's own view from some time on.
+`Scheme/AsyncLive/Statement.lean` states, and `Proof.lean` proves, when
+every `d` consecutive slots of `S₀` span eligibility, at every row and
+vote:
+
+* **the tail** (`Tail`): when the safe set of every block slot holds at
+  least `c` validators, `UndecidedBelow` has probability at most
+  `((n^d − c^d)/n^d)^M` (`Steelhead.Coin.badBlockBoundAt c d ^ M`). A block
+  of `d` safe coins is a run of `d` slots that commit
+  (`decided_of_safe_of_holds`), and a run that spans eligibility decides
+  every slot below it (`AnchoredRule.decided_below_of_run`); a draw outside
+  every such block is counted by `Steelhead.no_good_block_prob_le`;
+* **the tail vanishes** (`Vanishes`) at `c ≥ 1`;
+* **the rows ready for the count** (`Live`): the floor `c` is `1` at one
+  buffer round, `q − f` at two, and `⌈n/3⌉` at one buffer round where
+  `n ≥ 5f + 3c + 1` and `q = n − f − c` (`floors`).
+
+At a schedule with one slot per wave, `slotRound s = s · waveLength`,
+`d = 1` spans eligibility and the bound is `((n − c)/n)^M`; at one slot per
+round, `d = waveLength` (`spansEligible_of_identity`).
+
+**Not formalised.** The coin's construction, an adversary that sees the
+coin, and the probability for `K` leaders per round. With `K` leaders
+drawn without replacement the chance that none is safe is
+`C(n − G, K)/C(n, K)`, which `MultiLeader` bounds only at
+`K > n − G`, and `coinSlots` asks for one slot per round.
 
 ## 12. Every row, safe and live
 
