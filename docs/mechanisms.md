@@ -183,6 +183,9 @@ Replace the `\george` notes of §4 by the results, as `\edits{…}`.
   §22). The probability bound is `J · badBlockBoundAt c w ^ M`, a union
   bound over `J` fixed windows of `M` blocks of coin heads.
 
+* **M6 done.** `Scheme.Compose.AsyncComposed` (`windowsFail_le`;
+  `scheme.md` §23). All Lean steps of the plan are done; M7 (paper) remains.
+
 ## 5. Order
 
 M1a → M1b → M2 → M5a → M5b → M5c → M3 → M4 → M6 → M1c → M7.

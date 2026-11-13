@@ -4,6 +4,8 @@ import LeanDag.Integration.SchemeCheckpoint
 import LeanDag.Scheme.Schedules.Proof
 import LeanDag.Barnacle.Aimd.Proof
 import LeanDag.Adaptive.Score.Proof
+import LeanDag.Scheme.Helpers.CoinHeads
+import LeanDag.Scheme.Helpers.AsyncPace
 /-!
 # The mechanisms composed — proof
 
@@ -83,8 +85,31 @@ theorem aimdComposed : AimdComposed := by
     (Barnacle.Aimd.holds _ _ _ _ B lead hl).2.2.2.2
     Pr (fun v => (hrun v).some) hk hcfg h hlo hhi
 
+theorem asyncComposed : AsyncComposed := by
+  intro n hn BlockId Payload Value _ P _ q _ honest f p σ rel Ms E vm J M c dflt ht hc hcm
+  haveI : Nonempty (Fin n) := ⟨dflt⟩
+  intro B Bd lead hl hlead C₀ hC₀ U T Nr qp ac hq hTh hqp N hN C Pr hcov hNJ hfloor K hK
+  refine le_trans (MeasureTheory.measure_mono fun g hg => ?_) (windowsFail_le p U hfloor)
+  simp only [Set.mem_setOf_eq] at hg ⊢
+  intro hwin
+  apply hg
+  have hrun : ∀ v, Nonempty (Barnacle.Run
+      (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).toBaseRule B Bd
+      (Barnacle.Aimd.rule _ B (lead (coinHead dflt g)) (hl _)) (C₀ (coinHead dflt g)) U
+      (Pr.view v) K) := fun v =>
+    Schedules.asyncAimdRuns n hn BlockId Payload P q honest f p σ rel
+      (2 * (M * (p.waveLength - 1 + 1))) ht hc hcm B Bd (lead (coinHead dflt g)) (hl _)
+      (coinHead dflt g) (hlead _) (C₀ (coinHead dflt g)) (hC₀ _).1 (hC₀ _).2 U (Pr.view v) N T
+      hq hTh (fun r hr => ac.toAsyncPace.populated hqp r (le_trans hr hN))
+      (safeHeadRuns_of_windows p U rfl dflt g hNJ hwin) (hcov v) K hK
+  refine ⟨fun v => (hrun v).some, fun k hk v₀ hcfg κ L h hlo hhi => ?_⟩
+  exact Integration.commitFinalized_barnacle_scheme Ms E vm ht
+    (Barnacle.Aimd.holds _ _ _ _ B _ (hl _)).2.2.2.2
+    Pr (fun v => (hrun v).some) hk hcfg h hlo hhi
+
 theorem holds : Statement :=
-  ⟨checkpointsResponsive, checkpointsCrash, scheduledCrash, hammerHeadComposed, aimdComposed⟩
+  ⟨checkpointsResponsive, checkpointsCrash, scheduledCrash, hammerHeadComposed, aimdComposed,
+    asyncComposed⟩
 
 end Compose
 

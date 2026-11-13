@@ -1281,3 +1281,19 @@ at most `badBlockBoundAt c w ^ M` (`Steelhead.no_good_block_prob_le`), and
 the windows are joined by a union bound. The record is fixed before the
 coin. A reputation schedule (HammerHead) is not live under asynchrony: it
 names leaders the adversary can delay.
+
+## 23. The mechanisms composed, asynchronously
+
+`docs/mechanisms.md` M6; statement `Scheme/Compose/Statement.lean`.
+
+Under asynchrony there is no responsive mode to compose, and HammerHead is
+not live; crash recovery, Barnacle's AIMD rule with coin heads and
+checkpoints compose (`Compose.AsyncComposed`). An asynchronous crash run
+populates every round up to its horizon (`AsyncCrashRun.toAsyncPace`); a
+draw whose windows each hold a block of safe heads gives runs of every
+height on every signer's view (`Schedules.AsyncAimdRuns`,
+`safeHeadRuns_of_windows`); every slot a closed configuration of those runs
+commits reaches second-tier finality
+(`Integration.commitFinalized_barnacle_scheme`); and the draws without such
+windows have probability at most `J · badBlockBoundAt c w ^ M`
+(`windowsFail_le`).

@@ -357,55 +357,18 @@ theorem asyncAimdRuns : AsyncAimdRuns := by
       exact h3 i hi⟩)
     (Nat.zero_le 1) K hK
 
-open scoped ENNReal in
-attribute [local instance] noFaults in
 theorem asyncAimdLive : AsyncAimdLive := by
   intro n hn BlockId Payload _ P _ q _ honest f p σ rel J M c dflt ht hc hcm
   haveI : Nonempty (Fin n) := ⟨dflt⟩
   intro B Bd lead hl hlead C₀ hC₀ U V N T hq hTh hpop hcov hNJ hfloor K hK
-  -- the blocks of window `j`, and the safe sets of their rounds
-  let H : Fin J → Finset (Fin (J * M)) := fun j =>
-    (Finset.univ : Finset (Fin M)).map
-      ⟨fun (m : Fin M) => (⟨j * M + m, blk_lt j.isLt m.isLt⟩ : Fin (J * M)),
-        fun a b h => Fin.ext (by have := congrArg Fin.val h; simpa using this)⟩
-  let G : Fin (J * M) → Fin (p.waveLength - 1 + 1) → Finset (Fin n) := fun k i =>
-    safeAt p U (k * (p.waveLength - 1 + 1) + i)
-  have hG : ∀ k i, c ≤ (G k i).card := fun k i => hfloor _ (by
-    have h1 := Nat.mul_le_mul_right (p.waveLength - 1 + 1) (show (k : ℕ) + 1 ≤ J * M from k.isLt)
-    have h2 := i.isLt
-    have : (J * M) * (p.waveLength - 1 + 1) = J * (M * (p.waveLength - 1 + 1)) := by ring
-    nlinarith)
-  -- a draw with a block of safe heads in every window has runs of every height
-  have hsub : {g : Fin (J * M) → Fin (p.waveLength - 1 + 1) → Fin n | IsEmpty (Barnacle.Run
-        (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).toBaseRule B Bd
-        (Barnacle.Aimd.rule _ B (lead (coinHead dflt g)) (hl _)) (C₀ (coinHead dflt g)) U V K)} ⊆
-      ⋃ j, {g | ∀ k ∈ H j, ∃ i, g k i ∉ G k i} := by
-    intro g hg
-    by_contra hno
-    simp only [Set.mem_iUnion, Set.mem_setOf_eq, not_exists, not_forall, not_not] at hno
-    have hwin : ∀ j : Fin J, ∃ m : Fin M, ∀ i : Fin (p.waveLength - 1 + 1),
-        g ⟨j * M + m, blk_lt j.isLt m.isLt⟩ i ∈
-          safeAt p U ((j * M + m) * (p.waveLength - 1 + 1) + i) := by
-      intro j
-      obtain ⟨k, hk, hall⟩ := hno j
-      obtain ⟨m, -, rfl⟩ := Finset.mem_map.mp hk
-      exact ⟨m, fun i => hall i⟩
-    obtain ⟨Rn⟩ := asyncAimdRuns n hn BlockId Payload P q honest f p σ rel
-      (2 * (M * (p.waveLength - 1 + 1))) ht hc hcm B Bd (lead (coinHead dflt g)) (hl _)
-      (coinHead dflt g) (hlead _) (C₀ (coinHead dflt g)) (hC₀ _).1 (hC₀ _).2 U V N T hq hTh hpop
-      (safeHeadRuns_of_windows p U rfl dflt g hNJ hwin) hcov K hK
-    exact hg.false Rn
-  refine le_trans (MeasureTheory.measure_mono hsub)
-    (le_trans (MeasureTheory.measure_iUnion_fintype_le _ _) ?_)
-  calc ∑ j : Fin J, (PMF.uniformOfFintype _).toOuterMeasure
-          {g : Fin (J * M) → Fin (p.waveLength - 1 + 1) → Fin n | ∀ k ∈ H j, ∃ i, g k i ∉ G k i}
-        ≤ ∑ _j : Fin J, Steelhead.Coin.badBlockBoundAt (Fin n) c (p.waveLength - 1 + 1) ^ M := by
-          refine Finset.sum_le_sum fun j _ => ?_
-          have := Steelhead.no_good_block_prob_le (H j) G hG
-          rw [Finset.card_map, Finset.card_univ] at this
-          simpa only [Fintype.card_fin, Steelhead.Coin.badBlockBoundAt] using this
-      _ = (J : ℝ≥0∞) * Steelhead.Coin.badBlockBoundAt (Fin n) c (p.waveLength - 1 + 1) ^ M := by
-          rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+  refine le_trans (MeasureTheory.measure_mono fun g hg => ?_) (windowsFail_le p U hfloor)
+  simp only [Set.mem_setOf_eq] at hg ⊢
+  intro hwin
+  obtain ⟨Rn⟩ := asyncAimdRuns n hn BlockId Payload P q honest f p σ rel
+    (2 * (M * (p.waveLength - 1 + 1))) ht hc hcm B Bd (lead (coinHead dflt g)) (hl _)
+    (coinHead dflt g) (hlead _) (C₀ (coinHead dflt g)) (hC₀ _).1 (hC₀ _).2 U V N T hq hTh hpop
+    (safeHeadRuns_of_windows p U rfl dflt g hNJ hwin) hcov K hK
+  exact hg.false Rn
 
 theorem holds : Statement :=
   ⟨safe, descends, runsExist, aimd, hammerHead, rowsScheduled, silentDescends, silentLive,

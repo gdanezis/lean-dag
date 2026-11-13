@@ -1,13 +1,17 @@
 import LeanDag.Scheme.Model.Schedules
 import Mathlib.Tactic.Ring
 import Mathlib.Tactic.Linarith
+import LeanDag.Scheme.Model.NoFaults
+import LeanDag.Steelhead.Helpers.Coin
 /-!
 # The coin's heads
 
 `coinHead` reads the head of round `ρ` off block `ρ / w` of a draw at
 position `ρ mod w` (`coinHead_eq`). If every window of `M` blocks holds a
 block of safe heads, then from every round a wave of safe heads lies within
-two windows (`safeHeadRuns_of_windows`).
+two windows (`safeHeadRuns_of_windows`). A uniform draw leaves some window
+without such a block with probability at most `J · badBlockBoundAt c w ^ M`
+(`windowsFail_le`).
 -/
 
 namespace LeanDag
@@ -79,6 +83,51 @@ theorem safeHeadRuns_of_windows (p : Params) (U : BlockRecord Validator BlockId 
   · have hi' : i < w := by omega
     rw [coinHead_eq dflt g (blk_lt hjJ m.isLt) hi']
     exact hm ⟨i, hi'⟩
+
+open scoped ENNReal in
+attribute [local instance] noFaults in
+/-- **Some window lacks a block of safe heads** with probability at most
+`J · badBlockBoundAt c w ^ M`, when every safe set of the windows' rounds
+holds at least `c` validators: a union bound over the windows, each failing
+with probability at most `badBlockBoundAt c w ^ M`. -/
+theorem windowsFail_le [Nonempty Validator] (p : Params)
+    (U : BlockRecord Validator BlockId Payload P honest) {J M w c : ℕ}
+    (hfloor : ∀ r, r < J * (M * w) → c ≤ (safeAt p U r).card) :
+    (PMF.uniformOfFintype (Fin (J * M) → Fin w → Validator)).toOuterMeasure
+        {g | ¬ ∀ j : Fin J, ∃ m : Fin M, ∀ i : Fin w,
+          g ⟨j * M + m, blk_lt j.isLt m.isLt⟩ i ∈ safeAt p U ((j * M + m) * w + i)} ≤
+      (J : ℝ≥0∞) * Steelhead.Coin.badBlockBoundAt Validator c w ^ M := by
+  let H : Fin J → Finset (Fin (J * M)) := fun j =>
+    (Finset.univ : Finset (Fin M)).map
+      ⟨fun (m : Fin M) => (⟨j * M + m, blk_lt j.isLt m.isLt⟩ : Fin (J * M)),
+        fun a b h => Fin.ext (by have := congrArg Fin.val h; simpa using this)⟩
+  let G : Fin (J * M) → Fin w → Finset Validator := fun k i => safeAt p U (k * w + i)
+  have hG : ∀ k i, c ≤ (G k i).card := fun k i => hfloor _ (by
+    have h1 := Nat.mul_le_mul_right w (show (k : ℕ) + 1 ≤ J * M from k.isLt)
+    have h2 := i.isLt
+    have : (J * M) * w = J * (M * w) := by ring
+    nlinarith)
+  have hsub : {g : Fin (J * M) → Fin w → Validator | ¬ ∀ j : Fin J, ∃ m : Fin M, ∀ i : Fin w,
+        g ⟨j * M + m, blk_lt j.isLt m.isLt⟩ i ∈ safeAt p U ((j * M + m) * w + i)} ⊆
+      ⋃ j, {g | ∀ k ∈ H j, ∃ i, g k i ∉ G k i} := by
+    intro g hg
+    simp only [Set.mem_setOf_eq, not_forall, not_exists] at hg
+    obtain ⟨j, hj⟩ := hg
+    refine Set.mem_iUnion.mpr ⟨j, fun k hk => ?_⟩
+    obtain ⟨m, -, rfl⟩ := Finset.mem_map.mp hk
+    obtain ⟨i, hi⟩ := hj m
+    exact ⟨i, hi⟩
+  refine le_trans (MeasureTheory.measure_mono hsub)
+    (le_trans (MeasureTheory.measure_iUnion_fintype_le _ _) ?_)
+  calc ∑ j : Fin J, (PMF.uniformOfFintype _).toOuterMeasure
+          {g : Fin (J * M) → Fin w → Validator | ∀ k ∈ H j, ∃ i, g k i ∉ G k i}
+        ≤ ∑ _j : Fin J, Steelhead.Coin.badBlockBoundAt Validator c w ^ M := by
+          refine Finset.sum_le_sum fun j _ => ?_
+          have := Steelhead.no_good_block_prob_le (H j) G hG
+          rw [Finset.card_map, Finset.card_univ] at this
+          simpa only [Fintype.card_fin, Steelhead.Coin.badBlockBoundAt] using this
+      _ = (J : ℝ≥0∞) * Steelhead.Coin.badBlockBoundAt Validator c w ^ M := by
+          rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
 end Scheme
 
