@@ -163,14 +163,12 @@ Replace the `\george` notes of §4 by the results, as `\edits{…}`.
   `LiveRule.Descent.ofProperties`); a responsive run's wait clauses stop
   at `SchemeReactive.waits`; `schemeLiveReactive` and
   `Schedules.ReactiveDescends` (`scheme.md` §20).
-* **M5a, step 3 (next).** A new configuration's first rounds precede the
-  validators' learning of the pivot that fixes it (about a wave under
-  Barnacle, up to the gap and a wave under HammerHead), so its leaders are
-  not waited for there. Plan: generalise `LiveOn` so that slots below the
-  round goodness starts are decided by a later commit (stretch descent),
-  and state every height under the hypothesis that each configuration's
-  schedule is good from its start plus a learning delay up to the round
-  its range closes, unless the run has already extended.
+* **M5a done.** The boundary: a new configuration's first rounds precede
+  its validators' learning of the pivot, so its schedule is good only `δ`
+  past its start; slots before are decided by a later commit
+  (`LiveRule.SettlesBelow`). `Barnacle.Live.RunsExistFrom`,
+  `StatementFrom`; `Schedules.{RunsExistReactive, AimdReactive,
+  HammerHeadReactive, ReactiveGoodInhabited}` (`scheme.md` §20).
 
 ## 5. Order
 

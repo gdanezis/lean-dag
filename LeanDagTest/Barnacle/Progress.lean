@@ -165,8 +165,8 @@ example :
     Rn1.start 1 ≤ 0 + 4 + 1 + 0 := by
   obtain ⟨Rn1, hb, -⟩ := progress_exists MysticetiProperties.agree bnUpdL_bounded bnUpdL_uniform
     (coversUpto_full laws32.full_ids Usun 8) run0 bnLive_liveOn bnC1_uniform
-    ⟨rfl, rfl, rfl⟩ (by decide) (by decide)
-  exact ⟨Rn1, hb⟩
+    (Rnd := 1) ⟨rfl, rfl, rfl⟩ (fun _ h1 h2 => absurd h2 (by simp at h1 ⊢; omega)) (by decide)
+  exact ⟨Rn1, le_trans hb (by decide)⟩
 
 -- horizon values
 example : horizon bnP bnLive 0 1 = 8 := by decide

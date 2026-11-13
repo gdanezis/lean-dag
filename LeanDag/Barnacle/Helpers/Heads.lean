@@ -238,6 +238,38 @@ theorem liveOn_of_headsRun (hD : R.Descent slack) (hw : 0 < R.waveLength)
       · rw [Config_slotRound_head]; omega
       · rw [Config_leader_head]; simpa using hled 0 hw
 
+/-- **Slots below the good start settle, from a run of heads**: a run of
+good heads past the good start commits a head a wave above every slot
+below it, and the stretch descent decides them. -/
+theorem settlesBelow_of_headsRun (hD : R.Descent slack) (hw : 0 < R.waveLength)
+    (hheads : ∀ T : Finset Validator, Fintype.card Validator ≤ T.card + slack →
+      HeadsRun C.head T R.waveLength c₀) :
+    R.SettlesBelow C.sched c₀ := by
+  intro U V Rnd N hgood hcov κ hκ hN
+  obtain ⟨T, hcardT, hT0⟩ := hD.goodLeaders C.sched U Rnd N hgood
+  have hT : ∀ κ : ℕ, Rnd ≤ C.sched.slotRound κ →
+      C.sched.slotRound κ + R.waveLength ≤ N → C.sched.leader κ ∈ T →
+      ∃ L, R.Decided C.sched V κ (some L) :=
+    fun κ h1 h2 h3 => hT0 V κ hcov h1 h2 h3
+  obtain ⟨ρ', hρ'lo, hρ'hi, hled⟩ := hheads T hcardT Rnd
+  obtain ⟨hdec, htop⟩ := headsDecide_at C hD hw V hT ρ' hρ'lo (by omega) hled
+  by_cases hcase : ρ' ≤ C.sched.slotRound κ + R.waveLength
+  · exact hdec κ (by omega) hcase
+  · refine stretchDescent hD C.sched V (b := C.cum (ρ' - R.waveLength))
+      (top := C.cum ρ') ?_ ?_ htop κ ?_
+    · intro i hi
+      have := Config_slotRound_lt_of_lt_head C hi
+      rw [Config_slotRound_head]
+      omega
+    · intro j hlo hhi
+      rcases Nat.lt_or_eq_of_le hhi with hlt | heq
+      · refine hdec j (Config_slotRound_lt_of_lt_head C hlt) ?_
+        have : ρ' - R.waveLength ≤ C.sched.slotRound j := by
+          rw [Config.sched_slotRound]; exact (C.cum_le_iff_le_roundOf).1 hlo
+        omega
+      · subst heq; obtain ⟨L, hL⟩ := htop; exact ⟨some L, hL⟩
+    · exact Config_lt_head_of_slotRound_lt C (by omega)
+
 /-- **A permuted schedule is live at the same gap.** A mechanism that
 reassigns who leads emits a family of head functions; where each is a
 permutation of one that has runs of heads, each is live with that
@@ -251,6 +283,15 @@ theorem liveOn_of_permuted_heads (hD : R.Descent slack) (hw : 0 < R.waveLength)
     (σ : Equiv.Perm Validator) (hC : C.head = fun ρ => σ (head ρ)) :
     R.LiveOn C.sched c₀ :=
   liveOn_of_headsRun C hD hw (by rw [hC]; exact headsRun_perm_of_all σ hheads)
+
+/-- **And its slots below the good start settle**, at the same gap. -/
+theorem settlesBelow_of_permuted_heads (hD : R.Descent slack) (hw : 0 < R.waveLength)
+    {head : ℕ → Validator}
+    (hheads : ∀ T : Finset Validator, Fintype.card Validator ≤ T.card + slack →
+      HeadsRun head T R.waveLength c₀)
+    (σ : Equiv.Perm Validator) (hC : C.head = fun ρ => σ (head ρ)) :
+    R.SettlesBelow C.sched c₀ :=
+  settlesBelow_of_headsRun C hD hw (by rw [hC]; exact headsRun_perm_of_all σ hheads)
 
 #print axioms liveOn_of_headsRun
 

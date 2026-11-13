@@ -6,6 +6,9 @@ import LeanDag.Barnacle.Live.Proof
 import LeanDag.Adaptive.Score.Proof
 import LeanDag.Barnacle.Helpers.Skips
 import LeanDag.Scheme.Helpers.Reactive
+import LeanDag.Barnacle.Helpers.Progress
+import LeanDag.Scheme.Helpers.FullRun
+import LeanDag.Scheme.Responsive.Proof
 /-!
 # The decider under Barnacle and HammerHead schedules — proof
 
@@ -222,9 +225,75 @@ theorem reactiveDescends : ReactiveDescends := by
     hlead
   exact ⟨L, hL.2.1⟩
 
+theorem runsExistReactive : RunsExistReactive := by
+  intro Validator BlockId Payload _ _ _ _ P _ q _ honest f p σ rel c₀ head ht hc hcm hheads B Bd
+    upd hbnd hkeep C₀ δ
+  have hD := reactiveDescends Validator BlockId Payload P honest p σ rel hc hcm
+  have hwl : (schemeLiveReactive p σ rel).waveLength = p.waveLength :=
+    show p.waveLength - 1 + 1 = p.waveLength by have := hc.1; omega
+  exact Live.holdsFrom _ _ _ (schemeLiveReactive p σ rel) rel.slack c₀ head (Scheme.agree ht)
+    hD (by rw [hwl]; have := hc.1; omega) (by rw [hwl]; exact hheads) B Bd upd hbnd hkeep C₀ δ
+
+theorem aimdReactive : AimdReactive := by
+  intro n hn BlockId Payload _ P _ q _ honest f p σ rel ht hc ⟨hcert, hlive, hbound⟩ B Bd lead
+    hl hlead C₀ δ
+  haveI : Nonempty (Fin n) := ⟨⟨0, hn⟩⟩
+  have hcard : Fintype.card (Fin n) = n := Fintype.card_fin n
+  have hD := reactiveDescends (Fin n) BlockId Payload P honest p σ rel (by rw [hcard]; exact hc)
+    (by rw [hcard]; exact hlive)
+  have hwl : (schemeLiveReactive p σ rel).waveLength = p.waveLength :=
+    show p.waveLength - 1 + 1 = p.waveLength by have := hc.1; omega
+  have hbnd : UpdBounded B (Aimd.rule (schemeLiveReactive p σ rel).toBaseRule B lead hl) := by
+    intro C b U V v A hC
+    exact ⟨fun _ => Aimd.count_le _ _ _ _, hC.2⟩
+  have hkeep : UpdKeeps (Aimd.rule (schemeLiveReactive p σ rel).toBaseRule B lead hl)
+      (fun C => C.head = roundRobin n hn) := by
+    intro C b U V v A _
+    funext ρ
+    exact hlead ρ
+  have h := Live.holdsFrom _ _ _ (schemeLiveReactive p σ rel) rel.slack
+    (n + (schemeLiveReactive p σ rel).waveLength - 1) (roundRobin n hn) (Scheme.agree ht) hD
+    (by rw [hwl]; have := hc.1; omega) (fun T hT => roundRobin_headsRun n hn T _ _ (by simpa using hT)
+      (by rw [hwl]; exact hbound)) B Bd _ hbnd hkeep C₀ δ
+  rwa [hwl] at h
+
+theorem hammerHeadReactive : HammerHeadReactive := by
+  intro n hn BlockId Payload _ P _ q _ honest f p σ rel ht hc ⟨hcert, hlive, hbound⟩
+  haveI : Nonempty (Fin n) := ⟨⟨0, hn⟩⟩
+  intro B score C₀ δ hkeep hQ h₀ hQ₀ U V N hcov hgood K hK
+  have hcard : Fintype.card (Fin n) = n := Fintype.card_fin n
+  have hD := reactiveDescends (Fin n) BlockId Payload P honest p σ rel (by rw [hcard]; exact hc)
+    (by rw [hcard]; exact hlive)
+  have hwl : (schemeLiveReactive p σ rel).waveLength = p.waveLength :=
+    show p.waveLength - 1 + 1 = p.waveLength by have := hc.1; omega
+  have hbase : ∀ T : Finset (Fin n), Fintype.card (Fin n) ≤ T.card + rel.slack →
+      HeadsRun (roundRobin n hn) T (schemeLiveReactive p σ rel).waveLength
+        (n + p.waveLength - 1) := fun T hT => by
+    have := roundRobin_headsRun n hn T _ (schemeLiveReactive p σ rel).waveLength
+      (by simpa using hT) (by rw [hwl]; exact hbound)
+    rwa [hwl] at this ⊢
+  have hw0 : 0 < (schemeLiveReactive p σ rel).waveLength := by rw [hwl]; have := hc.1; omega
+  obtain ⟨Rn, -, -⟩ := everyHeight_from (Q := PermRR hn) (Scheme.agree ht)
+    (Adaptive.Score.rule_bounded B score hkeep) (Adaptive.Score.rule_keeps score _ hQ)
+    (fun C _ ⟨π, hπ⟩ => liveOn_of_permuted_heads C hD hw0 hbase π hπ)
+    (fun C _ ⟨π, hπ⟩ => settlesBelow_of_permuted_heads C hD hw0 hbase π hπ)
+    h₀ hQ₀ hcov hgood K hK
+  exact ⟨Rn⟩
+
+attribute [local instance] noFaults in
+theorem reactiveGoodInhabited : ReactiveGoodInhabited := by
+  intro n _ p f c hrow rel hq σ N
+  have hqn : n - f - c ≤ n := by omega
+  refine ⟨Full.record hqn N, fun r hr v => ⟨toLex (r, v), Full.mem_record_ids.mpr
+    (by simpa using hr), by simp, by simp⟩, fun S Rnd => ?_⟩
+  exact ⟨Finset.univ, hq, Finset.subset_univ _, N,
+    Full.run (S := S) (Fintype.card (Fin n) - rel.slack) p (Responsive.psRow_cert_le hrow) σ,
+    Nat.zero_le _, fun _ _ => by simp, le_refl N⟩
+
 theorem holds : Statement :=
   ⟨safe, descends, runsExist, aimd, hammerHead, rowsScheduled, silentDescends, silentLive,
-    hammerHeadSilent, rowsSkipScheduled, reactiveDescends⟩
+    hammerHeadSilent, rowsSkipScheduled, reactiveDescends, runsExistReactive, aimdReactive,
+    hammerHeadReactive, reactiveGoodInhabited⟩
 
 end Schedules
 

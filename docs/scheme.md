@@ -1209,3 +1209,25 @@ DAG is good under `S` when a quorum of `rel` runs it responsively under
 quorum meets the commit and certificate thresholds (`ReactiveDescends`):
 the run's certificates feed the family's commit law
 (`familySupport_commits`), and the indirect rule is the family's.
+
+The boundary. A new configuration's first rounds come before its
+validators learn the pivot that fixes it — about a wave under Barnacle,
+which starts it after the pivot's round, up to the gap and a wave under
+HammerHead, which starts it at the threshold — so no validator waits for
+its leaders there. Its schedule is therefore good only `δ` rounds after its
+start, and the slots of the rounds before are decided by a later commit
+(`LiveRule.SettlesBelow`, from a run of heads by the stretch descent,
+`settlesBelow_of_headsRun`). Validators keep waiting for the old
+configuration's leaders until its range closes. The progress step looks
+for the anchor from the later of the threshold and the good start
+(`progress_exists`), and runs of every height exist under the hypothesis
+that each configuration's schedule is good from `δ` past its start up to
+the round its step needs, unless the run has already moved past it
+(`Barnacle.Live.RunsExistFrom`, horizon `horizonFrom`).
+
+| Claim | Lean |
+|---|---|
+| Every height, run responsively, under a schedule whose heads run | `Schedules.RunsExistReactive` |
+| The same under Barnacle's AIMD rule | `Schedules.AimdReactive` |
+| The same under every HammerHead score permuting round-robin | `Schedules.HammerHeadReactive` |
+| Responsive goodness under every schedule is inhabited at every row | `Schedules.ReactiveGoodInhabited` |

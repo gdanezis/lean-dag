@@ -16840,8 +16840,9 @@ The committed blocks of the slots `[lo, hi)`, in slot order.
 ```lean
 def LiveRule.LiveOn (R : LiveRule Validator BlockId Payload) (S : Slots Validator) (c : ℕ) :
     Prop :=
-  -- On every DAG good from `Rnd` to `N` …
-  ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ), R.Good U Rnd N → R.toBaseRule.CoversUpto U V N →
+  -- On every DAG good under `S` from `Rnd` to `N` …
+  ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ), R.Good S U Rnd N →
+    R.toBaseRule.CoversUpto U V N →
     -- … every slot at a round from `Rnd`, with `c` rounds and a wave still
     -- under the horizon, is decided on any view caught up to `N` …
     (∀ κ, Rnd ≤ S.slotRound κ → S.slotRound κ + c + R.waveLength ≤ N →
@@ -16864,7 +16865,7 @@ def LiveRule.LiveOn (R : LiveRule Validator BlockId Payload) (S : Slots Validato
 structure LiveRule.Delivers (R : LiveRule Validator BlockId Payload) (slack : ℕ) : Prop where
   /-- A good author's block is in the history of every block two rounds
   above it. -/
-  reaches : ∀ (U : R.Universe) (Rnd N : ℕ), R.Good U Rnd N →
+  reaches : ∀ (S : Slots Validator) (U : R.Universe) (Rnd N : ℕ), R.Good S U Rnd N →
     ∃ T : Finset Validator, Fintype.card Validator ≤ T.card + slack ∧
       ∀ b ∈ R.ids U, (R.block U b).creator ∈ T → Rnd ≤ (R.block U b).round →
         (R.block U b).round + 1 ≤ N →
@@ -20911,12 +20912,17 @@ structure SchemeReactive [S : Slots Validator] (q : ℕ) (p : Params)
   /-- **The progress rule at `q`.** A reliable validator holding `q`
   distinct round-`n` authors gets past round `n`. -/
   advancesAt : ∀ v ∈ T, ∀ n < N, ∀ t, q ≤ (authorsIn U (holds v t) n).card → n < top v
+  /-- The last round up to which the validators wait for this schedule's
+  leaders: the horizon under a fixed schedule, the round its range closes
+  under an adaptive one. -/
+  waits : ℕ
+  waits_le : waits ≤ N
   /-- **Reach or wait.** At a slot past GST, at each round from the one
   above the proposal to the vote round, a reliable block reaches the leader
   block, or its builder waited the timeout and references the leader's
   block of the round below if it holds it. -/
   reach_or_wait : ∀ v ∈ T, ∀ k : ℕ, gst ≤ S.slotRound k →
-    S.slotRound k + p.voteOffset ≤ N → S.leader k ∈ T →
+    S.slotRound k + p.voteOffset ≤ waits → S.leader k ∈ T →
     ∀ L, IsLeaderBlock U k L → ∀ m, m < p.voteOffset →
     ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + m + 1 →
     Reaches U c L ∨
@@ -20929,7 +20935,7 @@ structure SchemeReactive [S : Slots Validator] (q : ℕ) (p : Params)
   block, or its builder waited the timeout and references every reliable
   vote for it that it holds. -/
   cert_or_wait : p.voteIsCert = false → ∀ v ∈ T, ∀ k : ℕ, gst ≤ S.slotRound k →
-    S.slotRound k + p.voteOffset + 1 ≤ N → S.leader k ∈ T →
+    S.slotRound k + p.voteOffset + 1 ≤ waits → S.leader k ∈ T →
     ∀ L, IsLeaderBlock U k L →
     ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + p.voteOffset + 1 →
     IsCert p σ U c L ∨
@@ -25729,7 +25735,7 @@ theorem progress (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBound
     {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
     (Rn : Run R.toBaseRule P B upd C₀ U V K)
     (hlive : R.LiveOn (Rn.cfg K).sched c)
-    (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ Rn.start K + 1)
+    (hgood : R.Good (Rn.cfg K).sched U Rnd N) (hRnd : Rnd ≤ Rn.start K + 1)
     (hN : Rn.start K + P.maxInterval + 1 + 2 * c + R.waveLength ≤ N) :
     Nonempty (Run R.toBaseRule P B upd C₀ U V (K + 1))
 ```
@@ -29301,7 +29307,7 @@ A vote, across a band.
 ```lean
 theorem votes (hw : 2 ≤ p.waveLength) (hTh : T ⊆ honest) (hq : q ≤ T.card)
     (hgst : rs.gst ≤ R) (hto : ∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) {k : ℕ}
-    {L : BlockId} (hR : R ≤ S.slotRound k) (hN : S.slotRound k + p.voteOffset ≤ N)
+    {L : BlockId} (hR : R ≤ S.slotRound k) (hN : S.slotRound k + p.voteOffset ≤ rs.waits)
     (hlead : S.leader k ∈ T) (hL : IsLeaderBlock U k L) :
     ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
       (U.block c).round = S.slotRound k + p.voteOffset → σ.Votes U c L

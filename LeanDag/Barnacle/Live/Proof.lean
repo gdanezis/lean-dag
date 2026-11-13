@@ -22,6 +22,15 @@ theorem holds : Statement := by
     (fun C _ hCh => liveOn_of_headsRun C hD hw (by rw [hCh]; exact hheads)) h₀ hC₀ U V Rnd N
     (fun C hC _ => hgood C hC)
 
+theorem holdsFrom : StatementFrom := by
+  intro Validator BlockId Payload _ _ _ R slack c₀ head hagree hD hw hheads P B upd hbnd hbh C₀ δ
+    h₀ hQ₀ U V N hcov hgood K hK
+  obtain ⟨Rn, -, -⟩ := everyHeight_from (Q := fun C => C.head = head) hagree hbnd hbh
+    (fun C _ hCh => liveOn_of_headsRun C hD hw (by rw [hCh]; exact hheads))
+    (fun C _ hCh => settlesBelow_of_headsRun C hD hw (by rw [hCh]; exact hheads))
+    h₀ hQ₀ hcov hgood K hK
+  exact ⟨Rn⟩
+
 /-- **Round-robin meets the heads-run hypothesis** once the committee bound
 `waveLength * slack + 1 ≤ n` holds, at gap `n + waveLength - 1`. -/
 theorem runsExist_roundRobin {n : ℕ} (hn : 0 < n) {BlockId Payload : Type}
