@@ -170,6 +170,9 @@ Replace the `\george` notes of §4 by the results, as `\edits{…}`.
   `StatementFrom`; `Schedules.{RunsExistReactive, AimdReactive,
   HammerHeadReactive, ReactiveGoodInhabited}` (`scheme.md` §20).
 
+* **M5c done.** `Scheme.Compose.{ScheduledCrash, HammerHeadComposed,
+  AimdComposed}` (`crashGood`; `scheme.md` §21).
+
 ## 5. Order
 
 M1a → M1b → M2 → M5a → M5b → M5c → M3 → M4 → M6 → M1c → M7.

@@ -1,5 +1,9 @@
 import LeanDag.Scheme.Model.Crash
 import LeanDag.Checkpoint.CommitSpec
+import LeanDag.Scheme.Model.Schedules
+import LeanDag.Barnacle.Live.Statement
+import LeanDag.Barnacle.Aimd.Rule
+import LeanDag.Adaptive.Score.Rule
 /-!
 # The mechanisms composed — statement
 
@@ -13,6 +17,15 @@ import LeanDag.Checkpoint.CommitSpec
   it gets a finality certificate.
 * **Checkpoints with crashes** (`CheckpointsCrash`): the same, when they
   run the family with crashes and restarts, past `max gst tr`.
+* **Scheduling with crashes** (`ScheduledCrash`): an adaptive schedule
+  that reaches every height over responsive runs reaches it when each
+  configuration is run with crashes and restarts (`crashGood`).
+* **All four, partially synchronously** (`HammerHeadComposed`,
+  `AimdComposed`): under a HammerHead score permuting round-robin, or
+  Barnacle's AIMD rule, with the validators running each configuration
+  responsively with crashes and restarts from `δ` past its start, runs of
+  every height exist on every signer's view, and every slot a closed
+  configuration commits reaches second-tier finality.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -65,8 +78,105 @@ def CheckpointsCrash : Prop :=
       ∃ L, (schemeRule p σ).IsCandidate S U slot L ∧
         Nonempty (SigningFaults.Execution.FinalityQC M E (vm.checkpointAfterCommit slot L))
 
+open Barnacle in
+/-- The goodness asked of a run of height `K`, with crashes: its
+configuration is run with crashes and restarts from `δ` past its start up to
+the round its step needs, or the run already extends past it. -/
+def CrashGoodRuns {Validator BlockId Payload : Type} [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] {P : Validity Validator BlockId Payload}
+    [P.Mechanised] {honest : Finset Validator} (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) (rel : Reliability Validator)
+    (B : Barnacle.Params) (Bd : Boundary Validator)
+    (upd : UpdateRule (schemeLiveReactive p σ rel).toBaseRule) (C₀ : Config Validator)
+    (Q : Config Validator → Prop) (c δ : ℕ) (U : (schemeLiveReactive p σ rel).Universe)
+    (V : (schemeLiveReactive p σ rel).View U) : Prop :=
+  ∀ K (Rn : Run (schemeLiveReactive p σ rel).toBaseRule B Bd upd C₀ U V K), Q (Rn.cfg K) →
+    crashGood p σ rel (Rn.cfg K).sched U (Rn.start K + δ)
+        (Rn.start K + max (B.maxInterval + 1) δ + 2 * c + (schemeLiveReactive p σ rel).waveLength) ∨
+      ∃ Rn' : Run (schemeLiveReactive p σ rel).toBaseRule B Bd upd C₀ U V (K + 1),
+        Rn'.start (K + 1) ≤ Rn.start K + max (B.maxInterval + 1) δ + c ∧ Q (Rn'.cfg (K + 1))
+
+open Barnacle in
+/-- **Scheduling with crashes.** -/
+def ScheduledCrash : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [P.Mechanised] (honest : Finset Validator) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) (rel : Reliability Validator)
+    (B : Barnacle.Params) (Bd : Boundary Validator)
+    (upd : UpdateRule (schemeLiveReactive p σ rel).toBaseRule) (C₀ : Config Validator)
+    (Q : Config Validator → Prop) (c δ : ℕ),
+    Live.RunsExistFrom (schemeLiveReactive p σ rel) B Bd upd C₀ Q c δ →
+    C₀.InBounds B → Q C₀ →
+    ∀ (U : (schemeLiveReactive p σ rel).Universe) (V : (schemeLiveReactive p σ rel).View U)
+      (N : ℕ), (schemeLiveReactive p σ rel).toBaseRule.CoversUpto U V N →
+      CrashGoodRuns p σ rel B Bd upd C₀ Q c δ U V →
+      ∀ K, horizonFrom B (schemeLiveReactive p σ rel) c δ K ≤ N →
+        Nonempty (Run (schemeLiveReactive p σ rel).toBaseRule B Bd upd C₀ U V K)
+
+open Barnacle in
+/-- **All four under HammerHead**: responsive, with crashes, under a
+HammerHead score permuting round-robin, with checkpoints. -/
+def HammerHeadComposed : Prop :=
+  ∀ (n : ℕ) (hn : 0 < n) (BlockId Payload Value : Type) [LinearOrder BlockId]
+    (P : Validity (Fin n) BlockId Payload) [P.Mechanised] (q : ℕ) [P.Quorate q]
+    (honest : Finset (Fin n)) (f : ℕ) (p : Params)
+    (σ : VoteSel (Fin n) BlockId Payload P honest) (rel : Reliability (Fin n))
+    (M : SigningFaults (Fin n)) (E : M.Execution Value)
+    (vm : DeterministicVM (BlockId := BlockId) (Value := Value)),
+    p.Tolerates honest f q → p.CertFits (n - rel.slack) → p.Scheduled n rel.slack →
+    haveI : Nonempty (Fin n) := ⟨⟨0, hn⟩⟩
+    ∀ (B : Barnacle.Params) (score : Adaptive.Score (schemeLiveReactive p σ rel).toBaseRule)
+      (C₀ : Config (Fin n)) (δ : ℕ),
+      score.Keeps → (∀ U V v C, PermRR hn C → PermRR hn (score U V v C)) →
+      C₀.InBounds B → PermRR hn C₀ →
+      ∀ (U : (schemeLiveReactive p σ rel).Universe) (C : Config (Fin n))
+        (Pr : SigningFaults.Execution.SigningRule M E
+          (schemeLiveReactive p σ rel).toBaseRule.toDagRule C.sched U vm) (N : ℕ),
+        (∀ v, (schemeLiveReactive p σ rel).toBaseRule.CoversUpto U (Pr.view v) N) →
+        (∀ v, CrashGoodRuns p σ rel B Boundary.atThreshold (Adaptive.rule score) C₀ (PermRR hn)
+          (n + p.waveLength - 1) δ U (Pr.view v)) →
+        ∀ K, horizonFrom B (schemeLiveReactive p σ rel) (n + p.waveLength - 1) δ K ≤ N →
+          ∃ Rn : ∀ v, Run (schemeLiveReactive p σ rel).toBaseRule B Boundary.atThreshold
+              (Adaptive.rule score) C₀ U (Pr.view v) K,
+            ∀ (k : ℕ), k < K → ∀ (v₀ : Fin n), (Rn v₀).cfg k = C →
+              ∀ (κ : ℕ) (L : BlockId), (Rn v₀).vdct k κ = some L →
+                (Rn v₀).start k < C.roundOf κ → C.roundOf κ ≤ C.roundOf ((Rn v₀).anchor k) →
+                Nonempty (SigningFaults.Execution.FinalityQC M E (vm.checkpointAfterCommit κ L))
+
+open Barnacle in
+/-- **All four under Barnacle's AIMD rule**: responsive, with crashes, under
+the AIMD rule on a leader function whose first leader is round-robin, with
+checkpoints. -/
+def AimdComposed : Prop :=
+  ∀ (n : ℕ) (hn : 0 < n) (BlockId Payload Value : Type) [LinearOrder BlockId]
+    (P : Validity (Fin n) BlockId Payload) [P.Mechanised] (q : ℕ) [P.Quorate q]
+    (honest : Finset (Fin n)) (f : ℕ) (p : Params)
+    (σ : VoteSel (Fin n) BlockId Payload P honest) (rel : Reliability (Fin n))
+    (M : SigningFaults (Fin n)) (E : M.Execution Value)
+    (vm : DeterministicVM (BlockId := BlockId) (Value := Value)),
+    p.Tolerates honest f q → p.CertFits (n - rel.slack) → p.Scheduled n rel.slack →
+    haveI : Nonempty (Fin n) := ⟨⟨0, hn⟩⟩
+    ∀ (B : Barnacle.Params) (Bd : Boundary (Fin n)) (lead : ℕ → ℕ → Fin n)
+      (hl : LeadKeyed lead B.maxLeaders), (∀ ρ, lead ρ 0 = roundRobin n hn ρ) →
+      ∀ (C₀ : Config (Fin n)) (δ : ℕ), C₀.InBounds B → C₀.head = roundRobin n hn →
+      ∀ (U : (schemeLiveReactive p σ rel).Universe) (C : Config (Fin n))
+        (Pr : SigningFaults.Execution.SigningRule M E
+          (schemeLiveReactive p σ rel).toBaseRule.toDagRule C.sched U vm) (N : ℕ),
+        (∀ v, (schemeLiveReactive p σ rel).toBaseRule.CoversUpto U (Pr.view v) N) →
+        (∀ v, CrashGoodRuns p σ rel B Bd (Aimd.rule _ B lead hl) C₀
+          (fun C => C.head = roundRobin n hn) (n + p.waveLength - 1) δ U (Pr.view v)) →
+        ∀ K, horizonFrom B (schemeLiveReactive p σ rel) (n + p.waveLength - 1) δ K ≤ N →
+          ∃ Rn : ∀ v, Run (schemeLiveReactive p σ rel).toBaseRule B Bd
+              (Aimd.rule _ B lead hl) C₀ U (Pr.view v) K,
+            ∀ (k : ℕ), k < K → ∀ (v₀ : Fin n), (Rn v₀).cfg k = C →
+              ∀ (κ : ℕ) (L : BlockId), (Rn v₀).vdct k κ = some L →
+                (Rn v₀).start k < C.roundOf κ → C.roundOf κ ≤ C.roundOf ((Rn v₀).anchor k) →
+                Nonempty (SigningFaults.Execution.FinalityQC M E (vm.checkpointAfterCommit κ L))
+
 /-- The mechanisms composed. -/
-def Statement : Prop := CheckpointsResponsive ∧ CheckpointsCrash
+def Statement : Prop :=
+  CheckpointsResponsive ∧ CheckpointsCrash ∧ ScheduledCrash ∧ HammerHeadComposed ∧ AimdComposed
 
 end Compose
 

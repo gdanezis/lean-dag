@@ -198,6 +198,18 @@ def crashLive (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
       R₀ ≤ S.slotRound lo ∧ Properties.CoversUpto (schemeRule p σ) V N ∧
       ∀ k, k < K → S.slotRound k + (p.waveLength - 1) ≤ cr.waits
 
+/-- **Good under `S`, with crashes and restarts**: a quorum `T` of `rel` of
+honest validators runs the family under `S` with crashes and restarts, past
+`max gst tr` at `Rnd`, the timeout clearing `2Δ + proc` from `Rnd`, and waits
+for `S`'s leaders up to `N`. -/
+def crashGood (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
+    (rel : Reliability Validator) (S : Slots Validator)
+    (U : BlockRecord Validator BlockId Payload P honest) (Rnd N : ℕ) : Prop :=
+  ∃ T : Finset Validator, rel.IsQuorum T ∧ T ⊆ honest ∧
+    ∃ (N' : ℕ) (cr : CrashRun (S := S) (Fintype.card Validator - rel.slack) p σ U T N'),
+      max cr.gst cr.tr ≤ Rnd ∧ (∀ n, Rnd ≤ n → 2 * cr.delay + cr.proc ≤ cr.timeout n) ∧
+      N ≤ cr.waits
+
 /-- **The family, run asynchronously with crashes and restarts**, at
 quorum `q`: an asynchronous run whose delivery reaches only validators
 that run from some time on. -/

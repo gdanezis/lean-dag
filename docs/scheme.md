@@ -1231,3 +1231,18 @@ the round its step needs, unless the run has already moved past it
 | The same under Barnacle's AIMD rule | `Schedules.AimdReactive` |
 | The same under every HammerHead score permuting round-robin | `Schedules.HammerHeadReactive` |
 | Responsive goodness under every schedule is inhabited at every row | `Schedules.ReactiveGoodInhabited` |
+
+## 21. The four mechanisms composed, partially synchronously
+
+`docs/mechanisms.md` M5c; statement `Scheme/Compose/Statement.lean`.
+
+A configuration run with crashes and restarts is good under its schedule
+(`crashGood`) when a quorum runs it as a crash run past `max gst tr`; read
+past that time a crash run is a responsive one (`CrashRun.toReactive`), so
+scheduling over responsive runs is scheduling with crashes
+(`Compose.ScheduledCrash`). Under a HammerHead score permuting round-robin,
+or Barnacle's AIMD rule, with each configuration run responsively with
+crashes from `δ` past its start until its range closes, runs of every
+height exist on every signer's view, and every slot a closed configuration
+commits reaches second-tier finality (`Compose.HammerHeadComposed`,
+`Compose.AimdComposed`, through `Integration.commitFinalized_barnacle_scheme`).
