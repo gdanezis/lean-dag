@@ -17,7 +17,7 @@ namespace Odontoceti
 
 theorem descent : Descent := by
   intro Validator BlockId Payload _ _ F _
-  exact OdontocetiProperties.descent
+  exact LiveRule.Descent.ofProperties (fun _ => rfl) (OdontocetiProperties.descent)
 
 theorem holds : Statement := by
   refine ⟨?_, descent, ?_⟩

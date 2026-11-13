@@ -76,17 +76,19 @@ theorem arrives (hq : q ≤ T.card) (hgst : rs.gst ≤ R)
 one above the proposal to the vote round. -/
 theorem reaches (hTh : T ⊆ honest) (hq : q ≤ T.card) (hgst : rs.gst ≤ R)
     (hto : ∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) {k : ℕ} {L : BlockId}
-    (hR : R ≤ S.slotRound k) (hN : S.slotRound k + p.voteOffset ≤ N) (hlead : S.leader k ∈ T)
-    (hL : IsLeaderBlock U k L) :
+    (hR : R ≤ S.slotRound k) (hN : S.slotRound k + p.voteOffset ≤ rs.waits)
+    (hlead : S.leader k ∈ T) (hL : IsLeaderBlock U k L) :
     ∀ m, m < p.voteOffset → ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
       (U.block c).round = S.slotRound k + m + 1 → Reaches U c L := by
+  have hW := rs.waits_le
   have step : ∀ m, m < p.voteOffset →
       (∀ b ∈ U.ids, (U.block b).creator = S.leader k → (U.block b).round = S.slotRound k + m →
         Reaches U b L) →
       ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
         (U.block c).round = S.slotRound k + m + 1 → Reaches U c L := by
     intro m hm hbelow v hv c hc hcc hcr
-    rcases rs.reach_or_wait v hv k hN hlead L hL m hm c hc hcc hcr with h | ⟨hwait, hincl⟩
+    rcases rs.reach_or_wait v hv k (le_trans hgst hR) hN hlead L hL m hm c hc hcc hcr with
+      h | ⟨hwait, hincl⟩
     · exact h
     obtain ⟨b, hb, hbc, hbr⟩ :=
       rs.toAsyncPace.populated hq (S.slotRound k + m) (by omega) (S.leader k) hlead
@@ -107,7 +109,7 @@ theorem reaches (hTh : T ⊆ honest) (hq : q ≤ T.card) (hgst : rs.gst ≤ R)
 /-- **Every reliable vote-round block votes for the leader block.** -/
 theorem votes (hw : 2 ≤ p.waveLength) (hTh : T ⊆ honest) (hq : q ≤ T.card)
     (hgst : rs.gst ≤ R) (hto : ∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) {k : ℕ}
-    {L : BlockId} (hR : R ≤ S.slotRound k) (hN : S.slotRound k + p.voteOffset ≤ N)
+    {L : BlockId} (hR : R ≤ S.slotRound k) (hN : S.slotRound k + p.voteOffset ≤ rs.waits)
     (hlead : S.leader k ∈ T) (hL : IsLeaderBlock U k L) :
     ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
       (U.block c).round = S.slotRound k + p.voteOffset → σ.Votes U c L := by
@@ -123,12 +125,13 @@ theorem certifies (hw : 2 ≤ p.waveLength)
     (hcv : p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q)
     (hTh : T ⊆ honest) (hq : q ≤ T.card) (hgst : rs.gst ≤ R)
     (hto : ∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) {k : ℕ} {L : BlockId}
-    (hR : R ≤ S.slotRound k) (hN : S.slotRound k + (p.waveLength - 1) ≤ N)
+    (hR : R ≤ S.slotRound k) (hN : S.slotRound k + (p.waveLength - 1) ≤ rs.waits)
     (hlead : S.leader k ∈ T) (hL : IsLeaderBlock U k L) :
     ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
       (U.block c).round = S.slotRound k + (p.waveLength - 1) → IsCert p σ U c L := by
   intro v hv c hc hcc hcr
   have hvw := Params.voteOffset_le hw
+  have hW := rs.waits_le
   cases hvc : p.voteIsCert with
   | true =>
     exact (isCert_iff_votes σ p hvc).mpr (rs.votes hw hTh hq hgst hto hR (by omega) hlead hL v hv
@@ -136,7 +139,7 @@ theorem certifies (hw : 2 ≤ p.waveLength)
   | false =>
     obtain ⟨hw3, hcq⟩ := hcv hvc
     have hoff := Params.voteOffset_of_false hvc hw3
-    rcases rs.cert_or_wait hvc v hv k (by omega) hlead L hL c hc hcc (by omega) with
+    rcases rs.cert_or_wait hvc v hv k (le_trans hgst hR) (by omega) hlead L hL c hc hcc (by omega) with
       h | ⟨hwait, hincl⟩
     · exact h
     refine isCert_of_votes σ p (fun h => absurd (hvc.symm.trans h) (by simp))
@@ -163,9 +166,10 @@ theorem live_of_reactiveLive {rel : Reliability Validator}
     {T : Finset Validator} {lo K : ℕ} (h : reactiveLive p σ rel S V T lo K) :
     (familySupport p σ).live rel S V T lo K := by
   obtain ⟨hT, hTh, N, R₀, rs, hgst, hto, hR, hcov, hN⟩ := h
-  refine ⟨hT, N, hcov, fun k hk => hN k hk, fun k hlo hK hlead => ⟨?_, ?_⟩⟩
+  refine ⟨hT, N, hcov, fun k hk => le_trans (hN k hk) rs.waits_le, fun k hlo hK hlead =>
+    ⟨?_, ?_⟩⟩
   · intro n _ h2
-    exact rs.toAsyncPace.populated hT.2 n (le_trans h2 (hN k hK))
+    exact rs.toAsyncPace.populated hT.2 n (le_trans h2 (le_trans (hN k hK) rs.waits_le))
   · rintro L ⟨hLmem, hLr, hLc⟩
     exact rs.certifies (S := S) hw hcv hTh hT.2 hgst hto (le_trans hR (S.mono hlo)) (hN k hK)
       hlead ⟨hLmem, hLr, hLc⟩

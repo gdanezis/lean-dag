@@ -30,15 +30,15 @@ theorem liveOn_of_skipRun (hD : R.Descent slack') (hK : R.Decisive slack fb)
       Fintype.card Validator ≤ D.card + fb → SkipRun C T D R.waveLength c₀) :
     R.LiveOn C.sched c₀ := by
   intro U V Rnd N hgood hcov
-  obtain ⟨T, D, hTD, hT, hDc, hcom, hdec⟩ := hK U Rnd N hgood
+  obtain ⟨T, D, hTD, hT, hDc, hcom, hdec⟩ := hK C.sched U Rnd N hgood
   have hr := hrun T D hTD hT hDc
   have htop : ∀ ρ, Rnd ≤ ρ → ρ + R.waveLength ≤ N → C.head ρ ∈ T →
       ∃ L, R.Decided C.sched V (C.cum ρ) (some L) := fun ρ h1 h2 h3 =>
-    hcom C.sched V (C.cum ρ) hcov (by rw [Config_slotRound_head]; exact h1)
+    hcom V (C.cum ρ) hcov (by rw [Config_slotRound_head]; exact h1)
       (by rw [Config_slotRound_head]; exact h2) (by rw [Config_leader_head]; exact h3)
   refine ⟨fun κ hRnd hN => ?_, fun r hRnd hN => ?_⟩
   · obtain ⟨ρ, hlo, hhi, hDl, hTl⟩ := hr (C.sched.slotRound κ + 1)
-    refine stretchDescent hD C.sched V (b := C.cum ρ) (top := C.cum (ρ + R.waveLength - 1))
+    refine stretchDescent hD.indirect C.sched V (b := C.cum ρ) (top := C.cum (ρ + R.waveLength - 1))
       (fun i hi => ?_) (fun j hj1 hj2 => ?_) (htop _ (by omega) (by omega) hTl) κ
       (Config_lt_head_of_slotRound_lt C (by omega))
     · have := Config_slotRound_lt_of_lt_head C hi
@@ -47,7 +47,7 @@ theorem liveOn_of_skipRun (hD : R.Descent slack') (hK : R.Decisive slack fb)
         rw [Config.sched_slotRound]; exact (C.cum_le_iff_le_roundOf).1 hj1
       rcases Nat.lt_or_eq_of_le hj2 with hlt | rfl
       · have := Config_slotRound_lt_of_lt_head C hlt
-        exact hdec C.sched V j hcov (by omega) (by omega) (hDl j hjr (by omega))
+        exact hdec V j hcov (by omega) (by omega) (hDl j hjr (by omega))
       · obtain ⟨L, hL⟩ := htop _ (by omega) (by omega) hTl
         exact ⟨some L, hL⟩
   · obtain ⟨ρ, hlo, hhi, -, hTl⟩ := hr r

@@ -46,23 +46,24 @@ open LeanDag LeanDag.Barnacle
 
 /-- (E) the `with` spelling -/
 def bnLive : LiveRule (Fin 4) (Fin 32) Unit :=
-  { mysticeti with Good := fun U Rnd N => U = Usun ∧ Rnd = 1 ∧ N = 8 }
+  { mysticeti with Good := fun _ U Rnd N => U = Usun ∧ Rnd = 1 ∧ N = 8 }
 
 /-- (E) the `where` spelling -/
 def bnLive' : LiveRule (Fin 4) (Fin 32) Unit where
   toBaseRule := mysticeti
-  Good := fun U Rnd N => U = Usun ∧ Rnd = 1 ∧ N = 8
+  Good := fun _ U Rnd N => U = Usun ∧ Rnd = 1 ∧ N = 8
 
 example : bnLive.toBaseRule = bnRule32 := rfl
 example : bnLive.full Usun = Vsun := rfl
 example : bnLive.full Usun = LeanDag.View.full Usun := rfl
 example : bnLive.waveLength = 3 := rfl
 
--- `Good` is a genuine predicate.
-example : bnLive.Good Usun 1 8 := ⟨rfl, rfl, rfl⟩
-example : ¬ bnLive.Good Usun 1 9 := fun h => absurd h.2.2 (by decide)
-
 abbrev sched1 : Slots (Fin 4) := bnC1.sched
+
+-- `Good` is a genuine predicate.
+example : bnLive.Good sched1 Usun 1 8 := ⟨rfl, rfl, rfl⟩
+example : ¬ bnLive.Good sched1 Usun 1 9 := fun h => absurd h.2.2 (by decide)
+
 
 /-- **The configurations the AIMD rule emits**: one width throughout, on
 the witness leaders. Whatever it reads, `Aimd.rule` writes a
@@ -150,7 +151,7 @@ example :
   obtain ⟨Rn1⟩ := (Progress.holds (Fin 4) (Fin 32) Unit bnLive MysticetiProperties.agree bnP _
     bnUpdL bnUpdL_bounded bnC1 BnUniform bnUpdL_uniform 0).1 Usun (bnLive.full Usun) 1 8 0
     (coversUpto_full laws32.full_ids Usun 8) run0 bnLive_liveOn
-    (show bnLive.Good Usun 1 8 from ⟨rfl, rfl, rfl⟩) (by decide) (by decide)
+    ⟨rfl, rfl, rfl⟩ (by decide) (by decide)
   refine ⟨Rn1, ?_⟩
   have h := (Agreement.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 bnP _ bnUpdL bnC1
     (fun _ _ _ _ _ _ _ => rfl)) Usun (bnLive.full Usun) Vsun 1 1 Rn1 run2 1 (by decide)
@@ -164,8 +165,8 @@ example :
     Rn1.start 1 ≤ 0 + 4 + 1 + 0 := by
   obtain ⟨Rn1, hb, -⟩ := progress_exists MysticetiProperties.agree bnUpdL_bounded bnUpdL_uniform
     (coversUpto_full laws32.full_ids Usun 8) run0 bnLive_liveOn bnC1_uniform
-    (show bnLive.Good Usun 1 8 from ⟨rfl, rfl, rfl⟩) (by decide) (by decide)
-  exact ⟨Rn1, hb⟩
+    (Rnd := 1) ⟨rfl, rfl, rfl⟩ (fun _ h1 h2 => absurd h2 (by simp at h1 ⊢; omega)) (by decide)
+  exact ⟨Rn1, le_trans hb (by decide)⟩
 
 -- horizon values
 example : horizon bnP bnLive 0 1 = 8 := by decide
@@ -220,14 +221,14 @@ example : Nonempty (PartialRun bnLive.toBaseRule bnP bnUpdL bnC1 Usun (bnLive.fu
   everyHeight MysticetiProperties.agree bnUpdL_bounded bnUpdL_uniform
     (fun C _ hC => bnLive_liveOn_all C hC)
     ⟨fun _ => (by decide : (1 : ℕ) ≤ 4), by decide, by decide⟩ bnC1_uniform (coversUpto_full laws32.full_ids Usun 8)
-    (show bnLive.Good Usun 1 8 from ⟨rfl, rfl, rfl⟩) le_rfl 1 (by decide)
+    (fun _ _ _ => ⟨rfl, rfl, rfl⟩) le_rfl 1 (by decide)
 
 -- Through `holds`.
 example : Nonempty (PartialRun bnLive.toBaseRule bnP bnUpdL bnC1 Usun (bnLive.full Usun) 1) :=
   ((Progress.holds (Fin 4) (Fin 32) Unit bnLive MysticetiProperties.agree bnP _ bnUpdL
     bnUpdL_bounded bnC1 BnUniform bnUpdL_uniform 0).2
     (fun C _ hC => bnLive_liveOn_all C hC)
-    ⟨fun _ => (by decide : (1 : ℕ) ≤ 4), by decide, by decide⟩ bnC1_uniform Usun (bnLive.full Usun) 1 8 ⟨rfl, rfl, rfl⟩
+    ⟨fun _ => (by decide : (1 : ℕ) ≤ 4), by decide, by decide⟩ bnC1_uniform Usun (bnLive.full Usun) 1 8 (fun _ _ _ => ⟨rfl, rfl, rfl⟩)
     (coversUpto_full laws32.full_ids Usun 8) le_rfl 1 (by decide))
 example : Nonempty (PartialRun bnLive.toBaseRule bnP bnUpdL bnC1 Usun (bnLive.full Usun) 1) :=
   ((Progress.holds (Fin 4) (Fin 32) Unit bnLive MysticetiProperties.agree bnP _ bnUpdL
@@ -362,7 +363,7 @@ example :
     bnUpdC_bounded bnC1I1 BnUniform (bnUpdC_keeps _) 0).2
     (fun C _ hC => bnLive_liveOn_all C hC)
     ⟨fun _ => (by decide : (1 : ℕ) ≤ 4), by decide, by decide⟩ bnC1I1_uniform
-    Usun (bnLive.full Usun) 1 8 ⟨rfl, rfl, rfl⟩ (coversUpto_full laws32.full_ids Usun 8) le_rfl 2
+    Usun (bnLive.full Usun) 1 8 (fun _ _ _ => ⟨rfl, rfl, rfl⟩) (coversUpto_full laws32.full_ids Usun 8) le_rfl 2
     (by decide))
 example : ¬ (horizon bnPI1 bnLive 0 3 ≤ 8) := by decide
 
@@ -373,7 +374,7 @@ its candidate, block `26`, has no certificate in `Usun`, so no
 derivation commits it, direct or indirect. -/
 
 def bnLive9 : LiveRule (Fin 4) (Fin 32) Unit :=
-  { mysticeti with Good := fun U Rnd N => U = Usun ∧ Rnd = 1 ∧ N = 9 }
+  { mysticeti with Good := fun _ U Rnd N => U = Usun ∧ Rnd = 1 ∧ N = 9 }
 
 /-- Slot 6's only candidate is block 26 … -/
 theorem hall6 : ∀ L : Fin 32, bnRule32.IsLeaderBlock sched1 Usun 6 L → L = 26 := by decide
@@ -433,7 +434,7 @@ def Usk : BlockUniverse (Fin 4) (Fin 32) Unit where
   no_equivocation := by decide
 
 def bnLiveSk : LiveRule (Fin 4) (Fin 32) Unit :=
-  { mysticeti with Good := fun U Rnd N => U = Usk ∧ Rnd = 1 ∧ N = 8 }
+  { mysticeti with Good := fun _ U Rnd N => U = Usk ∧ Rnd = 1 ∧ N = 8 }
 
 -- Slot 2's candidate is block 10, blamed by 12, 13, 15.
 theorem hallSk : ∀ L : Fin 32, bnRule32.IsLeaderBlock sched1 Usk 2 L → L = 10 := by decide

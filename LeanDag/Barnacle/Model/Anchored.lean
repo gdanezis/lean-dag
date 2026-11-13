@@ -70,14 +70,14 @@ abbrev ofAnchoredOn (R : AnchoredRule Validator BlockId Payload P honest)
 def liveOfAnchored (R : AnchoredRule Validator BlockId Payload P honest)
     (hw : ∀ κ, R.waveAt κ = R.waveAt 0) (rel : Reliability Validator) :
     LiveRule Validator BlockId Payload :=
-  { ofAnchored R hw with Good := Timed.Good R.toDagRule rel }
+  { ofAnchored R hw with Good := fun _ => Timed.Good R.toDagRule rel }
 
 /-- **An anchored rule read through a projection, as a live rule.** -/
 def liveOfAnchoredVia (R : AnchoredRule Validator BlockId Payload P honest) {X : Type}
     (f : X → BlockRecord Validator BlockId Payload P honest)
     (hw : ∀ κ, R.waveAt κ = R.waveAt 0) (rel : Reliability Validator) :
     LiveRule Validator BlockId Payload :=
-  { ofAnchoredVia R f hw with Good := Timed.Good (R.toDagRuleVia f) rel }
+  { ofAnchoredVia R f hw with Good := fun _ => Timed.Good (R.toDagRuleVia f) rel }
 
 /-- **An anchored rule under an invariant, as a live rule.** -/
 abbrev liveOfAnchoredOn (R : AnchoredRule Validator BlockId Payload P honest)

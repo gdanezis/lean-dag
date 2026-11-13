@@ -1110,7 +1110,7 @@ each Lean statement reads against one clause of a paper:
 | Sailfish, Total order: `x` before `y` at `P_i` ⇒ not `y` before `x` at `P_j` | `AtomicBroadcast.TotalOrder` |
 | Sui–Duan, Total order: `x` before `y` at one ⇒ `y` at another only after `x` | `AtomicBroadcast.TotalOrderSD` |
 | Sailfish and Sui–Duan, Agreement | `AtomicBroadcast.Agreement` |
-| Sailfish, Validity: an honest sender's message delivered by every honest party | `AtomicBroadcast.ValidityPS`, `AtomicBroadcast.ValidityRoundRobin`, `AtomicBroadcast.ValidityAsync` |
+| Sailfish, Validity: an honest sender's message delivered by every honest party | `AtomicBroadcast.ValidityPS`, `AtomicBroadcast.ValidityRoundRobin`, `AtomicBroadcast.ValidityRoundRobinSilent`, `AtomicBroadcast.ValidityAsync` |
 | Sui–Duan, Liveness: an honest sender eventually delivers its own message | `AtomicBroadcast.LivenessPS`, `AtomicBroadcast.LivenessAsync` |
 
 A delivered message is a block; `deliverSeq` delivers committed leaders'
@@ -1129,7 +1129,17 @@ own view, the run decides every slot below it, and the leader block
 reaches the block by self-reference. Under round-robin on one slot per
 round, at `waveLength · (n − |T|) < n`, every rotation holds such a run, so
 the premise reduces to a horizon of `n · (max R r + 2) + 2 · waveLength`
-(`ValidityRoundRobin`). Asynchronously, against a coin-blind
+(`ValidityRoundRobin`). At Hybrid Mysticeti's committee
+`n = 3f + 2c + 1`, `|T| = n − f − c` and `waveLength = 3`, so
+`waveLength · (n − |T|) < n` fails once `c ≥ 1`. When the validators of a
+set `Z` author no block from a round `R` past GST on, a slot a member of
+`Z` leads is skipped directly (`skipsUnsupported`), and the descent needs
+only a window of `waveLength` slots led from `T ∪ Z` whose last leader is
+in `T` (`AnchoredRule.decided_below_of_window`). Such a window lies in
+every rotation when `(waveLength − 1) · fb < |T|`, for the `fb` validators
+outside `T ∪ Z` (`Barnacle.exists_run_perm_roundRobin`), at the same
+horizon (`ValidityRoundRobinSilent`); with `Z` the crashed validators and
+`fb = f`, Hybrid Mysticeti meets this for every `f` and `c`. Asynchronously, against a coin-blind
 adversary, the author's block of some round `r` is referenced by every
 reliable block of round `r + 1`; the failure probability over `M` blocks
 of coins from round `r + 2` is at most `badBlockBoundAt c d ^ M`. That
@@ -1137,3 +1147,262 @@ condition cannot be dropped: references reach one round down
 (`Validity.Mechanised.pred`), so a reliable validator the adversary keeps
 late at every round builds blocks that no later block references, and
 Sailfish's weak edges to older rounds have no counterpart in the model.
+
+## 16. Responsive liveness at every partially synchronous row
+
+`docs/mechanisms.md` M1; statement `Scheme/Responsive/Statement.lean`.
+
+| Claim | Lean |
+|---|---|
+| The partially synchronous rows at their committees, parent quorum `n − f − c` | `Params.PSRow` |
+| A responsive run exists at every such row, every vote and every schedule | `Responsive.Inhabited` (`Full.record`, `Full.run`) |
+| Validity (Sailfish) and the author's own delivery (Sui and Duan) at every such row | `Responsive.RowsValidity` |
+
+The witness is the full record run in lockstep: every block references the
+whole round below, so every block reaches every block of a lower round and
+every decision-round block certifies every leader block, and no validator
+waits a timeout. Validity at a row is `AtomicBroadcast.ValidityPS` with the
+row's coverage (`Table.RowsCovered`) and threshold fits discharged; the
+reactive run itself remains its premise, as GST is.
+
+## 17. Crash recovery, partially synchronous
+
+`docs/mechanisms.md` M2; statement `Scheme/Crash/Statement.lean`.
+
+| Claim | Lean |
+|---|---|
+| A crash run read past `max gst tr` is a responsive run | `Crash.ToReactive` (`CrashRun.toReactive`) |
+| The crash precondition is the reactive one | `Crash.Live` (`crashLive`) |
+| A reliably led slot commits past `max gst tr` | `Crash.Commits` |
+| Validity at every partially synchronous row | `Crash.RowsValidity` |
+| Every validator may crash at once | `Crash.Inhabited` (`Full.crashRun`) |
+
+The model separates what a crash leaves intact (the disk, the rounds
+rebuilt on restart, the wait rule with timers set again) from what needs
+the validator running (delivery, catch-up, the timeout ceiling). The
+reactive timing's ceiling and wait clauses are asked only past GST, which
+is where the proofs read them; that change is what lets a run with crashes
+before `tr` be a responsive run past `max gst tr`.
+
+## 18. Crash recovery, asynchronous
+
+`docs/mechanisms.md` M3; statement `Scheme/Crash/Statement.lean`.
+
+| Claim | Lean |
+|---|---|
+| An asynchronous crash run is an asynchronous run | `Crash.AsyncToPace` (`AsyncCrashRun.toAsyncPace`) |
+| Agreement | `Crash.AsyncAgreement` |
+| Validity with probability 1, coin-blind adversary | `Crash.AsyncValidity` |
+| Every validator may crash at once, at every quorum | `Crash.AsyncInhabited` (`CrashRun.toAsync`) |
+
+## 19. Checkpoints over responsive and crash runs
+
+`docs/mechanisms.md` M5b; statement `Scheme/Compose/Statement.lean`.
+
+| Claim | Lean |
+|---|---|
+| A reliably led slot reaches second-tier finality over a responsive run | `Compose.CheckpointsResponsive` |
+| The same with crashes and restarts, past `max gst tr` | `Compose.CheckpointsCrash` |
+
+## 20. The decider under schedules, run responsively
+
+`docs/mechanisms.md` M5a; statement `Scheme/Schedules/Statement.lean`.
+
+A responsive validator waits only for the leaders its schedule names, so
+Barnacle's goodness takes the schedule (`LiveRule.Good S U Rnd N`), and a
+responsive run says up to which round it waits for them
+(`SchemeReactive.waits`, the horizon under a fixed schedule).
+`schemeLiveReactive p σ rel` is the decider as a Barnacle live rule whose
+DAG is good under `S` when a quorum of `rel` runs it responsively under
+`S` past GST and waits for `S`'s leaders up to the horizon
+(`reactiveGood`). It has the descent laws at every reliability whose
+quorum meets the commit and certificate thresholds (`ReactiveDescends`):
+the run's certificates feed the family's commit law
+(`familySupport_commits`), and the indirect rule is the family's.
+
+The boundary. A new configuration's first rounds come before its
+validators learn the pivot that fixes it — about a wave under Barnacle,
+which starts it after the pivot's round, up to the gap and a wave under
+HammerHead, which starts it at the threshold — so no validator waits for
+its leaders there. Its schedule is therefore good only `δ` rounds after its
+start, and the slots of the rounds before are decided by a later commit
+(`LiveRule.SettlesBelow`, from a run of heads by the stretch descent,
+`settlesBelow_of_headsRun`). Validators keep waiting for the old
+configuration's leaders until its range closes. The progress step looks
+for the anchor from the later of the threshold and the good start
+(`progress_exists`), and runs of every height exist under the hypothesis
+that each configuration's schedule is good from `δ` past its start up to
+the round its step needs, unless the run has already moved past it
+(`Barnacle.Live.RunsExistFrom`, horizon `horizonFrom`).
+
+| Claim | Lean |
+|---|---|
+| Every height, run responsively, under a schedule whose heads run | `Schedules.RunsExistReactive` |
+| The same under Barnacle's AIMD rule | `Schedules.AimdReactive` |
+| The same under every HammerHead score permuting round-robin | `Schedules.HammerHeadReactive` |
+| Responsive goodness under every schedule is inhabited at every row | `Schedules.ReactiveGoodInhabited` |
+
+## 21. The four mechanisms composed, partially synchronously
+
+`docs/mechanisms.md` M5c; statement `Scheme/Compose/Statement.lean`.
+
+A configuration run with crashes and restarts is good under its schedule
+(`crashGood`) when a quorum runs it as a crash run past `max gst tr`; read
+past that time a crash run is a responsive one (`CrashRun.toReactive`), so
+scheduling over responsive runs is scheduling with crashes
+(`Compose.ScheduledCrash`). Under a HammerHead score permuting round-robin,
+or Barnacle's AIMD rule, with each configuration run responsively with
+crashes from `δ` past its start until its range closes, runs of every
+height exist on every signer's view, and every slot a closed configuration
+commits reaches second-tier finality (`Compose.HammerHeadComposed`,
+`Compose.AimdComposed`, through `Integration.commitFinalized_barnacle_scheme`).
+
+## 22. Scheduling under asynchrony
+
+`docs/mechanisms.md` M4; statement `Scheme/Schedules/Statement.lean`.
+
+Under asynchrony no validator waits for a leader, and the coin elects them.
+Barnacle's AIMD rule adapts the number of leaders per round; the head of
+each round, its first slot, is a coin, and the other leaders follow from it.
+`schemeLiveAsync p σ rel c₀` is the decider good under a schedule when a
+quorum populates every round and, from every round, `c₀` rounds hold a wave
+of rounds whose first slots are led by safe validators (`asyncGood`). Every
+configuration is then live (`AsyncConfigLive`): a safe-led head commits on a
+view holding its decision round (`decided_of_safe_of_round`), and runs of
+committed heads decide the rest (`clauses_of_committingHeads`). With the
+heads `h`, AIMD reaches every height when `h`'s safe heads come in runs
+(`AsyncAimdRuns`). Drawn as `J · M` blocks of a wave of uniform coins
+(`coinHead`), with every safe set holding at least `c` validators and the
+rounds up to the horizon filling `J` windows of `M` blocks, a run of height
+`K` fails to exist with probability at most `J · badBlockBoundAt c w ^ M`
+(`AsyncAimdLive`): a window with a block of safe heads gives a run within
+two windows (`safeHeadRuns_of_windows`), each window fails with probability
+at most `badBlockBoundAt c w ^ M` (`Steelhead.no_good_block_prob_le`), and
+the windows are joined by a union bound. The record is fixed before the
+coin. A reputation schedule (HammerHead) is not live under asynchrony: it
+names leaders the adversary can delay.
+
+## 23. The mechanisms composed, asynchronously
+
+`docs/mechanisms.md` M6; statement `Scheme/Compose/Statement.lean`.
+
+Under asynchrony there is no responsive mode to compose, and HammerHead is
+not live; crash recovery, Barnacle's AIMD rule with coin heads and
+checkpoints compose (`Compose.AsyncComposed`). An asynchronous crash run
+populates every round up to its horizon (`AsyncCrashRun.toAsyncPace`); a
+draw whose windows each hold a block of safe heads gives runs of every
+height on every signer's view (`Schedules.AsyncAimdRuns`,
+`safeHeadRuns_of_windows`); every slot a closed configuration of those runs
+commits reaches second-tier finality
+(`Integration.commitFinalized_barnacle_scheme`); and the draws without such
+windows have probability at most `J · badBlockBoundAt c w ^ M`
+(`windowsFail_le`).
+
+## 24. HammerHead under asynchrony, from a reputation distribution
+
+`docs/mechanisms.md` M4b; statements `Scheme/Schedules/Statement.lean`,
+`Scheme/Compose/Statement.lean`.
+
+A reputation schedule that names leaders in advance is not live under
+asynchrony. A HammerHead score may instead set the distribution the coin
+draws from: each configuration carries a table, and a round's head is the
+table's entry at a uniform index drawn for that round. The adversary sees
+the table but not the index, and chooses which validators are safe, subject
+to the counts of §11. A table supporting `k` validators with weight `e`
+(`Supports`) hits every set of `s` validators in at least `e (k + s − n)`
+entries (`card_hits_ge`), which is positive when `k + s > n`. With a quorum
+support this holds at two buffer rounds (`s = q − f`, `2q ≥ n + f + 1`) and
+at one buffer round where `n ≥ 5f + 3c + 1` (`s ≥ n/3`, `q > 2n/3`); at one
+buffer round with `2q = n + f + 1` the adversary can hold `s` at two, and only
+a support of `n − 1` validators survives. The table changes at each
+reconfiguration, with earlier coins; the bound asks the runs of safe heads
+of every table of a finite set `Tbls` and joins them by a union bound:
+
+| Claim | Lean |
+|---|---|
+| With every table's heads in safe runs, HammerHead reaches every height | `Schedules.AsyncHammerHeadRuns` |
+| A run of height `K` fails with probability at most `|Tbls| · J · badBlockBoundAt m (e (k + s − n)) w ^ M` | `Schedules.AsyncHammerHeadLive` |
+| The same with crashes and checkpoints | `Compose.AsyncHammerHeadComposed` |
+
+A HammerHead score that only permutes who leads keeps the coin uniform and
+needs none of this: it is the case of a table that is a permutation.
+
+## 25. Weak references
+
+Sailfish's weak edges, as data of the block (`wk b`, references to blocks
+of older rounds). The decision rule never reads them: they count as no
+vote, certificate or quorum. Delivery does: a committed leader's flush is
+its history through references and weak references (`ReachesW`, `flush U
+wk L`), so every statement about the delivered sequence takes the map `wk`
+and holds for every one. A reliable validator's block follows the
+weak-reference rule (`WeakRule`) when it reaches, through either, every
+block of an older round its author held when building it.
+
+Under the rule, a block every reliable validator holds by time `t` is
+reached by every block from round `t + 2` on (`reachesW_of_weakRule`): such
+a block references a quorum of the round below, which meets the reliable
+set, and a reliable block of round `t + 1` or later was built after `t`.
+Validity then needs neither that the author lead a slot nor that the next
+round reference its block:
+
+| Claim | Lean |
+|---|---|
+| Partially synchronous Validity, the author need not lead | `AtomicBroadcast.ValidityPSWeak` |
+| Asynchronous Validity, no reference from the next round assumed | `AtomicBroadcast.ValidityAsyncWeak` |
+
+With `wk` empty the delivered sequence is the one of §15, and its theorems
+hold as stated.
+
+## 26. Atomic broadcast over scheduled runs
+
+Statement `Scheme/Compose/Statement.lean`. A scheduled run delivers the
+committed leaders of its ledger (`Run.ledgerUpto`), through references and
+weak references (`runDeliver`, over `deliverLeaders`, which the fixed
+schedule's `deliverOf` also reads).
+
+| Claim | Lean |
+|---|---|
+| At most one block per round and author, none twice, only blocks of the record | `Compose.ScheduledIntegrity` |
+| Total order (both forms) and Agreement across runs and heights | `Compose.ScheduledAgreed` (from Barnacle's `LedgerAgreement`, `LedgerPrefix`) |
+| Validity under the weak-reference rule, given a ledger leader of round `t + 2` or later | `Compose.ScheduledValidity` |
+| At Barnacle's boundary, the ledger to height `K` holds a leader of round `k + 1` for every `k < K` | `Compose.AnchorLedger` |
+
+At Barnacle's boundary a configuration's range ends at its pivot, which is
+committed and therefore in the ledger; ranges start at least one round
+apart, so a run of height `t + 2` delivers every block every reliable
+validator held by `t`. At either boundary, a configuration whose
+schedule is good from `δ ≥ 1` past its start through the commit gap `c` and
+a wave, with `δ + c` at most its interval, commits a leader of round
+`start + δ` or later inside its own range (`Barnacle.ledger_commit_of_window`),
+which gives Validity over any responsive scheduled run
+(`Compose.ComposedValidity`).
+
+## 27. Theorem 2: the mechanisms composed broadcast atomically
+
+`Compose.Broadcasts` collects the three properties of a family of runs, one
+per signer's view: Integrity (`ScheduledIntegrity`), Total order and
+Agreement across views and heights (`ScheduledAgreed`), and Validity under
+the weak-reference rule for a block held by every validator of `T` by `t`,
+when `t + 2 < K`.
+
+| Setting | Lean | Failure probability |
+|---|---|---|
+| Responsive, crashes, HammerHead score permuting round-robin, checkpoints | `Compose.HammerHeadBroadcast` | 0 |
+| Responsive, crashes, Barnacle's AIMD rule, either boundary, checkpoints | `Compose.AimdBroadcast` | 0 |
+| Asynchronous, crashes, AIMD with coin heads, checkpoints | `Compose.AsyncBroadcast` | `J · badBlockBoundAt c w ^ M` |
+| Asynchronous, crashes, HammerHead coin over reputation tables, checkpoints | `Compose.AsyncHammerHeadBroadcast` | `|Tbls| · J · badBlockBoundAt m (e (k + s − n)) w ^ M` |
+
+Each gives runs of height `K` on every signer's view that satisfy
+`Broadcasts` and finalize every slot a closed configuration commits. The
+partially synchronous forms ask every configuration of every run to be
+run with crashes from `δ ≥ 1` past its start (`CrashGoodAll`), the
+interval to hold `δ` and the gap, and the views to cover `horizonFrom K + δ`.
+The asynchronous forms ask the interval to hold a round and the gap, and
+the views to cover `horizon K + 1`; every configuration there is good from
+round `0`. `RunsExistFrom` and `ScheduledCrash` return the run with its
+start bound `K · (max (maxInterval + 1) δ + c)`, which places each
+configuration's validity window under the coverage horizon
+(`Barnacle.start_mono`).
+
+The weak-reference rule (`WeakRule`), the monotonicity of `holds` and the
+`built` bound are premises.

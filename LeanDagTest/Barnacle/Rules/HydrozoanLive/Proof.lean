@@ -15,7 +15,7 @@ namespace HydrozoanLive
 
 theorem descent : Descent := by
   intro Replica BlockId _ _ _ F
-  exact LeanDag.Hydrozoan.descent
+  exact LiveRule.Descent.ofProperties (fun _ => rfl) (LeanDag.Hydrozoan.descent)
 
 theorem roundRobinLive : RoundRobinLive := by
   intro n hn BlockId _ F hck C hC

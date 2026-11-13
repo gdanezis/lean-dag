@@ -17,7 +17,7 @@ namespace Nemo
 
 theorem descent : Descent := by
   intro Validator BlockId Payload _ _ _ _
-  exact NemoProperties.descent
+  exact LiveRule.Descent.ofProperties (fun _ => rfl) (NemoProperties.descent)
 
 theorem majority_bound (n : ℕ) (hn : 0 < n) :
     2 * (n - LeanDag.Nemo.majority (Fin n)) + 1 ≤ n := by

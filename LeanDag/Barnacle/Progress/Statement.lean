@@ -41,9 +41,9 @@ def ConfigProgress (R : LiveRule Validator BlockId Payload) (P : Params)
     ∀ (Rn : Run R.toBaseRule P B upd C₀ U V K),
     -- … whose current configuration's schedule is live with gap `c` …
     R.LiveOn (Rn.cfg K).sched c →
-    -- … on a DAG good from `Rnd` to `N`, where the current configuration's
-    -- range starts at or after `Rnd` …
-    R.Good U Rnd N → Rnd ≤ Rn.start K + 1 →
+    -- … on a DAG good under its schedule from `Rnd` to `N`, where the
+    -- current configuration's range starts at or after `Rnd` …
+    R.Good (Rn.cfg K).sched U Rnd N → Rnd ≤ Rn.start K + 1 →
     -- … and the horizon leaves room for the threshold, the gap to the
     -- anchor, and the gap and one wave above it:
     Rn.start K + P.maxInterval + 1 + 2 * c + R.waveLength ≤ N →
@@ -61,8 +61,10 @@ def EveryHeight (R : LiveRule Validator BlockId Payload) (P : Params)
   -- the bounds and is one of them …
   (∀ C : Config Validator, C.InBounds P → Q C → R.LiveOn C.sched c) →
   C₀.InBounds P → Q C₀ →
-  -- … then on a DAG good from round `1` (or `0`) to `N` …
-  ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ), R.Good U Rnd N →
+  -- … then on a DAG good, under the schedule of every such configuration,
+  -- from round `1` (or `0`) to `N` …
+  ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ),
+    (∀ C : Config Validator, C.InBounds P → Q C → R.Good C.sched U Rnd N) →
     R.toBaseRule.CoversUpto U V N → Rnd ≤ 1 →
     -- … every height whose horizon fits under `N` is reached, on any view
     -- caught up to `N`.

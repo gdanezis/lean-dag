@@ -45,7 +45,7 @@ abbrev realRule : LiveRule (Fin 4) ℕ Unit := mysticetiLive
 /-- **The grown family is good, at every height.** The correct validators
 are a quorum, the family is synchronised from round `0`, and it is
 populated at every round up to `N`. -/
-theorem ugrow_good (N : ℕ) : realRule.Good (Ugrow N) 0 N :=
+theorem ugrow_good (N : ℕ) (S₀ : Slots (Fin 4)) : realRule.Good S₀ (Ugrow N) 0 N :=
   ⟨(Correct : Finset (Fin 4)), ⟨Finset.Subset.refl _, card_correct⟩,
     ugrow_synchronised N, fun _ _ hr => ugrow_populated hr⟩
 
@@ -79,7 +79,7 @@ theorem real_runs (K : ℕ) :
     realUpd_bounded realUpd_heads bnC1 bnC1_head
     ⟨fun _ => (by decide : (1 : ℕ) ≤ 4), by decide, by decide⟩
     (Ugrow (11 * K + 9)) (realRule.full (Ugrow (11 * K + 9))) 0 (11 * K + 9)
-    (ugrow_good _)
+    (fun _ _ => ugrow_good _ _)
     (coversUpto_full (Mysticeti.holds (Fin 4) ℕ Unit).full_ids _ _) (by omega) K
     (by show K * (4 + 1 + 6) + 6 + 3 ≤ 11 * K + 9; omega)
 
@@ -122,8 +122,8 @@ theorem real_delivers (K : ℕ) :
     Validity.holds (Fin 4) ℕ Unit realRule
       MysticetiProperties.commitsCandidate bnP _ realUpd bnC1
       (Faults.f (Fin 4)) (delivers_core _ (fun _ => rfl)) (Ugrow (11 * K + 9))
-      (realRule.full (Ugrow (11 * K + 9))) K (real_runs K).some 0 (11 * K + 9)
-      (ugrow_good _)
+      (realRule.full (Ugrow (11 * K + 9))) K (real_runs K).some bnC1.sched 0 (11 * K + 9)
+      (ugrow_good _ _)
   exact ⟨T, hcard, fun b hb hbT hN k hk hround => hT b hb hbT (Nat.zero_le _) hN k hk hround⟩
 
 #print axioms real_delivers

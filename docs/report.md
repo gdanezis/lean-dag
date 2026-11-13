@@ -12281,6 +12281,19 @@ every reliable validator once `n · (max R r + 2) + 2 · waveLength` lies
 below the horizon, `R` past GST and `r` the block's round
 (`Scheme.AtomicBroadcast.validityRoundRobin`); every rotation holds a run of
 `waveLength` reliably-led slots (`Scheme.AtomicBroadcast.roundRobin_run_within`).
+At Hybrid Mysticeti's committee `n = 3f + 2c + 1` that premise fails once
+`c ≥ 1`. When the validators of a set `Z` author no block from round `R`
+on, at most `fb` validators lie outside `T ∪ Z`, `(waveLength − 1) · fb <
+|T|`, the vote round is one above the proposal and `T` meets the skip
+threshold, the same conclusion holds at the same horizon
+(`Scheme.AtomicBroadcast.validityRoundRobinSilent`). A slot a member of `Z`
+leads is skipped directly (`Scheme.skipsUnsupported`); every rotation holds
+`waveLength` slots led from `T ∪ Z`, the last from `T`
+(`Barnacle.exists_run_perm_roundRobin`); and a window of decided slots
+ending at a committed one decides every slot below it
+(`AnchoredRule.decided_below_of_window`). Hybrid Mysticeti meets these
+premises for every `f` and `c` with `Z` the crashed validators and
+`fb = f`.
 Asynchronously, against an
 adversary that does not see the coin, when the author's block of a round `r` at
 or above `m`'s is referenced by every reliable block of round `r + 1`,
@@ -12296,7 +12309,98 @@ the on-time block (`Scheme.reaches_of_onTime`). Without such a round the
 claim fails: references reach one round down, so a reliable validator
 kept late at every round builds blocks no later block references.
 
-### 27.17 What the arc does not contain
+### 27.17 Responsive liveness at every partially synchronous row
+
+M1 (`mechanisms.md`). The partially synchronous rows at their committees
+are `Params.PSRow`: Mysticeti and Cordial Miners from `3f + 1`, Blue
+Bottle from `5f + 1`, without crash faults; Orcaella from `5f + 3c + 1`;
+Hybrid Mysticeti from `3f + 2c + 1`; Nemo-Nemo from `2c + 1` with `f = 0`;
+each at parent quorum `n − f − c`. At each, a responsive run exists
+(`Scheme.Responsive.inhabited`): the full record on `n` validators, every
+block referencing the whole round below (`Scheme.Full.record`, valid at
+every quorum `q ≤ n` with distinct authors and self-reference), run in
+lockstep with no delay, no processing time and a timeout of `1`, is a
+`SchemeReactive` over all validators at every vote rule and every schedule
+(`Scheme.Full.run`): every block reaches every block of a lower round
+(`Scheme.Full.reaches_of_lt`), so both wait clauses hold by their first
+disjunct. Validity holds at each row (`Scheme.Responsive.rowsValidity`):
+`AtomicBroadcast.validityPS` at the row's coverage (`Table.rowsCovered`),
+its certificate fitting and its commit threshold within `n − f − c`
+(`Scheme.Responsive.psRow_fits`). Nemo-Nemo is among the rows: its
+coverage is the crash-only one, and Validity asks only that blocks
+reference their author's previous block, which the family's row adds.
+
+### 27.18 Crash recovery, partially synchronous
+
+M2 (`mechanisms.md`). A crash run (`Scheme.CrashRun`) is a responsive run
+in which validators may stop and start again, any number of times and all
+at once, until a time `tr`, after which the reliable validators stay up.
+`up v t` says that `v` runs at `t`. What a crash leaves intact holds
+throughout: a validator keeps on disk what it holds and builds
+(`holds_mono`, `holds_own`), builds only while up (`up_built`), rebuilds
+every round it missed on restart (`built_of_le_top`), and sets its timers
+again, so the wait clauses hold of every block. What needs it running holds
+only while it runs: delivery to a validator up throughout the delay, which
+covers what was sent while it was down (`converges`), catch-up (`catchup`)
+and the timeout ceiling (`deadline`).
+
+Read past `max gst tr`, a crash run is a responsive run
+(`Scheme.CrashRun.toReactive`, `Scheme.Crash.toReactive`): from then on
+every reliable validator is up. For this the ceiling of the reactive
+timing (`ReactiveCore.deadline`) and the wait clauses of `SchemeReactive`
+are asked only past GST, which is all the proofs ever read of them. The
+crash precondition `Scheme.crashLive` is then the reactive one
+(`Scheme.Crash.live`), a reliably led slot commits past `max gst tr`
+(`Scheme.Crash.commits`), and Validity holds at every partially
+synchronous row (`Scheme.Crash.rowsValidity`). Every validator may crash at
+once (`Scheme.Crash.inhabited`): on the full record, all build round `0`,
+all are down from time `1` to `D`, and all rebuild on restart, round `r`
+at time `r + D` (`Scheme.Full.crashRun`). Safety asks nothing of the crash
+run: a validator that keeps its blocks builds no round twice, so the blocks
+form a `BlockRecord`.
+
+### 27.19 Crash recovery, asynchronous
+
+M3 (`mechanisms.md`). An asynchronous crash run (`Scheme.AsyncCrashRun`)
+has no clock to lose: a validator keeps what it holds on disk, rebuilds
+every round it missed, and what a running reliable validator holds reaches
+every reliable validator that runs from some time on. From `tr` the
+reliable validators run, so the run is an asynchronous one
+(`Scheme.AsyncCrashRun.toAsyncPace`, `Scheme.Crash.asyncToPace`), and
+Agreement (`Scheme.Crash.asyncAgreement`) and Validity with probability 1
+against a coin-blind adversary (`Scheme.Crash.asyncValidity`) hold of it.
+A timed crash run forgets its clock into one (`Scheme.CrashRun.toAsync`),
+and the run in which every validator is down from `1` to `D` inhabits it at
+every quorum (`Scheme.Crash.asyncInhabited`).
+
+### 27.20 Checkpoints over responsive and crash runs
+
+M5b (`mechanisms.md`). The checkpoint bridge needs the wave of a slot
+populated and its candidates certified by the validators following the
+signing rule. The responsive precondition gives both
+(`live_of_reactiveLive`), so a slot a signer leads reaches second-tier
+finality when the signers run the family responsively past GST
+(`Scheme.Compose.checkpointsResponsive`), and, through `Scheme.Crash.live`,
+when they run it with crashes and restarts past `max gst tr`
+(`Scheme.Compose.checkpointsCrash`).
+
+### 27.21 The mechanisms composed broadcast atomically
+
+Theorem 2 of the paper (`scheme.md` §27). Responsive liveness, crash
+recovery, an adaptive leader schedule and checkpoints, composed, give runs
+of every height on every signer's view whose delivered sequences satisfy
+Integrity, Total order, Agreement and Validity (`Compose.Broadcasts`), and
+in which every slot a closed configuration commits reaches second-tier
+finality: with certainty under partial synchrony
+(`Scheme.Compose.hammerHeadBroadcast`, `aimdBroadcast`), and outside a
+coin event of bounded probability under asynchrony
+(`asyncBroadcast`, `asyncHammerHeadBroadcast`). Validity asks the
+weak-reference rule as a premise, and the interval to hold the learning
+delay and the commit gap: a configuration then commits a leader inside its
+own range (`Barnacle.ledger_commit_of_window`), so its range in the ledger
+holds a leader late enough to reach the block.
+
+### 27.22 What the arc does not contain
 
 The properties of Mahi-Mahi and Async BlueBottle that are proved of
 those rules alone reach the rows of §27.5 at the least vote only; the
@@ -13649,7 +13753,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 436 definitions and structures the report names, in
+The 441 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -14607,9 +14711,9 @@ structure ReactiveCore (U : BlockRecord Validator BlockId Payload P honest)
   /-- Time advances with rounds — the only lower bound a reactive
   schedule keeps, over the rounds `v` reached. -/
   built_lt : ∀ v ∈ T, ∀ n < top v, built v n < built v (n + 1)
-  /-- **The reactive ceiling.** A validator never waits past the
+  /-- **The reactive ceiling.** Past GST a validator never waits past the
   timeout; it may build any time before it. -/
-  deadline : ∀ v ∈ T, ∀ n < top v, built v (n + 1) ≤ built v n + timeout n
+  deadline : ∀ v ∈ T, ∀ n < top v, gst ≤ built v n → built v (n + 1) ≤ built v n + timeout n
 ```
 
 **The reactive timing**, at any record: `PaceCore` with the ceiling and the round-advance clause in place of `ViewPace`'s full-timeout floor. What a reactive discipline's wait clauses are stated over.
@@ -16765,8 +16869,9 @@ The committed blocks of the slots `[lo, hi)`, in slot order.
 ```lean
 def LiveRule.LiveOn (R : LiveRule Validator BlockId Payload) (S : Slots Validator) (c : ℕ) :
     Prop :=
-  -- On every DAG good from `Rnd` to `N` …
-  ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ), R.Good U Rnd N → R.toBaseRule.CoversUpto U V N →
+  -- On every DAG good under `S` from `Rnd` to `N` …
+  ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ), R.Good S U Rnd N →
+    R.toBaseRule.CoversUpto U V N →
     -- … every slot at a round from `Rnd`, with `c` rounds and a wave still
     -- under the horizon, is decided on any view caught up to `N` …
     (∀ κ, Rnd ≤ S.slotRound κ → S.slotRound κ + c + R.waveLength ≤ N →
@@ -16789,7 +16894,7 @@ def LiveRule.LiveOn (R : LiveRule Validator BlockId Payload) (S : Slots Validato
 structure LiveRule.Delivers (R : LiveRule Validator BlockId Payload) (slack : ℕ) : Prop where
   /-- A good author's block is in the history of every block two rounds
   above it. -/
-  reaches : ∀ (U : R.Universe) (Rnd N : ℕ), R.Good U Rnd N →
+  reaches : ∀ (S : Slots Validator) (U : R.Universe) (Rnd N : ℕ), R.Good S U Rnd N →
     ∃ T : Finset Validator, Fintype.card Validator ≤ T.card + slack ∧
       ∀ b ∈ R.ids U, (R.block U b).creator ∈ T → Rnd ≤ (R.block U b).round →
         (R.block U b).round + 1 ≤ N →
@@ -16798,6 +16903,21 @@ structure LiveRule.Delivers (R : LiveRule Validator BlockId Payload) (slack : �
 ```
 
 **What a good DAG delivers**: a `slack`-missing set of validators whose blocks, from `Rnd`, are reached by everything two rounds above them — the base protocol's coverage read as delivery, the second law a live rule carries beside `Descent`.
+
+#### `LiveRule.Indirect`
+
+*abbrev, `Barnacle.Model.Heads.lean`*
+
+```lean
+abbrev LiveRule.Indirect (R : LiveRule Validator BlockId Payload) : Prop :=
+  ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U) (i j : ℕ) (A : BlockId),
+    S.slotRound i + R.waveLength ≤ S.slotRound j → R.Decided S V j (some A) →
+    (∀ i', i < i' → i' < j → S.slotRound i + R.waveLength ≤ S.slotRound i' →
+      R.Decided S V i' none) →
+    ∃ v, R.Decided S V i v
+```
+
+**A3, the indirect rule**, at the rule's wave: a committed slot a wave above `i`, with every slot a wave above `i` between them skipped, decides `i`.
 
 #### `ofAnchored`
 
@@ -18580,6 +18700,30 @@ structure Laws (I : Slots Validator → BlockRecord Validator BlockId Payload P 
 ```
 
 **The laws of an anchored rule** — what the direct predicates and the rungs must satisfy for agreement, on the records satisfying an invariant `I` (every record, by default). Every rule proves each of them under its own name.
+
+#### `BlockRecord`
+
+*structure, `Common.BlockRecord.lean`*
+
+```lean
+structure BlockRecord (Validator BlockId Payload : Type*)
+    (P : Validity Validator BlockId Payload) (honest : Finset Validator) where
+  /-- Which blocks exist. -/
+  ids : Finset BlockId
+  /-- What each id denotes. -/
+  block : BlockId → Block Validator BlockId Payload
+  /-- Every referenced block is present. -/
+  complete : ∀ i ∈ ids, ∀ j ∈ (block i).refs, j ∈ ids
+  /-- Every block present is valid. -/
+  valid : ∀ i ∈ ids, P block (block i)
+  /-- An honest author has at most one block per round. -/
+  no_equivocation : ∀ i ∈ ids, ∀ j ∈ ids,
+    (block i).creator ∈ honest →
+    (block i).creator = (block j).creator →
+    (block i).round = (block j).round → i = j
+```
+
+**The block record**: every universe type in the development, at a validity predicate `P` and an honest set. `block` is total, with junk outside `ids`; every clause quantifies over `i ∈ ids`, so the junk is never observed.
 
 #### `View`
 
@@ -20563,6 +20707,42 @@ def Populated : Prop :=
 
 **Production**: every round below the horizon has a block by every reliable validator, when the reliable set is `qp` strong.
 
+#### `Live`
+
+*def, `Scheme.Crash.Statement.lean`*
+
+```lean
+def Live : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [P.Mechanised] (honest : Finset Validator) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest)
+    (rel : Reliability Validator) (S : Slots Validator) (U : (schemeRule p σ).Universe)
+    (V : (schemeRule p σ).View U) (T : Finset Validator) (lo K : ℕ),
+    crashLive p σ rel S V T lo K → reactiveLive p σ rel S V T lo K
+```
+
+**The crash precondition is the reactive one**, at every reliability.
+
+#### `Commits`
+
+*def, `Scheme.Crash.Statement.lean`*
+
+```lean
+def Commits : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [P.Mechanised] (honest : Finset Validator) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest)
+    (rel : Reliability Validator),
+    p.CertFits (Fintype.card Validator - rel.slack) →
+    p.commitThreshold ≤ Fintype.card Validator - rel.slack →
+    LeaderCommits (schemeRule p σ)
+      (fun S {U} V T lo K => crashLive p σ rel S (U := U) V T lo K)
+```
+
+**With crashes, a reliably led slot commits**, at every reliability whose quorum meets the commit and certificate thresholds.
+
 #### `held`
 
 *def, `Scheme.Helpers.Starve.lean`*
@@ -20631,9 +20811,9 @@ def keepFirst {α β : Type*} [DecidableEq β] (key : α → β) : List β → L
 *def, `Scheme.Model.Deliver.lean`*
 
 ```lean
-noncomputable def deliverSeq (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
-    (N : ℕ) : List BlockId :=
-  deliverOf U (tryDecide p σ U V 0 N)
+noncomputable def deliverSeq (U : BlockRecord Validator BlockId Payload P honest)
+    (wk : BlockId → Finset BlockId) (V : U.View) (N : ℕ) : List BlockId :=
+  deliverOf U wk (tryDecide p σ U V 0 N)
 ```
 
 **The delivered sequence** on the view `V`, the loop scanning from slot `0` to slot `N`.
@@ -20763,6 +20943,55 @@ def Live (p : Params) (n f c : ℕ) : Prop :=
 ```
 
 **Liveness**: every threshold is reachable by the correct validators.
+
+#### `SchemeReactive`
+
+*structure, `Scheme.Model.Reactive.lean`*
+
+```lean
+structure SchemeReactive [S : Slots Validator] (q : ℕ) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest)
+    (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N : ℕ)
+    extends ReactiveCore U T N where
+  /-- **The progress rule at `q`.** A reliable validator holding `q`
+  distinct round-`n` authors gets past round `n`. -/
+  advancesAt : ∀ v ∈ T, ∀ n < N, ∀ t, q ≤ (authorsIn U (holds v t) n).card → n < top v
+  /-- The last round up to which the validators wait for this schedule's
+  leaders: the horizon under a fixed schedule, the round its range closes
+  under an adaptive one. -/
+  waits : ℕ
+  waits_le : waits ≤ N
+  /-- **Reach or wait.** At a slot past GST, at each round from the one
+  above the proposal to the vote round, a reliable block reaches the leader
+  block, or its builder waited the timeout and references the leader's
+  block of the round below if it holds it. -/
+  reach_or_wait : ∀ v ∈ T, ∀ k : ℕ, gst ≤ S.slotRound k →
+    S.slotRound k + p.voteOffset ≤ waits → S.leader k ∈ T →
+    ∀ L, IsLeaderBlock U k L → ∀ m, m < p.voteOffset →
+    ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + m + 1 →
+    Reaches U c L ∨
+      (built v (S.slotRound k + m) + timeout (S.slotRound k + m)
+          ≤ built v (S.slotRound k + m + 1) ∧
+        ∀ b ∈ U.ids, (U.block b).creator = S.leader k → (U.block b).round = S.slotRound k + m →
+          b ∈ holds v (built v (S.slotRound k + m + 1)) → b ∈ (U.block c).refs)
+  /-- **Certify or wait.** Where votes are certified a round later, at a
+  slot past GST, a reliable decision-round block certifies the leader
+  block, or its builder waited the timeout and references every reliable
+  vote for it that it holds. -/
+  cert_or_wait : p.voteIsCert = false → ∀ v ∈ T, ∀ k : ℕ, gst ≤ S.slotRound k →
+    S.slotRound k + p.voteOffset + 1 ≤ waits → S.leader k ∈ T →
+    ∀ L, IsLeaderBlock U k L →
+    ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + p.voteOffset + 1 →
+    IsCert p σ U c L ∨
+      (built v (S.slotRound k + p.voteOffset) + timeout (S.slotRound k + p.voteOffset)
+          ≤ built v (S.slotRound k + p.voteOffset + 1) ∧
+        ∀ b ∈ U.ids, (U.block b).creator ∈ T →
+          (U.block b).round = S.slotRound k + p.voteOffset →
+          b ∈ holds v (built v (S.slotRound k + p.voteOffset + 1)) → σ.Votes U b L →
+          b ∈ (U.block c).refs)
+```
+
+**The family, run reactively**, at quorum `q`: the reactive timing, the pacemaker's progress rule at `q`, and the wait clauses of a wave.
 
 #### `IsCert`
 
@@ -21077,7 +21306,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 647 theorems the body or Appendix A names, each
+The 656 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -25550,7 +25779,7 @@ theorem progress (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBound
     {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
     (Rn : Run R.toBaseRule P B upd C₀ U V K)
     (hlive : R.LiveOn (Rn.cfg K).sched c)
-    (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ Rn.start K + 1)
+    (hgood : R.Good (Rn.cfg K).sched U Rnd N) (hRnd : Rnd ≤ Rn.start K + 1)
     (hN : Rn.start K + P.maxInterval + 1 + 2 * c + R.waveLength ≤ N) :
     Nonempty (Run R.toBaseRule P B upd C₀ U V (K + 1))
 ```
@@ -29052,6 +29281,62 @@ theorem holds : Statement
 theorem holds : Statement
 ```
 
+#### `aimdBroadcast`
+
+*theorem, `Scheme.Compose.Proof.lean`*
+
+```lean
+theorem aimdBroadcast : AimdBroadcast
+```
+
+#### `asyncBroadcast`
+
+*theorem, `Scheme.Compose.Proof.lean`*
+
+```lean
+theorem asyncBroadcast : AsyncBroadcast
+```
+
+#### `asyncHammerHeadBroadcast`
+
+*theorem, `Scheme.Compose.Proof.lean`*
+
+```lean
+theorem asyncHammerHeadBroadcast : AsyncHammerHeadBroadcast
+```
+
+#### `holds`
+
+*theorem, `Scheme.Compose.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `live`
+
+*theorem, `Scheme.Crash.Proof.lean`*
+
+```lean
+theorem live : Live
+```
+
+#### `commits`
+
+*theorem, `Scheme.Crash.Proof.lean`*
+
+```lean
+theorem commits : Commits
+```
+
+#### `holds`
+
+*theorem, `Scheme.Crash.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
 #### `holds`
 
 *theorem, `Scheme.Equiv.Proof.lean`*
@@ -29090,13 +29375,29 @@ A vote, across a band.
 ```lean
 theorem votes (hw : 2 ≤ p.waveLength) (hTh : T ⊆ honest) (hq : q ≤ T.card)
     (hgst : rs.gst ≤ R) (hto : ∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) {k : ℕ}
-    {L : BlockId} (hR : R ≤ S.slotRound k) (hN : S.slotRound k + p.voteOffset ≤ N)
+    {L : BlockId} (hR : R ≤ S.slotRound k) (hN : S.slotRound k + p.voteOffset ≤ rs.waits)
     (hlead : S.leader k ∈ T) (hL : IsLeaderBlock U k L) :
     ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
       (U.block c).round = S.slotRound k + p.voteOffset → σ.Votes U c L
 ```
 
 **Every reliable vote-round block votes for the leader block.**
+
+#### `live_of_reactiveLive`
+
+*theorem, `Scheme.Helpers.Reactive.lean`*
+
+```lean
+theorem live_of_reactiveLive {rel : Reliability Validator}
+    (hw : 2 ≤ p.waveLength)
+    (hcv : p.voteIsCert = false →
+      3 ≤ p.waveLength ∧ p.certThreshold ≤ Fintype.card Validator - rel.slack)
+    {S : Slots Validator} {U : (schemeRule p σ).Universe} {V : (schemeRule p σ).View U}
+    {T : Finset Validator} {lo K : ℕ} (h : reactiveLive p σ rel S V T lo K) :
+    (familySupport p σ).live rel S V T lo K
+```
+
+**The reactive discipline reaches the family support's liveness precondition**, at any reliability: a reactive execution past GST is a quorum populating every round of each reliably-led slot's wave and certifying its candidates.
 
 #### `tryDecide_restart`
 
@@ -29258,6 +29559,14 @@ theorem decided_none_of_novel {p : Params} {σ : VoteSel Validator BlockId Paylo
 ```
 
 **The prompt skip**: after an extension, a slot whose candidates are all new is skipped at once, at a vote round one above the slot and a quorum of old blocks one round up that meets the skip threshold.
+
+#### `holds`
+
+*theorem, `Scheme.Responsive.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
 
 #### `holds`
 

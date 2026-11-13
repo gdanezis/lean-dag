@@ -39,8 +39,8 @@ def Delivered (R : LiveRule Validator BlockId Payload) (P : Params)
   R.Delivers slack →
   -- … on any run over a good DAG …
   ∀ (U : R.Universe) (V : R.View U) (K : ℕ)
-    (Rn : Run R.toBaseRule P B upd C₀ U V K) (Rnd N : ℕ),
-    R.Good U Rnd N →
+    (Rn : Run R.toBaseRule P B upd C₀ U V K) (S : Slots Validator) (Rnd N : ℕ),
+    R.Good S U Rnd N →
     -- … there is a good set, all but at most `slack` validators, …
     ∃ T : Finset Validator, Fintype.card Validator ≤ T.card + slack ∧
       -- … each of whose blocks, past the synchrony round and under the

@@ -174,34 +174,82 @@ namespace Scheme
 variable {Validator : Type} [DecidableEq Validator]
 variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type}
 variable {P : Validity Validator BlockId Payload} {honest : Finset Validator}
-variable {U : BlockRecord Validator BlockId Payload P honest}
+variable {U : BlockRecord Validator BlockId Payload P honest} {wk : BlockId → Finset BlockId}
+
+omit [DecidableEq Validator] [LinearOrder BlockId] in
+/-- **Strong reach is weak reach.** -/
+theorem reachesW_of_reaches {c b : BlockId} (h : Reaches U c b) : ReachesW U wk c b := by
+  unfold Reaches ReachesFrom at h
+  induction h with
+  | refl => exact Relation.ReflTransGen.refl
+  | tail _ hst ih => exact Relation.ReflTransGen.tail ih (Or.inl hst)
+
+omit [DecidableEq Validator] [LinearOrder BlockId] in
+/-- Weak reach composes. -/
+theorem ReachesW.trans {a b c : BlockId} (h₁ : ReachesW U wk a b) (h₂ : ReachesW U wk b c) :
+    ReachesW U wk a c :=
+  Relation.ReflTransGen.trans h₁ h₂
 
 omit [DecidableEq Validator] in
 /-- A flush holds exactly the blocks of `U` the leader reaches. -/
-theorem mem_flush {L b : BlockId} : b ∈ flush U L ↔ b ∈ U.ids ∧ Reaches U L b := by
+theorem mem_flush {L b : BlockId} : b ∈ flush U wk L ↔ b ∈ U.ids ∧ ReachesW U wk L b := by
   simp [flush, List.mem_mergeSort]
+
+/-- **Delivery preserves prefixes** of the committed leaders. -/
+theorem deliverLeaders_prefix {Ls₁ Ls₂ : List BlockId} (h : Ls₁ <+: Ls₂) :
+    deliverLeaders U wk Ls₁ <+: deliverLeaders U wk Ls₂ := by
+  obtain ⟨t, rfl⟩ := h
+  unfold deliverLeaders
+  rw [List.flatMap_append]
+  exact keepFirst_prefix _ (List.prefix_append _ _) _
+
+/-- At most one block of each round and author is delivered, and so no
+block twice. -/
+theorem deliverLeaders_nodup (Ls : List BlockId) :
+    ((deliverLeaders U wk Ls).map (roundAuthor U)).Nodup ∧ (deliverLeaders U wk Ls).Nodup :=
+  ⟨(keepFirst_nodup _ _ _).1, (keepFirst_nodup _ _ _).1.of_map _⟩
+
+/-- **Every delivered block is a block of the record**, reached by one of
+the leaders. -/
+theorem mem_deliverLeaders {Ls : List BlockId} {b : BlockId} (hb : b ∈ deliverLeaders U wk Ls) :
+    b ∈ U.ids ∧ ∃ L ∈ Ls, ReachesW U wk L b := by
+  have hb' := (keepFirst_sublist _ _ _).subset hb
+  obtain ⟨L, hL, hbL⟩ := List.mem_flatMap.mp hb'
+  obtain ⟨hU, hr⟩ := mem_flush.mp hbL
+  exact ⟨hU, L, hL, hr⟩
+
+/-- **Every honest block a leader reaches is delivered.** -/
+theorem mem_deliverLeaders_of {Ls : List BlockId} {L b : BlockId} (hL : L ∈ Ls)
+    (hb : b ∈ U.ids) (hr : ReachesW U wk L b) (hh : (U.block b).creator ∈ honest) :
+    b ∈ deliverLeaders U wk Ls := by
+  have hm : b ∈ Ls.flatMap (flush U wk) := List.mem_flatMap.mpr ⟨L, hL, mem_flush.mpr ⟨hb, hr⟩⟩
+  obtain ⟨c, hc, hkey⟩ := exists_keepFirst (roundAuthor U) hm (List.not_mem_nil)
+  have hcU := (mem_deliverLeaders (wk := wk) hc).1
+  simp only [roundAuthor, Prod.mk.injEq] at hkey
+  have : b = c := U.no_equivocation b hb c hcU hh hkey.2.symm hkey.1.symm
+  exact this ▸ hc
 
 /-- **Delivery preserves prefixes** of the decisions. -/
 theorem deliverOf_prefix {D₁ D₂ : List (ℕ × Option BlockId)} (h : D₁ <+: D₂) :
-    deliverOf U D₁ <+: deliverOf U D₂ := by
+    deliverOf U wk D₁ <+: deliverOf U wk D₂ := by
   obtain ⟨t, rfl⟩ := h
-  unfold deliverOf
+  unfold deliverOf deliverLeaders
   rw [List.filterMap_append, List.flatMap_append]
   exact keepFirst_prefix _ (List.prefix_append _ _) _
 
 /-- **At most one block of each round and author is delivered.** -/
 theorem deliverOf_nodup_roundAuthor (D : List (ℕ × Option BlockId)) :
-    ((deliverOf U D).map (roundAuthor U)).Nodup :=
+    ((deliverOf U wk D).map (roundAuthor U)).Nodup :=
   (keepFirst_nodup _ _ _).1
 
 /-- No block is delivered twice. -/
-theorem deliverOf_nodup (D : List (ℕ × Option BlockId)) : (deliverOf U D).Nodup :=
+theorem deliverOf_nodup (D : List (ℕ × Option BlockId)) : (deliverOf U wk D).Nodup :=
   (deliverOf_nodup_roundAuthor D).of_map _
 
 /-- **Every delivered block is a block of the record**, reached by a
 committed leader. -/
-theorem mem_deliverOf {D : List (ℕ × Option BlockId)} {b : BlockId} (hb : b ∈ deliverOf U D) :
-    b ∈ U.ids ∧ ∃ e ∈ D, ∃ L, e.2 = some L ∧ Reaches U L b := by
+theorem mem_deliverOf {D : List (ℕ × Option BlockId)} {b : BlockId} (hb : b ∈ deliverOf U wk D) :
+    b ∈ U.ids ∧ ∃ e ∈ D, ∃ L, e.2 = some L ∧ ReachesW U wk L b := by
   have hb' := (keepFirst_sublist _ _ _).subset hb
   simp only [List.mem_flatMap, List.mem_filterMap] at hb'
   obtain ⟨L, ⟨e, he, hL⟩, hbL⟩ := hb'
@@ -210,12 +258,12 @@ theorem mem_deliverOf {D : List (ℕ × Option BlockId)} {b : BlockId} (hb : b �
 
 /-- **Every honest block a committed leader reaches is delivered.** -/
 theorem mem_deliverOf_of {D : List (ℕ × Option BlockId)} {e : ℕ × Option BlockId} (he : e ∈ D)
-    {L b : BlockId} (hL : e.2 = some L) (hb : b ∈ U.ids) (hr : Reaches U L b)
-    (hh : (U.block b).creator ∈ honest) : b ∈ deliverOf U D := by
-  have hm : b ∈ (D.filterMap Prod.snd).flatMap (flush U) :=
+    {L b : BlockId} (hL : e.2 = some L) (hb : b ∈ U.ids) (hr : ReachesW U wk L b)
+    (hh : (U.block b).creator ∈ honest) : b ∈ deliverOf U wk D := by
+  have hm : b ∈ (D.filterMap Prod.snd).flatMap (flush U wk) :=
     List.mem_flatMap.mpr ⟨L, List.mem_filterMap.mpr ⟨e, he, hL⟩, mem_flush.mpr ⟨hb, hr⟩⟩
   obtain ⟨c, hc, hkey⟩ := exists_keepFirst (roundAuthor U) hm (List.not_mem_nil)
-  have hcU := (mem_deliverOf hc).1
+  have hcU := (mem_deliverOf (wk := wk) hc).1
   simp only [roundAuthor, Prod.mk.injEq] at hkey
   have : b = c := U.no_equivocation b hb c hcU hh hkey.2.symm hkey.1.symm
   exact this ▸ hc

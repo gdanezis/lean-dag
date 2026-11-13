@@ -50,6 +50,10 @@ synchronous (`SchemeReactive.toAsyncPace`).
 * `ValidityRoundRobin`: `ValidityPS` under round-robin on one slot per
   round, at `waveLength · (n − |T|) < n`, for every reliable block at
   least two rotations below the horizon.
+* `ValidityRoundRobinSilent`: the same with the validators of a set `Z`
+  silent from a round past GST, at `(waveLength − 1) · fb < |T|` for the `fb`
+  validators outside `T ∪ Z`; a silent leader's slot is skipped directly.
+  Hybrid Mysticeti meets this from `n = 3f + 2c + 1` (`fb = f`).
 * `ValidityAsync` (Sailfish) and `LivenessAsync` (Sui and Duan),
   asynchronous, against an adversary that does not see the coin: when the
   author's block of some round `r` is referenced by every reliable block
@@ -61,7 +65,9 @@ synchronous (`SchemeReactive.toAsyncPace`).
   every round has blocks no later block references.
 
 Validity is stated on records whose blocks reference their author's
-previous block (`Clause.selfParent`).
+previous block (`Clause.selfParent`), or, with weak references, under the
+weak-reference rule, where the author need not lead and no reference from
+the next round is assumed (`ValidityPSWeak`, `ValidityAsyncWeak`).
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -83,10 +89,11 @@ def Grows : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
     (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
-    (σ : VoteSel Validator BlockId Payload P honest) [Slots Validator]
+    (σ : VoteSel Validator BlockId Payload P honest) (wk : BlockId → Finset BlockId)
+    [Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (V₁ V₂ : U.View) (N₁ N₂ : ℕ),
     p.Tolerates honest f q → V₁.ids ⊆ V₂.ids → N₁ ≤ N₂ →
-    deliverSeq p σ U V₁ N₁ <+: deliverSeq p σ U V₂ N₂
+    deliverSeq p σ U wk V₁ N₁ <+: deliverSeq p σ U wk V₂ N₂
 
 /-- **A reliable validator's delivered sequence only grows** along a run,
 at the rows the inequalities cover. -/
@@ -94,11 +101,13 @@ def RunGrows : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
     (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
-    (σ : VoteSel Validator BlockId Payload P honest) [Slots Validator]
+    (σ : VoteSel Validator BlockId Payload P honest) (wk : BlockId → Finset BlockId)
+    [Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N qp : ℕ)
     (ap : AsyncPace qp U T N) (M : ℕ),
     p.Tolerates honest f q →
-    ∀ v (hv : v ∈ T) (t t' : ℕ), t ≤ t' → ap.deliverAt p σ hv M t <+: ap.deliverAt p σ hv M t'
+    ∀ v (hv : v ∈ T) (t t' : ℕ), t ≤ t' →
+      ap.deliverAt p σ wk hv M t <+: ap.deliverAt p σ wk hv M t'
 
 /-- **Integrity, Sailfish's form**: for every round `r` and author `P_k`,
 a validator delivers at most one block of round `r` by `P_k`, whatever
@@ -106,10 +115,11 @@ its content. -/
 def Integrity : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) (honest : Finset Validator)
-    (p : Params) (σ : VoteSel Validator BlockId Payload P honest) [Slots Validator]
+    (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
+    (wk : BlockId → Finset BlockId) [Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (V : U.View) (N : ℕ)
     (r : ℕ) (P_k : Validator),
-    ((deliverSeq p σ U V N).filter
+    ((deliverSeq p σ U wk V N).filter
       (fun b => (U.block b).round = r ∧ (U.block b).creator = P_k)).length ≤ 1
 
 /-- **Integrity, Sui and Duan's form**: a validator delivers a block at most
@@ -117,9 +127,10 @@ once, and only a block some validator built. -/
 def IntegritySD : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) (honest : Finset Validator)
-    (p : Params) (σ : VoteSel Validator BlockId Payload P honest) [Slots Validator]
+    (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
+    (wk : BlockId → Finset BlockId) [Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (V : U.View) (N : ℕ),
-    (deliverSeq p σ U V N).Nodup ∧ ∀ b ∈ deliverSeq p σ U V N, b ∈ U.ids
+    (deliverSeq p σ U wk V N).Nodup ∧ ∀ b ∈ deliverSeq p σ U wk V N, b ∈ U.ids
 
 /-- **Total order, Sailfish's form**, at the rows the inequalities cover: if
 a validator delivers `x` before `y`, no validator delivers `y` before
@@ -128,11 +139,12 @@ def TotalOrder : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
     (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
-    (σ : VoteSel Validator BlockId Payload P honest) [Slots Validator]
+    (σ : VoteSel Validator BlockId Payload P honest) (wk : BlockId → Finset BlockId)
+    [Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (V_i V_j : U.View) (N_i N_j : ℕ)
     (x y : BlockId),
     p.Tolerates honest f q →
-    Before (deliverSeq p σ U V_i N_i) x y → ¬ Before (deliverSeq p σ U V_j N_j) y x
+    Before (deliverSeq p σ U wk V_i N_i) x y → ¬ Before (deliverSeq p σ U wk V_j N_j) y x
 
 /-- **Total order, Sui and Duan's form**, at the rows the inequalities
 cover: if a validator delivers `x` before `y`, a validator that delivers
@@ -141,12 +153,13 @@ def TotalOrderSD : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
     (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
-    (σ : VoteSel Validator BlockId Payload P honest) [Slots Validator]
+    (σ : VoteSel Validator BlockId Payload P honest) (wk : BlockId → Finset BlockId)
+    [Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (V_i V_j : U.View) (N_i N_j : ℕ)
     (x y : BlockId),
     p.Tolerates honest f q →
-    Before (deliverSeq p σ U V_i N_i) x y → y ∈ deliverSeq p σ U V_j N_j →
-    Before (deliverSeq p σ U V_j N_j) x y
+    Before (deliverSeq p σ U wk V_i N_i) x y → y ∈ deliverSeq p σ U wk V_j N_j →
+    Before (deliverSeq p σ U wk V_j N_j) x y
 
 /-- **Agreement**, at the rows the inequalities cover: if a reliable
 validator delivers `b`, every reliable validator delivers `b` from some
@@ -155,12 +168,14 @@ def Agreement : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
     (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
-    (σ : VoteSel Validator BlockId Payload P honest) [Slots Validator]
+    (σ : VoteSel Validator BlockId Payload P honest) (wk : BlockId → Finset BlockId)
+    [Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N qp : ℕ)
     (ap : AsyncPace qp U T N) (M : ℕ),
     p.Tolerates honest f q →
-    ∀ (P_i : Validator) (hi : P_i ∈ T) (t : ℕ) (b : BlockId), b ∈ ap.deliverAt p σ hi M t →
-      ∀ (P_j : Validator) (hj : P_j ∈ T), ∃ t', ∀ t'', t' ≤ t'' → b ∈ ap.deliverAt p σ hj M t''
+    ∀ (P_i : Validator) (hi : P_i ∈ T) (t : ℕ) (b : BlockId), b ∈ ap.deliverAt p σ wk hi M t →
+      ∀ (P_j : Validator) (hj : P_j ∈ T), ∃ t', ∀ t'', t' ≤ t'' →
+        b ∈ ap.deliverAt p σ wk hj M t''
 
 /-- **Validity, Sailfish's form**, partially synchronous, at the rows the
 inequalities cover: in a reactive run past GST whose reliable set meets
@@ -172,7 +187,8 @@ def ValidityPS : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
     [P.Mechanised] (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
-    (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
+    (σ : VoteSel Validator BlockId Payload P honest) (wk : BlockId → Finset BlockId)
+    [S : Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N R qr d : ℕ)
     (rs : SchemeReactive qr p σ U T N),
     p.Tolerates honest f q → p.CertFits qr → p.commitThreshold ≤ T.card →
@@ -184,8 +200,8 @@ def ValidityPS : Prop :=
       P_k ∈ T → m ∈ U.ids → (U.block m).creator = P_k →
       S.leader k = P_k → R ≤ S.slotRound k → (U.block m).round ≤ S.slotRound k → k < b₀ →
       (∀ i, i < d → S.leader (b₀ + i) ∈ T) →
-      S.slotRound (b₀ + d - 1) + (p.waveLength - 1) ≤ N →
-      ∀ (P_j : Validator) (hj : P_j ∈ T), rs.toAsyncPace.Delivers p σ hj m
+      S.slotRound (b₀ + d - 1) + (p.waveLength - 1) ≤ rs.waits →
+      ∀ (P_j : Validator) (hj : P_j ∈ T), rs.toAsyncPace.Delivers p σ wk hj m
 
 /-- **Liveness, Sui and Duan's form**, partially synchronous, under
 `ValidityPS`'s conditions: the author `P_k` eventually delivers its own
@@ -194,7 +210,8 @@ def LivenessPS : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
     [P.Mechanised] (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
-    (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
+    (σ : VoteSel Validator BlockId Payload P honest) (wk : BlockId → Finset BlockId)
+    [S : Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N R qr d : ℕ)
     (rs : SchemeReactive qr p σ U T N),
     p.Tolerates honest f q → p.CertFits qr → p.commitThreshold ≤ T.card →
@@ -206,8 +223,8 @@ def LivenessPS : Prop :=
       m ∈ U.ids → (U.block m).creator = P_k →
       S.leader k = P_k → R ≤ S.slotRound k → (U.block m).round ≤ S.slotRound k → k < b₀ →
       (∀ i, i < d → S.leader (b₀ + i) ∈ T) →
-      S.slotRound (b₀ + d - 1) + (p.waveLength - 1) ≤ N →
-      rs.toAsyncPace.Delivers p σ hk m
+      S.slotRound (b₀ + d - 1) + (p.waveLength - 1) ≤ rs.waits →
+      rs.toAsyncPace.Delivers p σ wk hk m
 
 /-- **Validity under round-robin**, partially synchronous, at the rows
 the inequalities cover: on `n` validators led in turn, one slot per round,
@@ -220,7 +237,7 @@ def ValidityRoundRobin : Prop :=
   ∀ (n : ℕ) [NeZero n] (BlockId Payload : Type) [LinearOrder BlockId]
     (P : Validity (Fin n) BlockId Payload) [P.Mechanised] (q : ℕ) [P.Quorate q]
     (honest : Finset (Fin n)) (f : ℕ) (p : Params)
-    (σ : VoteSel (Fin n) BlockId Payload P honest)
+    (σ : VoteSel (Fin n) BlockId Payload P honest) (wk : BlockId → Finset BlockId)
     (U : BlockRecord (Fin n) BlockId Payload P honest) (T : Finset (Fin n)) (N R qr : ℕ)
     (rs : SchemeReactive (S := roundRobinSlots n) qr p σ U T N),
     p.Tolerates honest f q → p.CertFits qr → p.commitThreshold ≤ T.card →
@@ -229,9 +246,34 @@ def ValidityRoundRobin : Prop :=
     (∀ blk b, P blk b → Clause.selfParent blk b) →
     p.waveLength * (n - T.card) < n →
     ∀ (P_k : Fin n) (m : BlockId), P_k ∈ T → m ∈ U.ids → (U.block m).creator = P_k →
-      n * (max R (U.block m).round + 2) + 2 * p.waveLength ≤ N →
+      n * (max R (U.block m).round + 2) + 2 * p.waveLength ≤
+        SchemeReactive.waits (S := roundRobinSlots n) rs →
       ∀ (P_j : Fin n) (hj : P_j ∈ T),
-        (rs.toAsyncPace (S := roundRobinSlots n)).Delivers (S := roundRobinSlots n) p σ hj m
+        (rs.toAsyncPace (S := roundRobinSlots n)).Delivers (S := roundRobinSlots n) p σ wk hj m
+
+/-- **Validity under round-robin with silent crashes**: `ValidityRoundRobin`
+when the validators of `Z` author no block at round `R` or above, at most
+`fb` validators lie outside `T ∪ Z`, `(waveLength − 1) · fb < |T|`, the vote
+round is one above the proposal and `T` meets the skip threshold. -/
+def ValidityRoundRobinSilent : Prop :=
+  ∀ (n : ℕ) [NeZero n] (BlockId Payload : Type) [LinearOrder BlockId]
+    (P : Validity (Fin n) BlockId Payload) [P.Mechanised] (q : ℕ) [P.Quorate q]
+    (honest : Finset (Fin n)) (f : ℕ) (p : Params)
+    (σ : VoteSel (Fin n) BlockId Payload P honest) (wk : BlockId → Finset BlockId)
+    (U : BlockRecord (Fin n) BlockId Payload P honest) (T Z : Finset (Fin n)) (N R qr fb : ℕ)
+    (rs : SchemeReactive (S := roundRobinSlots n) qr p σ U T N),
+    p.Tolerates honest f q → p.CertFits qr → p.commitThreshold ≤ T.card →
+    p.skipThreshold ≤ T.card → p.voteOffset = 1 →
+    T ⊆ honest → qr ≤ T.card → rs.gst ≤ R →
+    (∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) →
+    (∀ blk b, P blk b → Clause.selfParent blk b) →
+    (∀ b ∈ U.ids, (U.block b).creator ∈ Z → (U.block b).round < R) →
+    n ≤ (T ∪ Z).card + fb → (p.waveLength - 1) * fb < T.card →
+    ∀ (P_k : Fin n) (m : BlockId), P_k ∈ T → m ∈ U.ids → (U.block m).creator = P_k →
+      n * (max R (U.block m).round + 2) + 2 * p.waveLength ≤
+        SchemeReactive.waits (S := roundRobinSlots n) rs →
+      ∀ (P_j : Fin n) (hj : P_j ∈ T),
+        (rs.toAsyncPace (S := roundRobinSlots n)).Delivers (S := roundRobinSlots n) p σ wk hj m
 
 /-- **Validity, Sailfish's form**, asynchronous, at the rows the
 inequalities cover, against an adversary that does not see the coin: in an
@@ -246,7 +288,7 @@ def ValidityAsync : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
     [P.Mechanised] (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
-    (σ : VoteSel Validator BlockId Payload P honest)
+    (σ : VoteSel Validator BlockId Payload P honest) (wk : BlockId → Finset BlockId)
     (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N qp : ℕ)
     (ap : AsyncPace qp U T N) (S₀ : Slots Validator) (hS : StrictMono S₀.slotRound)
     (dflt : Validator) (s₀ d M c : ℕ),
@@ -264,7 +306,7 @@ def ValidityAsync : Prop :=
       r + 2 ≤ S₀.slotRound s₀ →
       (PMF.uniformOfFintype (Fin M → Fin d → Validator)).toOuterMeasure
           {g | ¬ ∀ (P_j : Validator) (hj : P_j ∈ T),
-            ap.Delivers (S := coinSlots S₀ hS (Steelhead.coinOfBlocksFrom s₀ g dflt)) p σ hj m} ≤
+            ap.Delivers (S := coinSlots S₀ hS (Steelhead.coinOfBlocksFrom s₀ g dflt)) p σ wk hj m} ≤
         Steelhead.Coin.badBlockBoundAt Validator c d ^ M
 
 /-- **Liveness, Sui and Duan's form**, asynchronous, under
@@ -274,7 +316,7 @@ def LivenessAsync : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
     [P.Mechanised] (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
-    (σ : VoteSel Validator BlockId Payload P honest)
+    (σ : VoteSel Validator BlockId Payload P honest) (wk : BlockId → Finset BlockId)
     (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N qp : ℕ)
     (ap : AsyncPace qp U T N) (S₀ : Slots Validator) (hS : StrictMono S₀.slotRound)
     (dflt : Validator) (s₀ d M c : ℕ),
@@ -292,13 +334,75 @@ def LivenessAsync : Prop :=
       r + 2 ≤ S₀.slotRound s₀ →
       (PMF.uniformOfFintype (Fin M → Fin d → Validator)).toOuterMeasure
           {g | ¬ ap.Delivers (S := coinSlots S₀ hS (Steelhead.coinOfBlocksFrom s₀ g dflt))
-            p σ hk m} ≤
+            p σ wk hk m} ≤
+        Steelhead.Coin.badBlockBoundAt Validator c d ^ M
+
+/-- **Validity with weak references, partially synchronously**, at the rows
+the inequalities cover: in a reactive run past GST whose blocks follow the
+weak-reference rule, a block `m` of a reliable validator held by every
+reliable validator by time `t ≥ round m` is eventually delivered by every
+reliable validator once a run of `d` reliably led slots starts at round
+`t + 2` or later. The author need not lead a slot. -/
+def ValidityPSWeak : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [P.Mechanised] (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) (wk : BlockId → Finset BlockId)
+    [S : Slots Validator]
+    (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N R qr d : ℕ)
+    (rs : SchemeReactive qr p σ U T N),
+    p.Tolerates honest f q → p.CertFits qr → p.commitThreshold ≤ T.card →
+    T ⊆ honest → qr ≤ T.card → rs.gst ≤ R →
+    (∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) →
+    WeakRule U wk T rs.holds rs.built → Fintype.card Validator < q + T.card →
+    0 < d → (schemeAnchored p σ).SpansEligible (S := S) d →
+    ∀ (P_k : Validator) (m : BlockId) (t b₀ : ℕ),
+      P_k ∈ T → m ∈ U.ids → (U.block m).creator = P_k → (U.block m).round ≤ t →
+      (∀ v ∈ T, m ∈ rs.holds v t) →
+      R ≤ S.slotRound b₀ → t + 2 ≤ S.slotRound b₀ →
+      (∀ i, i < d → S.leader (b₀ + i) ∈ T) →
+      S.slotRound (b₀ + d - 1) + (p.waveLength - 1) ≤ rs.waits →
+      ∀ (P_j : Validator) (hj : P_j ∈ T), rs.toAsyncPace.Delivers p σ wk hj m
+
+/-- **Validity with weak references, asynchronously**, at the rows the
+inequalities cover, against an adversary that does not see the coin: in an
+asynchronous run whose blocks follow the weak-reference rule at build times
+no earlier than their rounds, a block `m` of a reliable validator held by
+every reliable validator by time `t ≥ round m` fails to be eventually
+delivered by every reliable validator with probability at most
+`badBlockBoundAt c d ^ M`, over `M` blocks of `d` coins from a slot `s₀` at
+round `t + 2` or above. No reference to `m` from the next round is
+assumed. -/
+def ValidityAsyncWeak : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [P.Mechanised] (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) (wk : BlockId → Finset BlockId)
+    (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N qp : ℕ)
+    (ap : AsyncPace qp U T N) (built : Validator → ℕ → ℕ) (S₀ : Slots Validator)
+    (hS : StrictMono S₀.slotRound) (dflt : Validator) (s₀ d M c : ℕ),
+    p.Tolerates honest f q → p.CertFits q → p.commitThreshold ≤ T.card → qp ≤ T.card →
+    T ⊆ honest → Fintype.card Validator < q + T.card → 0 < d →
+    (schemeAnchored p σ).SpansEligible (S := S₀) d →
+    S₀.slotRound (s₀ + M * d) + (p.waveLength - 1) ≤ N →
+    (∀ s, s₀ ≤ s → s < s₀ + M * d → c ≤ (safeAt p U (S₀.slotRound s)).card) →
+    WeakRule U wk T ap.holds built →
+    (∀ v ∈ T, ∀ b ∈ U.ids, (U.block b).creator = v →
+      (U.block b).round ≤ built v (U.block b).round) →
+    ∀ (P_k : Validator) (m : BlockId) (t : ℕ),
+      P_k ∈ T → m ∈ U.ids → (U.block m).creator = P_k → (U.block m).round ≤ t →
+      (∀ v ∈ T, m ∈ ap.holds v t) → t + 2 ≤ S₀.slotRound s₀ →
+      (PMF.uniformOfFintype (Fin M → Fin d → Validator)).toOuterMeasure
+          {g | ¬ ∀ (P_j : Validator) (hj : P_j ∈ T),
+            ap.Delivers (S := coinSlots S₀ hS (Steelhead.coinOfBlocksFrom s₀ g dflt))
+              p σ wk hj m} ≤
         Steelhead.Coin.badBlockBoundAt Validator c d ^ M
 
 /-- The atomic-broadcast claims. -/
 def Statement : Prop :=
   Grows ∧ RunGrows ∧ Integrity ∧ IntegritySD ∧ TotalOrder ∧ TotalOrderSD ∧ Agreement ∧
-    ValidityPS ∧ LivenessPS ∧ ValidityRoundRobin ∧ ValidityAsync ∧ LivenessAsync
+    ValidityPS ∧ LivenessPS ∧ ValidityRoundRobin ∧ ValidityRoundRobinSilent ∧ ValidityAsync ∧
+    LivenessAsync ∧ ValidityPSWeak ∧ ValidityAsyncWeak
 
 end AtomicBroadcast
 
