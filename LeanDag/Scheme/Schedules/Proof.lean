@@ -5,6 +5,7 @@ import LeanDag.Barnacle.Ledger.Proof
 import LeanDag.Barnacle.Live.Proof
 import LeanDag.Adaptive.Score.Proof
 import LeanDag.Barnacle.Helpers.Skips
+import LeanDag.Barnacle.Helpers.Chains
 import LeanDag.Scheme.Helpers.Reactive
 import LeanDag.Barnacle.Helpers.Progress
 import LeanDag.Scheme.Helpers.FullRun
@@ -113,10 +114,12 @@ theorem hammerHead : HammerHead := by
 
 theorem rowsScheduled : RowsScheduled := by
   intro n f c
-  refine ⟨fun h => ⟨?_, ?_⟩, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩ <;>
+  refine ⟨fun h => ⟨?_, ?_⟩, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_,
+    fun h => ?_⟩ <;>
   simp only [Scheme.Params.Scheduled, Scheme.Params.mysticeti, Scheme.Params.cordialMinersPS,
     Scheme.Params.blueBottlePS, Scheme.Params.orcaella, Scheme.Params.nemoNemo,
-    Scheme.Params.hybridMysticeti] <;> omega
+    Scheme.Params.hybridMysticeti, Scheme.Params.blueBottleAsync,
+    Scheme.Params.asyncOrcaella] <;> omega
 
 theorem silentDescends : SilentDescends := by
   intro Validator BlockId Payload _ _ _ P _ honest p σ rel fb hsub hw hw3 hcert hlive
@@ -280,7 +283,7 @@ theorem hammerHeadReactive : HammerHeadReactive := by
     (Adaptive.Score.rule_bounded B score hkeep) (Adaptive.Score.rule_keeps score _ hQ)
     (fun C _ ⟨π, hπ⟩ => liveOn_of_permuted_heads C hD hw0 hbase π hπ)
     (fun C _ ⟨π, hπ⟩ => settlesBelow_of_permuted_heads C hD hw0 hbase π hπ)
-    h₀ hQ₀ hcov hgood K hK
+    h₀ hQ₀ hcov (fun K Rn hQ _ _ => hgood K Rn hQ) K hK
 
 attribute [local instance] noFaults in
 theorem reactiveGoodInhabited : ReactiveGoodInhabited := by
@@ -422,11 +425,40 @@ theorem asyncHammerHeadLive : AsyncHammerHeadLive := by
             simpa only [Fintype.card_fin] using this
       _ = _ := by rw [Finset.sum_const, nsmul_eq_mul]
 
+theorem chainsSilent : ChainsSilent := by
+  intro Validator BlockId Payload _ _ _ P _ q _ honest f p σ rel fb c₀ ht hsub hcert hlive hskip hv
+    B Bd upd Q hbnd hkeep hC C₀ hQ₀ h₀
+  obtain ⟨hw, hw3⟩ := waves_of_tolerates ht
+  have hwl : (schemeLiveSilent p σ rel fb).waveLength = p.waveLength :=
+    show p.waveLength - 1 + 1 = p.waveLength by omega
+  obtain ⟨hD, hK⟩ := silentDescends _ _ _ P honest p σ rel fb hsub hw hw3 hcert hlive
+  have hK := hK hv hskip
+  have hev := (Progress.holds _ _ _ (schemeLiveSilent p σ rel fb) (Scheme.agree ht) B Bd upd
+    hbnd C₀ Q hkeep (c₀ + 2 * p.waveLength)).2
+    (fun C _ hQ => liveOn_of_boundedChains C hD.indirect hK (by rw [hwl]; exact hC C hQ)
+      (by rw [hwl])) h₀ hQ₀
+  intro U V Rnd N hg
+  exact hev U V Rnd N (fun C hC _ => hg C hC)
+
+theorem chainsReactive : ChainsReactive := by
+  intro Validator BlockId Payload _ _ _ _ P _ q _ honest f p σ rel c₀ ht hc hcm B Bd upd Q hbnd
+    hkeep hC C₀ δ h₀ hQ₀ U V N hcov hgood K hK
+  have hD := reactiveDescends Validator BlockId Payload P honest p σ rel hc hcm
+  have hwl : (schemeLiveReactive p σ rel).waveLength = p.waveLength :=
+    show p.waveLength - 1 + 1 = p.waveLength by have := hc.1; omega
+  have hw0 : 0 < (schemeLiveReactive p σ rel).waveLength := by rw [hwl]; have := hc.1; omega
+  exact everyHeight_from (Q := Q) (Scheme.agree ht) hbnd hkeep
+    (fun C _ hQ => liveOn_of_boundedChains C hD.indirect hD.decisive
+      (by rw [hwl]; exact hC C hQ) (by rw [hwl]))
+    (fun C _ hQ => settlesBelow_of_boundedChains C hD.indirect hD.decisive hw0
+      (by rw [hwl]; exact hC C hQ) (by rw [hwl]))
+    h₀ hQ₀ hcov (fun K Rn hQ _ _ => hgood K Rn hQ) K hK
+
 theorem holds : Statement :=
   ⟨safe, descends, runsExist, aimd, hammerHead, rowsScheduled, silentDescends, silentLive,
     hammerHeadSilent, rowsSkipScheduled, reactiveDescends, runsExistReactive, aimdReactive,
     hammerHeadReactive, reactiveGoodInhabited, asyncConfigLive, asyncAimdRuns, asyncAimdLive,
-    asyncHammerHeadRuns, asyncHammerHeadLive⟩
+    asyncHammerHeadRuns, asyncHammerHeadLive, chainsSilent, chainsReactive⟩
 
 end Schedules
 

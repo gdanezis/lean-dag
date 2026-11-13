@@ -6,6 +6,7 @@ import Mathlib.Probability.Distributions.Uniform
 import LeanDag.Barnacle.Agreement.Statement
 import LeanDag.Barnacle.Ledger.Statement
 import LeanDag.Barnacle.Live.Statement
+import LeanDag.Barnacle.Model.Chains
 import LeanDag.Barnacle.Aimd.Rule
 import LeanDag.Adaptive.Score.Rule
 /-!
@@ -50,7 +51,15 @@ import LeanDag.Adaptive.Score.Rule
   update rule that keeps that shape, HammerHead's among them, at
   `(waveLength − 1)·fb + slack + 1 ≤ n` (`SilentLive`, `HammerHeadSilent`);
   Mysticeti, Blue Bottle PS, Orcaella and Hybrid Mysticeti meet this at
-  their committees (`RowsSkipScheduled`).
+  their committees (`RowsSkipScheduled`);
+* **at every leader count, under schedules with bounded anchor chains**
+  (`Config.BoundedChains`): from every round's first slot, the scan to the
+  first committed slot, through the skipped slots of crashed leaders and
+  the scans of Byzantine-led slots a wave above them, ends within `c₀`
+  rounds. Under every update rule keeping such schedules, the decider
+  reaches every height with crashed validators silent (`ChainsSilent`) and
+  run responsively, each configuration's schedule good from `δ` past its
+  start (`ChainsReactive`), at gap `c₀ + 2·waveLength`.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -375,11 +384,11 @@ def HammerHead : Prop :=
         Barnacle.Live.RunsExist (schemeLive p σ rel) B Boundary.atThreshold
           (Adaptive.rule score) C₀ (n + p.waveLength - 1))
 
-/-- **The partially synchronous rows fit round-robin scheduling**, at slack
-`f` for the Byzantine rows and `f + c` for the hybrid ones: Mysticeti and
-Cordial Miners PS from `3f + 1`, Blue Bottle PS from `5f + 1`, Orcaella
-from `5f + 3c + 1`, Nemo-Nemo from `2c + 1`, and Hybrid Mysticeti from
-`3f + 3c + 1`. -/
+/-- **The rows that fit round-robin scheduling**, at slack `f` for the
+Byzantine rows and `f + c` for the hybrid ones: Mysticeti and Cordial
+Miners PS from `3f + 1`, Blue Bottle PS and Blue Bottle Async from
+`5f + 1`, Orcaella and Async Orcaella from `5f + 3c + 1`, Nemo-Nemo from
+`2c + 1`, and Hybrid Mysticeti from `3f + 3c + 1`. -/
 def RowsScheduled : Prop :=
   ∀ n f c : ℕ,
     (3 * f + 1 ≤ n → (Params.mysticeti n f).Scheduled n f ∧
@@ -387,7 +396,9 @@ def RowsScheduled : Prop :=
     (5 * f + 1 ≤ n → (Params.blueBottlePS n f).Scheduled n f) ∧
     (5 * f + 3 * c + 1 ≤ n → (Params.orcaella n f c).Scheduled n (f + c)) ∧
     (2 * c + 1 ≤ n → (Params.nemoNemo n c).Scheduled n c) ∧
-    (3 * f + 3 * c + 1 ≤ n → (Params.hybridMysticeti n f c).Scheduled n (f + c))
+    (3 * f + 3 * c + 1 ≤ n → (Params.hybridMysticeti n f c).Scheduled n (f + c)) ∧
+    (5 * f + 1 ≤ n → (Params.blueBottleAsync n f).Scheduled n f) ∧
+    (5 * f + 3 * c + 1 ≤ n → (Params.asyncOrcaella n f c).Scheduled n (f + c))
 
 /-- **With crashed validators silent, the decider has the descent laws and
 decides every slot a synchronised or silent validator leads**, the latter
@@ -448,13 +459,51 @@ def RowsSkipScheduled : Prop :=
     (5 * f + 3 * c + 1 ≤ n → (Params.orcaella n f c).SkipScheduled n (f + c) f) ∧
     (3 * f + 2 * c + 1 ≤ n → (Params.hybridMysticeti n f c).SkipScheduled n (f + c) f)
 
+/-- **With crashed validators silent, schedules with bounded anchor chains
+reach every height**, at any leader count, under every update rule that
+keeps them, at gap `c₀ + 2·waveLength`. -/
+def ChainsSilent : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised] (q : ℕ)
+    [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) (rel : Reliability Validator) (fb c₀ : ℕ),
+    p.Tolerates honest f q → rel.correct ⊆ honest →
+    p.certThreshold ≤ Fintype.card Validator - rel.slack →
+    p.commitThreshold ≤ Fintype.card Validator - rel.slack →
+    p.skipThreshold ≤ Fintype.card Validator - rel.slack → p.voteOffset = 1 →
+    ∀ (B : Barnacle.Params) (Bd : Boundary Validator)
+      (upd : UpdateRule (schemeLiveSilent p σ rel fb).toBaseRule) (Q : Config Validator → Prop),
+      UpdBounded B upd → UpdKeeps upd Q →
+      (∀ C : Config Validator, Q C → C.BoundedChains rel.slack fb p.waveLength c₀) →
+      ∀ C₀ : Config Validator, Q C₀ →
+        Barnacle.Live.RunsExist (schemeLiveSilent p σ rel fb) B Bd upd C₀ (c₀ + 2 * p.waveLength)
+
+/-- **Run responsively, schedules with bounded anchor chains reach every
+height**, at any leader count, under every update rule that keeps them,
+each configuration's schedule good only from `δ` past its start, at gap
+`c₀ + 2·waveLength`. -/
+def ChainsReactive : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [P.Mechanised] (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) (rel : Reliability Validator) (c₀ : ℕ),
+    p.Tolerates honest f q → p.CertFits (Fintype.card Validator - rel.slack) →
+    p.commitThreshold ≤ Fintype.card Validator - rel.slack →
+    ∀ (B : Barnacle.Params) (Bd : Boundary Validator)
+      (upd : UpdateRule (schemeLiveReactive p σ rel).toBaseRule) (Q : Config Validator → Prop),
+      UpdBounded B upd → UpdKeeps upd Q →
+      (∀ C : Config Validator, Q C → C.BoundedChains rel.slack rel.slack p.waveLength c₀) →
+      ∀ (C₀ : Config Validator) (δ : ℕ),
+        Barnacle.Live.RunsExistFrom (schemeLiveReactive p σ rel) B Bd upd C₀ Q
+          (c₀ + 2 * p.waveLength) δ
+
 /-- Safety, the descent laws, every height under Barnacle and HammerHead,
 the rows that fit round-robin, and the same with silent crashes. -/
 def Statement : Prop :=
   Safe ∧ Descends ∧ RunsExist ∧ Aimd ∧ HammerHead ∧ RowsScheduled ∧ SilentDescends ∧
     SilentLive ∧ HammerHeadSilent ∧ RowsSkipScheduled ∧ ReactiveDescends ∧ RunsExistReactive ∧
     AimdReactive ∧ HammerHeadReactive ∧ ReactiveGoodInhabited ∧ AsyncConfigLive ∧ AsyncAimdRuns ∧
-    AsyncAimdLive ∧ AsyncHammerHeadRuns ∧ AsyncHammerHeadLive
+    AsyncAimdLive ∧ AsyncHammerHeadRuns ∧ AsyncHammerHeadLive ∧ ChainsSilent ∧ ChainsReactive
 
 end Schedules
 

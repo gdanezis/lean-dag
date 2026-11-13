@@ -28,7 +28,7 @@ theorem holdsFrom : StatementFrom := by
   exact everyHeight_from (Q := fun C => C.head = head) hagree hbnd hbh
     (fun C _ hCh => liveOn_of_headsRun C hD hw (by rw [hCh]; exact hheads))
     (fun C _ hCh => settlesBelow_of_headsRun C hD hw (by rw [hCh]; exact hheads))
-    h₀ hQ₀ hcov hgood K hK
+    h₀ hQ₀ hcov (fun K Rn hQ _ _ => hgood K Rn hQ) K hK
 
 /-- **Round-robin meets the heads-run hypothesis** once the committee bound
 `waveLength * slack + 1 ≤ n` holds, at gap `n + waveLength - 1`. -/

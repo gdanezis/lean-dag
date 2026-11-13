@@ -143,8 +143,8 @@ are the evidence.
    crash faults enter only through `q`. Hydrozoan's fault model admits
    the committee, and the row lives there (§10).
 
-**Open.** The asynchronous liveness, and the gaps to the concrete
-algorithms; §9.2–§9.4 list them with a plan.
+**Open.** The gaps to the concrete algorithms; §9.2–§9.4 list them with
+a plan. The asynchronous liveness is proved (§11.2).
 
 ## 1. The parameters
 
@@ -900,7 +900,16 @@ vote:
 * **the tail vanishes** (`Vanishes`) at `c ≥ 1`;
 * **the rows ready for the count** (`Live`): the floor `c` is `1` at one
   buffer round, `q − f` at two, and `⌈n/3⌉` at one buffer round where
-  `n ≥ 5f + 3c + 1` and `q = n − f − c` (`floors`).
+  `n ≥ 5f + 3c + 1` and `q = n − f − c` (`floors`);
+* **Validity at every asynchronous row** (`RowsValidity`): at the rows of
+  `Params.AsyncRow`, each at its committee and parent quorum `n − f − c`,
+  under the weak-reference rule, a block every reliable validator holds by
+  `t` fails to be delivered with probability at most
+  `badBlockBoundAt 1 d ^ M` (`AtomicBroadcast.validityAsyncWeak` with the
+  row's readiness `asyncRow_ready`, coverage `asyncRow_covered` and floor
+  `1`);
+* **with probability 1** (`RowsValidityOne`): for every `ε > 0` some `M₀`
+  bounds that probability by `ε` for every `M ≥ M₀` (`Vanishes`).
 
 At a schedule with one slot per wave, `slotRound s = s · waveLength`,
 `d = 1` spans eligibility and the bound is `((n − c)/n)^M`; at one slot per
@@ -1057,11 +1066,11 @@ is `p.waveLength`. `Scheme/Schedules/Statement.lean` states, and
   output's heads are a permutation of round-robin (`PermRR`), reach every
   height with gap `n + waveLength − 1`. A HammerHead score is safe at every
   tolerated row with no clause on the score;
-* **the partially synchronous rows meet `Params.Scheduled`**
-  (`RowsScheduled`): Mysticeti and Cordial Miners PS at slack `f` from
-  `3f + 1`, Blue Bottle PS from `5f + 1`, Orcaella at slack `f + c` from
-  `5f + 3c + 1`, Nemo-Nemo at slack `c` from `2c + 1`, and Hybrid
-  Mysticeti at slack `f + c` from `3f + 3c + 1`.
+* **the rows that meet `Params.Scheduled`** (`RowsScheduled`): Mysticeti
+  and Cordial Miners PS at slack `f` from `3f + 1`, Blue Bottle PS and
+  Blue Bottle Async from `5f + 1`, Orcaella and Async Orcaella at slack
+  `f + c` from `5f + 3c + 1`, Nemo-Nemo at slack `c` from `2c + 1`, and
+  Hybrid Mysticeti at slack `f + c` from `3f + 3c + 1`.
 
 Three limits. Barnacle's configurations have a slot in every round, so
 the schedules it emits are pipelined; a row run with one slot per wave is
@@ -1159,6 +1168,7 @@ Sailfish's weak edges to older rounds have no counterpart in the model.
 | The partially synchronous rows at their committees, parent quorum `n − f − c` | `Params.PSRow` |
 | A responsive run exists at every such row, every vote and every schedule | `Responsive.Inhabited` (`Full.record`, `Full.run`) |
 | Validity (Sailfish) and the author's own delivery (Sui and Duan) at every such row | `Responsive.RowsValidity` |
+| Validity with weak references at every such row, the author leading no slot | `Responsive.RowsValidityWeak` (`psRow_two_quorums`) |
 
 The witness is the full record run in lockstep: every block references the
 whole round below, so every block reaches every block of a lower round and
@@ -1408,3 +1418,44 @@ configuration's validity window under the coverage horizon
 
 The weak-reference rule (`WeakRule`), the monotonicity of `holds` and the
 `built` bound are premises.
+
+## 28. Bounded anchor chains
+
+Statement `Barnacle/Model/Chains.lean`, proofs `Barnacle/Helpers/Chains.lean`;
+review item 1 on PR #55. Liveness under a leader schedule at any number of
+leaders per round.
+
+A slot at round `r` is decided indirectly by scanning the slots from round
+`r + w` in decision order: a skipped slot is passed over, the first
+committed slot is the anchor, and an undecided slot stops the scan (the
+indirect law, `LiveRule.Indirect`). After GST a correct leader's slot
+commits and a crashed leader's is skipped; only a Byzantine-led slot can
+stay undecided, and it is decided once its own scan, from a wave above
+it, ends.
+
+| Claim | Lean |
+|---|---|
+| The scan from slot `p` ends by round `H`: a `T`-led slot is reached, every slot before it led outside `D` having its own scan end by `H` | `Config.ChainEnds` |
+| **Bounded anchor chains**: for every split `T ⊆ D` missing at most `slack` and `fb`, the scan from every round's first slot ends within `c₀` rounds | `Config.BoundedChains` |
+| A scan that ends decides its slot | `decided_of_scan` |
+| A scan that ends under the horizon reaches a committed slot and decides every slot before it | `scan_of_chainEnds` |
+| A configuration with bounded anchor chains is live, and settles the slots below where its schedule turns good, at gap `c₀ + 2w` | `liveOn_of_boundedChains`, `settlesBelow_of_boundedChains` |
+| Runs of heads and runs of decided rounds are bounded anchor chains | `boundedChains_of_headsRun`, `boundedChains_of_skipRun` |
+| With crashed validators silent, every update rule keeping bounded anchor chains reaches every height | `Schedules.ChainsSilent` |
+| Run responsively, the same, each configuration good from `δ` past its start | `Schedules.ChainsReactive` |
+| Theorem 2 under any anchored update rule keeping bounded anchor chains | `Compose.ChainsBroadcast` |
+| Validity of the decider under a schedule with bounded anchor chains, partially synchronously, once `t + 3w + c₀` rounds fit in the run; at every partially synchronous row at its committee | `AtomicBroadcast.ValidityPSChains`, `Responsive.RowsValidityChains` |
+| Up to a horizon: the property for the rounds under `Nmax`, and the rule read with good DAGs only up to `Nmax`, are live and settle | `Config.BoundedChainsUpto`, `LiveRule.upTo`, `liveOn_upTo_of_boundedChainsUpto`, `settlesBelow_upTo_of_boundedChainsUpto` |
+| **Random assignments**: heads drawn in `J · M` independent blocks of `L` rounds, each opening with `w` heads from every `T` missing at most `slack` except with probability `ε`, have bounded anchor chains up to `Nmax ≤ J·M·L`, gap `2ML`, except with probability `2ⁿ · J · ε^M` | `Barnacle.Chains.RandomChains` (`chainEnds_of_windows`, `window_le`) |
+| **A fresh random ordering per block of `n` rounds**: `ε = 1 − (n − slack)^(w) / n^(w)`, below `1` once `w ≤ n − slack` | `Barnacle.Chains.ShuffleChains` (`card_prefixIn_mul`, `shuffle_compl_le`) |
+| **Theorem 2 under a random ordering per block**: runs of height `K` on every signer's view that broadcast atomically and finalize each closed configuration's commits fail to exist with probability at most `2ⁿ · J · ε^Mb` | `Compose.ShuffleBroadcast` (`broadcasts_of_ledger`; `everyHeight_from` on `LiveRule.upTo N`, its goodness asked only of the runs it builds) |
+
+The property is not a condition on the heads alone. With two leaders per
+round, Hybrid Mysticeti at `n = 6`, `f = 1`, `c = 1`, round-robin heads
+and validator `0` (Byzantine) as every round's second leader, a crashed
+head (validator `3`) exposes the second slot at every round `≡ 0 mod 3`, and
+the scan from round `0` never ends: the property fails, and so does
+liveness. The heads-only conditions `Params.Scheduled` and
+`Params.SkipScheduled` are instances (`boundedChains_of_headsRun`,
+`boundedChains_of_skipRun`).
+

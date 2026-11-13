@@ -262,6 +262,7 @@ theorem everyHeight_from (hR : Properties.Agree R.toBaseRule.toDagRule)
     (h₀ : C₀.InBounds P) (hQ₀ : Q C₀)
     {N : ℕ} {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
     (hgood : ∀ K (Rn : Run R.toBaseRule P B upd C₀ U V K), Q (Rn.cfg K) →
+      Rn.start K ≤ K * (max (P.maxInterval + 1) δ + c) → horizonFrom P R c δ (K + 1) ≤ N →
       R.Good (Rn.cfg K).sched U (Rn.start K + δ)
           (Rn.start K + max (P.maxInterval + 1) δ + 2 * c + R.waveLength) ∨
         ∃ Rn' : Run R.toBaseRule P B upd C₀ U V (K + 1),
@@ -277,7 +278,7 @@ theorem everyHeight_from (hR : Properties.Agree R.toBaseRule.toDagRule)
     have hhor : horizonFrom P R c δ K ≤ N := by unfold horizonFrom; omega
     obtain ⟨Rn, hstart, hhead⟩ :=
       everyHeight_from hR hupd hupdh hlive hset h₀ hQ₀ hcov hgood K hhor
-    rcases hgood K Rn hhead with hg | ⟨Rn', hstart', hhead'⟩
+    rcases hgood K Rn hhead hstart hN with hg | ⟨Rn', hstart', hhead'⟩
     · -- the step's own horizon, under `N`
       have hcovK : R.toBaseRule.CoversUpto U V
           (Rn.start K + max (P.maxInterval + 1) δ + 2 * c + R.waveLength) :=

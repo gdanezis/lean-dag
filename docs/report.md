@@ -12329,6 +12329,13 @@ its certificate fitting and its commit threshold within `n − f − c`
 (`Scheme.Responsive.psRow_fits`). Nemo-Nemo is among the rows: its
 coverage is the crash-only one, and Validity asks only that blocks
 reference their author's previous block, which the family's row adds.
+With weak references the author need not lead a slot
+(`Scheme.Responsive.rowsValidityWeak`, from `AtomicBroadcast.validityPSWeak`
+and `psRow_two_quorums`). The asynchronous rows have the same per-row form
+(`Params.AsyncRow`; `Scheme.AsyncLive.rowsValidity`): a block every reliable
+validator holds fails to be delivered with probability at most
+`badBlockBoundAt 1 d ^ M`, and so with probability `1` as `M` grows
+(`Scheme.AsyncLive.rowsValidityOne`).
 
 ### 27.18 Crash recovery, partially synchronous
 
@@ -12400,7 +12407,44 @@ delay and the commit gap: a configuration then commits a leader inside its
 own range (`Barnacle.ledger_commit_of_window`), so its range in the ledger
 holds a leader late enough to reach the block.
 
-### 27.22 What the arc does not contain
+### 27.22 Bounded anchor chains
+
+Liveness under a leader schedule at any number of leaders per round
+(`scheme.md` §28). A Byzantine-led slot is the only slot that can stay
+undecided after GST, and it stops the indirect rule's scan for every slot
+a wave below it; a crashed leader's slot is skipped and passed over. A
+schedule has **bounded anchor chains** (`Barnacle.Config.BoundedChains`)
+when, for every split of the validators into those whose slots commit and
+those whose slots are decided directly, the scan from every round's first
+slot reaches a committed slot within `c₀` rounds, each Byzantine-led slot
+it meets resolved by its own scan. Such a schedule is live at gap
+`c₀ + 2w` (`Barnacle.liveOn_of_boundedChains`,
+`settlesBelow_of_boundedChains`); the decider reaches every height under
+any update rule that keeps the property, with crashed validators silent
+(`Scheme.Schedules.chainsSilent`) and run responsively
+(`chainsReactive`), and the mechanisms composed broadcast atomically
+(`Scheme.Compose.chainsBroadcast`). Runs of heads and runs of decided
+rounds are instances. The decider's own Validity holds under any schedule
+with bounded anchor chains (`Scheme.AtomicBroadcast.validityPSChains`, per
+row `Scheme.Responsive.rowsValidityChains`): the scan from `t + 1 + w`
+reaches a committed leader, every slot below it is decided, and the
+weak-reference rule puts the block in its history. Any assignment algorithm that draws the heads in
+independent blocks, each opening with a wave of correct heads with
+probability at least `1 − ε`, has the property up to a horizon except with
+probability `2ⁿ · J · ε^M` (`Barnacle.Chains.randomChains`), against an
+adversary that fixes the faults before the draw; a fresh uniformly random
+ordering of the validators per block of `n` rounds has
+`ε = 1 − (n − slack)^(w) / n^(w)` (`Barnacle.Chains.shuffleChains`), which
+is below `1` whenever `w ≤ n − slack`, a far weaker condition than
+`w · slack < n`. Under such a schedule, with responsive validators that
+crash and restart and checkpoints, runs of every height up to the horizon
+exist on every signer's view, broadcast atomically and finalize what each
+closed configuration commits, except with probability
+`2ⁿ · J · ε^Mb` (`Scheme.Compose.shuffleBroadcast`): the runs are built on
+the rule read up to the horizon (`Barnacle.LiveRule.upTo`), whose good DAGs
+`everyHeight_from` needs only for the runs it constructs.
+
+### 27.23 What the arc does not contain
 
 The properties of Mahi-Mahi and Async BlueBottle that are proved of
 those rules alone reach the rows of §27.5 at the least vote only; the
@@ -21306,7 +21350,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 656 theorems the body or Appendix A names, each
+The 661 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -25784,6 +25828,33 @@ theorem progress (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBound
     Nonempty (Run R.toBaseRule P B upd C₀ U V (K + 1))
 ```
 
+#### `everyHeight_from`
+
+*theorem, `Barnacle.Helpers.Progress.lean`*
+
+```lean
+theorem everyHeight_from (hR : Properties.Agree R.toBaseRule.toDagRule)
+    (hupd : UpdBounded P upd) (hupdh : UpdKeeps upd Q) {c δ : ℕ}
+    (hlive : ∀ C : Config Validator, C.InBounds P → Q C → R.LiveOn C.sched c)
+    (hset : ∀ C : Config Validator, C.InBounds P → Q C → R.SettlesBelow C.sched c)
+    (h₀ : C₀.InBounds P) (hQ₀ : Q C₀)
+    {N : ℕ} {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
+    (hgood : ∀ K (Rn : Run R.toBaseRule P B upd C₀ U V K), Q (Rn.cfg K) →
+      Rn.start K ≤ K * (max (P.maxInterval + 1) δ + c) → horizonFrom P R c δ (K + 1) ≤ N →
+      R.Good (Rn.cfg K).sched U (Rn.start K + δ)
+          (Rn.start K + max (P.maxInterval + 1) δ + 2 * c + R.waveLength) ∨
+        ∃ Rn' : Run R.toBaseRule P B upd C₀ U V (K + 1),
+          Rn'.start (K + 1) ≤ Rn.start K + max (P.maxInterval + 1) δ + c ∧
+            Q (Rn'.cfg (K + 1))) :
+    ∀ K, horizonFrom P R c δ K ≤ N →
+      ∃ Rn : Run R.toBaseRule P B upd C₀ U V K,
+        Rn.start K ≤ K * (max (P.maxInterval + 1) δ + c) ∧ Q (Rn.cfg K)
+  | 0, _ => ⟨Run.zero _ P B upd C₀ h₀ U V, Nat.zero_le _, hQ₀⟩
+  | K + 1, hN =>
+```
+
+**Every height, each configuration's schedule good from `δ` past its start**, up to the round its step needs, unless the run has already moved past it.
+
 #### `headsRun_of_cycle`
 
 *theorem, `Barnacle.Helpers.Heads.lean`*
@@ -26536,6 +26607,14 @@ The hypothesis is what "reads the history" means: the score's answer depends on 
 theorem holds : Statement
 ```
 
+#### `holds`
+
+*theorem, `Barnacle.Chains.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
 #### `chop_chop`
 
 *theorem, `Barnacle.Chop.lean`*
@@ -26636,6 +26715,19 @@ theorem update_spanOf (Rn : Run R P B upd C₀ U V K) (k : ℕ) (hk : k < K)
 ```
 
 **The rule is applied to exactly the range's verdicts.** `Run.spanOf` and the structure's own `update` field name one function, so a reader chasing what a reputation rule sees can read `spanOf` and stop.
+
+#### `settlesBelow_of_boundedChains`
+
+*theorem, `Barnacle.Helpers.Chains.lean`*
+
+```lean
+theorem settlesBelow_of_boundedChains {slack fb c₀ c : ℕ} (hD : R.Indirect)
+    (hK : R.Decisive slack fb) (hw : 0 < R.waveLength)
+    (hC : C.BoundedChains slack fb R.waveLength c₀) (hc : c₀ + 2 * R.waveLength ≤ c) :
+    R.SettlesBelow C.sched c
+```
+
+**A configuration with bounded anchor chains settles the slots below the round its schedule turns good**, at any gap of at least `c₀ + 2w`.
 
 #### `coversUpto_full`
 
@@ -29560,6 +29652,16 @@ theorem decided_none_of_novel {p : Params} {σ : VoteSel Validator BlockId Paylo
 
 **The prompt skip**: after an extension, a slot whose candidates are all new is skipped at once, at a vote round one above the slot and a quorum of old blocks one round up that meets the skip threshold.
 
+#### `psRow_two_quorums`
+
+*theorem, `Scheme.Responsive.Proof.lean`*
+
+```lean
+theorem psRow_two_quorums {p : Params} {n f c : ℕ} (h : p.PSRow n f c) : n < 2 * (n - f - c)
+```
+
+At a partially synchronous row, two parent quorums exceed the committee.
+
 #### `holds`
 
 *theorem, `Scheme.Responsive.Proof.lean`*
@@ -29582,6 +29684,14 @@ theorem holds : Statement
 
 ```lean
 theorem holds : Statement
+```
+
+#### `chainsReactive`
+
+*theorem, `Scheme.Schedules.Proof.lean`*
+
+```lean
+theorem chainsReactive : ChainsReactive
 ```
 
 #### `holds`

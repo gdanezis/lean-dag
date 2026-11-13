@@ -1,4 +1,5 @@
 import LeanDag.Scheme.Model.Deliver
+import LeanDag.Barnacle.Model.Chains
 import LeanDag.Scheme.Model.Reactive
 import LeanDag.Scheme.Model.AsyncLive
 import LeanDag.Scheme.Model.Async
@@ -398,11 +399,36 @@ def ValidityAsyncWeak : Prop :=
               p σ wk hj m} ≤
         Steelhead.Coin.badBlockBoundAt Validator c d ^ M
 
+/-- **Validity under a schedule with bounded anchor chains, partially
+synchronously**, at the rows the inequalities cover: in a reactive run past
+GST under the schedule of a configuration with bounded anchor chains, whose
+blocks follow the weak-reference rule, a block `m` of a reliable validator
+held by every reliable validator by time `t` is eventually delivered by
+every reliable validator, once `t + 3w + c₀` rounds fit in the run. -/
+def ValidityPSChains : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [P.Mechanised] (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) (wk : BlockId → Finset BlockId)
+    (C : Barnacle.Config Validator),
+    letI : Slots Validator := C.sched
+    ∀ (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator)
+    (N R qr c₀ slack : ℕ) (rs : SchemeReactive qr p σ U T N),
+    p.Tolerates honest f q → p.CertFits qr → p.commitThreshold ≤ T.card →
+    T ⊆ honest → qr ≤ T.card → rs.gst ≤ R →
+    (∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) →
+    WeakRule U wk T rs.holds rs.built → Fintype.card Validator < q + T.card →
+    Fintype.card Validator ≤ T.card + slack → C.BoundedChains slack slack p.waveLength c₀ →
+    ∀ (P_k : Validator) (m : BlockId) (t : ℕ),
+      P_k ∈ T → m ∈ U.ids → (U.block m).creator = P_k → (U.block m).round ≤ t →
+      (∀ v ∈ T, m ∈ rs.holds v t) → R ≤ t + 2 → t + 3 * p.waveLength + c₀ ≤ rs.waits →
+      ∀ (P_j : Validator) (hj : P_j ∈ T), rs.toAsyncPace.Delivers p σ wk hj m
+
 /-- The atomic-broadcast claims. -/
 def Statement : Prop :=
   Grows ∧ RunGrows ∧ Integrity ∧ IntegritySD ∧ TotalOrder ∧ TotalOrderSD ∧ Agreement ∧
     ValidityPS ∧ LivenessPS ∧ ValidityRoundRobin ∧ ValidityRoundRobinSilent ∧ ValidityAsync ∧
-    LivenessAsync ∧ ValidityPSWeak ∧ ValidityAsyncWeak
+    LivenessAsync ∧ ValidityPSWeak ∧ ValidityAsyncWeak ∧ ValidityPSChains
 
 end AtomicBroadcast
 
