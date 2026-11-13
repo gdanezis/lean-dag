@@ -156,7 +156,7 @@ def hyReactive (N : ℕ) :
     latest := fun n => 2 + 6 * n
     built_le_latest := fun v hv _ _ => by obtain ⟨_, _⟩ := mem_Thy hv; omega
     built_lt := fun _ _ _ _ => by omega
-    deadline := fun _ _ _ _ => by omega
+    deadline := fun _ _ _ _ _ => by omega
     holds := hyHolds N
     holds_sub := fun _ _ => by
       simp only [hyHolds, uhy_ids]; exact Finset.filter_subset _ _
@@ -200,7 +200,7 @@ def hyReactive (N : ℕ) :
       refine ⟨hn, ?_⟩
       rcases hheld.2 with h | ⟨_, h⟩ <;> omega
     advancesAt := fun _ _ _ hn _ _ => hn
-    reach_or_wait := fun v hv k _ _ L hL m hm c hc hcc hcr => by
+    reach_or_wait := fun v hv k _ _ _ L hL m hm c hc hcc hcr => by
       -- the reactive exit: every block references the whole round below
       left
       have hvo : hyP.voteOffset = 1 := by decide
@@ -211,7 +211,7 @@ def hyReactive (N : ℕ) :
       exact Reaches.single (by
         change L ∈ (hyBlock c).refs
         exact mem_hyBlock_refs.mpr (by omega))
-    cert_or_wait := fun _ v hv k hN hlead L hL c hc hcc hcr => by
+    cert_or_wait := fun _ v hv k _ hN hlead L hL c hc hcc hcr => by
       -- the reactive exit: both round-`(r + 1)` blocks vote and are referenced
       left
       have hvo : hyP.voteOffset = 1 := by decide

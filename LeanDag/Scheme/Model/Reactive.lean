@@ -53,11 +53,12 @@ structure SchemeReactive [S : Slots Validator] (q : ℕ) (p : Params)
   /-- **The progress rule at `q`.** A reliable validator holding `q`
   distinct round-`n` authors gets past round `n`. -/
   advancesAt : ∀ v ∈ T, ∀ n < N, ∀ t, q ≤ (authorsIn U (holds v t) n).card → n < top v
-  /-- **Reach or wait.** At each round from the one above the proposal to
-  the vote round, a reliable block reaches the leader block, or its builder
-  waited the timeout and references the leader's block of the round below
-  if it holds it. -/
-  reach_or_wait : ∀ v ∈ T, ∀ k : ℕ, S.slotRound k + p.voteOffset ≤ N → S.leader k ∈ T →
+  /-- **Reach or wait.** At a slot past GST, at each round from the one
+  above the proposal to the vote round, a reliable block reaches the leader
+  block, or its builder waited the timeout and references the leader's
+  block of the round below if it holds it. -/
+  reach_or_wait : ∀ v ∈ T, ∀ k : ℕ, gst ≤ S.slotRound k →
+    S.slotRound k + p.voteOffset ≤ N → S.leader k ∈ T →
     ∀ L, IsLeaderBlock U k L → ∀ m, m < p.voteOffset →
     ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + m + 1 →
     Reaches U c L ∨
@@ -65,11 +66,11 @@ structure SchemeReactive [S : Slots Validator] (q : ℕ) (p : Params)
           ≤ built v (S.slotRound k + m + 1) ∧
         ∀ b ∈ U.ids, (U.block b).creator = S.leader k → (U.block b).round = S.slotRound k + m →
           b ∈ holds v (built v (S.slotRound k + m + 1)) → b ∈ (U.block c).refs)
-  /-- **Certify or wait.** Where votes are certified a round later, a
-  reliable decision-round block certifies the leader block, or its builder
-  waited the timeout and references every reliable vote for it that it
-  holds. -/
-  cert_or_wait : p.voteIsCert = false → ∀ v ∈ T, ∀ k : ℕ,
+  /-- **Certify or wait.** Where votes are certified a round later, at a
+  slot past GST, a reliable decision-round block certifies the leader
+  block, or its builder waited the timeout and references every reliable
+  vote for it that it holds. -/
+  cert_or_wait : p.voteIsCert = false → ∀ v ∈ T, ∀ k : ℕ, gst ≤ S.slotRound k →
     S.slotRound k + p.voteOffset + 1 ≤ N → S.leader k ∈ T →
     ∀ L, IsLeaderBlock U k L →
     ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + p.voteOffset + 1 →

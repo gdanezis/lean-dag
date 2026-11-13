@@ -12317,7 +12317,36 @@ its certificate fitting and its commit threshold within `n − f − c`
 coverage is the crash-only one, and Validity asks only that blocks
 reference their author's previous block, which the family's row adds.
 
-### 27.18 What the arc does not contain
+### 27.18 Crash recovery, partially synchronous
+
+M2 (`mechanisms.md`). A crash run (`Scheme.CrashRun`) is a responsive run
+in which validators may stop and start again, any number of times and all
+at once, until a time `tr`, after which the reliable validators stay up.
+`up v t` says that `v` runs at `t`. What a crash leaves intact holds
+throughout: a validator keeps on disk what it holds and builds
+(`holds_mono`, `holds_own`), builds only while up (`up_built`), rebuilds
+every round it missed on restart (`built_of_le_top`), and sets its timers
+again, so the wait clauses hold of every block. What needs it running holds
+only while it runs: delivery to a validator up throughout the delay, which
+covers what was sent while it was down (`converges`), catch-up (`catchup`)
+and the timeout ceiling (`deadline`).
+
+Read past `max gst tr`, a crash run is a responsive run
+(`Scheme.CrashRun.toReactive`, `Scheme.Crash.toReactive`): from then on
+every reliable validator is up. For this the ceiling of the reactive
+timing (`ReactiveCore.deadline`) and the wait clauses of `SchemeReactive`
+are asked only past GST, which is all the proofs ever read of them. The
+crash precondition `Scheme.crashLive` is then the reactive one
+(`Scheme.Crash.live`), a reliably led slot commits past `max gst tr`
+(`Scheme.Crash.commits`), and Validity holds at every partially
+synchronous row (`Scheme.Crash.rowsValidity`). Every validator may crash at
+once (`Scheme.Crash.inhabited`): on the full record, all build round `0`,
+all are down from time `1` to `D`, and all rebuild on restart, round `r`
+at time `r + D` (`Scheme.Full.crashRun`). Safety asks nothing of the crash
+run: a validator that keeps its blocks builds no round twice, so the blocks
+form a `BlockRecord`.
+
+### 27.19 What the arc does not contain
 
 The properties of Mahi-Mahi and Async BlueBottle that are proved of
 those rules alone reach the rows of §27.5 at the least vote only; the
@@ -13670,7 +13699,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 437 definitions and structures the report names, in
+The 440 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -14628,9 +14657,9 @@ structure ReactiveCore (U : BlockRecord Validator BlockId Payload P honest)
   /-- Time advances with rounds — the only lower bound a reactive
   schedule keeps, over the rounds `v` reached. -/
   built_lt : ∀ v ∈ T, ∀ n < top v, built v n < built v (n + 1)
-  /-- **The reactive ceiling.** A validator never waits past the
+  /-- **The reactive ceiling.** Past GST a validator never waits past the
   timeout; it may build any time before it. -/
-  deadline : ∀ v ∈ T, ∀ n < top v, built v (n + 1) ≤ built v n + timeout n
+  deadline : ∀ v ∈ T, ∀ n < top v, gst ≤ built v n → built v (n + 1) ≤ built v n + timeout n
 ```
 
 **The reactive timing**, at any record: `PaceCore` with the ceiling and the round-advance clause in place of `ViewPace`'s full-timeout floor. What a reactive discipline's wait clauses are stated over.
@@ -18602,6 +18631,30 @@ structure Laws (I : Slots Validator → BlockRecord Validator BlockId Payload P 
 
 **The laws of an anchored rule** — what the direct predicates and the rungs must satisfy for agreement, on the records satisfying an invariant `I` (every record, by default). Every rule proves each of them under its own name.
 
+#### `BlockRecord`
+
+*structure, `Common.BlockRecord.lean`*
+
+```lean
+structure BlockRecord (Validator BlockId Payload : Type*)
+    (P : Validity Validator BlockId Payload) (honest : Finset Validator) where
+  /-- Which blocks exist. -/
+  ids : Finset BlockId
+  /-- What each id denotes. -/
+  block : BlockId → Block Validator BlockId Payload
+  /-- Every referenced block is present. -/
+  complete : ∀ i ∈ ids, ∀ j ∈ (block i).refs, j ∈ ids
+  /-- Every block present is valid. -/
+  valid : ∀ i ∈ ids, P block (block i)
+  /-- An honest author has at most one block per round. -/
+  no_equivocation : ∀ i ∈ ids, ∀ j ∈ ids,
+    (block i).creator ∈ honest →
+    (block i).creator = (block j).creator →
+    (block i).round = (block j).round → i = j
+```
+
+**The block record**: every universe type in the development, at a validity predicate `P` and an honest set. `block` is total, with junk outside `ids`; every clause quantifies over `i ∈ ids`, so the junk is never observed.
+
 #### `View`
 
 *structure, `Common.BlockRecord.lean`*
@@ -20584,6 +20637,42 @@ def Populated : Prop :=
 
 **Production**: every round below the horizon has a block by every reliable validator, when the reliable set is `qp` strong.
 
+#### `Live`
+
+*def, `Scheme.Crash.Statement.lean`*
+
+```lean
+def Live : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [P.Mechanised] (honest : Finset Validator) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest)
+    (rel : Reliability Validator) (S : Slots Validator) (U : (schemeRule p σ).Universe)
+    (V : (schemeRule p σ).View U) (T : Finset Validator) (lo K : ℕ),
+    crashLive p σ rel S V T lo K → reactiveLive p σ rel S V T lo K
+```
+
+**The crash precondition is the reactive one**, at every reliability.
+
+#### `Commits`
+
+*def, `Scheme.Crash.Statement.lean`*
+
+```lean
+def Commits : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [P.Mechanised] (honest : Finset Validator) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest)
+    (rel : Reliability Validator),
+    p.CertFits (Fintype.card Validator - rel.slack) →
+    p.commitThreshold ≤ Fintype.card Validator - rel.slack →
+    LeaderCommits (schemeRule p σ)
+      (fun S {U} V T lo K => crashLive p σ rel S (U := U) V T lo K)
+```
+
+**With crashes, a reliably led slot commits**, at every reliability whose quorum meets the commit and certificate thresholds.
+
 #### `held`
 
 *def, `Scheme.Helpers.Starve.lean`*
@@ -20797,11 +20886,12 @@ structure SchemeReactive [S : Slots Validator] (q : ℕ) (p : Params)
   /-- **The progress rule at `q`.** A reliable validator holding `q`
   distinct round-`n` authors gets past round `n`. -/
   advancesAt : ∀ v ∈ T, ∀ n < N, ∀ t, q ≤ (authorsIn U (holds v t) n).card → n < top v
-  /-- **Reach or wait.** At each round from the one above the proposal to
-  the vote round, a reliable block reaches the leader block, or its builder
-  waited the timeout and references the leader's block of the round below
-  if it holds it. -/
-  reach_or_wait : ∀ v ∈ T, ∀ k : ℕ, S.slotRound k + p.voteOffset ≤ N → S.leader k ∈ T →
+  /-- **Reach or wait.** At a slot past GST, at each round from the one
+  above the proposal to the vote round, a reliable block reaches the leader
+  block, or its builder waited the timeout and references the leader's
+  block of the round below if it holds it. -/
+  reach_or_wait : ∀ v ∈ T, ∀ k : ℕ, gst ≤ S.slotRound k →
+    S.slotRound k + p.voteOffset ≤ N → S.leader k ∈ T →
     ∀ L, IsLeaderBlock U k L → ∀ m, m < p.voteOffset →
     ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + m + 1 →
     Reaches U c L ∨
@@ -20809,11 +20899,11 @@ structure SchemeReactive [S : Slots Validator] (q : ℕ) (p : Params)
           ≤ built v (S.slotRound k + m + 1) ∧
         ∀ b ∈ U.ids, (U.block b).creator = S.leader k → (U.block b).round = S.slotRound k + m →
           b ∈ holds v (built v (S.slotRound k + m + 1)) → b ∈ (U.block c).refs)
-  /-- **Certify or wait.** Where votes are certified a round later, a
-  reliable decision-round block certifies the leader block, or its builder
-  waited the timeout and references every reliable vote for it that it
-  holds. -/
-  cert_or_wait : p.voteIsCert = false → ∀ v ∈ T, ∀ k : ℕ,
+  /-- **Certify or wait.** Where votes are certified a round later, at a
+  slot past GST, a reliable decision-round block certifies the leader
+  block, or its builder waited the timeout and references every reliable
+  vote for it that it holds. -/
+  cert_or_wait : p.voteIsCert = false → ∀ v ∈ T, ∀ k : ℕ, gst ≤ S.slotRound k →
     S.slotRound k + p.voteOffset + 1 ≤ N → S.leader k ∈ T →
     ∀ L, IsLeaderBlock U k L →
     ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + p.voteOffset + 1 →
@@ -21141,7 +21231,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 648 theorems the body or Appendix A names, each
+The 651 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -29111,6 +29201,30 @@ theorem holds : Statement
 #### `holds`
 
 *theorem, `Scheme.AtomicBroadcast.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `live`
+
+*theorem, `Scheme.Crash.Proof.lean`*
+
+```lean
+theorem live : Live
+```
+
+#### `commits`
+
+*theorem, `Scheme.Crash.Proof.lean`*
+
+```lean
+theorem commits : Commits
+```
+
+#### `holds`
+
+*theorem, `Scheme.Crash.Proof.lean`*
 
 ```lean
 theorem holds : Statement

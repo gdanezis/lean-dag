@@ -1154,3 +1154,22 @@ every decision-round block certifies every leader block, and no validator
 waits a timeout. Validity at a row is `AtomicBroadcast.ValidityPS` with the
 row's coverage (`Table.RowsCovered`) and threshold fits discharged; the
 reactive run itself remains its premise, as GST is.
+
+## 17. Crash recovery, partially synchronous
+
+`docs/mechanisms.md` M2; statement `Scheme/Crash/Statement.lean`.
+
+| Claim | Lean |
+|---|---|
+| A crash run read past `max gst tr` is a responsive run | `Crash.ToReactive` (`CrashRun.toReactive`) |
+| The crash precondition is the reactive one | `Crash.Live` (`crashLive`) |
+| A reliably led slot commits past `max gst tr` | `Crash.Commits` |
+| Validity at every partially synchronous row | `Crash.RowsValidity` |
+| Every validator may crash at once | `Crash.Inhabited` (`Full.crashRun`) |
+
+The model separates what a crash leaves intact (the disk, the rounds
+rebuilt on restart, the wait rule with timers set again) from what needs
+the validator running (delivery, catch-up, the timeout ceiling). The
+reactive timing's ceiling and wait clauses are asked only past GST, which
+is where the proofs read them; that change is what lets a run with crashes
+before `tr` be a responsive run past `max gst tr`.

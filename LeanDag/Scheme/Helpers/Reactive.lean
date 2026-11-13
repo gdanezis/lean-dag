@@ -86,7 +86,8 @@ theorem reaches (hTh : T ⊆ honest) (hq : q ≤ T.card) (hgst : rs.gst ≤ R)
       ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
         (U.block c).round = S.slotRound k + m + 1 → Reaches U c L := by
     intro m hm hbelow v hv c hc hcc hcr
-    rcases rs.reach_or_wait v hv k hN hlead L hL m hm c hc hcc hcr with h | ⟨hwait, hincl⟩
+    rcases rs.reach_or_wait v hv k (le_trans hgst hR) hN hlead L hL m hm c hc hcc hcr with
+      h | ⟨hwait, hincl⟩
     · exact h
     obtain ⟨b, hb, hbc, hbr⟩ :=
       rs.toAsyncPace.populated hq (S.slotRound k + m) (by omega) (S.leader k) hlead
@@ -136,7 +137,7 @@ theorem certifies (hw : 2 ≤ p.waveLength)
   | false =>
     obtain ⟨hw3, hcq⟩ := hcv hvc
     have hoff := Params.voteOffset_of_false hvc hw3
-    rcases rs.cert_or_wait hvc v hv k (by omega) hlead L hL c hc hcc (by omega) with
+    rcases rs.cert_or_wait hvc v hv k (le_trans hgst hR) (by omega) hlead L hL c hc hcc (by omega) with
       h | ⟨hwait, hincl⟩
     · exact h
     refine isCert_of_votes σ p (fun h => absurd (hvc.symm.trans h) (by simp))

@@ -1,4 +1,5 @@
 import LeanDag.Scheme.Model.Reactive
+import LeanDag.Scheme.Model.Crash
 import LeanDag.Scheme.Helpers.Support
 import Mathlib.Data.Prod.Lex
 import Mathlib.Data.Fintype.Fin
@@ -130,7 +131,36 @@ theorem mem_holdsAt {t : ℕ} {b : Lex (ℕ × Fin n)} :
 attribute [local instance] noFaults
 
 variable [NeZero n] [S : Slots (Fin n)]
-variable {P' : Validity (Fin n) (Lex (ℕ × Fin n)) Unit}
+
+omit [NeZero n] S in
+/-- **Every block two rounds above a leader block certifies it**, at a row
+whose votes are certified a round later and whose certificate threshold is
+at most `n`: its references are the whole round below, each of which
+reaches the leader block and so votes for it. -/
+theorem certifies {p : Params} (hcert : p.certThreshold ≤ n)
+    (σ : VoteSel (Fin n) (Lex (ℕ × Fin n)) Unit
+      (ValidAt q (Clause.distinct.and Clause.selfParent)) Finset.univ)
+    (hvc : p.voteIsCert = false) {L c : Lex (ℕ × Fin n)} (hLmem : L ∈ (record hq N).ids)
+    (hc : c ∈ (record hq N).ids) (hlt : (ofLex L).1 + 2 ≤ (ofLex c).1) :
+    IsCert p σ (record hq N) c L := by
+  unfold IsCert
+  rw [if_neg (by rw [hvc]; decide)]
+  change p.certThreshold ≤ (creatorsOf (blk n) (carriedVotes (record hq N)
+    (σ.Votes (record hq N)) c L)).card
+  have hsub : (Finset.univ : Finset (Fin n)) ⊆
+      creatorsOf (blk n) (carriedVotes (record hq N) (σ.Votes (record hq N)) c L) := by
+    intro w _
+    have hcN := mem_record_ids.mp hc
+    refine mem_creatorsOf.mpr ⟨toLex ((ofLex c).1 - 1, w), ?_, by simp⟩
+    refine Finset.mem_filter.mpr ⟨mem_blk_refs.mpr (by simp only [ofLex_toLex]; omega), ?_⟩
+    refine votes_of_reaches_record (record hq N).noEquivOn_honest
+      (mem_record_ids.mpr (by simp only [ofLex_toLex]; omega)) hLmem (Finset.mem_univ _)
+      (by change (ofLex L).1 < (ofLex (toLex ((ofLex c).1 - 1, w))).1
+          simp only [ofLex_toLex]; omega)
+      (reaches_of_lt ((ofLex c).1 - 2 - (ofLex L).1) ?_)
+    simp only [ofLex_toLex]
+    omega
+  exact le_trans (by simpa using hcert) (Finset.card_le_card hsub)
 
 /-- **The full run is a responsive run** of the family at quorum `qr`, at
 every row whose certificate threshold is at most `n`, every vote rule and
@@ -155,7 +185,7 @@ def run (qr : ℕ) (p : Params) (hcert : p.certThreshold ≤ n)
   latest := fun r => r
   built_le_latest := fun _ _ _ _ => le_refl _
   built_lt := fun _ _ _ _ => Nat.lt_succ_self _
-  deadline := fun _ _ _ _ => le_refl _
+  deadline := fun _ _ _ _ _ => le_refl _
   holds := fun _ t => holdsAt hq N t
   holds_sub := fun _ _ => Finset.filter_subset _ _
   refs_held := fun _ _ r b hb _ hbr j hj => by
@@ -180,37 +210,20 @@ def run (qr : ℕ) (p : Params) (hcert : p.certThreshold ≤ n)
     change (ofLex b).1 = r at hbr
     exact ⟨hr, by omega⟩
   advancesAt := fun _ _ _ hr _ _ => hr
-  reach_or_wait := fun _ _ k _ _ L hL m _ c _ _ hcr => by
+  reach_or_wait := fun _ _ k _ _ _ L hL m _ c _ _ hcr => by
     left
     obtain ⟨_, hLr, -⟩ := hL
     change (ofLex L).1 = S.slotRound k at hLr
     change (ofLex c).1 = S.slotRound k + m + 1 at hcr
     exact reaches_of_lt m (by omega)
-  cert_or_wait := fun hvc _ _ k hN _ L hL c hc _ hcr => by
+  cert_or_wait := fun hvc _ _ k _ _ _ L hL c hc _ hcr => by
     left
     obtain ⟨hLmem, hLr, -⟩ := hL
     change (ofLex L).1 = S.slotRound k at hLr
     change (ofLex c).1 = S.slotRound k + p.voteOffset + 1 at hcr
     have hvo : 1 ≤ p.voteOffset := by
       unfold Params.voteOffset; rw [hvc]; simp
-    unfold IsCert
-    rw [if_neg (by rw [hvc]; decide)]
-    change p.certThreshold ≤ (creatorsOf (blk n) (carriedVotes (record hq N)
-      (σ.Votes (record hq N)) c L)).card
-    have hsub : (Finset.univ : Finset (Fin n)) ⊆
-        creatorsOf (blk n) (carriedVotes (record hq N) (σ.Votes (record hq N)) c L) := by
-      intro w _
-      have hcN := mem_record_ids.mp hc
-      refine mem_creatorsOf.mpr ⟨toLex ((ofLex c).1 - 1, w), ?_, by simp⟩
-      refine Finset.mem_filter.mpr ⟨mem_blk_refs.mpr (by simp only [ofLex_toLex]; omega), ?_⟩
-      refine votes_of_reaches_record (record hq N).noEquivOn_honest
-        (mem_record_ids.mpr (by simp only [ofLex_toLex]; omega)) hLmem (Finset.mem_univ _)
-        (by change (ofLex L).1 < (ofLex (toLex ((ofLex c).1 - 1, w))).1
-            simp only [ofLex_toLex]; omega)
-        (reaches_of_lt (S.slotRound k + p.voteOffset - 1 - (ofLex L).1) ?_)
-      simp only [ofLex_toLex]
-      omega
-    exact le_trans (by simpa using hcert) (Finset.card_le_card hsub)
+    exact certifies hcert σ hvc hLmem hc (by omega)
 
 @[simp] theorem run_gst (qr : ℕ) (p : Params) (hcert : p.certThreshold ≤ n) (σ) :
     (run (hq := hq) (N := N) qr p hcert σ).gst = 0 := rfl
@@ -223,6 +236,109 @@ def run (qr : ℕ) (p : Params) (hcert : p.certThreshold ≤ n)
 
 @[simp] theorem run_timeout (qr : ℕ) (p : Params) (hcert : p.certThreshold ≤ n) (σ) (r : ℕ) :
     (run (hq := hq) (N := N) qr p hcert σ).timeout r = 1 := rfl
+
+end Full
+
+namespace Full
+
+variable {n q : ℕ} {hq : q ≤ n} {N : ℕ}
+
+/-- When round `r` is built in the run with an outage: round `0` at time
+`0`, round `r > 0` at time `r + D`. -/
+def at_ (D r : ℕ) : ℕ := if r = 0 then 0 else r + D
+
+theorem at_mono {D r s : ℕ} (h : r ≤ s) : at_ D r ≤ at_ D s := by
+  unfold at_; split <;> split <;> omega
+
+theorem at_lt {D r : ℕ} : at_ D r < at_ D (r + 1) := by
+  unfold at_; split <;> simp
+
+/-- What every validator holds at time `t` in the run with an outage. -/
+def holdsOut (hq : q ≤ n) (N D t : ℕ) : Finset (Lex (ℕ × Fin n)) :=
+  (record hq N).ids.filter fun b => at_ D (ofLex b).1 ≤ t
+
+theorem mem_holdsOut {D t : ℕ} {b : Lex (ℕ × Fin n)} :
+    b ∈ holdsOut hq N D t ↔ (ofLex b).1 ≤ N ∧ at_ D (ofLex b).1 ≤ t := by
+  simp only [holdsOut, Finset.mem_filter, mem_record_ids]
+
+attribute [local instance] noFaults
+
+variable [NeZero n] [S : Slots (Fin n)]
+
+/-- **Every validator crashes at once.** All build round `0` at time `0`,
+all are down from `1` to `D`, and each rebuilds every round on restart:
+a crash run whose validators all stay up from `D + 1` on. -/
+def crashRun (qr : ℕ) (p : Params) (hcert : p.certThreshold ≤ n)
+    (σ : VoteSel (Fin n) (Lex (ℕ × Fin n)) Unit
+      (ValidAt q (Clause.distinct.and Clause.selfParent)) Finset.univ) (D : ℕ) :
+    CrashRun qr p σ (record hq N) Finset.univ N where
+  top := fun _ => N
+  built := fun _ r => at_ D r
+  timeout := fun _ => 1
+  gst := 0
+  delay := 0
+  proc := 0
+  latest := fun r => at_ D r
+  holds := fun _ t => holdsOut hq N D t
+  up := fun _ t => t = 0 ∨ D < t
+  tr := D + 1
+  up_from := fun _ _ t ht => Or.inr (by omega)
+  up_built := fun _ _ r _ => by
+    show at_ D r = 0 ∨ D < at_ D r
+    unfold at_; split <;> omega
+  rounds_le := fun b hb => mem_record_ids.mp hb
+  built_of_le_top := fun v _ r hr =>
+    ⟨toLex (r, v), mem_record_ids.mpr (by simpa using hr), by simp, by simp⟩
+  le_top_of_built := fun _ _ b hb _ => mem_record_ids.mp hb
+  timeout_pos := fun _ => le_refl 1
+  built_le_latest := fun _ _ _ _ => le_refl _
+  holds_sub := fun _ _ => Finset.filter_subset _ _
+  holds_closed := fun _ _ t b hb j hj => by
+    have hj' := mem_blk_refs.mp hj
+    have hb' := mem_holdsOut.mp hb
+    exact mem_holdsOut.mpr ⟨by omega, le_trans (at_mono (by omega)) hb'.2⟩
+  refs_held := fun _ _ r b hb _ hbr j hj => by
+    have hj' := mem_blk_refs.mp hj
+    have hb' := mem_record_ids.mp hb
+    change (ofLex b).1 = r + 1 at hbr
+    exact mem_holdsOut.mpr ⟨by omega, at_mono (by omega)⟩
+  holds_own := fun _ _ r _ b hb _ hbr => by
+    change (ofLex b).1 = r at hbr
+    exact mem_holdsOut.mpr ⟨mem_record_ids.mp hb, by rw [hbr]⟩
+  holds_mono := fun _ s t hst b hb => by
+    have hb' := mem_holdsOut.mp hb
+    exact mem_holdsOut.mpr ⟨hb'.1, le_trans hb'.2 hst⟩
+  converges := fun _ _ _ _ t _ _ _ b hb => by simpa using hb
+  advances := fun _ _ _ hr _ _ => hr
+  catchup := fun _ _ r hr b _ _ hbr t _ _ hheld => by
+    have hh := mem_holdsOut.mp hheld
+    change (ofLex b).1 = r at hbr
+    rw [hbr] at hh
+    exact ⟨hr, by omega⟩
+  built_lt := fun _ _ _ _ => at_lt
+  deadline := fun _ _ r _ _ hup => by
+    rcases Nat.eq_zero_or_pos r with rfl | hr
+    · -- from round `0`, the validator was down unless there was no outage
+      have h1 := hup 1 (Nat.zero_le _) (by unfold at_; simp)
+      rcases h1 with h1 | h1
+      · omega
+      · unfold at_; simp; omega
+    · unfold at_; split <;> split <;> omega
+  advancesAt := fun _ _ _ hr _ _ => hr
+  reach_or_wait := fun _ _ k _ _ _ L hL m _ c _ _ hcr => by
+    left
+    obtain ⟨_, hLr, -⟩ := hL
+    change (ofLex L).1 = S.slotRound k at hLr
+    change (ofLex c).1 = S.slotRound k + m + 1 at hcr
+    exact reaches_of_lt m (by omega)
+  cert_or_wait := fun hvc _ _ k _ _ _ L hL c hc _ hcr => by
+    left
+    obtain ⟨hLmem, hLr, -⟩ := hL
+    change (ofLex L).1 = S.slotRound k at hLr
+    change (ofLex c).1 = S.slotRound k + p.voteOffset + 1 at hcr
+    have hvo : 1 ≤ p.voteOffset := by
+      unfold Params.voteOffset; rw [hvc]; simp
+    exact certifies hcert σ hvc hLmem hc (by omega)
 
 end Full
 

@@ -138,6 +138,14 @@ Replace the `\george` notes of §4 by the results, as `\edits{…}`.
   the Lean statement, which asks self-reference of the record, not of the
   published protocol; its coverage is the crash-only one.
 
+* **M2 done.** `Scheme.Crash.{ToReactive, Live, Commits, RowsValidity,
+  Inhabited}` (`Model/Crash.lean`, `Scheme/Crash/`, `Full.crashRun`,
+  `scheme.md` §17, report §27.18). `ReactiveCore.deadline` and
+  `SchemeReactive`'s wait clauses are now asked only past GST; no proof
+  read them before it. The executable's `W` (timers re-armed after a
+  restart) has no counterpart: the model's timers are set again at the
+  restart, so the wait clause holds of every block.
+
 ## 5. Order
 
 M1a → M1b → M2 → M5a → M5b → M5c → M3 → M4 → M6 → M1c → M7.

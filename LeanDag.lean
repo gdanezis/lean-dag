@@ -529,6 +529,7 @@ import LeanDag.Scheme.Model.Async
 import LeanDag.Scheme.Model.NoFaults
 import LeanDag.Scheme.Model.Reactive
 import LeanDag.Scheme.Model.AsyncPace
+import LeanDag.Scheme.Model.Crash
 import LeanDag.Scheme.Table.Statement
 import LeanDag.Scheme.Table.Proof
 import LeanDag.Scheme.Helpers.Votes
@@ -589,3 +590,5 @@ import LeanDag.Scheme.AtomicBroadcast.Statement
 import LeanDag.Scheme.AtomicBroadcast.Proof
 import LeanDag.Scheme.Responsive.Statement
 import LeanDag.Scheme.Responsive.Proof
+import LeanDag.Scheme.Crash.Statement
+import LeanDag.Scheme.Crash.Proof
