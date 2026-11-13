@@ -29,6 +29,13 @@ At the least vote, the rows with buffer rounds are carriers too:
 * **Cordial Miners Async** is `cordialAsyncAnchored 5`, Mahi-Mahi's rule
   at wave five with no direct skip, and two views decide alike.
 
+Where no validator equivocates the vote is immaterial:
+
+* **any two vote-selection rules give one carrier** (`VoteFree`) on the
+  records in which no validator equivocates;
+* **so the three rows with buffer rounds are their rules at every vote**
+  on those records (`BufferedRowsNoEquiv`).
+
 Statements only; the proofs are `Proof.lean`.
 -/
 
@@ -125,10 +132,43 @@ def CordialMinersAsyncRow : Prop :=
         (leastSel (Validator := Validator) (BlockId := BlockId) (Payload := Payload)
           (P := ValidWrt) (honest := Correct))).toDagRule
 
+/-- **Any two vote-selection rules give one carrier** on the records in
+which no validator equivocates. -/
+def VoteFree : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
+    (honest : Finset Validator) (p : Params) (σ σ' : VoteSel Validator BlockId Payload P honest),
+    (schemeAnchored p σ).toDagRuleOn (fun U => U.NoEquivOn Finset.univ) =
+      (schemeAnchored p σ').toDagRuleOn (fun U => U.NoEquivOn Finset.univ)
+
+/-- **The rows with buffer rounds are their rules at every vote** on the
+records in which no validator equivocates: Mahi-Mahi at wave `w ≥ 3`, Blue
+Bottle Async, and Cordial Miners Async as `cordialAsyncAnchored 5`. -/
+def BufferedRowsNoEquiv : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId],
+    (∀ [F : Faults Validator] (σ : VoteSel Validator BlockId Payload ValidWrt Correct) (w : ℕ),
+      3 ≤ w →
+      (schemeAnchored (Params.mahiMahi w (Fintype.card Validator) F.f) σ).toDagRuleOn
+          (fun U => U.NoEquivOn Finset.univ) =
+        (MahiMahi.mahiMahiAnchored Validator BlockId Payload w).toDagRuleOn
+          (fun U => U.NoEquivOn Finset.univ)) ∧
+    (∀ [F : Faults5 Validator] (σ : VoteSel Validator BlockId Payload ValidWrt Correct),
+      (schemeAnchored (Params.blueBottleAsync (Fintype.card Validator) F.f) σ).toDagRuleOn
+          (fun U => U.NoEquivOn Finset.univ) =
+        (AsyncBlueBottle.asyncBlueBottleAnchored Validator BlockId Payload).toDagRuleOn
+          (fun U => U.NoEquivOn Finset.univ)) ∧
+    (∀ [F : Faults Validator] (σ : VoteSel Validator BlockId Payload ValidWrt Correct),
+      (schemeAnchored (Params.cordialMinersAsync (Fintype.card Validator) F.f) σ).toDagRuleOn
+          (fun U => U.NoEquivOn Finset.univ) =
+        (cordialAsyncAnchored Validator BlockId Payload 5).toDagRuleOn
+          (fun U => U.NoEquivOn Finset.univ))
+
 /-- The eight rows, together. -/
 def Statement : Prop :=
   MysticetiRow ∧ BlueBottlePSRow ∧ OrcaellaRow ∧ CordialMinersPSRow ∧ NemoNemoRow ∧
-    MahiMahiRow ∧ BlueBottleAsyncRow ∧ CordialMinersAsyncRow
+    MahiMahiRow ∧ BlueBottleAsyncRow ∧ CordialMinersAsyncRow ∧
+    VoteFree ∧ BufferedRowsNoEquiv
 
 end Equiv
 

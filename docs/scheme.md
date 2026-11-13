@@ -267,6 +267,14 @@ as Mahi-Mahi's `Votes` (`leastSel_votes_iff`). Mahi-Mahi has no
 tie-break; two linked candidates are one block by
 `MahiMahi.eq_of_hasCertificate`.
 
+On a record in which no validator equivocates, every vote-selection rule
+selects the slot's one block (`sel_eq_of_noEquiv`), so any two give one
+carrier (`VoteFree`, `readAlike_noEquiv`), and the three rows with buffer
+rounds are their rules at every vote there (`BufferedRowsNoEquiv`). The
+choice of vote matters only where a voter holds two blocks of an
+equivocating leader: it decides which twin, if any, reaches the
+certificate threshold.
+
 Async Nemo-Nemo agrees by the inequalities where nobody equivocates
 (§7.1).
 
@@ -515,8 +523,8 @@ and dropped.
 `OnRecord` is `Scheme/Record.lean`, with the prompt skip after an
 extension; chain quality at the carrier is
 `LeanDagTest/Quality/Generic.lean`. In `audit-conformance.py` and
-`audit-mechanisms.py` the family shows every obligation, and every
-mechanism but adaptive leaders, which no rule of the development has.
+`audit-mechanisms.py` the family shows every obligation and has every
+mechanism; adaptive leaders (Barnacle and HammerHead) are §14.
 
 **The local vote.** `Banded` asks that a slot's verdict survive a
 truncation or a round shift of the record, so the vote must survive it.
@@ -767,10 +775,39 @@ row and vote:
   each references every block of the round below it holds and the starved
   validators' blocks arrive one round late (`Starve.starvePace`,
   `Starve.refs_starve_eq_held`).
+* **One buffer round against a population of `q`** (`SafeOneBuffer`,
+  `card_safeAt_oneBuffer`): with an honest population of the buffer round
+  at least `q` strong and `n ≤ 2q`, the double count reads
+  `q·(q − f) ≤ G·(2q − n) + |honest|·(n − q)`.
+* **A third at the five-`f` committees** (`SafeThird`,
+  `card_safeAt_third`): at `n ≥ 5f + 3c + 1` and `q = n − f − c`, one
+  buffer round gives `n ≤ 3G`. This covers Blue Bottle Async (`c = 0`) and
+  Async Orcaella.
+* **Two at the three-`f` committees** (`TwoSafe`,
+  `Scheme/Helpers/TwoSafe.lean`): at every `b ≤ k` with `k ≥ 2`, on
+  `n = b + 2k + 1` validators with `q = b + k + 1` and `b` Byzantine, some
+  execution under eventual delivery has exactly two safe validators at one
+  buffer round. These are the committees `2q = n + f + 1` of Mahi-Mahi at
+  wave four (`b = k = f`), Hybrid Mahi-Mahi at wave four (`b = f`,
+  `k = f + c`) and Async Nemo-Nemo (`b = 0`, `k = c`). Validators `b` and
+  `b + 1` are `x₁` and `x₂`; the other `2k − 1` honest validators carry
+  labels on a cycle. A round-`1` block references the Byzantine round-`0`
+  blocks, `x₁`, `x₂`, and the `k − 1` labels from a centre: its own label,
+  `0` for `x₁`, `k − 1` for `x₂`. A Byzantine validator has one round-`1`
+  block per label `x`, centred one past `x`. At round `2` the validator
+  labelled `x + 1` references the Byzantine blocks for `x`, the honest
+  blocks of the `k` labels from `x + 1`, and the block of `x₁` or `x₂`
+  whose window misses `x`; no round-`2` block reaches label `x`, while
+  every round-`2` block reaches `x₁` and `x₂`. The safe set is `{x₁, x₂}`
+  (`TwoSafe.card_safeAt_twoSafe`), and the coin finds a safe leader with
+  probability `2/n`. A constant fraction of safe validators therefore
+  needs two buffer rounds, or one buffer round at the five-`f`
+  committees.
 **The coin** (`CoinCommit`, `CoinTail`, through Steelhead's counts,
 `Steelhead/Helpers/Coin.lean`, whose fault model a fault-free instance
 supplies inside the proofs): a uniform coin names a safe leader with
-probability at least `1/n` at one buffer round and `(q − f)/n` at two;
+probability at least `1/n` at one buffer round and `(q − f)/n` at two,
+and at least `1/3` where a third of the validators is safe (`CoinThird`);
 `m` independent coins over rounds whose safe sets hold `c` validators all
 miss with probability at most `((n − c)/n)^m`, which vanishes.
 
@@ -837,9 +874,41 @@ slot, commits on each live replica's own view from some time on. On the
 starving execution of four validators at the Mahi-Mahi row of wave five,
 `CoinLive` gives probability at least `1/2`.
 
-**Not formalised.** Measurability of the safe set (it reads only rounds up
-to the vote round, which is what makes the clause the coin's
-consequence), and the hypergeometric probability for `K` leaders.
+### 11.2 Across waves
+
+The record and its pacing are fixed before the coins are drawn: the
+adversary does not see the coin. `Scheme/Model/AsyncLive.lean` defines
+`coinSlots S₀ h coin`, the schedule on the rounds and kinds of `S₀`,
+whose rounds strictly increase, in which slot `s` is led by `coin s`. The
+coins of `M` blocks of `d` consecutive slots from slot `s₀` are uniform and
+independent (`Steelhead.coinOfBlocksFrom`), and `AsyncPace.UndecidedBelow`
+is the set of draws under which some slot below `s₀` is not decided on
+every reliable validator's own view from some time on.
+`Scheme/AsyncLive/Statement.lean` states, and `Proof.lean` proves, when
+every `d` consecutive slots of `S₀` span eligibility, at every row and
+vote:
+
+* **the tail** (`Tail`): when the safe set of every block slot holds at
+  least `c` validators, `UndecidedBelow` has probability at most
+  `((n^d − c^d)/n^d)^M` (`Steelhead.Coin.badBlockBoundAt c d ^ M`). A block
+  of `d` safe coins is a run of `d` slots that commit
+  (`decided_of_safe_of_holds`), and a run that spans eligibility decides
+  every slot below it (`AnchoredRule.decided_below_of_run`); a draw outside
+  every such block is counted by `Steelhead.no_good_block_prob_le`;
+* **the tail vanishes** (`Vanishes`) at `c ≥ 1`;
+* **the rows ready for the count** (`Live`): the floor `c` is `1` at one
+  buffer round, `q − f` at two, and `⌈n/3⌉` at one buffer round where
+  `n ≥ 5f + 3c + 1` and `q = n − f − c` (`floors`).
+
+At a schedule with one slot per wave, `slotRound s = s · waveLength`,
+`d = 1` spans eligibility and the bound is `((n − c)/n)^M`; at one slot per
+round, `d = waveLength` (`spansEligible_of_identity`).
+
+**Not formalised.** The coin's construction, an adversary that sees the
+coin, and the probability for `K` leaders per round. With `K` leaders
+drawn without replacement the chance that none is safe is
+`C(n − G, K)/C(n, K)`, which `MultiLeader` bounds only at
+`K > n − G`, and `coinSlots` asks for one slot per round.
 
 ## 12. Every row, safe and live
 
@@ -951,3 +1020,80 @@ a reliably-led slot commits. On both witnesses a reliable validator's
 round-`1` block enters the ledger through a slot its author leads
 (`ugrowScheme_includes`, `hyReactive_includes`); on the second, replica
 `0` never builds.
+
+## 14. The family under Barnacle and HammerHead schedules
+
+Barnacle (`LeanDag/Barnacle/`) and HammerHead (`LeanDag/Adaptive/`) are
+stated over any Barnacle live rule. `Scheme/Model/Schedules.lean` reads
+the decider as one, `schemeLive p σ rel`, through
+`Barnacle.liveOfAnchored`; the decider's wave does not depend on the slot,
+so the adapter's wave condition is `rfl`, and `schemeLive`'s wave length
+is `p.waveLength`. `Scheme/Schedules/Statement.lean` states, and
+`Proof.lean` proves, at every vote:
+
+* **safety under every update rule** (`Safe`): at every row with
+  `p.Tolerates honest f q`, two runs agree on the configurations, the
+  anchors and the verdicts, and under an update rule that does not read
+  the view the ledger is agreed, grows by appending, and holds no block
+  twice. The only laws read are `Scheme.agree` and
+  `Scheme.commitsCandidate`;
+* **the descent laws at slack `rel.slack`** (`Descends`), when
+  `rel.correct ⊆ honest`, the wave is at least two (three where votes are
+  certified a round later), and `n − rel.slack` meets the certificate and
+  commit thresholds. This is `Timed.descent_of_support` at
+  `familySupport`, with the gap of `Scheme.indirect`;
+* **every height under a schedule whose heads come in runs**
+  (`RunsExist`, Barnacle's BN11): if every set missing at most `rel.slack`
+  validators leads `p.waveLength` consecutive heads within every `c₀ + 1`
+  rounds, an update rule that keeps the heads and the bounds reaches every
+  height whose horizon fits;
+* **Barnacle's AIMD rule** (`Aimd`) and **every HammerHead score**
+  (`HammerHead`) over the decider: at a row meeting `Params.Scheduled n
+  rel.slack` (`cert ≤ n − slack`, `commit ≤ n − slack`,
+  `waveLength · slack + 1 ≤ n`), the AIMD rule on a leader function whose
+  first leader is round-robin, and a score that keeps the shape and whose
+  output's heads are a permutation of round-robin (`PermRR`), reach every
+  height with gap `n + waveLength − 1`. A HammerHead score is safe at every
+  tolerated row with no clause on the score;
+* **the partially synchronous rows meet `Params.Scheduled`**
+  (`RowsScheduled`): Mysticeti and Cordial Miners PS at slack `f` from
+  `3f + 1`, Blue Bottle PS from `5f + 1`, Orcaella at slack `f + c` from
+  `5f + 3c + 1`, Nemo-Nemo at slack `c` from `2c + 1`, and Hybrid
+  Mysticeti at slack `f + c` from `3f + 3c + 1`.
+
+Three limits. Barnacle's configurations have a slot in every round, so
+the schedules it emits are pipelined; a row run with one slot per wave is
+not one of them. Barnacle's liveness reads `Timed.Good`, partial
+synchrony; the asynchronous rows are safe under Barnacle and HammerHead
+by `Safe`, but their liveness rests on a coin the adversary cannot
+predict (§11), and a reputation schedule is computed from the committed
+history. The heads argument needs `waveLength` consecutive reliable heads, which
+`n ≥ waveLength · (f + c) + 1` guarantees under round-robin.
+
+**Silent crashes.** After every crash has happened a crashed validator
+authors no block. `Timed.SilentGood rel fb` adds to `Timed.Good` a set `Z`
+of validators with no block from the good round on, with at most `fb`
+validators outside the synchronised quorum and `Z`. A slot led by a member
+of `Z` has no candidate, so at a vote round one above the proposal and a
+skip threshold within `n − rel.slack` it is skipped directly
+(`Scheme.skipsUnsupported`). `schemeLiveSilent p σ rel fb` is the decider
+with this goodness, and it is `LiveRule.Decisive`: the quorum commits the
+slots it leads and the quorum with `Z` decides the slots it leads
+(`SilentDescends`). A slot is then decided below `w − 1` rounds of decided
+slots and a committed head (`Barnacle.liveOn_of_skipRun`, the stretch
+descent over the whole run), and on one slot per round a permutation of
+round-robin has such runs once `(w − 1)·fb + slack + 1 ≤ n`
+(`Barnacle.skipRun_perm_roundRobin`: positions whose head is outside the
+quorum number at most `slack`, and positions with a head outside `D` among
+the `w − 1` before them inject into `Fin (w − 1) × Dᶜ`). Every update rule
+that keeps one slot per round and the heads a permutation of round-robin,
+HammerHead's scores among them, reaches every height (`SilentLive`,
+`HammerHeadSilent`) at `Params.SkipScheduled`, which Mysticeti, Blue Bottle
+PS, Orcaella and Hybrid Mysticeti meet at their committees with `fb = f`
+(`RowsSkipScheduled`; Hybrid Mysticeti needs `3f + c + 1 ≤ n`). Cordial
+Miners PS and Nemo-Nemo have no direct skip and meet `Params.Scheduled` at
+their committees. With several leaders per round the run would need every
+slot of its rounds decided, so Barnacle's AIMD rule keeps
+`n ≥ waveLength · (f + c) + 1`, which Hybrid Mysticeti meets from
+`3f + 3c + 1`.
+

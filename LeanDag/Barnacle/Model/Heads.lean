@@ -35,6 +35,30 @@ is `Config.head`. -/
 def HeadsRun (head : ℕ → Validator) (T : Finset Validator) (g c₀ : ℕ) : Prop :=
   ∀ r, ∃ ρ, r ≤ ρ ∧ ρ + g ≤ r + c₀ ∧ ∀ i, i < g → head (ρ + i) ∈ T
 
+/-- **Slots led by a decisive set are decided**: on a good DAG, a set `T`
+missing at most `slack` validators commits the slots it leads, and a set
+`D ⊇ T` missing at most `fb` decides the slots it leads, on any view caught
+up to the horizon. -/
+def LiveRule.Decisive (R : LiveRule Validator BlockId Payload) (slack fb : ℕ) : Prop :=
+  ∀ (U : R.Universe) (Rnd N : ℕ), R.Good U Rnd N →
+    ∃ T D : Finset Validator, T ⊆ D ∧ Fintype.card Validator ≤ T.card + slack ∧
+      Fintype.card Validator ≤ D.card + fb ∧
+      (∀ (S : Slots Validator) (V : R.View U) (κ : ℕ), R.toBaseRule.CoversUpto U V N →
+        Rnd ≤ S.slotRound κ → S.slotRound κ + R.waveLength ≤ N → S.leader κ ∈ T →
+        ∃ L, R.Decided S V κ (some L)) ∧
+      (∀ (S : Slots Validator) (V : R.View U) (κ : ℕ), R.toBaseRule.CoversUpto U V N →
+        Rnd ≤ S.slotRound κ → S.slotRound κ + R.waveLength ≤ N → S.leader κ ∈ D →
+        ∃ v, R.Decided S V κ v)
+
+/-- **A run of decided rounds ending at a committing head**: from every
+round `r`, within `c₀` rounds, `g` consecutive rounds from `ρ` whose first
+`g − 1` rounds hold only `D`-led slots and whose last round's head is
+`T`-led. -/
+def SkipRun (C : Config Validator) (T D : Finset Validator) (g c₀ : ℕ) : Prop :=
+  ∀ r, ∃ ρ, r ≤ ρ ∧ ρ + g ≤ r + c₀ ∧
+    (∀ κ, ρ ≤ C.sched.slotRound κ → C.sched.slotRound κ + 1 < ρ + g → C.sched.leader κ ∈ D) ∧
+    C.head (ρ + g - 1) ∈ T
+
 end Barnacle
 
 end LeanDag
