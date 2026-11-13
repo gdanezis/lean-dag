@@ -85,6 +85,41 @@ theorem reaches_of_onTime {q : ℕ} [P.Quorate q] {T : Finset Validator}
   · exact hon i hiU hiT (by omega)
   · exact ih i hiU (by omega)
 
+omit [LinearOrder BlockId] in
+/-- **Under the weak-reference rule, a block every reliable validator holds
+by time `t` is reached by every block from round `t + 2` on**, when the
+quorum and the reliable set together exceed the committee and a reliable
+block of round `r` is built at time `r` or later: such a block references a
+reliable block of round `t + 1` or later, built after `t`, which reaches
+the held block. -/
+theorem reachesW_of_weakRule {q : ℕ} [P.Quorate q] {T : Finset Validator}
+    (hqT : Fintype.card Validator < q + T.card) {wk : BlockId → Finset BlockId}
+    {holds : Validator → ℕ → Finset BlockId} {built : Validator → ℕ → ℕ}
+    (hwr : WeakRule U wk T holds built) (hmono : ∀ v, ∀ s t, s ≤ t → holds v s ⊆ holds v t)
+    (hbuilt : ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
+      (U.block c).round ≤ built v (U.block c).round)
+    {m : BlockId} {t : ℕ} (hmr : (U.block m).round ≤ t) (hheld : ∀ v ∈ T, m ∈ holds v t) :
+    ∀ c ∈ U.ids, t + 2 ≤ (U.block c).round → ReachesW U wk c m := by
+  intro c hc hcr
+  have hquo := Validity.Quorate.quorum U.block (U.block c) (U.valid c hc) (by omega)
+  obtain ⟨i, hi, hiT⟩ : ∃ i ∈ (U.block c).refs, (U.block i).creator ∈ T := by
+    by_contra hno
+    push Not at hno
+    have hsub : creators U.block (U.block c) ⊆ Tᶜ := by
+      intro v hv
+      obtain ⟨i, hi, rfl⟩ := mem_creatorsOf.mp hv
+      exact Finset.mem_compl.mpr (hno i hi)
+    have := Finset.card_le_card hsub
+    rw [Finset.card_compl] at this
+    have := Finset.card_le_univ T
+    omega
+  have hiU := U.complete c hc i hi
+  have hir := Validity.Mechanised.pred U.block (U.block c) (U.valid c hc) i hi
+  have hb := hbuilt _ hiT i hiU rfl
+  have hmi : m ∈ holds (U.block i).creator (built (U.block i).creator (U.block i).round) :=
+    hmono _ t _ (by omega) (hheld _ hiT)
+  exact Relation.ReflTransGen.head (Or.inl hi) (hwr _ hiT i hiU rfl m hmi (by omega))
+
 variable {q : ℕ} [P.Quorate q] {p : Params} (σ : VoteSel Validator BlockId Payload P honest)
 
 /-- **A leader block every reliable decision-round block certifies commits**
@@ -106,9 +141,10 @@ cover. -/
 theorem mem_deliverSeq_of_decided [S : Slots Validator] {f : ℕ} (ht : p.Tolerates honest f q)
     {V : U.View} {k : ℕ} {L b : BlockId}
     (hall : ∀ m ≤ k, ∃ v, (schemeAnchored p σ).Decided U V m v)
-    (hk : (schemeAnchored p σ).Decided U V k (some L)) (hb : b ∈ U.ids) (hr : Reaches U L b)
+    (hk : (schemeAnchored p σ).Decided U V k (some L)) (hb : b ∈ U.ids)
+    {wk : BlockId → Finset BlockId} (hr : ReachesW U wk L b)
     (hh : (U.block b).creator ∈ honest) :
-    ∃ N₀, ∀ N, N₀ ≤ N → b ∈ deliverSeq p σ U V N := by
+    ∃ N₀, ∀ N, N₀ ≤ N → b ∈ deliverSeq p σ U wk V N := by
   obtain ⟨N₀, hN₀⟩ := Loop.outputComplete Validator BlockId Payload P q honest f p σ U V 0 k ht
     (Nat.zero_le _) fun m _ hm => hall m hm
   exact ⟨N₀, fun N hN => mem_deliverOf_of (hN₀ N hN (some L) hk) rfl hb hr hh⟩

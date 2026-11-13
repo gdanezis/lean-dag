@@ -1326,3 +1326,29 @@ of every table of a finite set `Tbls` and joins them by a union bound:
 
 A HammerHead score that only permutes who leads keeps the coin uniform and
 needs none of this: it is the case of a table that is a permutation.
+
+## 25. Weak references
+
+Sailfish's weak edges, as data of the block (`wk b`, references to blocks
+of older rounds). The decision rule never reads them: they count as no
+vote, certificate or quorum. Delivery does: a committed leader's flush is
+its history through references and weak references (`ReachesW`, `flush U
+wk L`), so every statement about the delivered sequence takes the map `wk`
+and holds for every one. A reliable validator's block follows the
+weak-reference rule (`WeakRule`) when it reaches, through either, every
+block of an older round its author held when building it.
+
+Under the rule, a block every reliable validator holds by time `t` is
+reached by every block from round `t + 2` on (`reachesW_of_weakRule`): such
+a block references a quorum of the round below, which meets the reliable
+set, and a reliable block of round `t + 1` or later was built after `t`.
+Validity then needs neither that the author lead a slot nor that the next
+round reference its block:
+
+| Claim | Lean |
+|---|---|
+| Partially synchronous Validity, the author need not lead | `AtomicBroadcast.ValidityPSWeak` |
+| Asynchronous Validity, no reference from the next round assumed | `AtomicBroadcast.ValidityAsyncWeak` |
+
+With `wk` empty the delivered sequence is the one of §15, and its theorems
+hold as stated.

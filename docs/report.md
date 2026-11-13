@@ -20795,9 +20795,9 @@ def keepFirst {α β : Type*} [DecidableEq β] (key : α → β) : List β → L
 *def, `Scheme.Model.Deliver.lean`*
 
 ```lean
-noncomputable def deliverSeq (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
-    (N : ℕ) : List BlockId :=
-  deliverOf U (tryDecide p σ U V 0 N)
+noncomputable def deliverSeq (U : BlockRecord Validator BlockId Payload P honest)
+    (wk : BlockId → Finset BlockId) (V : U.View) (N : ℕ) : List BlockId :=
+  deliverOf U wk (tryDecide p σ U V 0 N)
 ```
 
 **The delivered sequence** on the view `V`, the loop scanning from slot `0` to slot `N`.

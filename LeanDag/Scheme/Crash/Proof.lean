@@ -41,9 +41,9 @@ theorem commits : Commits := by
     (live Validator BlockId Payload P honest p σ rel S U V T lo K h)
 
 theorem rowsValidity : RowsValidity := by
-  intro Validator BlockId Payload _ _ _ _ P _ honest p f c _ hrow hhon σ S U T N R d cr hTh hqT
+  intro Validator BlockId Payload _ _ _ _ P _ honest p f c _ hrow hhon σ wk S U T N R d cr hTh hqT
     hgst hto hP hd hspan P_k m k b₀ hk hm hmc hlead hR hmr hkb hrun hN P_j hj
-  exact Responsive.rowsValidity Validator BlockId Payload P honest p f c hrow hhon σ U T N R d
+  exact Responsive.rowsValidity Validator BlockId Payload P honest p f c hrow hhon σ wk U T N R d
     cr.toReactive hTh hqT hgst hto hP hd hspan P_k m k b₀ hk hm hmc hlead hR hmr hkb hrun hN P_j hj
 
 theorem inhabited : Inhabited := by
@@ -61,13 +61,13 @@ theorem asyncToPace : AsyncToPace := by
   exact ⟨ac.toAsyncPace, rfl, rfl⟩
 
 theorem asyncAgreement : AsyncAgreement := by
-  intro Validator BlockId Payload _ _ _ P _ q _ honest f p σ _ U T N qp ac M ht
-  exact AtomicBroadcast.agreement Validator BlockId Payload P q honest f p σ U T N qp
+  intro Validator BlockId Payload _ _ _ P _ q _ honest f p σ wk _ U T N qp ac M ht
+  exact AtomicBroadcast.agreement Validator BlockId Payload P q honest f p σ wk U T N qp
     ac.toAsyncPace M ht
 
 theorem asyncValidity : AsyncValidity := by
-  intro Validator BlockId Payload _ _ _ _ P _ q _ honest f p σ U T N qp ac
-  exact AtomicBroadcast.validityAsync Validator BlockId Payload P q honest f p σ U T N qp
+  intro Validator BlockId Payload _ _ _ _ P _ q _ honest f p σ wk U T N qp ac
+  exact AtomicBroadcast.validityAsync Validator BlockId Payload P q honest f p σ wk U T N qp
     ac.toAsyncPace
 
 theorem asyncInhabited : AsyncInhabited := by

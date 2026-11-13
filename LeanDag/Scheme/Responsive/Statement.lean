@@ -54,7 +54,8 @@ def RowsValidity : Prop :=
     [P.Mechanised] (honest : Finset Validator) (p : Params) (f c : ℕ)
     [P.Quorate (Fintype.card Validator - f - c)],
     p.PSRow (Fintype.card Validator) f c → honestᶜ.card ≤ f →
-    ∀ (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
+    ∀ (σ : VoteSel Validator BlockId Payload P honest) (wk : BlockId → Finset BlockId)
+      [S : Slots Validator]
       (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N R d : ℕ)
       (rs : SchemeReactive (Fintype.card Validator - f - c) p σ U T N),
       T ⊆ honest → Fintype.card Validator - f - c ≤ T.card → rs.gst ≤ R →
@@ -66,7 +67,7 @@ def RowsValidity : Prop :=
         S.leader k = P_k → R ≤ S.slotRound k → (U.block m).round ≤ S.slotRound k → k < b₀ →
         (∀ i, i < d → S.leader (b₀ + i) ∈ T) →
         S.slotRound (b₀ + d - 1) + (p.waveLength - 1) ≤ rs.waits →
-        ∀ (P_j : Validator) (hj : P_j ∈ T), rs.toAsyncPace.Delivers p σ hj m
+        ∀ (P_j : Validator) (hj : P_j ∈ T), rs.toAsyncPace.Delivers p σ wk hj m
 
 /-- Responsive liveness at every partially synchronous row. -/
 def Statement : Prop := Inhabited ∧ RowsValidity

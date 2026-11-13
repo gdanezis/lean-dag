@@ -56,12 +56,12 @@ theorem inhabited : Inhabited := by
   simp
 
 theorem rowsValidity : RowsValidity := by
-  intro Validator BlockId Payload _ _ _ _ P _ honest p f c _ hrow hhon σ S U T N R d rs hTh hqT
+  intro Validator BlockId Payload _ _ _ _ P _ honest p f c _ hrow hhon σ wk S U T N R d rs hTh hqT
     hgst hto hP hd hspan P_k m k b₀ hk hm hmc hlead hR hmr hkb hrun hN P_j hj
   have hf := psRow_fits hrow
   have hn : Fintype.card Validator - f - c ≤ Fintype.card Validator := by omega
   exact AtomicBroadcast.validityPS Validator BlockId Payload P (Fintype.card Validator - f - c)
-    honest f p σ U T N R (Fintype.card Validator - f - c) d rs ⟨hhon, hn, psRow_covered hrow⟩ hf.1
+    honest f p σ wk U T N R (Fintype.card Validator - f - c) d rs ⟨hhon, hn, psRow_covered hrow⟩ hf.1
     (le_trans hf.2 hqT) hTh hqT hgst hto hP hd hspan P_k m k b₀ hk hm hmc hlead hR hmr hkb hrun
     hN P_j hj
 

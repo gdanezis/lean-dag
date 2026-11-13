@@ -193,6 +193,12 @@ Replace the `\george` notes of §4 by the results, as `\edits{…}`.
   `scheme.md` §24). Union bound over a finite set of tables, factor
   `|Tbls|`.
 
+* **Weak references done** (user request: close the gaps relating to weak
+  references). `wk` threads through the delivered sequence;
+  `AtomicBroadcast.{ValidityPSWeak, ValidityAsyncWeak}`
+  (`reachesW_of_weakRule`; `scheme.md` §25). Next: Theorem 2's atomic
+  broadcast over scheduled runs.
+
 ## 5. Order
 
 M1a → M1b → M2 → M5a → M5b → M5c → M3 → M4 → M6 → M1c → M7.
