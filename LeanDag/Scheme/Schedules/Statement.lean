@@ -1,6 +1,8 @@
 import LeanDag.Scheme.Model.Schedules
 import LeanDag.Scheme.Model.Params
 import Mathlib.Data.Prod.Lex
+import LeanDag.Steelhead.Coin.Statement
+import Mathlib.Probability.Distributions.Uniform
 import LeanDag.Barnacle.Agreement.Statement
 import LeanDag.Barnacle.Ledger.Statement
 import LeanDag.Barnacle.Live.Statement
@@ -154,6 +156,64 @@ def AsyncConfigLive : Prop :=
     ∀ C : Config Validator,
       (schemeLiveAsync p σ rel c₀).LiveOn C.sched c₀ ∧
         (schemeLiveAsync p σ rel c₀).SettlesBelow C.sched c₀
+
+/-- **Barnacle's AIMD rule over the decider, run asynchronously, reaches every
+height** when its heads are `h`, a quorum populates every round, and `h`'s
+safe heads come in runs within `c₀` rounds. -/
+def AsyncAimdRuns : Prop :=
+  ∀ (n : ℕ) (hn : 0 < n) (BlockId Payload : Type) [LinearOrder BlockId]
+    (P : Validity (Fin n) BlockId Payload) [P.Mechanised] (q : ℕ) [P.Quorate q]
+    (honest : Finset (Fin n)) (f : ℕ) (p : Params)
+    (σ : VoteSel (Fin n) BlockId Payload P honest) (rel : Reliability (Fin n)) (c₀ : ℕ),
+    p.Tolerates honest f q → p.CertFits q →
+    p.commitThreshold ≤ Fintype.card (Fin n) - rel.slack →
+    ∀ (B : Barnacle.Params) (Bd : Boundary (Fin n)) (lead : ℕ → ℕ → Fin n)
+      (hl : LeadKeyed lead B.maxLeaders) (h : ℕ → Fin n), (∀ ρ, lead ρ 0 = h ρ) →
+      ∀ C₀ : Config (Fin n), C₀.InBounds B → C₀.head = h →
+      ∀ (U : (schemeLiveAsync p σ rel c₀).Universe) (V : (schemeLiveAsync p σ rel c₀).View U)
+        (N : ℕ) (T : Finset (Fin n)), rel.IsQuorum T → T ⊆ honest →
+        (∀ r ≤ N, PopulatedOn U T r) → SafeHeadRuns p U h c₀ 0 N →
+        (schemeLiveAsync p σ rel c₀).toBaseRule.CoversUpto U V N →
+        ∀ K, Barnacle.horizon B (schemeLiveAsync p σ rel c₀) c₀ K ≤ N →
+          Nonempty (Barnacle.Run (schemeLiveAsync p σ rel c₀).toBaseRule B Bd
+            (Barnacle.Aimd.rule _ B lead hl) C₀ U V K)
+
+open scoped ENNReal in
+/-- **Barnacle's AIMD rule over the decider, its heads drawn by a coin,
+reaches every height with probability tending to `1`.** The record is fixed
+before the coin (the adversary does not see it); the rounds up to the
+horizon fill `J` windows of `M` waves; every round's safe set holds at least
+`c` validators. The heads are `J · M` blocks of a wave of uniform coins
+(`coinHead`), and the other leaders of a round follow from its head
+(`lead h ρ 0 = h ρ`). A run of height `K` fails to exist with probability at
+most `J · badBlockBoundAt c w ^ M`. -/
+def AsyncAimdLive : Prop :=
+  ∀ (n : ℕ) (hn : 0 < n) (BlockId Payload : Type) [LinearOrder BlockId]
+    (P : Validity (Fin n) BlockId Payload) [P.Mechanised] (q : ℕ) [P.Quorate q]
+    (honest : Finset (Fin n)) (f : ℕ) (p : Params)
+    (σ : VoteSel (Fin n) BlockId Payload P honest) (rel : Reliability (Fin n))
+    (J M c : ℕ) (dflt : Fin n),
+    p.Tolerates honest f q → p.CertFits q →
+    p.commitThreshold ≤ Fintype.card (Fin n) - rel.slack →
+    haveI : Nonempty (Fin n) := ⟨dflt⟩
+    ∀ (B : Barnacle.Params) (Bd : Boundary (Fin n)) (lead : (ℕ → Fin n) → ℕ → ℕ → Fin n)
+      (hl : ∀ h, LeadKeyed (lead h) B.maxLeaders), (∀ h ρ, lead h ρ 0 = h ρ) →
+      ∀ C₀ : (ℕ → Fin n) → Config (Fin n), (∀ h, (C₀ h).InBounds B ∧ (C₀ h).head = h) →
+      ∀ (U : (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).Universe)
+        (V : (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).View U)
+        (N : ℕ) (T : Finset (Fin n)), rel.IsQuorum T → T ⊆ honest →
+        (∀ r ≤ N, PopulatedOn U T r) →
+        (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).toBaseRule.CoversUpto U V N →
+        N + 1 ≤ J * (M * (p.waveLength - 1 + 1)) →
+        (∀ r, r < J * (M * (p.waveLength - 1 + 1)) → c ≤ (safeAt p U r).card) →
+        ∀ K, Barnacle.horizon B (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1))))
+            (2 * (M * (p.waveLength - 1 + 1))) K ≤ N →
+          (PMF.uniformOfFintype (Fin (J * M) → Fin (p.waveLength - 1 + 1) → Fin n)).toOuterMeasure
+              {g | IsEmpty (Barnacle.Run
+                (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).toBaseRule B Bd
+                (Barnacle.Aimd.rule _ B (lead (coinHead dflt g)) (hl _)) (C₀ (coinHead dflt g))
+                U V K)} ≤
+            (J : ℝ≥0∞) * Steelhead.Coin.badBlockBoundAt (Fin n) c (p.waveLength - 1 + 1) ^ M
 
 /-- **The decider is safe under every update rule.** -/
 def Safe : Prop :=
@@ -320,7 +380,8 @@ the rows that fit round-robin, and the same with silent crashes. -/
 def Statement : Prop :=
   Safe ∧ Descends ∧ RunsExist ∧ Aimd ∧ HammerHead ∧ RowsScheduled ∧ SilentDescends ∧
     SilentLive ∧ HammerHeadSilent ∧ RowsSkipScheduled ∧ ReactiveDescends ∧ RunsExistReactive ∧
-    AimdReactive ∧ HammerHeadReactive ∧ ReactiveGoodInhabited ∧ AsyncConfigLive
+    AimdReactive ∧ HammerHeadReactive ∧ ReactiveGoodInhabited ∧ AsyncConfigLive ∧ AsyncAimdRuns ∧
+    AsyncAimdLive
 
 end Schedules
 

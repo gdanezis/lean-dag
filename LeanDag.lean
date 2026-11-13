@@ -553,6 +553,7 @@ import LeanDag.Scheme.Helpers.ReactiveMysticeti
 import LeanDag.Scheme.Helpers.AsyncPace
 import LeanDag.Scheme.Helpers.Starve
 import LeanDag.Scheme.Helpers.FullRun
+import LeanDag.Scheme.Helpers.CoinHeads
 import LeanDag.Scheme.Equiv.Statement
 import LeanDag.Scheme.Equiv.Proof
 import LeanDag.Scheme.Safety.Statement

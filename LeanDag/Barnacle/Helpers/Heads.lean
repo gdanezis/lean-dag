@@ -39,6 +39,16 @@ theorem Config_lt_head_of_slotRound_lt {κ ρ : ℕ} (h : C.sched.slotRound κ <
     κ < C.cum ρ := by
   rw [Config.sched_slotRound] at h; exact C.lt_cum_iff_roundOf_lt.2 h
 
+/-- **The first slot of a round is its head.** -/
+theorem eq_cum_of_first {κ ρ : ℕ} (hκ : C.sched.slotRound κ = ρ)
+    (hfirst : ∀ κ', κ' < κ → C.sched.slotRound κ' < ρ) : κ = C.cum ρ := by
+  apply le_antisymm
+  · by_contra h
+    have := hfirst (C.cum ρ) (by omega)
+    rw [Config_slotRound_head] at this
+    omega
+  · rw [C.cum_le_iff_le_roundOf, ← Config.sched_slotRound, hκ]
+
 end HeadArith
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]

@@ -1256,3 +1256,28 @@ crashes from `δ` past its start until its range closes, runs of every
 height exist on every signer's view, and every slot a closed configuration
 commits reaches second-tier finality (`Compose.HammerHeadComposed`,
 `Compose.AimdComposed`, through `Integration.commitFinalized_barnacle_scheme`).
+
+## 22. Scheduling under asynchrony
+
+`docs/mechanisms.md` M4; statement `Scheme/Schedules/Statement.lean`.
+
+Under asynchrony no validator waits for a leader, and the coin elects them.
+Barnacle's AIMD rule adapts the number of leaders per round; the head of
+each round, its first slot, is a coin, and the other leaders follow from it.
+`schemeLiveAsync p σ rel c₀` is the decider good under a schedule when a
+quorum populates every round and, from every round, `c₀` rounds hold a wave
+of rounds whose first slots are led by safe validators (`asyncGood`). Every
+configuration is then live (`AsyncConfigLive`): a safe-led head commits on a
+view holding its decision round (`decided_of_safe_of_round`), and runs of
+committed heads decide the rest (`clauses_of_committingHeads`). With the
+heads `h`, AIMD reaches every height when `h`'s safe heads come in runs
+(`AsyncAimdRuns`). Drawn as `J · M` blocks of a wave of uniform coins
+(`coinHead`), with every safe set holding at least `c` validators and the
+rounds up to the horizon filling `J` windows of `M` blocks, a run of height
+`K` fails to exist with probability at most `J · badBlockBoundAt c w ^ M`
+(`AsyncAimdLive`): a window with a block of safe heads gives a run within
+two windows (`safeHeadRuns_of_windows`), each window fails with probability
+at most `badBlockBoundAt c w ^ M` (`Steelhead.no_good_block_prob_le`), and
+the windows are joined by a union bound. The record is fixed before the
+coin. A reputation schedule (HammerHead) is not live under asynchrony: it
+names leaders the adversary can delay.
