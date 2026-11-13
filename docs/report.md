@@ -13737,7 +13737,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 440 definitions and structures the report names, in
+The 441 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -16887,6 +16887,21 @@ structure LiveRule.Delivers (R : LiveRule Validator BlockId Payload) (slack : �
 ```
 
 **What a good DAG delivers**: a `slack`-missing set of validators whose blocks, from `Rnd`, are reached by everything two rounds above them — the base protocol's coverage read as delivery, the second law a live rule carries beside `Descent`.
+
+#### `LiveRule.Indirect`
+
+*abbrev, `Barnacle.Model.Heads.lean`*
+
+```lean
+abbrev LiveRule.Indirect (R : LiveRule Validator BlockId Payload) : Prop :=
+  ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U) (i j : ℕ) (A : BlockId),
+    S.slotRound i + R.waveLength ≤ S.slotRound j → R.Decided S V j (some A) →
+    (∀ i', i < i' → i' < j → S.slotRound i + R.waveLength ≤ S.slotRound i' →
+      R.Decided S V i' none) →
+    ∃ v, R.Decided S V i v
+```
+
+**A3, the indirect rule**, at the rule's wave: a committed slot a wave above `i`, with every slot a wave above `i` between them skipped, decides `i`.
 
 #### `ofAnchored`
 
