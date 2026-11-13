@@ -1418,3 +1418,39 @@ configuration's validity window under the coverage horizon
 
 The weak-reference rule (`WeakRule`), the monotonicity of `holds` and the
 `built` bound are premises.
+
+## 28. Bounded anchor chains
+
+Statement `Barnacle/Model/Chains.lean`, proofs `Barnacle/Helpers/Chains.lean`;
+review item 1 on PR #55. Liveness under a leader schedule at any number of
+leaders per round.
+
+A slot at round `r` is decided indirectly by scanning the slots from round
+`r + w` in decision order: a skipped slot is passed over, the first
+committed slot is the anchor, and an undecided slot stops the scan (the
+indirect law, `LiveRule.Indirect`). After GST a correct leader's slot
+commits and a crashed leader's is skipped; only a Byzantine-led slot can
+stay undecided, and it is decided once its own scan, from a wave above
+it, ends.
+
+| Claim | Lean |
+|---|---|
+| The scan from slot `p` ends by round `H`: a `T`-led slot is reached, every slot before it led outside `D` having its own scan end by `H` | `Config.ChainEnds` |
+| **Bounded anchor chains**: for every split `T ⊆ D` missing at most `slack` and `fb`, the scan from every round's first slot ends within `c₀` rounds | `Config.BoundedChains` |
+| A scan that ends decides its slot | `decided_of_scan` |
+| A scan that ends under the horizon reaches a committed slot and decides every slot before it | `scan_of_chainEnds` |
+| A configuration with bounded anchor chains is live, and settles the slots below where its schedule turns good, at gap `c₀ + 2w` | `liveOn_of_boundedChains`, `settlesBelow_of_boundedChains` |
+| Runs of heads and runs of decided rounds are bounded anchor chains | `boundedChains_of_headsRun`, `boundedChains_of_skipRun` |
+| With crashed validators silent, every update rule keeping bounded anchor chains reaches every height | `Schedules.ChainsSilent` |
+| Run responsively, the same, each configuration good from `δ` past its start | `Schedules.ChainsReactive` |
+| Theorem 2 under any anchored update rule keeping bounded anchor chains | `Compose.ChainsBroadcast` |
+
+The property is not a condition on the heads alone. With two leaders per
+round, Hybrid Mysticeti at `n = 6`, `f = 1`, `c = 1`, round-robin heads
+and validator `0` (Byzantine) as every round's second leader, a crashed
+head (validator `3`) exposes the second slot at every round `≡ 0 mod 3`, and
+the scan from round `0` never ends: the property fails, and so does
+liveness. The heads-only conditions `Params.Scheduled` and
+`Params.SkipScheduled` are instances (`boundedChains_of_headsRun`,
+`boundedChains_of_skipRun`).
+

@@ -12407,7 +12407,26 @@ delay and the commit gap: a configuration then commits a leader inside its
 own range (`Barnacle.ledger_commit_of_window`), so its range in the ledger
 holds a leader late enough to reach the block.
 
-### 27.22 What the arc does not contain
+### 27.22 Bounded anchor chains
+
+Liveness under a leader schedule at any number of leaders per round
+(`scheme.md` §28). A Byzantine-led slot is the only slot that can stay
+undecided after GST, and it stops the indirect rule's scan for every slot
+a wave below it; a crashed leader's slot is skipped and passed over. A
+schedule has **bounded anchor chains** (`Barnacle.Config.BoundedChains`)
+when, for every split of the validators into those whose slots commit and
+those whose slots are decided directly, the scan from every round's first
+slot reaches a committed slot within `c₀` rounds, each Byzantine-led slot
+it meets resolved by its own scan. Such a schedule is live at gap
+`c₀ + 2w` (`Barnacle.liveOn_of_boundedChains`,
+`settlesBelow_of_boundedChains`); the decider reaches every height under
+any update rule that keeps the property, with crashed validators silent
+(`Scheme.Schedules.chainsSilent`) and run responsively
+(`chainsReactive`), and the mechanisms composed broadcast atomically
+(`Scheme.Compose.chainsBroadcast`). Runs of heads and runs of decided
+rounds are instances.
+
+### 27.23 What the arc does not contain
 
 The properties of Mahi-Mahi and Async BlueBottle that are proved of
 those rules alone reach the rows of §27.5 at the least vote only; the
@@ -21313,7 +21332,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 657 theorems the body or Appendix A names, each
+The 659 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -26644,6 +26663,19 @@ theorem update_spanOf (Rn : Run R P B upd C₀ U V K) (k : ℕ) (hk : k < K)
 
 **The rule is applied to exactly the range's verdicts.** `Run.spanOf` and the structure's own `update` field name one function, so a reader chasing what a reputation rule sees can read `spanOf` and stop.
 
+#### `settlesBelow_of_boundedChains`
+
+*theorem, `Barnacle.Helpers.Chains.lean`*
+
+```lean
+theorem settlesBelow_of_boundedChains {slack fb c₀ c : ℕ} (hD : R.Indirect)
+    (hK : R.Decisive slack fb) (hw : 0 < R.waveLength)
+    (hC : C.BoundedChains slack fb R.waveLength c₀) (hc : c₀ + 2 * R.waveLength ≤ c) :
+    R.SettlesBelow C.sched c
+```
+
+**A configuration with bounded anchor chains settles the slots below the round its schedule turns good**, at any gap of at least `c₀ + 2w`.
+
 #### `coversUpto_full`
 
 *theorem, `Barnacle.Helpers.Cover.lean`*
@@ -29599,6 +29631,14 @@ theorem holds : Statement
 
 ```lean
 theorem holds : Statement
+```
+
+#### `chainsReactive`
+
+*theorem, `Scheme.Schedules.Proof.lean`*
+
+```lean
+theorem chainsReactive : ChainsReactive
 ```
 
 #### `holds`

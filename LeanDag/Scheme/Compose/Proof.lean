@@ -9,6 +9,7 @@ import LeanDag.Scheme.Helpers.AsyncPace
 import LeanDag.Scheme.Helpers.Validity
 import LeanDag.Scheme.Helpers.Deliver
 import LeanDag.Barnacle.Ledger.Proof
+import LeanDag.Barnacle.Helpers.Chains
 /-!
 # The mechanisms composed — proof
 
@@ -595,11 +596,50 @@ theorem asyncHammerHeadBroadcast : AsyncHammerHeadBroadcast := by
             simpa only [Fintype.card_fin] using this
       _ = _ := by rw [Finset.sum_const, nsmul_eq_mul]
 
+theorem chainsBroadcast : ChainsBroadcast := by
+  intro n hn BlockId Payload Value _ P _ q _ honest f p σ rel M E vm ht hc hcm
+  haveI : Nonempty (Fin n) := ⟨⟨0, hn⟩⟩
+  intro B Bd upd Q C₀ δ c₀ hanc hbnd hkeep hkI hC h₀ hQ₀ hδ hint U C Pr N hcov hall wk T holds
+    built hTh hqT hwr hmono hbuilt K hK
+  have hcard : Fintype.card (Fin n) = n := Fintype.card_fin n
+  have hRE := Schedules.chainsReactive (Fin n) BlockId Payload P q honest f p σ rel c₀ ht
+    (by rw [hcard]; exact hc) (by rw [hcard]; exact hcm) B Bd upd Q hbnd hkeep
+    (fun C hQ => hC C hQ) C₀ δ
+  have hrun := fun v => scheduledCrash (Fin n) BlockId Payload P honest p σ rel B _ _ C₀ _ _ δ hRE
+    h₀ hQ₀ U (Pr.view v) N (hcov v) (fun K' Rn hQ' => Or.inl (hall v K' Rn K' le_rfl hQ')) K
+    (by omega)
+  let Rn := fun v => (hrun v).choose
+  have hD := Schedules.reactiveDescends (Fin n) BlockId Payload P honest p σ rel
+    (by rw [hcard]; exact hc) (by rw [hcard]; exact hcm)
+  have hwl : (schemeLiveReactive p σ rel).waveLength = p.waveLength :=
+    show p.waveLength - 1 + 1 = p.waveLength by have := hc.1; omega
+  refine ⟨Rn, broadcasts_of (c := c₀ + 2 * p.waveLength) ht hanc Rn wk hTh
+      (by rw [hcard]; exact hqT) hwr hmono hbuilt hδ fun i t ht2 => ?_,
+    fun k hk v₀ hcfg κ L h hlo hhi => ?_⟩
+  · have hQt := Barnacle.cfg_keeps (Rn i) hkeep hQ₀ (t + 2) (by omega)
+    have hst := Barnacle.start_mono (Rn i) (show t + 2 ≤ K by omega) le_rfl
+    have hsK := (hrun i).choose_spec.1
+    have hmx := le_max_right (B.maxInterval + 1) δ
+    unfold Barnacle.horizonFrom at hK
+    refine ⟨by rw [Barnacle.interval_eq (Rn i) hkI _ (by omega)]; exact hint,
+      Barnacle.liveOn_of_boundedChains _ hD.indirect hD.decisive
+        (by rw [hwl]; exact hC _ hQt) (by rw [hwl]),
+      reactiveGood_mono (reactiveGood_of_crashGood
+        (hall i K (Rn i) (t + 2) (by omega) hQt)) ?_, fun b hb hr => hcov i b hb ?_⟩
+    · change _ ≤ _ + _ + _ + (p.waveLength - 1 + 1)
+      omega
+    · change (U.block b).round ≤ _ at hr
+      change Barnacle.Run.start (Rn i) K ≤ _ at hsK
+      change _ + _ + (p.waveLength - 1 + 1) + δ ≤ N at hK
+      show (U.block b).round ≤ N
+      omega
+  · exact Integration.commitFinalized_barnacle_scheme M E vm ht hanc Pr Rn hk hcfg h hlo hhi
+
 theorem holds : Statement :=
   ⟨checkpointsResponsive, checkpointsCrash, scheduledCrash, hammerHeadComposed, aimdComposed,
     asyncComposed, asyncHammerHeadComposed, scheduledIntegrity, scheduledAgreed, scheduledValidity,
     anchorLedger, composedValidity, hammerHeadBroadcast, aimdBroadcast,
-    asyncBroadcast, asyncHammerHeadBroadcast⟩
+    asyncBroadcast, asyncHammerHeadBroadcast, chainsBroadcast⟩
 
 end Compose
 

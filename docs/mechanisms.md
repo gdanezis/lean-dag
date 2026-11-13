@@ -220,3 +220,11 @@ Replace the `\george` notes of §4 by the results, as `\edits{…}`.
 M1a → M1b → M2 → M5a → M5b → M5c → M3 → M4 → M6 → M1c → M7.
 Partially synchronous first, since M5 depends on M2 and M1; M1c is
 independent and may move.
+
+* **Bounded anchor chains** (review item 1 on PR #55: scheduling liveness
+  without `waveLength·slack + 1 ≤ n`). `Barnacle.Config.BoundedChains`;
+  `Schedules.{ChainsSilent, ChainsReactive}`, `Compose.ChainsBroadcast`
+  (`scheme.md` §28). Open: a concrete assignment of several leaders per
+  round meeting the property at Hybrid Mysticeti's committee, and the
+  `n = 6` counterexample checked in Lean.
+
