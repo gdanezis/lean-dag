@@ -12329,6 +12329,13 @@ its certificate fitting and its commit threshold within `n − f − c`
 (`Scheme.Responsive.psRow_fits`). Nemo-Nemo is among the rows: its
 coverage is the crash-only one, and Validity asks only that blocks
 reference their author's previous block, which the family's row adds.
+With weak references the author need not lead a slot
+(`Scheme.Responsive.rowsValidityWeak`, from `AtomicBroadcast.validityPSWeak`
+and `psRow_two_quorums`). The asynchronous rows have the same per-row form
+(`Params.AsyncRow`; `Scheme.AsyncLive.rowsValidity`): a block every reliable
+validator holds fails to be delivered with probability at most
+`badBlockBoundAt 1 d ^ M`, and so with probability `1` as `M` grows
+(`Scheme.AsyncLive.rowsValidityOne`).
 
 ### 27.18 Crash recovery, partially synchronous
 
@@ -21306,7 +21313,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 656 theorems the body or Appendix A names, each
+The 657 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -29559,6 +29566,16 @@ theorem decided_none_of_novel {p : Params} {σ : VoteSel Validator BlockId Paylo
 ```
 
 **The prompt skip**: after an extension, a slot whose candidates are all new is skipped at once, at a vote round one above the slot and a quorum of old blocks one round up that meets the skip threshold.
+
+#### `psRow_two_quorums`
+
+*theorem, `Scheme.Responsive.Proof.lean`*
+
+```lean
+theorem psRow_two_quorums {p : Params} {n f c : ℕ} (h : p.PSRow n f c) : n < 2 * (n - f - c)
+```
+
+At a partially synchronous row, two parent quorums exceed the committee.
 
 #### `holds`
 

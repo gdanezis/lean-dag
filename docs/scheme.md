@@ -900,7 +900,16 @@ vote:
 * **the tail vanishes** (`Vanishes`) at `c ≥ 1`;
 * **the rows ready for the count** (`Live`): the floor `c` is `1` at one
   buffer round, `q − f` at two, and `⌈n/3⌉` at one buffer round where
-  `n ≥ 5f + 3c + 1` and `q = n − f − c` (`floors`).
+  `n ≥ 5f + 3c + 1` and `q = n − f − c` (`floors`);
+* **Validity at every asynchronous row** (`RowsValidity`): at the rows of
+  `Params.AsyncRow`, each at its committee and parent quorum `n − f − c`,
+  under the weak-reference rule, a block every reliable validator holds by
+  `t` fails to be delivered with probability at most
+  `badBlockBoundAt 1 d ^ M` (`AtomicBroadcast.validityAsyncWeak` with the
+  row's readiness `asyncRow_ready`, coverage `asyncRow_covered` and floor
+  `1`);
+* **with probability 1** (`RowsValidityOne`): for every `ε > 0` some `M₀`
+  bounds that probability by `ε` for every `M ≥ M₀` (`Vanishes`).
 
 At a schedule with one slot per wave, `slotRound s = s · waveLength`,
 `d = 1` spans eligibility and the bound is `((n − c)/n)^M`; at one slot per
@@ -1159,6 +1168,7 @@ Sailfish's weak edges to older rounds have no counterpart in the model.
 | The partially synchronous rows at their committees, parent quorum `n − f − c` | `Params.PSRow` |
 | A responsive run exists at every such row, every vote and every schedule | `Responsive.Inhabited` (`Full.record`, `Full.run`) |
 | Validity (Sailfish) and the author's own delivery (Sui and Duan) at every such row | `Responsive.RowsValidity` |
+| Validity with weak references at every such row, the author leading no slot | `Responsive.RowsValidityWeak` (`psRow_two_quorums`) |
 
 The witness is the full record run in lockstep: every block references the
 whole round below, so every block reaches every block of a lower round and
