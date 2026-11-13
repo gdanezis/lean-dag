@@ -46,6 +46,10 @@ import LeanDag.Barnacle.Model.Run
   whose coin draws from reputation tables supporting `k` validators with
   weight `e` (`AsyncHammerHeadComposed`), at `|Tbls| · J ·
   badBlockBoundAt m (e (k + s − n)) w ^ M`.
+* **Theorem 2** (`HammerHeadBroadcast`, `AimdBroadcast`, `AsyncBroadcast`,
+  `AsyncHammerHeadBroadcast`): the same compositions give runs on every
+  signer's view that also satisfy `Broadcasts` (Integrity, Total order,
+  Agreement, Validity under the weak-reference rule).
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -132,7 +136,8 @@ def ScheduledCrash : Prop :=
       (N : ℕ), (schemeLiveReactive p σ rel).toBaseRule.CoversUpto U V N →
       CrashGoodRuns p σ rel B Bd upd C₀ Q c δ U V →
       ∀ K, horizonFrom B (schemeLiveReactive p σ rel) c δ K ≤ N →
-        Nonempty (Run (schemeLiveReactive p σ rel).toBaseRule B Bd upd C₀ U V K)
+        ∃ Rn : Run (schemeLiveReactive p σ rel).toBaseRule B Bd upd C₀ U V K,
+          Rn.start K ≤ K * (max (B.maxInterval + 1) δ + c) ∧ Q (Rn.cfg K)
 
 open Barnacle in
 /-- **All four under HammerHead**: responsive, with crashes, under a
@@ -370,11 +375,283 @@ def AnchorLedger : Prop :=
       Barnacle.Boundary.atAnchor upd C₀ U V K),
     ∀ k, k < K → ∃ A ∈ Rn.ledgerUpto K, A ∈ U.ids ∧ k + 1 ≤ (U.block A).round
 
+/-- **Validity over any scheduled run, run responsively**, at either
+boundary: under the weak-reference rule, a block of a reliable validator
+held by every reliable validator by `t` is delivered by a run of height
+`K > t + 2` whose configuration `t + 2` is live, good from `δ ≥ 1` past its
+start through the commit gap and a wave on a view covering that window, and
+long enough to hold `δ` and the gap. -/
+def ComposedValidity : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [P.Mechanised] (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) (rel : Reliability Validator)
+    (Par : Barnacle.Params) (B : Barnacle.Boundary Validator)
+    (upd : Barnacle.UpdateRule (schemeLiveReactive p σ rel).toBaseRule)
+    (C₀ : Barnacle.Config Validator) (U : BlockRecord Validator BlockId Payload P honest)
+    (V : U.View) (K c δ : ℕ)
+    (Rn : Barnacle.Run (schemeLiveReactive p σ rel).toBaseRule Par B upd C₀ U V K)
+    (wk : BlockId → Finset BlockId) (T : Finset Validator)
+    (holds : Validator → ℕ → Finset BlockId) (built : Validator → ℕ → ℕ)
+    (m : BlockId) (t : ℕ),
+    p.Tolerates honest f q → T ⊆ honest → Fintype.card Validator < q + T.card →
+    WeakRule U wk T holds built → (∀ v, ∀ s t, s ≤ t → holds v s ⊆ holds v t) →
+    (∀ v ∈ T, ∀ b ∈ U.ids, (U.block b).creator = v →
+      (U.block b).round ≤ built v (U.block b).round) →
+    m ∈ U.ids → (U.block m).creator ∈ T → (U.block m).round ≤ t → (∀ v ∈ T, m ∈ holds v t) →
+    t + 2 < K → 1 ≤ δ → δ + c ≤ (Rn.cfg (t + 2)).interval →
+    (schemeLiveReactive p σ rel).LiveOn (Rn.cfg (t + 2)).sched c →
+    reactiveGood p σ rel (Rn.cfg (t + 2)).sched U (Rn.start (t + 2) + δ)
+      (Rn.start (t + 2) + δ + c + (p.waveLength - 1 + 1)) →
+    (schemeLiveReactive p σ rel).toBaseRule.CoversUpto U V
+      (Rn.start (t + 2) + δ + c + (p.waveLength - 1 + 1)) →
+    m ∈ runDeliver Rn wk K
+
+/-- **Runs that broadcast atomically**, one per view: each delivered
+sequence holds each round and author at most once, no block twice, and
+only blocks of the record (Integrity); two sequences to heights the runs
+have closed never order two blocks both ways, a block one delivers after
+another the other delivers after it too, and the lower height's sequence
+is delivered by the higher (Total order, Agreement); a block of a
+validator of `T`, held by every validator of `T` by `t` with `t + 2 < K`,
+is delivered by every run (Validity). -/
+def Broadcasts {Validator BlockId Payload ι : Type} [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] {P : Validity Validator BlockId Payload} [P.Mechanised]
+    {honest : Finset Validator} {p : Params} {σ : VoteSel Validator BlockId Payload P honest}
+    {Par : Barnacle.Params} {B : Barnacle.Boundary Validator}
+    {upd : Barnacle.UpdateRule (Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl))}
+    {C₀ : Barnacle.Config Validator} {U : BlockRecord Validator BlockId Payload P honest}
+    {V : ι → U.View} {K : ℕ}
+    (Rn : ∀ i, Barnacle.Run (Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl)) Par B upd
+      C₀ U (V i) K)
+    (wk : BlockId → Finset BlockId) (T : Finset Validator)
+    (holds : Validator → ℕ → Finset BlockId) : Prop :=
+  (∀ i K', ((runDeliver (Rn i) wk K').map (roundAuthor U)).Nodup ∧
+      (runDeliver (Rn i) wk K').Nodup ∧ ∀ b ∈ runDeliver (Rn i) wk K', b ∈ U.ids) ∧
+    (∀ i j K₁ K₂, K₁ ≤ K → K₂ ≤ K →
+      (∀ x y, Before (runDeliver (Rn i) wk K₁) x y → ¬ Before (runDeliver (Rn j) wk K₂) y x) ∧
+      (∀ x y, Before (runDeliver (Rn i) wk K₁) x y → y ∈ runDeliver (Rn j) wk K₂ →
+        Before (runDeliver (Rn j) wk K₂) x y) ∧
+      (K₁ ≤ K₂ → ∀ b ∈ runDeliver (Rn i) wk K₁, b ∈ runDeliver (Rn j) wk K₂)) ∧
+    ∀ i (m : BlockId) (t : ℕ), m ∈ U.ids → (U.block m).creator ∈ T → (U.block m).round ≤ t →
+      (∀ v ∈ T, m ∈ holds v t) → t + 2 < K → m ∈ runDeliver (Rn i) wk K
+
+open Barnacle in
+/-- The goodness asked of every configuration of every run on `V`, with
+crashes: once the configuration has the property `Q`, it is run with
+crashes and restarts from `δ` past its start up to the round its step
+needs. -/
+def CrashGoodAll {Validator BlockId Payload : Type} [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] {P : Validity Validator BlockId Payload}
+    [P.Mechanised] {honest : Finset Validator} (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) (rel : Reliability Validator)
+    (B : Barnacle.Params) (Bd : Boundary Validator)
+    (upd : UpdateRule (schemeLiveReactive p σ rel).toBaseRule) (C₀ : Config Validator)
+    (Q : Config Validator → Prop) (c δ : ℕ) (U : (schemeLiveReactive p σ rel).Universe)
+    (V : (schemeLiveReactive p σ rel).View U) : Prop :=
+  ∀ K (Rn : Run (schemeLiveReactive p σ rel).toBaseRule B Bd upd C₀ U V K) k, k ≤ K →
+    Q (Rn.cfg k) →
+    crashGood p σ rel (Rn.cfg k).sched U (Rn.start k + δ)
+      (Rn.start k + max (B.maxInterval + 1) δ + 2 * c + (schemeLiveReactive p σ rel).waveLength)
+
+open Barnacle in
+/-- **Theorem 2 under HammerHead**: responsive liveness, crashes and
+restarts, a HammerHead score permuting round-robin, and checkpoints,
+composed, broadcast atomically. Runs of every height exist on every
+signer's view; they satisfy `Broadcasts` under the weak-reference rule; and
+every slot a closed configuration commits reaches second-tier finality. -/
+def HammerHeadBroadcast : Prop :=
+  ∀ (n : ℕ) (hn : 0 < n) (BlockId Payload Value : Type) [LinearOrder BlockId]
+    (P : Validity (Fin n) BlockId Payload) [P.Mechanised] (q : ℕ) [P.Quorate q]
+    (honest : Finset (Fin n)) (f : ℕ) (p : Params)
+    (σ : VoteSel (Fin n) BlockId Payload P honest) (rel : Reliability (Fin n))
+    (M : SigningFaults (Fin n)) (E : M.Execution Value)
+    (vm : DeterministicVM (BlockId := BlockId) (Value := Value)),
+    p.Tolerates honest f q → p.CertFits (n - rel.slack) → p.Scheduled n rel.slack →
+    haveI : Nonempty (Fin n) := ⟨⟨0, hn⟩⟩
+    ∀ (B : Barnacle.Params) (score : Adaptive.Score (schemeLiveReactive p σ rel).toBaseRule)
+      (C₀ : Config (Fin n)) (δ : ℕ),
+      score.Keeps → (∀ U V v C, PermRR hn C → PermRR hn (score U V v C)) →
+      C₀.InBounds B → PermRR hn C₀ → 1 ≤ δ → δ + (n + p.waveLength - 1) ≤ C₀.interval →
+      ∀ (U : (schemeLiveReactive p σ rel).Universe) (C : Config (Fin n))
+        (Pr : SigningFaults.Execution.SigningRule M E
+          (schemeLiveReactive p σ rel).toBaseRule.toDagRule C.sched U vm) (N : ℕ),
+        (∀ v, (schemeLiveReactive p σ rel).toBaseRule.CoversUpto U (Pr.view v) N) →
+        (∀ v, CrashGoodAll p σ rel B Boundary.atThreshold (Adaptive.rule score) C₀ (PermRR hn)
+          (n + p.waveLength - 1) δ U (Pr.view v)) →
+      ∀ (wk : BlockId → Finset BlockId) (T : Finset (Fin n))
+        (holds : Fin n → ℕ → Finset BlockId) (built : Fin n → ℕ → ℕ),
+        T ⊆ honest → n < q + T.card → WeakRule U wk T holds built →
+        (∀ v, ∀ s t, s ≤ t → holds v s ⊆ holds v t) →
+        (∀ v ∈ T, ∀ b ∈ U.ids, (U.block b).creator = v →
+          (U.block b).round ≤ built v (U.block b).round) →
+      ∀ K, horizonFrom B (schemeLiveReactive p σ rel) (n + p.waveLength - 1) δ K + δ ≤ N →
+        ∃ Rn : ∀ v, Run (schemeLiveReactive p σ rel).toBaseRule B Boundary.atThreshold
+            (Adaptive.rule score) C₀ U (Pr.view v) K,
+          Broadcasts Rn wk T holds ∧
+          ∀ (k : ℕ), k < K → ∀ (v₀ : Fin n), (Rn v₀).cfg k = C →
+            ∀ (κ : ℕ) (L : BlockId), (Rn v₀).vdct k κ = some L →
+              (Rn v₀).start k < C.roundOf κ → C.roundOf κ ≤ C.roundOf ((Rn v₀).anchor k) →
+              Nonempty (SigningFaults.Execution.FinalityQC M E (vm.checkpointAfterCommit κ L))
+
+open Barnacle in
+/-- **Theorem 2 under Barnacle's AIMD rule**: the same, under the AIMD
+rule on a leader function whose first leader is round-robin, at either
+boundary. -/
+def AimdBroadcast : Prop :=
+  ∀ (n : ℕ) (hn : 0 < n) (BlockId Payload Value : Type) [LinearOrder BlockId]
+    (P : Validity (Fin n) BlockId Payload) [P.Mechanised] (q : ℕ) [P.Quorate q]
+    (honest : Finset (Fin n)) (f : ℕ) (p : Params)
+    (σ : VoteSel (Fin n) BlockId Payload P honest) (rel : Reliability (Fin n))
+    (M : SigningFaults (Fin n)) (E : M.Execution Value)
+    (vm : DeterministicVM (BlockId := BlockId) (Value := Value)),
+    p.Tolerates honest f q → p.CertFits (n - rel.slack) → p.Scheduled n rel.slack →
+    haveI : Nonempty (Fin n) := ⟨⟨0, hn⟩⟩
+    ∀ (B : Barnacle.Params) (Bd : Boundary (Fin n)) (lead : ℕ → ℕ → Fin n)
+      (hl : LeadKeyed lead B.maxLeaders), (∀ ρ, lead ρ 0 = roundRobin n hn ρ) →
+      ∀ (C₀ : Config (Fin n)) (δ : ℕ), C₀.InBounds B → C₀.head = roundRobin n hn →
+      1 ≤ δ → δ + (n + p.waveLength - 1) ≤ C₀.interval →
+      ∀ (U : (schemeLiveReactive p σ rel).Universe) (C : Config (Fin n))
+        (Pr : SigningFaults.Execution.SigningRule M E
+          (schemeLiveReactive p σ rel).toBaseRule.toDagRule C.sched U vm) (N : ℕ),
+        (∀ v, (schemeLiveReactive p σ rel).toBaseRule.CoversUpto U (Pr.view v) N) →
+        (∀ v, CrashGoodAll p σ rel B Bd (Aimd.rule _ B lead hl) C₀
+          (fun C => C.head = roundRobin n hn) (n + p.waveLength - 1) δ U (Pr.view v)) →
+      ∀ (wk : BlockId → Finset BlockId) (T : Finset (Fin n))
+        (holds : Fin n → ℕ → Finset BlockId) (built : Fin n → ℕ → ℕ),
+        T ⊆ honest → n < q + T.card → WeakRule U wk T holds built →
+        (∀ v, ∀ s t, s ≤ t → holds v s ⊆ holds v t) →
+        (∀ v ∈ T, ∀ b ∈ U.ids, (U.block b).creator = v →
+          (U.block b).round ≤ built v (U.block b).round) →
+      ∀ K, horizonFrom B (schemeLiveReactive p σ rel) (n + p.waveLength - 1) δ K + δ ≤ N →
+        ∃ Rn : ∀ v, Run (schemeLiveReactive p σ rel).toBaseRule B Bd
+            (Aimd.rule _ B lead hl) C₀ U (Pr.view v) K,
+          Broadcasts Rn wk T holds ∧
+          ∀ (k : ℕ), k < K → ∀ (v₀ : Fin n), (Rn v₀).cfg k = C →
+            ∀ (κ : ℕ) (L : BlockId), (Rn v₀).vdct k κ = some L →
+              (Rn v₀).start k < C.roundOf κ → C.roundOf κ ≤ C.roundOf ((Rn v₀).anchor k) →
+              Nonempty (SigningFaults.Execution.FinalityQC M E (vm.checkpointAfterCommit κ L))
+
+open Barnacle in
+open scoped ENNReal in
+/-- **Theorem 2 under asynchrony, with AIMD**: crashes and restarts,
+Barnacle's AIMD rule with heads drawn by a coin, and checkpoints, composed,
+broadcast atomically: runs of every height on every signer's view that
+satisfy `Broadcasts` under the weak-reference rule at `Tr` and finalize what
+each closed configuration commits fail to exist with probability at most
+`J · badBlockBoundAt c w ^ M`. -/
+def AsyncBroadcast : Prop :=
+  ∀ (n : ℕ) (hn : 0 < n) (BlockId Payload Value : Type) [LinearOrder BlockId]
+    (P : Validity (Fin n) BlockId Payload) [P.Mechanised] (q : ℕ) [P.Quorate q]
+    (honest : Finset (Fin n)) (f : ℕ) (p : Params)
+    (σ : VoteSel (Fin n) BlockId Payload P honest) (rel : Reliability (Fin n))
+    (Ms : SigningFaults (Fin n)) (E : Ms.Execution Value)
+    (vm : DeterministicVM (BlockId := BlockId) (Value := Value)) (J M c : ℕ) (dflt : Fin n),
+    p.Tolerates honest f q → p.CertFits q →
+    p.commitThreshold ≤ Fintype.card (Fin n) - rel.slack →
+    haveI : Nonempty (Fin n) := ⟨dflt⟩
+    ∀ (B : Barnacle.Params) (Bd : Boundary (Fin n)) (lead : (ℕ → Fin n) → ℕ → ℕ → Fin n)
+      (hl : ∀ h, LeadKeyed (lead h) B.maxLeaders), (∀ h ρ, lead h ρ 0 = h ρ) →
+      ∀ C₀ : (ℕ → Fin n) → Config (Fin n), (∀ h, (C₀ h).InBounds B ∧ (C₀ h).head = h) →
+      (∀ h, 1 + 2 * (M * (p.waveLength - 1 + 1)) ≤ (C₀ h).interval) →
+      ∀ (U : (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).Universe)
+        (T : Finset (Fin n)) (Nr qp : ℕ) (ac : AsyncCrashRun qp U T Nr),
+        rel.IsQuorum T → T ⊆ honest → qp ≤ T.card →
+      ∀ (N : ℕ), N ≤ Nr →
+      ∀ (C : Config (Fin n)) (Pr : SigningFaults.Execution.SigningRule Ms E
+          (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).toBaseRule.toDagRule
+          C.sched U vm),
+        (∀ v, (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).toBaseRule.CoversUpto
+          U (Pr.view v) N) →
+        N + 1 ≤ J * (M * (p.waveLength - 1 + 1)) →
+        (∀ r, r < J * (M * (p.waveLength - 1 + 1)) → c ≤ (safeAt p U r).card) →
+      ∀ (wk : BlockId → Finset BlockId) (Tr : Finset (Fin n))
+        (holds : Fin n → ℕ → Finset BlockId) (built : Fin n → ℕ → ℕ),
+        Tr ⊆ honest → n < q + Tr.card → WeakRule U wk Tr holds built →
+        (∀ v, ∀ s t, s ≤ t → holds v s ⊆ holds v t) →
+        (∀ v ∈ Tr, ∀ b ∈ U.ids, (U.block b).creator = v →
+          (U.block b).round ≤ built v (U.block b).round) →
+        ∀ K, horizon B (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1))))
+            (2 * (M * (p.waveLength - 1 + 1))) K + 1 ≤ N →
+          (PMF.uniformOfFintype (Fin (J * M) → Fin (p.waveLength - 1 + 1) → Fin n)).toOuterMeasure
+              {g | ¬ ∃ Rn : ∀ v, Run
+                  (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).toBaseRule B Bd
+                  (Aimd.rule _ B (lead (coinHead dflt g)) (hl _)) (C₀ (coinHead dflt g)) U
+                  (Pr.view v) K,
+                Broadcasts Rn wk Tr holds ∧
+                ∀ (k : ℕ), k < K → ∀ (v₀ : Fin n), (Rn v₀).cfg k = C →
+                  ∀ (κ : ℕ) (L : BlockId), (Rn v₀).vdct k κ = some L →
+                    (Rn v₀).start k < C.roundOf κ → C.roundOf κ ≤ C.roundOf ((Rn v₀).anchor k) →
+                    Nonempty (SigningFaults.Execution.FinalityQC Ms E
+                      (vm.checkpointAfterCommit κ L))} ≤
+            (J : ℝ≥0∞) * Steelhead.Coin.badBlockBoundAt (Fin n) c (p.waveLength - 1 + 1) ^ M
+
+open Barnacle in
+open scoped ENNReal in
+/-- **Theorem 2 under asynchrony, with HammerHead**: the same under a
+HammerHead score whose coin draws from reputation tables supporting `k`
+validators with weight `e`, at `|Tbls| · J · badBlockBoundAt m (e (k + s −
+n)) w ^ M`. -/
+def AsyncHammerHeadBroadcast : Prop :=
+  ∀ (n : ℕ) (hn : 0 < n) (BlockId Payload Value : Type) [LinearOrder BlockId]
+    (P : Validity (Fin n) BlockId Payload) [P.Mechanised] (q : ℕ) [P.Quorate q]
+    (honest : Finset (Fin n)) (f : ℕ) (p : Params)
+    (σ : VoteSel (Fin n) BlockId Payload P honest) (rel : Reliability (Fin n))
+    (Ms : SigningFaults (Fin n)) (E : Ms.Execution Value)
+    (vm : DeterministicVM (BlockId := BlockId) (Value := Value))
+    (J M m k e s : ℕ) (dflt : Fin m) (Tbls : Finset (Fin m → Fin n)),
+    p.Tolerates honest f q → p.CertFits q →
+    p.commitThreshold ≤ Fintype.card (Fin n) - rel.slack →
+    (∀ tbl ∈ Tbls, Supports tbl k e) →
+    haveI : Nonempty (Fin m) := ⟨dflt⟩
+    ∀ (B : Barnacle.Params)
+      (score : (ℕ → Fin m) →
+        Adaptive.Score (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).toBaseRule)
+      (C₀ : (ℕ → Fin m) → Config (Fin n)),
+      (∀ u', (score u').Keeps) →
+      (∀ u' U V v C, (∃ tbl ∈ Tbls, C.head = fun ρ => tbl (u' ρ)) →
+        ∃ tbl ∈ Tbls, (score u' U V v C).head = fun ρ => tbl (u' ρ)) →
+      (∀ u', (C₀ u').InBounds B ∧ ∃ tbl ∈ Tbls, (C₀ u').head = fun ρ => tbl (u' ρ)) →
+      (∀ u', 1 + 2 * (M * (p.waveLength - 1 + 1)) ≤ (C₀ u').interval) →
+      ∀ (U : (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).Universe)
+        (T : Finset (Fin n)) (Nr qp : ℕ) (ac : AsyncCrashRun qp U T Nr),
+        rel.IsQuorum T → T ⊆ honest → qp ≤ T.card →
+      ∀ (N : ℕ), N ≤ Nr →
+      ∀ (C : Config (Fin n)) (Pr : SigningFaults.Execution.SigningRule Ms E
+          (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).toBaseRule.toDagRule
+          C.sched U vm),
+        (∀ v, (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).toBaseRule.CoversUpto
+          U (Pr.view v) N) →
+        N + 1 ≤ J * (M * (p.waveLength - 1 + 1)) →
+        (∀ r, r < J * (M * (p.waveLength - 1 + 1)) → s ≤ (safeAt p U r).card) →
+      ∀ (wk : BlockId → Finset BlockId) (Tr : Finset (Fin n))
+        (holds : Fin n → ℕ → Finset BlockId) (built : Fin n → ℕ → ℕ),
+        Tr ⊆ honest → n < q + Tr.card → WeakRule U wk Tr holds built →
+        (∀ v, ∀ s t, s ≤ t → holds v s ⊆ holds v t) →
+        (∀ v ∈ Tr, ∀ b ∈ U.ids, (U.block b).creator = v →
+          (U.block b).round ≤ built v (U.block b).round) →
+        ∀ K, horizon B (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1))))
+            (2 * (M * (p.waveLength - 1 + 1))) K + 1 ≤ N →
+          (PMF.uniformOfFintype (Fin (J * M) → Fin (p.waveLength - 1 + 1) → Fin m)).toOuterMeasure
+              {g | ¬ ∃ Rn : ∀ v, Run
+                  (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).toBaseRule B
+                  Boundary.atThreshold (Adaptive.rule (score (coinHead dflt g)))
+                  (C₀ (coinHead dflt g)) U (Pr.view v) K,
+                Broadcasts Rn wk Tr holds ∧
+                ∀ (k' : ℕ), k' < K → ∀ (v₀ : Fin n), (Rn v₀).cfg k' = C →
+                  ∀ (κ : ℕ) (L : BlockId), (Rn v₀).vdct k' κ = some L →
+                    (Rn v₀).start k' < C.roundOf κ → C.roundOf κ ≤ C.roundOf ((Rn v₀).anchor k') →
+                    Nonempty (SigningFaults.Execution.FinalityQC Ms E
+                      (vm.checkpointAfterCommit κ L))} ≤
+            (Tbls.card : ℝ≥0∞) * ((J : ℝ≥0∞) *
+              Steelhead.Coin.badBlockBoundAt (Fin m) (e * (k + s - n)) (p.waveLength - 1 + 1) ^ M)
+
 /-- The mechanisms composed. -/
 def Statement : Prop :=
   CheckpointsResponsive ∧ CheckpointsCrash ∧ ScheduledCrash ∧ HammerHeadComposed ∧ AimdComposed ∧
     AsyncComposed ∧ AsyncHammerHeadComposed ∧ ScheduledIntegrity ∧ ScheduledAgreed ∧
-    ScheduledValidity ∧ AnchorLedger
+    ScheduledValidity ∧ AnchorLedger ∧ ComposedValidity ∧ HammerHeadBroadcast ∧ AimdBroadcast ∧
+    AsyncBroadcast ∧ AsyncHammerHeadBroadcast
 
 end Compose
 

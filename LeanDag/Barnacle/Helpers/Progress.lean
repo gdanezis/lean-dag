@@ -290,6 +290,84 @@ theorem everyHeight_from (hR : Properties.Agree R.toBaseRule.toDagRule)
       exact ⟨Rn', by rw [Nat.succ_mul]; omega, hhead'⟩
     · exact ⟨Rn', by rw [Nat.succ_mul]; omega, hhead'⟩
 
+/-- **A good window puts a commit in the ledger**: if configuration `k`'s
+schedule is good from `δ` past its start through the commit gap and a wave,
+and its interval holds `δ` and the gap, then the run's ledger holds a
+leader committed at a slot of range `k` at round `start k + δ` or later, at
+either boundary. -/
+theorem ledger_commit_of_window (hR : Properties.Agree R.toBaseRule.toDagRule) {c δ K k M : ℕ}
+    {V : R.View U} (Rn : Run R.toBaseRule P B upd C₀ U V K) (hk : k < K)
+    (hlive : R.LiveOn (Rn.cfg k).sched c)
+    (hgood : R.Good (Rn.cfg k).sched U (Rn.start k + δ) M)
+    (hcov : R.toBaseRule.CoversUpto U V M) (hδ : 1 ≤ δ) (hint : δ + c ≤ (Rn.cfg k).interval)
+    (hM : Rn.start k + δ + c + R.waveLength ≤ M) :
+    ∃ κ L, Rn.start k + δ ≤ (Rn.cfg k).roundOf κ ∧ R.Decided (Rn.cfg k).sched V κ (some L) ∧
+      L ∈ Rn.ledgerUpto K := by
+  obtain ⟨-, h2⟩ := hlive U V _ M hgood hcov
+  obtain ⟨κ, hκlo, hκhi, L, hL⟩ := h2 (Rn.start k + δ) le_rfl hM
+  simp only [Config.sched_slotRound] at hκlo hκhi
+  have hthr := (Rn.anchor_commits k hk).2
+  have hge := B.ge_threshold (Rn.cfg k) (Rn.start k) (Rn.anchor k) hthr
+  have hle := B.le_anchor (Rn.cfg k) (Rn.start k) (Rn.anchor k) hthr
+  have hs := Rn.start_succ k hk
+  have hcl := Rn.closed k hk κ (by omega) (by omega)
+  have hv : Rn.vdct k κ = some L := hR _ _ _ κ _ _ hcl hL
+  refine ⟨κ, L, hκlo, hL, List.mem_flatMap.mpr ⟨k, List.mem_range.mpr hk, ?_⟩⟩
+  unfold Run.rangeLedger ledgerOf
+  have h1 : (Rn.cfg k).cum (Rn.start k + 1) ≤ κ :=
+    (Rn.cfg k).cum_le_iff_le_roundOf.mpr (by omega)
+  have h2 : κ < (Rn.cfg k).cum (Rn.start (k + 1) + 1) :=
+    (Rn.cfg k).lt_cum_iff_roundOf_lt.mpr (by omega)
+  exact List.mem_filterMap.mpr ⟨κ, List.mem_range'_1.mpr ⟨h1, by omega⟩, hv⟩
+
+/-- **Configurations start a round apart or more**: configuration `k` of a
+run starts at round `k` or later. -/
+theorem le_start {V : R.View U} {K : ℕ} (Rn : Run R.toBaseRule P B upd C₀ U V K) :
+    ∀ k, k ≤ K → k ≤ Rn.start k := by
+  intro k
+  induction k with
+  | zero => intro _; omega
+  | succ k ih =>
+    intro hk
+    have hs := Rn.start_succ k (by omega)
+    have hthr := (Rn.anchor_commits k (by omega)).2
+    have hge := B.ge_threshold (Rn.cfg k) (Rn.start k) (Rn.anchor k) hthr
+    have hpos := (Rn.bounds k).2.1
+    have := ih (by omega)
+    omega
+
+/-- **A rule that keeps the interval keeps it along a run.** -/
+theorem interval_eq {V : R.View U} {K : ℕ} (Rn : Run R.toBaseRule P B upd C₀ U V K)
+    (hkeep : ∀ C b U' V' v A, (upd C b U' V' v A).1.interval = C.interval) :
+    ∀ k, k ≤ K → (Rn.cfg k).interval = C₀.interval := by
+  intro k
+  induction k with
+  | zero => intro _; rw [Rn.init.2.1]
+  | succ k ih =>
+    intro hk
+    obtain ⟨⟨A, hA⟩, -⟩ := Rn.anchor_commits k (by omega)
+    have hu := Rn.update k (by omega) A hA
+    have := congrArg (fun x => x.1.interval) hu
+    simp only at this
+    rw [this, hkeep, ih (by omega)]
+
+/-- **What the update rule preserves holds of every configuration** of a
+run from a genesis that has it. -/
+theorem cfg_keeps {Q : Config Validator → Prop} {V : R.View U} {K : ℕ}
+    (Rn : Run R.toBaseRule P B upd C₀ U V K) (hkeep : UpdKeeps upd Q) (h₀ : Q C₀) :
+    ∀ k, k ≤ K → Q (Rn.cfg k) := by
+  intro k
+  induction k with
+  | zero => intro _; rw [Rn.init.2.1]; exact h₀
+  | succ k ih =>
+    intro hk
+    obtain ⟨⟨A, hA⟩, -⟩ := Rn.anchor_commits k (by omega)
+    have hu := Rn.update k (by omega) A hA
+    have := congrArg Prod.fst hu
+    simp only at this
+    rw [this]
+    exact hkeep _ _ _ _ _ _ (ih (by omega))
+
 end Progress
 
 end Barnacle

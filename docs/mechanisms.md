@@ -202,8 +202,18 @@ Replace the `\george` notes of §4 by the results, as `\edits{…}`.
 * **Theorem 2 (atomic broadcast over scheduled runs)**: integrity, total
   order, agreement and validity proved (`Compose.{ScheduledIntegrity,
   ScheduledAgreed, ScheduledValidity, AnchorLedger}`, `scheme.md` §26).
-  Open: discharging Validity's ledger premise at HammerHead's boundary
-  (needs the interval to exceed the commit gap).
+  Validity's ledger premise is discharged at either boundary when the
+  interval holds the learning delay and the commit gap
+  (`Barnacle.ledger_commit_of_window`, `Compose.ComposedValidity`).
+
+* **Theorem 2 done** (user request: the composition of all mechanisms is
+  Byzantine atomic broadcast). `Compose.{HammerHeadBroadcast,
+  AimdBroadcast}` (responsive, crashes, adaptive leaders, checkpoints) and
+  `Compose.{AsyncBroadcast, AsyncHammerHeadBroadcast}` (asynchronous, same
+  failure bounds as M6 and M4b) give runs on every signer's view
+  satisfying `Compose.Broadcasts` (integrity, total order, agreement,
+  validity) with checkpoint finality (`scheme.md` §27). The weak-reference
+  rule is a premise.
 
 ## 5. Order
 

@@ -12384,7 +12384,23 @@ finality when the signers run the family responsively past GST
 when they run it with crashes and restarts past `max gst tr`
 (`Scheme.Compose.checkpointsCrash`).
 
-### 27.21 What the arc does not contain
+### 27.21 The mechanisms composed broadcast atomically
+
+Theorem 2 of the paper (`scheme.md` §27). Responsive liveness, crash
+recovery, an adaptive leader schedule and checkpoints, composed, give runs
+of every height on every signer's view whose delivered sequences satisfy
+Integrity, Total order, Agreement and Validity (`Compose.Broadcasts`), and
+in which every slot a closed configuration commits reaches second-tier
+finality: with certainty under partial synchrony
+(`Scheme.Compose.hammerHeadBroadcast`, `aimdBroadcast`), and outside a
+coin event of bounded probability under asynchrony
+(`asyncBroadcast`, `asyncHammerHeadBroadcast`). Validity asks the
+weak-reference rule as a premise, and the interval to hold the learning
+delay and the commit gap: a configuration then commits a leader inside its
+own range (`Barnacle.ledger_commit_of_window`), so its range in the ledger
+holds a leader late enough to reach the block.
+
+### 27.22 What the arc does not contain
 
 The properties of Mahi-Mahi and Async BlueBottle that are proved of
 those rules alone reach the rows of §27.5 at the least vote only; the
@@ -21290,7 +21306,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 653 theorems the body or Appendix A names, each
+The 656 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -29263,6 +29279,30 @@ theorem holds : Statement
 
 ```lean
 theorem holds : Statement
+```
+
+#### `aimdBroadcast`
+
+*theorem, `Scheme.Compose.Proof.lean`*
+
+```lean
+theorem aimdBroadcast : AimdBroadcast
+```
+
+#### `asyncBroadcast`
+
+*theorem, `Scheme.Compose.Proof.lean`*
+
+```lean
+theorem asyncBroadcast : AsyncBroadcast
+```
+
+#### `asyncHammerHeadBroadcast`
+
+*theorem, `Scheme.Compose.Proof.lean`*
+
+```lean
+theorem asyncHammerHeadBroadcast : AsyncHammerHeadBroadcast
 ```
 
 #### `holds`

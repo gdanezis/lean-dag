@@ -276,12 +276,11 @@ theorem hammerHeadReactive : HammerHeadReactive := by
       (by simpa using hT) (by rw [hwl]; exact hbound)
     rwa [hwl] at this ⊢
   have hw0 : 0 < (schemeLiveReactive p σ rel).waveLength := by rw [hwl]; have := hc.1; omega
-  obtain ⟨Rn, -, -⟩ := everyHeight_from (Q := PermRR hn) (Scheme.agree ht)
+  exact everyHeight_from (Q := PermRR hn) (Scheme.agree ht)
     (Adaptive.Score.rule_bounded B score hkeep) (Adaptive.Score.rule_keeps score _ hQ)
     (fun C _ ⟨π, hπ⟩ => liveOn_of_permuted_heads C hD hw0 hbase π hπ)
     (fun C _ ⟨π, hπ⟩ => settlesBelow_of_permuted_heads C hD hw0 hbase π hπ)
     h₀ hQ₀ hcov hgood K hK
-  exact ⟨Rn⟩
 
 attribute [local instance] noFaults in
 theorem reactiveGoodInhabited : ReactiveGoodInhabited := by

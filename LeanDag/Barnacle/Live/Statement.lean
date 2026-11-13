@@ -14,7 +14,8 @@ configurations' rounds come in runs of a wave. Round-robin is one such schedule,
 `RunsExistFrom` is the same consequent when a configuration's schedule is
 good only `δ` rounds after its start, its validators not yet knowing it
 before, and only up to the round its step needs, unless the run has
-already moved past it; `StatementFrom` says the same rules reach it.
+already moved past it, and gives the run with a bound on its last start;
+`StatementFrom` says the same rules reach it.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -75,7 +76,9 @@ def RunsExistFrom (R : LiveRule Validator BlockId Payload) (P : Params)
         ∃ Rn' : Run R.toBaseRule P B upd C₀ U V (K + 1),
           Rn'.start (K + 1) ≤ Rn.start K + max (P.maxInterval + 1) δ + c ∧
             Q (Rn'.cfg (K + 1))) →
-    ∀ K, horizonFrom P R c δ K ≤ N → Nonempty (Run R.toBaseRule P B upd C₀ U V K)
+    ∀ K, horizonFrom P R c δ K ≤ N →
+      ∃ Rn : Run R.toBaseRule P B upd C₀ U V K,
+        Rn.start K ≤ K * (max (P.maxInterval + 1) δ + c) ∧ Q (Rn.cfg K)
 
 /-- **BN11 with a learning delay**: the same rules reach every height when
 each configuration's schedule is good only from `δ` past its start. -/

@@ -1370,6 +1370,39 @@ schedule's `deliverOf` also reads).
 At Barnacle's boundary a configuration's range ends at its pivot, which is
 committed and therefore in the ledger; ranges start at least one round
 apart, so a run of height `t + 2` delivers every block every reliable
-validator held by `t`. At HammerHead's boundary the range ends at the
-threshold, before the pivot, and holds a commit of its own only when the
-interval exceeds the commit gap; that discharge is not yet proved.
+validator held by `t`. At either boundary, a configuration whose
+schedule is good from `δ ≥ 1` past its start through the commit gap `c` and
+a wave, with `δ + c` at most its interval, commits a leader of round
+`start + δ` or later inside its own range (`Barnacle.ledger_commit_of_window`),
+which gives Validity over any responsive scheduled run
+(`Compose.ComposedValidity`).
+
+## 27. Theorem 2: the mechanisms composed broadcast atomically
+
+`Compose.Broadcasts` collects the three properties of a family of runs, one
+per signer's view: Integrity (`ScheduledIntegrity`), Total order and
+Agreement across views and heights (`ScheduledAgreed`), and Validity under
+the weak-reference rule for a block held by every validator of `T` by `t`,
+when `t + 2 < K`.
+
+| Setting | Lean | Failure probability |
+|---|---|---|
+| Responsive, crashes, HammerHead score permuting round-robin, checkpoints | `Compose.HammerHeadBroadcast` | 0 |
+| Responsive, crashes, Barnacle's AIMD rule, either boundary, checkpoints | `Compose.AimdBroadcast` | 0 |
+| Asynchronous, crashes, AIMD with coin heads, checkpoints | `Compose.AsyncBroadcast` | `J · badBlockBoundAt c w ^ M` |
+| Asynchronous, crashes, HammerHead coin over reputation tables, checkpoints | `Compose.AsyncHammerHeadBroadcast` | `|Tbls| · J · badBlockBoundAt m (e (k + s − n)) w ^ M` |
+
+Each gives runs of height `K` on every signer's view that satisfy
+`Broadcasts` and finalize every slot a closed configuration commits. The
+partially synchronous forms ask every configuration of every run to be
+run with crashes from `δ ≥ 1` past its start (`CrashGoodAll`), the
+interval to hold `δ` and the gap, and the views to cover `horizonFrom K + δ`.
+The asynchronous forms ask the interval to hold a round and the gap, and
+the views to cover `horizon K + 1`; every configuration there is good from
+round `0`. `RunsExistFrom` and `ScheduledCrash` return the run with its
+start bound `K · (max (maxInterval + 1) δ + c)`, which places each
+configuration's validity window under the coverage horizon
+(`Barnacle.start_mono`).
+
+The weak-reference rule (`WeakRule`), the monotonicity of `holds` and the
+`built` bound are premises.
