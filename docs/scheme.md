@@ -1297,3 +1297,32 @@ commits reaches second-tier finality
 (`Integration.commitFinalized_barnacle_scheme`); and the draws without such
 windows have probability at most `J · badBlockBoundAt c w ^ M`
 (`windowsFail_le`).
+
+## 24. HammerHead under asynchrony, from a reputation distribution
+
+`docs/mechanisms.md` M4b; statements `Scheme/Schedules/Statement.lean`,
+`Scheme/Compose/Statement.lean`.
+
+A reputation schedule that names leaders in advance is not live under
+asynchrony. A HammerHead score may instead set the distribution the coin
+draws from: each configuration carries a table, and a round's head is the
+table's entry at a uniform index drawn for that round. The adversary sees
+the table but not the index, and chooses which validators are safe, subject
+to the counts of §11. A table supporting `k` validators with weight `e`
+(`Supports`) hits every set of `s` validators in at least `e (k + s − n)`
+entries (`card_hits_ge`), which is positive when `k + s > n`. With a quorum
+support this holds at two buffer rounds (`s = q − f`, `2q ≥ n + f + 1`) and
+at one buffer round where `n ≥ 5f + 3c + 1` (`s ≥ n/3`, `q > 2n/3`); at one
+buffer round with `2q = n + f + 1` the adversary can hold `s` at two, and only
+a support of `n − 1` validators survives. The table changes at each
+reconfiguration, with earlier coins; the bound asks the runs of safe heads
+of every table of a finite set `Tbls` and joins them by a union bound:
+
+| Claim | Lean |
+|---|---|
+| With every table's heads in safe runs, HammerHead reaches every height | `Schedules.AsyncHammerHeadRuns` |
+| A run of height `K` fails with probability at most `|Tbls| · J · badBlockBoundAt m (e (k + s − n)) w ^ M` | `Schedules.AsyncHammerHeadLive` |
+| The same with crashes and checkpoints | `Compose.AsyncHammerHeadComposed` |
+
+A HammerHead score that only permutes who leads keeps the coin uniform and
+needs none of this: it is the case of a table that is a permutation.

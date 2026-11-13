@@ -361,19 +361,73 @@ theorem asyncAimdLive : AsyncAimdLive := by
   intro n hn BlockId Payload _ P _ q _ honest f p σ rel J M c dflt ht hc hcm
   haveI : Nonempty (Fin n) := ⟨dflt⟩
   intro B Bd lead hl hlead C₀ hC₀ U V N T hq hTh hpop hcov hNJ hfloor K hK
-  refine le_trans (MeasureTheory.measure_mono fun g hg => ?_) (windowsFail_le p U hfloor)
+  refine le_trans (MeasureTheory.measure_mono fun g hg => ?_) (windowsFail_le (safeAt p U) hfloor)
   simp only [Set.mem_setOf_eq] at hg ⊢
   intro hwin
   obtain ⟨Rn⟩ := asyncAimdRuns n hn BlockId Payload P q honest f p σ rel
     (2 * (M * (p.waveLength - 1 + 1))) ht hc hcm B Bd (lead (coinHead dflt g)) (hl _)
     (coinHead dflt g) (hlead _) (C₀ (coinHead dflt g)) (hC₀ _).1 (hC₀ _).2 U V N T hq hTh hpop
-    (safeHeadRuns_of_windows p U rfl dflt g hNJ hwin) hcov K hK
+    (safeHeadRuns_of_windows p U rfl dflt id (safeAt p U) (fun _ _ h => h) g hNJ hwin) hcov K hK
   exact hg.false Rn
+
+theorem asyncHammerHeadRuns : AsyncHammerHeadRuns := by
+  intro n hn BlockId Payload _ P _ q _ honest f p σ rel c₀ m u Tbls ht hc hcm B score C₀ hkeep hQ
+    h₀ hQ₀ U V N T hq hTh hpop hsafe hcov K hK
+  exact everyHeight (Q := fun C => ∃ tbl ∈ Tbls, C.head = fun ρ => tbl (u ρ)) (Scheme.agree ht)
+    (Adaptive.Score.rule_bounded B score hkeep) (Adaptive.Score.rule_keeps score _ hQ)
+    (fun C _ _ => (asyncConfigLive (Fin n) BlockId Payload P q honest p σ rel c₀ hc hcm C).1)
+    h₀ hQ₀ hcov
+    (fun C _ ⟨tbl, htbl, hCh⟩ => ⟨T, hq, hTh, hpop, fun r hr hrN => by
+      obtain ⟨ρ, h1, h2, h3⟩ := hsafe tbl htbl r hr hrN
+      refine ⟨ρ, h1, h2, fun i hi κ hκ hfirst => ?_⟩
+      rw [eq_cum_of_first C hκ hfirst, Config_leader_head, hCh]
+      exact h3 i hi⟩)
+    (Nat.zero_le 1) K hK
+
+open scoped ENNReal in
+theorem asyncHammerHeadLive : AsyncHammerHeadLive := by
+  intro n hn BlockId Payload _ P _ q _ honest f p σ rel J M m k e s dflt Tbls ht hc hcm hsup
+  haveI : Nonempty (Fin m) := ⟨dflt⟩
+  intro B score C₀ hkeep hQ hC₀ U V N T hq hTh hpop hcov hNJ hfloor K hK
+  let Sr : (Fin m → Fin n) → ℕ → Finset (Fin m) := fun tbl r =>
+    Finset.univ.filter fun j => tbl j ∈ safeAt p U r
+  have hsub : {g : Fin (J * M) → Fin (p.waveLength - 1 + 1) → Fin m | IsEmpty (Barnacle.Run
+        (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).toBaseRule B
+        Boundary.atThreshold (Adaptive.rule (score (coinHead dflt g)))
+        (C₀ (coinHead dflt g)) U V K)} ⊆
+      ⋃ tbl ∈ Tbls, {g | ¬ ∀ j : Fin J, ∃ m' : Fin M, ∀ i : Fin (p.waveLength - 1 + 1),
+        g ⟨j * M + m', blk_lt j.isLt m'.isLt⟩ i ∈
+          Sr tbl ((j * M + m') * (p.waveLength - 1 + 1) + i)} := by
+    intro g hg
+    by_contra hno
+    simp only [Set.mem_iUnion, Set.mem_setOf_eq, not_exists, not_not] at hno
+    obtain ⟨Rn⟩ := asyncHammerHeadRuns n hn BlockId Payload P q honest f p σ rel
+      (2 * (M * (p.waveLength - 1 + 1))) m (coinHead dflt g) Tbls ht hc hcm B
+      (score (coinHead dflt g)) (C₀ (coinHead dflt g)) (hkeep _) (hQ _) (hC₀ _).1 (hC₀ _).2
+      U V N T hq hTh hpop
+      (fun tbl htbl => safeHeadRuns_of_windows p U rfl dflt tbl (Sr tbl)
+        (fun r x hx => (Finset.mem_filter.mp hx).2) g hNJ (hno tbl htbl))
+      hcov K hK
+    exact hg.false Rn
+  refine le_trans (MeasureTheory.measure_mono hsub)
+    (le_trans (MeasureTheory.measure_biUnion_finset_le _ _) ?_)
+  calc ∑ tbl ∈ Tbls, (PMF.uniformOfFintype _).toOuterMeasure
+          {g : Fin (J * M) → Fin (p.waveLength - 1 + 1) → Fin m |
+            ¬ ∀ j : Fin J, ∃ m' : Fin M, ∀ i : Fin (p.waveLength - 1 + 1),
+              g ⟨j * M + m', blk_lt j.isLt m'.isLt⟩ i ∈
+                Sr tbl ((j * M + m') * (p.waveLength - 1 + 1) + i)}
+        ≤ ∑ _tbl ∈ Tbls, (J : ℝ≥0∞) *
+            Steelhead.Coin.badBlockBoundAt (Fin m) (e * (k + s - n)) (p.waveLength - 1 + 1) ^ M :=
+          Finset.sum_le_sum fun tbl htbl => windowsFail_le (Sr tbl) fun r hr => by
+            have := card_hits_ge (hsup tbl htbl) (hfloor r hr)
+            simpa only [Fintype.card_fin] using this
+      _ = _ := by rw [Finset.sum_const, nsmul_eq_mul]
 
 theorem holds : Statement :=
   ⟨safe, descends, runsExist, aimd, hammerHead, rowsScheduled, silentDescends, silentLive,
     hammerHeadSilent, rowsSkipScheduled, reactiveDescends, runsExistReactive, aimdReactive,
-    hammerHeadReactive, reactiveGoodInhabited, asyncConfigLive, asyncAimdRuns, asyncAimdLive⟩
+    hammerHeadReactive, reactiveGoodInhabited, asyncConfigLive, asyncAimdRuns, asyncAimdLive,
+    asyncHammerHeadRuns, asyncHammerHeadLive⟩
 
 end Schedules
 

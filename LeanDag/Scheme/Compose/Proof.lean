@@ -89,7 +89,7 @@ theorem asyncComposed : AsyncComposed := by
   intro n hn BlockId Payload Value _ P _ q _ honest f p σ rel Ms E vm J M c dflt ht hc hcm
   haveI : Nonempty (Fin n) := ⟨dflt⟩
   intro B Bd lead hl hlead C₀ hC₀ U T Nr qp ac hq hTh hqp N hN C Pr hcov hNJ hfloor K hK
-  refine le_trans (MeasureTheory.measure_mono fun g hg => ?_) (windowsFail_le p U hfloor)
+  refine le_trans (MeasureTheory.measure_mono fun g hg => ?_) (windowsFail_le (safeAt p U) hfloor)
   simp only [Set.mem_setOf_eq] at hg ⊢
   intro hwin
   apply hg
@@ -101,15 +101,68 @@ theorem asyncComposed : AsyncComposed := by
       (2 * (M * (p.waveLength - 1 + 1))) ht hc hcm B Bd (lead (coinHead dflt g)) (hl _)
       (coinHead dflt g) (hlead _) (C₀ (coinHead dflt g)) (hC₀ _).1 (hC₀ _).2 U (Pr.view v) N T
       hq hTh (fun r hr => ac.toAsyncPace.populated hqp r (le_trans hr hN))
-      (safeHeadRuns_of_windows p U rfl dflt g hNJ hwin) (hcov v) K hK
+      (safeHeadRuns_of_windows p U rfl dflt id (safeAt p U) (fun _ _ h => h) g hNJ hwin) (hcov v) K hK
   refine ⟨fun v => (hrun v).some, fun k hk v₀ hcfg κ L h hlo hhi => ?_⟩
   exact Integration.commitFinalized_barnacle_scheme Ms E vm ht
     (Barnacle.Aimd.holds _ _ _ _ B _ (hl _)).2.2.2.2
     Pr (fun v => (hrun v).some) hk hcfg h hlo hhi
 
+open scoped ENNReal in
+theorem asyncHammerHeadComposed : AsyncHammerHeadComposed := by
+  intro n hn BlockId Payload Value _ P _ q _ honest f p σ rel Ms E vm J M m k e s dflt Tbls ht hc
+    hcm hsup
+  haveI : Nonempty (Fin m) := ⟨dflt⟩
+  intro B score C₀ hkeep hQ hC₀ U T Nr qp ac hq hTh hqp N hN C Pr hcov hNJ hfloor K hK
+  let Sr : (Fin m → Fin n) → ℕ → Finset (Fin m) := fun tbl r =>
+    Finset.univ.filter fun j => tbl j ∈ safeAt p U r
+  have hsub : {g : Fin (J * M) → Fin (p.waveLength - 1 + 1) → Fin m | ¬ ∃ Rn : ∀ v,
+        Barnacle.Run (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).toBaseRule B
+          Barnacle.Boundary.atThreshold (Adaptive.rule (score (coinHead dflt g)))
+          (C₀ (coinHead dflt g)) U (Pr.view v) K,
+        ∀ (k' : ℕ), k' < K → ∀ (v₀ : Fin n), (Rn v₀).cfg k' = C →
+          ∀ (κ : ℕ) (L : BlockId), (Rn v₀).vdct k' κ = some L →
+            (Rn v₀).start k' < C.roundOf κ → C.roundOf κ ≤ C.roundOf ((Rn v₀).anchor k') →
+            Nonempty (Checkpoint.SigningFaults.Execution.FinalityQC Ms E
+              (vm.checkpointAfterCommit κ L))} ⊆
+      ⋃ tbl ∈ Tbls, {g | ¬ ∀ j : Fin J, ∃ m' : Fin M, ∀ i : Fin (p.waveLength - 1 + 1),
+        g ⟨j * M + m', blk_lt j.isLt m'.isLt⟩ i ∈
+          Sr tbl ((j * M + m') * (p.waveLength - 1 + 1) + i)} := by
+    intro g hg
+    by_contra hno
+    simp only [Set.mem_iUnion, Set.mem_setOf_eq, not_exists, not_not] at hno
+    apply hg
+    have hrun : ∀ v, Nonempty (Barnacle.Run
+        (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).toBaseRule B
+        Barnacle.Boundary.atThreshold (Adaptive.rule (score (coinHead dflt g)))
+        (C₀ (coinHead dflt g)) U (Pr.view v) K) := fun v =>
+      Schedules.asyncHammerHeadRuns n hn BlockId Payload P q honest f p σ rel
+        (2 * (M * (p.waveLength - 1 + 1))) m (coinHead dflt g) Tbls ht hc hcm B
+        (score (coinHead dflt g)) (C₀ (coinHead dflt g)) (hkeep _) (hQ _) (hC₀ _).1 (hC₀ _).2
+        U (Pr.view v) N T hq hTh (fun r hr => ac.toAsyncPace.populated hqp r (le_trans hr hN))
+        (fun tbl htbl => safeHeadRuns_of_windows p U rfl dflt tbl (Sr tbl)
+          (fun r x hx => (Finset.mem_filter.mp hx).2) g hNJ (hno tbl htbl))
+        (hcov v) K hK
+    refine ⟨fun v => (hrun v).some, fun k' hk v₀ hcfg κ L h hlo hhi => ?_⟩
+    exact Integration.commitFinalized_barnacle_scheme Ms E vm ht
+      (Adaptive.Score.rule_anchored (score (coinHead dflt g)))
+      Pr (fun v => (hrun v).some) hk hcfg h hlo hhi
+  refine le_trans (MeasureTheory.measure_mono hsub)
+    (le_trans (MeasureTheory.measure_biUnion_finset_le _ _) ?_)
+  calc ∑ tbl ∈ Tbls, (PMF.uniformOfFintype _).toOuterMeasure
+          {g : Fin (J * M) → Fin (p.waveLength - 1 + 1) → Fin m |
+            ¬ ∀ j : Fin J, ∃ m' : Fin M, ∀ i : Fin (p.waveLength - 1 + 1),
+              g ⟨j * M + m', blk_lt j.isLt m'.isLt⟩ i ∈
+                Sr tbl ((j * M + m') * (p.waveLength - 1 + 1) + i)}
+        ≤ ∑ _tbl ∈ Tbls, (J : ℝ≥0∞) *
+            Steelhead.Coin.badBlockBoundAt (Fin m) (e * (k + s - n)) (p.waveLength - 1 + 1) ^ M :=
+          Finset.sum_le_sum fun tbl htbl => windowsFail_le (Sr tbl) fun r hr => by
+            have := card_hits_ge (hsup tbl htbl) (hfloor r hr)
+            simpa only [Fintype.card_fin] using this
+      _ = _ := by rw [Finset.sum_const, nsmul_eq_mul]
+
 theorem holds : Statement :=
   ⟨checkpointsResponsive, checkpointsCrash, scheduledCrash, hammerHeadComposed, aimdComposed,
-    asyncComposed⟩
+    asyncComposed, asyncHammerHeadComposed⟩
 
 end Compose
 

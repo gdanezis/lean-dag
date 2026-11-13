@@ -136,6 +136,12 @@ def coinHead {J M w : ℕ} (dflt : Validator) (g : Fin (J * M) → Fin w → Val
     Validator :=
   if h : ρ / w < J * M ∧ 0 < w then g ⟨ρ / w, h.1⟩ ⟨ρ % w, Nat.mod_lt _ h.2⟩ else dflt
 
+/-- **A table supports `k` validators with weight `e`**: at least `k`
+validators each fill at least `e` of its entries. A reputation distribution
+over leaders, read by a uniform index into the table. -/
+def Supports {m : ℕ} (tbl : Fin m → Validator) (k e : ℕ) : Prop :=
+  ∃ D : Finset Validator, k ≤ D.card ∧ ∀ v ∈ D, e ≤ (Finset.univ.filter fun j => tbl j = v).card
+
 end Scheme
 
 end LeanDag

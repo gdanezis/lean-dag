@@ -31,7 +31,10 @@ import LeanDag.Scheme.Schedules.Statement
   restarts, under Barnacle's AIMD rule with heads drawn by a coin, and with
   checkpoints, runs of every height on every signer's view, finalizing what
   each closed configuration commits, fail to exist with probability at most
-  `J · badBlockBoundAt c w ^ M`.
+  `J · badBlockBoundAt c w ^ M`. The same holds under a HammerHead score
+  whose coin draws from reputation tables supporting `k` validators with
+  weight `e` (`AsyncHammerHeadComposed`), at `|Tbls| · J ·
+  badBlockBoundAt m (e (k + s − n)) w ^ M`.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -222,10 +225,61 @@ def AsyncComposed : Prop :=
                       (vm.checkpointAfterCommit κ L))} ≤
             (J : ℝ≥0∞) * Steelhead.Coin.badBlockBoundAt (Fin n) c (p.waveLength - 1 + 1) ^ M
 
+open Barnacle in
+open scoped ENNReal in
+/-- **All three under asynchrony, with HammerHead**: crashes and restarts,
+a HammerHead score whose coin draws from reputation tables, and
+checkpoints. -/
+def AsyncHammerHeadComposed : Prop :=
+  ∀ (n : ℕ) (hn : 0 < n) (BlockId Payload Value : Type) [LinearOrder BlockId]
+    (P : Validity (Fin n) BlockId Payload) [P.Mechanised] (q : ℕ) [P.Quorate q]
+    (honest : Finset (Fin n)) (f : ℕ) (p : Params)
+    (σ : VoteSel (Fin n) BlockId Payload P honest) (rel : Reliability (Fin n))
+    (Ms : SigningFaults (Fin n)) (E : Ms.Execution Value)
+    (vm : DeterministicVM (BlockId := BlockId) (Value := Value))
+    (J M m k e s : ℕ) (dflt : Fin m) (Tbls : Finset (Fin m → Fin n)),
+    p.Tolerates honest f q → p.CertFits q →
+    p.commitThreshold ≤ Fintype.card (Fin n) - rel.slack →
+    (∀ tbl ∈ Tbls, Supports tbl k e) →
+    haveI : Nonempty (Fin m) := ⟨dflt⟩
+    ∀ (B : Barnacle.Params)
+      (score : (ℕ → Fin m) →
+        Adaptive.Score (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).toBaseRule)
+      (C₀ : (ℕ → Fin m) → Config (Fin n)),
+      (∀ u', (score u').Keeps) →
+      (∀ u' U V v C, (∃ tbl ∈ Tbls, C.head = fun ρ => tbl (u' ρ)) →
+        ∃ tbl ∈ Tbls, (score u' U V v C).head = fun ρ => tbl (u' ρ)) →
+      (∀ u', (C₀ u').InBounds B ∧ ∃ tbl ∈ Tbls, (C₀ u').head = fun ρ => tbl (u' ρ)) →
+      ∀ (U : (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).Universe)
+        (T : Finset (Fin n)) (Nr qp : ℕ) (ac : AsyncCrashRun qp U T Nr),
+        rel.IsQuorum T → T ⊆ honest → qp ≤ T.card →
+      ∀ (N : ℕ), N ≤ Nr →
+      ∀ (C : Config (Fin n)) (Pr : SigningFaults.Execution.SigningRule Ms E
+          (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).toBaseRule.toDagRule
+          C.sched U vm),
+        (∀ v, (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).toBaseRule.CoversUpto
+          U (Pr.view v) N) →
+        N + 1 ≤ J * (M * (p.waveLength - 1 + 1)) →
+        (∀ r, r < J * (M * (p.waveLength - 1 + 1)) → s ≤ (safeAt p U r).card) →
+        ∀ K, horizon B (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1))))
+            (2 * (M * (p.waveLength - 1 + 1))) K ≤ N →
+          (PMF.uniformOfFintype (Fin (J * M) → Fin (p.waveLength - 1 + 1) → Fin m)).toOuterMeasure
+              {g | ¬ ∃ Rn : ∀ v, Run
+                  (schemeLiveAsync p σ rel (2 * (M * (p.waveLength - 1 + 1)))).toBaseRule B
+                  Boundary.atThreshold (Adaptive.rule (score (coinHead dflt g)))
+                  (C₀ (coinHead dflt g)) U (Pr.view v) K,
+                ∀ (k' : ℕ), k' < K → ∀ (v₀ : Fin n), (Rn v₀).cfg k' = C →
+                  ∀ (κ : ℕ) (L : BlockId), (Rn v₀).vdct k' κ = some L →
+                    (Rn v₀).start k' < C.roundOf κ → C.roundOf κ ≤ C.roundOf ((Rn v₀).anchor k') →
+                    Nonempty (SigningFaults.Execution.FinalityQC Ms E
+                      (vm.checkpointAfterCommit κ L))} ≤
+            (Tbls.card : ℝ≥0∞) * ((J : ℝ≥0∞) *
+              Steelhead.Coin.badBlockBoundAt (Fin m) (e * (k + s - n)) (p.waveLength - 1 + 1) ^ M)
+
 /-- The mechanisms composed. -/
 def Statement : Prop :=
   CheckpointsResponsive ∧ CheckpointsCrash ∧ ScheduledCrash ∧ HammerHeadComposed ∧ AimdComposed ∧
-    AsyncComposed
+    AsyncComposed ∧ AsyncHammerHeadComposed
 
 end Compose
 

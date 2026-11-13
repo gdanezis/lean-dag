@@ -186,6 +186,13 @@ Replace the `\george` notes of §4 by the results, as `\edits{…}`.
 * **M6 done.** `Scheme.Compose.AsyncComposed` (`windowsFail_le`;
   `scheme.md` §23). All Lean steps of the plan are done; M7 (paper) remains.
 
+* **M4b done** (user request, 2026-11-13: HammerHead under asynchrony,
+  the reconfiguration setting the coin's distribution).
+  `Schedules.{AsyncHammerHeadRuns, AsyncHammerHeadLive}`,
+  `Compose.AsyncHammerHeadComposed` (`Supports`, `card_hits_ge`;
+  `scheme.md` §24). Union bound over a finite set of tables, factor
+  `|Tbls|`.
+
 ## 5. Order
 
 M1a → M1b → M2 → M5a → M5b → M5c → M3 → M4 → M6 → M1c → M7.
