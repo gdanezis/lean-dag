@@ -22,6 +22,16 @@ namespace Barnacle
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 
+/-- **A3, the indirect rule**, at the rule's wave: a committed slot a wave
+above `i`, with every slot a wave above `i` between them skipped, decides
+`i`. -/
+abbrev LiveRule.Indirect (R : LiveRule Validator BlockId Payload) : Prop :=
+  ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U) (i j : ℕ) (A : BlockId),
+    S.slotRound i + R.waveLength ≤ S.slotRound j → R.Decided S V j (some A) →
+    (∀ i', i < i' → i' < j → S.slotRound i + R.waveLength ≤ S.slotRound i' →
+      R.Decided S V i' none) →
+    ∃ v, R.Decided S V i v
+
 /-- **The descent laws** of a live rule, at its own gap: `Properties.Descent`
 with goodness read under the schedule it is about, `slack` the number of
 validators the good set may miss. -/
@@ -35,11 +45,7 @@ structure LiveRule.Descent (R : LiveRule Validator BlockId Payload) (slack : ℕ
         Rnd ≤ S.slotRound κ → S.slotRound κ + R.waveLength ≤ N →
         S.leader κ ∈ T → ∃ L, R.Decided S V κ (some L)
   /-- **A3, the indirect rule**, at the rule's wave. -/
-  indirect : ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U) (i j : ℕ) (A : BlockId),
-    S.slotRound i + R.waveLength ≤ S.slotRound j → R.Decided S V j (some A) →
-    (∀ i', i < i' → i' < j → S.slotRound i + R.waveLength ≤ S.slotRound i' →
-      R.Decided S V i' none) →
-    ∃ v, R.Decided S V i v
+  indirect : R.Indirect
 
 /-- **A run of heads**: from every round `r`, within `c₀` rounds, `g`
 consecutive rounds whose heads — first slots, led by `head` of the

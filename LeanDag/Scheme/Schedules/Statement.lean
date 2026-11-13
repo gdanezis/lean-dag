@@ -36,6 +36,10 @@ import LeanDag.Adaptive.Score.Rule
   schedule good only from `δ` past its start, before which its validators
   do not know it (`RunsExistReactive`, `AimdReactive`,
   `HammerHeadReactive`);
+* **run asynchronously** (`schemeLiveAsync`), the DAG good under a
+  schedule when a quorum populates every round and the first slots of a
+  wave of rounds in every window are led by safe validators, every
+  configuration is live (`AsyncConfigLive`);
 * **with crashed validators silent** (`schemeLiveSilent`,
   `Timed.SilentGood`), a crashed leader's slot is skipped directly, so the
   decider has the descent laws and decides every slot a synchronised or
@@ -135,6 +139,21 @@ def ReactiveGoodInhabited : Prop :=
           (ValidAt (n - f - c) (Clause.distinct.and Clause.selfParent)) Finset.univ,
         (∀ r ≤ N, ∀ v : Fin n, ∃ b ∈ U.ids, (U.block b).creator = v ∧ (U.block b).round = r) ∧
         ∀ (S : Slots (Fin n)) (Rnd : ℕ), reactiveGood p σ rel S U Rnd N
+
+/-- **Run asynchronously, every configuration is live**: at every
+reliability whose quorum meets the commit and certificate thresholds, on a
+DAG good asynchronously under a configuration's schedule, its slots are
+decided, each window of `c₀` rounds commits, and the slots below the good
+start are decided. -/
+def AsyncConfigLive : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
+    (q : ℕ) [P.Quorate q] (honest : Finset Validator) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) (rel : Reliability Validator) (c₀ : ℕ),
+    p.CertFits q → p.commitThreshold ≤ Fintype.card Validator - rel.slack →
+    ∀ C : Config Validator,
+      (schemeLiveAsync p σ rel c₀).LiveOn C.sched c₀ ∧
+        (schemeLiveAsync p σ rel c₀).SettlesBelow C.sched c₀
 
 /-- **The decider is safe under every update rule.** -/
 def Safe : Prop :=
@@ -301,7 +320,7 @@ the rows that fit round-robin, and the same with silent crashes. -/
 def Statement : Prop :=
   Safe ∧ Descends ∧ RunsExist ∧ Aimd ∧ HammerHead ∧ RowsScheduled ∧ SilentDescends ∧
     SilentLive ∧ HammerHeadSilent ∧ RowsSkipScheduled ∧ ReactiveDescends ∧ RunsExistReactive ∧
-    AimdReactive ∧ HammerHeadReactive ∧ ReactiveGoodInhabited
+    AimdReactive ∧ HammerHeadReactive ∧ ReactiveGoodInhabited ∧ AsyncConfigLive
 
 end Schedules
 

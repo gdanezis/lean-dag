@@ -8,6 +8,7 @@ import LeanDag.Barnacle.Helpers.Skips
 import LeanDag.Scheme.Helpers.Reactive
 import LeanDag.Barnacle.Helpers.Progress
 import LeanDag.Scheme.Helpers.FullRun
+import LeanDag.Scheme.Helpers.AsyncPace
 import LeanDag.Scheme.Responsive.Proof
 /-!
 # The decider under Barnacle and HammerHead schedules — proof
@@ -290,10 +291,53 @@ theorem reactiveGoodInhabited : ReactiveGoodInhabited := by
     Full.run (S := S) (Fintype.card (Fin n) - rel.slack) p (Responsive.psRow_cert_le hrow) σ,
     Nat.zero_le _, fun _ _ => by simp, le_refl N⟩
 
+theorem asyncConfigLive : AsyncConfigLive := by
+  intro Validator BlockId Payload _ _ _ P _ q _ honest p σ rel c₀ hc hcm C
+  have hw : 0 < (schemeLiveAsync p σ rel c₀).waveLength := Nat.succ_pos _
+  have hind : (schemeLiveAsync p σ rel c₀).Indirect :=
+    fun S U V i j A hij hj hmid => Scheme.indirect.decided S V hij hj hmid
+  have key : ∀ (U : (schemeLiveAsync p σ rel c₀).Universe)
+      (V : (schemeLiveAsync p σ rel c₀).View U) (Rnd N : ℕ),
+      (schemeLiveAsync p σ rel c₀).Good C.sched U Rnd N →
+      (schemeLiveAsync p σ rel c₀).toBaseRule.CoversUpto U V N →
+      (∀ κ, Rnd ≤ C.sched.slotRound κ →
+        C.sched.slotRound κ + c₀ + (schemeLiveAsync p σ rel c₀).waveLength ≤ N →
+        ∃ v, (schemeLiveAsync p σ rel c₀).Decided C.sched V κ v) ∧
+      (∀ r, Rnd ≤ r → r + c₀ + (schemeLiveAsync p σ rel c₀).waveLength ≤ N →
+        ∃ κ, r ≤ C.sched.slotRound κ ∧ C.sched.slotRound κ ≤ r + c₀ ∧
+          ∃ L, (schemeLiveAsync p σ rel c₀).Decided C.sched V κ (some L)) ∧
+      (∀ κ, C.sched.slotRound κ < Rnd → Rnd + c₀ + (schemeLiveAsync p σ rel c₀).waveLength ≤ N →
+        ∃ v, (schemeLiveAsync p σ rel c₀).Decided C.sched V κ v) :=
+    fun U V Rnd N hg hcov => by
+      obtain ⟨T, hq, hTh, hpop, hheads⟩ := hg
+      have hcmT : p.commitThreshold ≤ T.card := le_trans hcm hq.2
+      exact clauses_of_committingHeads C hind hw V
+        (fun ρ => C.sched.leader (C.cum ρ) ∈ safeAt p U ρ)
+        (fun ρ _ hρN hGd => by
+          letI : Slots Validator := C.sched
+          have hsafe : C.sched.leader (C.cum ρ) ∈ LeanDag.Scheme.safe p U (C.cum ρ) := by
+            unfold LeanDag.Scheme.safe; rw [Config_slotRound_head]; exact hGd
+          obtain ⟨L, -, hL⟩ := decided_of_safe_of_round (q := q)
+            σ hc.1 hc.2 hcmT
+            (hpop _ (by rw [Config_slotRound_head]; change ρ + (p.waveLength - 1 + 1) ≤ N at hρN
+                        omega)) hsafe
+            (V := V) fun b hb hbr => hcov b hb (by
+              change (U.block b).round ≤ N
+              rw [hbr, Config_slotRound_head]
+              change ρ + (p.waveLength - 1 + 1) ≤ N at hρN
+              omega)
+          exact ⟨L, hL⟩)
+        (fun r hr hrN => by
+          obtain ⟨ρ, h1, h2, h3⟩ := hheads r hr hrN
+          exact ⟨ρ, h1, h2, fun i hi => h3 i hi (C.cum (ρ + i)) (Config_slotRound_head C _)
+            (fun κ' h => Config_slotRound_lt_of_lt_head C h)⟩)
+  exact ⟨fun U V Rnd N hg hcov => ⟨(key U V Rnd N hg hcov).1, (key U V Rnd N hg hcov).2.1⟩,
+    fun U V Rnd N hg hcov => (key U V Rnd N hg hcov).2.2⟩
+
 theorem holds : Statement :=
   ⟨safe, descends, runsExist, aimd, hammerHead, rowsScheduled, silentDescends, silentLive,
     hammerHeadSilent, rowsSkipScheduled, reactiveDescends, runsExistReactive, aimdReactive,
-    hammerHeadReactive, reactiveGoodInhabited⟩
+    hammerHeadReactive, reactiveGoodInhabited, asyncConfigLive⟩
 
 end Schedules
 

@@ -38,7 +38,7 @@ theorem liveOn_of_skipRun (hD : R.Descent slack') (hK : R.Decisive slack fb)
       (by rw [Config_slotRound_head]; exact h2) (by rw [Config_leader_head]; exact h3)
   refine ⟨fun κ hRnd hN => ?_, fun r hRnd hN => ?_⟩
   · obtain ⟨ρ, hlo, hhi, hDl, hTl⟩ := hr (C.sched.slotRound κ + 1)
-    refine stretchDescent hD C.sched V (b := C.cum ρ) (top := C.cum (ρ + R.waveLength - 1))
+    refine stretchDescent hD.indirect C.sched V (b := C.cum ρ) (top := C.cum (ρ + R.waveLength - 1))
       (fun i hi => ?_) (fun j hj1 hj2 => ?_) (htop _ (by omega) (by omega) hTl) κ
       (Config_lt_head_of_slotRound_lt C (by omega))
     · have := Config_slotRound_lt_of_lt_head C hi
