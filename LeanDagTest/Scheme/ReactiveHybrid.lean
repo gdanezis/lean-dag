@@ -200,6 +200,8 @@ def hyReactive (N : ℕ) :
       refine ⟨hn, ?_⟩
       rcases hheld.2 with h | ⟨_, h⟩ <;> omega
     advancesAt := fun _ _ _ hn _ _ => hn
+    waits := N
+    waits_le := le_refl N
     reach_or_wait := fun v hv k _ _ _ L hL m hm c hc hcc hcr => by
       -- the reactive exit: every block references the whole round below
       left
@@ -263,6 +265,7 @@ theorem hyReactive_live (N k : ℕ) (hN : hySlots.slotRound k + 2 ≤ N) :
   intro j hj
   have := hySlots.mono (Nat.lt_succ_iff.mp hj)
   have hw : hyP.waveLength - 1 = 2 := rfl
+  show _ ≤ N
   omega
 
 /-- **And a reliably-led slot commits**, by the generic `LeaderCommits`. -/

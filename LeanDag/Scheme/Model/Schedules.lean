@@ -2,6 +2,7 @@ import LeanDag.Scheme.Model.Local
 import LeanDag.Barnacle.Model.Anchored
 import LeanDag.Barnacle.Model.Schedule
 import LeanDag.Timed.Silent
+import LeanDag.Scheme.Model.Reactive
 /-!
 # The decider as a Barnacle live rule
 
@@ -17,6 +18,13 @@ row on `n` validators of which at most `slack` are unreliable.
 addition, the validators outside a synchronised quorum are silent or among
 `fb` others (`Timed.SilentGood`). `p.SkipScheduled n slack fb` is what
 round-robin liveness asks there, on one slot per round.
+
+`schemeLiveReactive p σ rel` is the same rule with the DAG good under a
+schedule `S` when a quorum of `rel` runs it responsively under `S`
+(`reactiveGood`): past GST, its timeout clearing `2Δ + proc`, its
+validators waiting for `S`'s leaders up to the horizon. A responsive
+validator waits only for the leaders it knows, so this goodness, unlike
+the timed ones, reads the schedule.
 
 Definitions only; the theorems are `Scheme/Schedules/Statement.lean`.
 -/
@@ -64,6 +72,27 @@ def PermRR {n : ℕ} (hn : 0 < n) (C : Barnacle.Config (Fin n)) : Prop :=
 /-- **One slot per round, its heads a permutation of round-robin.** -/
 def SinglePermRR {n : ℕ} (hn : 0 < n) (C : Barnacle.Config (Fin n)) : Prop :=
   (∀ r, C.slotsAt r = 1) ∧ PermRR hn C
+
+attribute [local instance] noFaults in
+/-- **Good under `S`, responsively**: a quorum `T` of `rel` of honest
+validators runs the family responsively under `S` past GST at `Rnd`, the
+timeout clearing `2Δ + proc` from `Rnd`, and waits for `S`'s leaders up to
+`N`. -/
+def reactiveGood [Nonempty Validator] (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) (rel : Reliability Validator)
+    (S : Slots Validator) (U : BlockRecord Validator BlockId Payload P honest) (Rnd N : ℕ) :
+    Prop :=
+  ∃ T : Finset Validator, rel.IsQuorum T ∧ T ⊆ honest ∧
+    ∃ (N' : ℕ) (rs : SchemeReactive (S := S) (Fintype.card Validator - rel.slack) p σ U T N'),
+      rs.gst ≤ Rnd ∧ (∀ n, Rnd ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) ∧ N ≤ rs.waits
+
+/-- **The decider as a live rule, run responsively**, at reliability
+`rel`. -/
+def schemeLiveReactive [Nonempty Validator] (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) (rel : Reliability Validator) :
+    Barnacle.LiveRule Validator BlockId Payload :=
+  { Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl) with
+    Good := fun S U Rnd N => reactiveGood p σ rel S U Rnd N }
 
 end Scheme
 

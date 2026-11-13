@@ -210,6 +210,8 @@ def run (qr : ℕ) (p : Params) (hcert : p.certThreshold ≤ n)
     change (ofLex b).1 = r at hbr
     exact ⟨hr, by omega⟩
   advancesAt := fun _ _ _ hr _ _ => hr
+  waits := N
+  waits_le := le_refl N
   reach_or_wait := fun _ _ k _ _ _ L hL m _ c _ _ hcr => by
     left
     obtain ⟨_, hLr, -⟩ := hL
@@ -325,6 +327,8 @@ def crashRun (qr : ℕ) (p : Params) (hcert : p.certThreshold ≤ n)
       · unfold at_; simp; omega
     · unfold at_; split <;> split <;> omega
   advancesAt := fun _ _ _ hr _ _ => hr
+  waits := N
+  waits_le := le_refl N
   reach_or_wait := fun _ _ k _ _ _ L hL m _ c _ _ hcr => by
     left
     obtain ⟨_, hLr, -⟩ := hL

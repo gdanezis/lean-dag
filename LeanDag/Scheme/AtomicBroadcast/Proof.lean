@@ -105,19 +105,21 @@ theorem validityPS : ValidityPS := by
     hqr hgst htime hP hd hspan P_k m k b₀ hk hm hmc hlead hRk hmk hkb hrun hN P_j hj
   set ap := rs.toAsyncPace
   obtain ⟨t, hdel⟩ := ap.delivered
+  have hW := rs.waits_le
   have hcommit : ∀ j, S.leader j ∈ T → R ≤ S.slotRound j →
-      S.slotRound j + (p.waveLength - 1) ≤ N →
+      S.slotRound j + (p.waveLength - 1) ≤ rs.waits →
       ∃ L, IsLeaderBlock U j L ∧ ∀ V : U.View,
         (∀ b ∈ U.ids, (U.block b).creator ∈ T → b ∈ V.ids) →
         (schemeAnchored p σ).Decided U V j (some L) := by
     intro j hjT hRj hjN
     obtain ⟨L, hL, hLc, hLr⟩ := ap.populated hqr (S.slotRound j) (by omega) (S.leader j) hjT
     have hLB : IsLeaderBlock U j L := ⟨hL, hLr, hLc⟩
-    refine ⟨L, hLB, fun V hV => decided_of_certified σ hcm (ap.populated hqr _ hjN) hLB ?_ hV⟩
+    refine ⟨L, hLB, fun V hV => decided_of_certified σ hcm (ap.populated hqr _ (by omega)) hLB ?_ hV⟩
     intro C hC hCT hCr
     exact ReactiveRun.certifies Validator BlockId Payload P honest p σ U T N R qr rs j L hcf hTh hqr
       hgst htime hRj hjN hjT hLB _ hCT C hC rfl hCr
-  have hlast : ∀ j, j ≤ b₀ + d - 1 → S.slotRound j + (p.waveLength - 1) ≤ N := fun j hj => by
+  have hlast : ∀ j, j ≤ b₀ + d - 1 → S.slotRound j + (p.waveLength - 1) ≤ rs.waits :=
+    fun j hj => by
     have := S.mono hj; omega
   set V := ap.viewAt hk t
   have hV : ∀ b ∈ U.ids, (U.block b).creator ∈ T → b ∈ V.ids := fun b hb hbT =>
@@ -182,7 +184,7 @@ theorem validityRoundRobin : ValidityRoundRobin := by
   exact validityPS (Fin n) BlockId Payload P q honest f p σ U T N R qr p.waveLength rs ht hcf hcm
     hTh hqr hgst htime hP (by omega) hspan P_k m (n * K + P_k.val) b₀ hk hm hmc hkl
     (le_trans (le_max_left _ _) hKk) (le_trans (le_max_right _ _) hKk) (by omega) hrun
-    (by change b₀ + p.waveLength - 1 + (p.waveLength - 1) ≤ N
+    (by change b₀ + p.waveLength - 1 + (p.waveLength - 1) ≤ rs.waits
         have : n * (K + 2) = n * K + 2 * n := by ring
         omega) P_j hj
 

@@ -184,7 +184,7 @@ def ValidityPS : Prop :=
       P_k ∈ T → m ∈ U.ids → (U.block m).creator = P_k →
       S.leader k = P_k → R ≤ S.slotRound k → (U.block m).round ≤ S.slotRound k → k < b₀ →
       (∀ i, i < d → S.leader (b₀ + i) ∈ T) →
-      S.slotRound (b₀ + d - 1) + (p.waveLength - 1) ≤ N →
+      S.slotRound (b₀ + d - 1) + (p.waveLength - 1) ≤ rs.waits →
       ∀ (P_j : Validator) (hj : P_j ∈ T), rs.toAsyncPace.Delivers p σ hj m
 
 /-- **Liveness, Sui and Duan's form**, partially synchronous, under
@@ -206,7 +206,7 @@ def LivenessPS : Prop :=
       m ∈ U.ids → (U.block m).creator = P_k →
       S.leader k = P_k → R ≤ S.slotRound k → (U.block m).round ≤ S.slotRound k → k < b₀ →
       (∀ i, i < d → S.leader (b₀ + i) ∈ T) →
-      S.slotRound (b₀ + d - 1) + (p.waveLength - 1) ≤ N →
+      S.slotRound (b₀ + d - 1) + (p.waveLength - 1) ≤ rs.waits →
       rs.toAsyncPace.Delivers p σ hk m
 
 /-- **Validity under round-robin**, partially synchronous, at the rows
@@ -229,7 +229,8 @@ def ValidityRoundRobin : Prop :=
     (∀ blk b, P blk b → Clause.selfParent blk b) →
     p.waveLength * (n - T.card) < n →
     ∀ (P_k : Fin n) (m : BlockId), P_k ∈ T → m ∈ U.ids → (U.block m).creator = P_k →
-      n * (max R (U.block m).round + 2) + 2 * p.waveLength ≤ N →
+      n * (max R (U.block m).round + 2) + 2 * p.waveLength ≤
+        SchemeReactive.waits (S := roundRobinSlots n) rs →
       ∀ (P_j : Fin n) (hj : P_j ∈ T),
         (rs.toAsyncPace (S := roundRobinSlots n)).Delivers (S := roundRobinSlots n) p σ hj m
 

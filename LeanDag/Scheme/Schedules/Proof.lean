@@ -5,6 +5,7 @@ import LeanDag.Barnacle.Ledger.Proof
 import LeanDag.Barnacle.Live.Proof
 import LeanDag.Adaptive.Score.Proof
 import LeanDag.Barnacle.Helpers.Skips
+import LeanDag.Scheme.Helpers.Reactive
 /-!
 # The decider under Barnacle and HammerHead schedules — proof
 
@@ -199,9 +200,31 @@ theorem rowsSkipScheduled : RowsSkipScheduled := by
   simp [Scheme.Params.SkipScheduled, Scheme.Params.voteOffset, Scheme.Params.mysticeti,
     Scheme.Params.blueBottlePS, Scheme.Params.orcaella, Scheme.Params.hybridMysticeti] <;> omega
 
+attribute [local instance] noFaults in
+theorem reactiveDescends : ReactiveDescends := by
+  intro Validator BlockId Payload _ _ _ _ P _ honest p σ rel hc hcm
+  refine ⟨?_, fun S U V i j A hij hj hmid => Scheme.indirect.decided S V hij hj hmid⟩
+  rintro S U Rnd N ⟨T, hq, hTh, N', rs, hgst, hto, hW⟩
+  refine ⟨T, by have := hq.2; omega, fun V κ hcov hRnd hN hlead => ?_⟩
+  have hNw : S.slotRound κ + (p.waveLength - 1) ≤ rs.waits := by
+    have : S.slotRound κ + (p.waveLength - 1 + 1) ≤ N := hN
+    omega
+  obtain ⟨L, hL⟩ := familySupport_commits (σ := σ) (rel := rel) hcm S V T κ hq
+    (fun n _ h2 => rs.toAsyncPace.populated hq.2 n
+      (le_trans h2 (le_trans hNw rs.waits_le)))
+    (fun L ⟨hLmem, hLr, hLc⟩ => rs.certifies (S := S) hc.1 hc.2 hTh hq.2 hgst hto hRnd hNw hlead
+      ⟨hLmem, hLr, hLc⟩)
+    (fun b hb hr => hcov b hb (by
+      change (U.block b).round ≤ S.slotRound κ + (p.waveLength - 1) at hr
+      change (U.block b).round ≤ N
+      have : S.slotRound κ + (p.waveLength - 1 + 1) ≤ N := hN
+      omega))
+    hlead
+  exact ⟨L, hL.2.1⟩
+
 theorem holds : Statement :=
   ⟨safe, descends, runsExist, aimd, hammerHead, rowsScheduled, silentDescends, silentLive,
-    hammerHeadSilent, rowsSkipScheduled⟩
+    hammerHeadSilent, rowsSkipScheduled, reactiveDescends⟩
 
 end Schedules
 

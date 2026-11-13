@@ -65,7 +65,7 @@ def RowsValidity : Prop :=
         P_k ∈ T → m ∈ U.ids → (U.block m).creator = P_k →
         S.leader k = P_k → R ≤ S.slotRound k → (U.block m).round ≤ S.slotRound k → k < b₀ →
         (∀ i, i < d → S.leader (b₀ + i) ∈ T) →
-        S.slotRound (b₀ + d - 1) + (p.waveLength - 1) ≤ N →
+        S.slotRound (b₀ + d - 1) + (p.waveLength - 1) ≤ rs.waits →
         ∀ (P_j : Validator) (hj : P_j ∈ T), rs.toAsyncPace.Delivers p σ hj m
 
 /-- Responsive liveness at every partially synchronous row. -/

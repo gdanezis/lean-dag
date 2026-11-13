@@ -114,9 +114,13 @@ structure CrashRun [S : Slots Validator] (q : ℕ) (p : Params)
   deadline : ∀ v ∈ T, ∀ n < top v, gst ≤ built v n → UpOn up v (built v n) (built v (n + 1)) →
     built v (n + 1) ≤ built v n + timeout n
   advancesAt : ∀ v ∈ T, ∀ n < N, ∀ t, q ≤ (authorsIn U (holds v t) n).card → n < top v
+  /-- The last round up to which the validators wait for this schedule's
+  leaders. -/
+  waits : ℕ
+  waits_le : waits ≤ N
   /-- **Reach or wait**, of every block, timers set again on restart. -/
   reach_or_wait : ∀ v ∈ T, ∀ k : ℕ, gst ≤ S.slotRound k →
-    S.slotRound k + p.voteOffset ≤ N → S.leader k ∈ T →
+    S.slotRound k + p.voteOffset ≤ waits → S.leader k ∈ T →
     ∀ L, IsLeaderBlock U k L → ∀ m, m < p.voteOffset →
     ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + m + 1 →
     Reaches U c L ∨
@@ -126,7 +130,7 @@ structure CrashRun [S : Slots Validator] (q : ℕ) (p : Params)
           b ∈ holds v (built v (S.slotRound k + m + 1)) → b ∈ (U.block c).refs)
   /-- **Certify or wait**, of every block, timers set again on restart. -/
   cert_or_wait : p.voteIsCert = false → ∀ v ∈ T, ∀ k : ℕ, gst ≤ S.slotRound k →
-    S.slotRound k + p.voteOffset + 1 ≤ N → S.leader k ∈ T →
+    S.slotRound k + p.voteOffset + 1 ≤ waits → S.leader k ∈ T →
     ∀ L, IsLeaderBlock U k L →
     ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + p.voteOffset + 1 →
     IsCert p σ U c L ∨
@@ -175,6 +179,8 @@ def CrashRun.toReactive [S : Slots Validator] {q : ℕ} {p : Params}
     cr.deadline v hv n hn (le_trans (le_max_left _ _) ht)
       (fun s hs _ => cr.up_from v hv s (le_trans (le_max_right _ _) (le_trans ht hs)))
   advancesAt := cr.advancesAt
+  waits := cr.waits
+  waits_le := cr.waits_le
   reach_or_wait := fun v hv k hk => cr.reach_or_wait v hv k (le_trans (le_max_left _ _) hk)
   cert_or_wait := fun hvc v hv k hk => cr.cert_or_wait hvc v hv k (le_trans (le_max_left _ _) hk)
 
@@ -190,7 +196,7 @@ def crashLive (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
     ∃ (N R₀ : ℕ) (cr : CrashRun (S := S) (Fintype.card Validator - rel.slack) p σ U T N),
       max cr.gst cr.tr ≤ R₀ ∧ (∀ n, R₀ ≤ n → 2 * cr.delay + cr.proc ≤ cr.timeout n) ∧
       R₀ ≤ S.slotRound lo ∧ Properties.CoversUpto (schemeRule p σ) V N ∧
-      ∀ k, k < K → S.slotRound k + (p.waveLength - 1) ≤ N
+      ∀ k, k < K → S.slotRound k + (p.waveLength - 1) ≤ cr.waits
 
 /-- **The family, run asynchronously with crashes and restarts**, at
 quorum `q`: an asynchronous run whose delivery reaches only validators

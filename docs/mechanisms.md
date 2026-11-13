@@ -158,6 +158,20 @@ Replace the `\george` notes of §4 by the results, as `\edits{…}`.
   hypothesis: the DAG is good under each configuration's schedule as long
   as no slot past its interval has committed.
 
+* **M5a, steps 1–2 done.** Barnacle's goodness takes the schedule
+  (`LiveRule.Good`, `LiveRule.Descent` its own structure,
+  `LiveRule.Descent.ofProperties`); a responsive run's wait clauses stop
+  at `SchemeReactive.waits`; `schemeLiveReactive` and
+  `Schedules.ReactiveDescends` (`scheme.md` §20).
+* **M5a, step 3 (next).** A new configuration's first rounds precede the
+  validators' learning of the pivot that fixes it (about a wave under
+  Barnacle, up to the gap and a wave under HammerHead), so its leaders are
+  not waited for there. Plan: generalise `LiveOn` so that slots below the
+  round goodness starts are decided by a later commit (stretch descent),
+  and state every height under the hypothesis that each configuration's
+  schedule is good from its start plus a learning delay up to the round
+  its range closes, unless the run has already extended.
+
 ## 5. Order
 
 M1a → M1b → M2 → M5a → M5b → M5c → M3 → M4 → M6 → M1c → M7.

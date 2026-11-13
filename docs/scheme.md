@@ -1193,3 +1193,19 @@ before `tr` be a responsive run past `max gst tr`.
 |---|---|
 | A reliably led slot reaches second-tier finality over a responsive run | `Compose.CheckpointsResponsive` |
 | The same with crashes and restarts, past `max gst tr` | `Compose.CheckpointsCrash` |
+
+## 20. The decider under schedules, run responsively
+
+`docs/mechanisms.md` M5a; statement `Scheme/Schedules/Statement.lean`.
+
+A responsive validator waits only for the leaders its schedule names, so
+Barnacle's goodness takes the schedule (`LiveRule.Good S U Rnd N`), and a
+responsive run says up to which round it waits for them
+(`SchemeReactive.waits`, the horizon under a fixed schedule).
+`schemeLiveReactive p σ rel` is the decider as a Barnacle live rule whose
+DAG is good under `S` when a quorum of `rel` runs it responsively under
+`S` past GST and waits for `S`'s leaders up to the horizon
+(`reactiveGood`). It has the descent laws at every reliability whose
+quorum meets the commit and certificate thresholds (`ReactiveDescends`):
+the run's certificates feed the family's commit law
+(`familySupport_commits`), and the indirect rule is the family's.

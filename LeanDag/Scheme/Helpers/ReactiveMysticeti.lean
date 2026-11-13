@@ -48,6 +48,8 @@ def ofReactiveM (σ : VoteSel Validator BlockId Payload ValidWrt Correct)
     { rc with
       advances := fun v hv n hn t h => hadv v hv n hn t (le_trans (Nat.sub_le _ _) h) }
   advancesAt := rm.advances
+  waits := N
+  waits_le := le_refl N
   reach_or_wait := fun v hv k _ hN hlead L hL m hm c hc hcc hcr => by
     have hvo : (Params.mysticeti (Fintype.card Validator) F.f).voteOffset = 1 := by
       simp [Params.voteOffset, Params.mysticeti]

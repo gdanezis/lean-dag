@@ -25,6 +25,10 @@ import LeanDag.Adaptive.Score.Rule
   at a row meeting `Params.Scheduled`;
 * **the partially synchronous rows meet `Params.Scheduled`**
   (`RowsScheduled`), Hybrid Mysticeti from `n ≥ 3f + 3c + 1`;
+* **run responsively** (`schemeLiveReactive`), the DAG good under a
+  schedule when a quorum runs it responsively under that schedule, has
+  the descent laws at every reliability whose quorum meets the commit
+  and certificate thresholds (`ReactiveDescends`);
 * **with crashed validators silent** (`schemeLiveSilent`,
   `Timed.SilentGood`), a crashed leader's slot is skipped directly, so the
   decider has the descent laws and decides every slot a synchronised or
@@ -45,6 +49,19 @@ namespace Scheme
 namespace Schedules
 
 open Barnacle (Config Boundary UpdateRule UpdBounded UpdKeeps HeadsRun roundRobin LeadKeyed)
+
+/-- **Run responsively, the decider has the descent laws** under every
+schedule, at every reliability whose quorum meets the commit and
+certificate thresholds: on a DAG run responsively under `S`, the reliable
+validators commit every slot of `S` they lead. -/
+def ReactiveDescends : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [P.Mechanised] (honest : Finset Validator) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) (rel : Reliability Validator),
+    p.CertFits (Fintype.card Validator - rel.slack) →
+    p.commitThreshold ≤ Fintype.card Validator - rel.slack →
+    (schemeLiveReactive p σ rel).Descent rel.slack
 
 /-- **The decider is safe under every update rule.** -/
 def Safe : Prop :=
@@ -210,7 +227,7 @@ def RowsSkipScheduled : Prop :=
 the rows that fit round-robin, and the same with silent crashes. -/
 def Statement : Prop :=
   Safe ∧ Descends ∧ RunsExist ∧ Aimd ∧ HammerHead ∧ RowsScheduled ∧ SilentDescends ∧
-    SilentLive ∧ HammerHeadSilent ∧ RowsSkipScheduled
+    SilentLive ∧ HammerHeadSilent ∧ RowsSkipScheduled ∧ ReactiveDescends
 
 end Schedules
 

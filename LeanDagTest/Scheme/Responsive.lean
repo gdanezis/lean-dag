@@ -54,7 +54,8 @@ theorem hmRun_certifies (N : ℕ) (hN : 4 ≤ N) :
   refine ReactiveRun.certifies (Fin 6) (Lex (ℕ × Fin 6)) Unit hmValid Finset.univ hmP hmσ
     (S := hmSlots) _ Finset.univ N 0 4 (hmRun N) 2 (toLex (2, 2))
     (Responsive.psRow_fits hm_row).1 (Finset.subset_univ _) (by simp) (le_refl 0)
-    (fun _ _ => by change 2 * 0 + 0 ≤ 1; omega) (Nat.zero_le _) (by simp [Params.hybridMysticeti]; omega)
+    (fun _ _ => by change 2 * 0 + 0 ≤ 1; omega) (Nat.zero_le _)
+    (by change _ ≤ N; simp [Params.hybridMysticeti]; omega)
     (Finset.mem_univ _)
     ⟨Full.mem_record_ids.mpr (by simp; omega), by simp, by apply Fin.ext; simp⟩
     ((Full.record (n := 6) (q := 4) (by omega) N).block c).creator (Finset.mem_univ _) c hc rfl
