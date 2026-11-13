@@ -80,7 +80,19 @@ theorem rowsValidityWeak : RowsValidityWeak := by
     hf.1 (le_trans hf.2 hqT) hTh hqT hgst hto hwr (by omega) hd hspan P_k m t b₀ hk hm hmc hmr
     hheld hR hr2 hrun hN P_j hj
 
-theorem holds : Statement := ⟨inhabited, rowsValidity, rowsValidityWeak⟩
+theorem rowsValidityChains : RowsValidityChains := by
+  intro Validator BlockId Payload _ _ _ _ P _ honest p f c _ hrow hhon σ wk C U T N R c₀ rs hTh hqT
+    hgst hto hwr hC P_k m t hk hm hmc hmr hheld hR hN P_j hj
+  letI : Slots Validator := C.sched
+  have hf := psRow_fits hrow
+  have hn : Fintype.card Validator - f - c ≤ Fintype.card Validator := by omega
+  have h2 := psRow_two_quorums hrow
+  exact AtomicBroadcast.validityPSChains Validator BlockId Payload P
+    (Fintype.card Validator - f - c) honest f p σ wk C U T N R (Fintype.card Validator - f - c) c₀ (f + c) rs
+    ⟨hhon, hn, psRow_covered hrow⟩ hf.1 (le_trans hf.2 hqT) hTh hqT hgst hto hwr (by omega)
+    (by omega) hC P_k m t hk hm hmc hmr hheld hR hN P_j hj
+
+theorem holds : Statement := ⟨inhabited, rowsValidity, rowsValidityWeak, rowsValidityChains⟩
 
 end Responsive
 

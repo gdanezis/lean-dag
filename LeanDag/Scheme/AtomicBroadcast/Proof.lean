@@ -5,6 +5,8 @@ import LeanDag.Scheme.Helpers.Validity
 import LeanDag.Scheme.Reactive.Proof
 import LeanDag.Steelhead.Helpers.Liveness
 import LeanDag.Barnacle.Helpers.Skips
+import LeanDag.Barnacle.Helpers.Chains
+import LeanDag.Barnacle.Model.Anchored
 /-!
 # Byzantine atomic broadcast — proof
 
@@ -408,10 +410,82 @@ theorem validityAsyncWeak : ValidityAsyncWeak := by
   have := Steelhead.no_good_block_prob_le (Finset.univ : Finset (Fin M)) G hG
   rwa [Finset.card_univ, Fintype.card_fin] at this
 
+attribute [local instance] noFaults in
+theorem validityPSChains : ValidityPSChains := by
+  intro Validator BlockId Payload _ _ _ _ P _ q _ honest f p σ wk C U T N R qr c₀ slack rs ht
+    hcf hcm hTh hqr hgst htime hwr hqT hslack hC P_k m t hk hm hmc hmr hheld hRt hwaits P_j hj
+  letI : Slots Validator := C.sched
+  set ap := rs.toAsyncPace
+  obtain ⟨t', hdel⟩ := ap.delivered
+  have hcommit := reliable_commits σ rs hcf hcm hTh hqr hgst htime
+  set V := ap.viewAt hk t'
+  have hV : ∀ b ∈ U.ids, (U.block b).creator ∈ T → b ∈ V.ids := fun b hb hbT =>
+    hdel t' le_rfl P_k hk b hb hbT
+  -- the decider as a live rule whose every DAG is good
+  let Rl : Barnacle.LiveRule Validator BlockId Payload :=
+    { Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl) with Good := fun _ _ _ _ => True }
+  have hInd : Rl.Indirect := fun S' U' V' i j A hij hj hmid =>
+    Scheme.indirect.decided S' V' hij hj hmid
+  have hw2 := hcf.1
+  have hwR : Rl.waveLength = p.waveLength := show p.waveLength - 1 + 1 = p.waveLength by omega
+  have hT : ∀ κ, R ≤ C.sched.slotRound κ → C.sched.slotRound κ + Rl.waveLength ≤ rs.waits + 1 →
+      C.sched.leader κ ∈ T → ∃ L, Rl.Decided C.sched V κ (some L) := fun κ h1 h2 h3 => by
+    obtain ⟨L, -, hL⟩ := hcommit κ h3 h1 (by rw [hwR] at h2; omega)
+    exact ⟨L, hL V hV⟩
+  have hTd : ∀ κ, R ≤ C.sched.slotRound κ → C.sched.slotRound κ + Rl.waveLength ≤ rs.waits + 1 →
+      C.sched.leader κ ∈ T → ∃ v, Rl.Decided C.sched V κ v := fun κ h1 h2 h3 =>
+    let ⟨L, hL⟩ := hT κ h1 h2 h3; ⟨some L, hL⟩
+  have hC' : ∀ x, C.ChainEnds T T Rl.waveLength (x + c₀) (C.cum x) := by
+    rw [hwR]; exact hC T T subset_rfl hslack hslack
+  have hscan : ∀ x, R ≤ x → x + c₀ + Rl.waveLength ≤ rs.waits + 1 →
+      ∃ top, C.cum x ≤ top ∧ C.sched.slotRound top ≤ x + c₀ ∧
+        (∃ L, Rl.Decided C.sched V top (some L)) ∧
+        ∀ j, C.cum x ≤ j → j < top → ∃ v, Rl.Decided C.sched V j v := fun x hx hN =>
+    Barnacle.scan_of_chainEnds C hInd V hT hTd hN (C.cum x) (hC' x)
+      (by rw [Barnacle.Config_slotRound_head]; exact hx)
+  -- the scan from `t + 1 + w` reaches a committed slot
+  obtain ⟨top, hle, -, htop, hmid⟩ := hscan (t + 1 + Rl.waveLength) (by omega)
+    (by rw [hwR]; omega)
+  have htopr := (Barnacle.Config_cum_le_iff C).1 hle
+  -- every slot up to it is decided
+  have hupto : ∀ j, C.cum (t + 2) ≤ j → j ≤ top → ∃ v, Rl.Decided C.sched V j v := by
+    intro j hj1 hj2
+    rcases Nat.lt_or_eq_of_le hj2 with hlt | rfl
+    · by_cases hjx : C.cum (t + 1 + Rl.waveLength) ≤ j
+      · exact hmid j hjx hlt
+      · have hjr : C.sched.slotRound j < t + 1 + Rl.waveLength :=
+          Barnacle.Config_slotRound_lt_of_lt_head C (by omega)
+        have hjR : t + 2 ≤ C.sched.slotRound j := (Barnacle.Config_cum_le_iff C).1 hj1
+        obtain ⟨top', hle', -, htop', hmid'⟩ := hscan (C.sched.slotRound j + Rl.waveLength)
+          (by omega) (by rw [hwR] at hjr ⊢; omega)
+        exact Barnacle.decided_of_scan C hInd V hle' htop' hmid'
+    · obtain ⟨L, hL⟩ := htop
+      exact ⟨some L, hL⟩
+  have hbelow : ∀ i, i < C.cum (t + 2) → ∃ v, Rl.Decided C.sched V i v :=
+    Barnacle.stretchDescent hInd C.sched V (b := C.cum (t + 2)) (top := top) (fun i hi => by
+      have := Barnacle.Config_slotRound_lt_of_lt_head C hi
+      omega) hupto htop
+  obtain ⟨L, hL⟩ := htop
+  obtain ⟨hLU, hLr, -⟩ := Scheme.commitsCandidate _ _ _ _ _ hL
+  have hLround : t + 2 ≤ (U.block L).round := by
+    change (U.block L).round = C.sched.slotRound top at hLr
+    rw [hLr]; omega
+  have hmh : (U.block m).creator ∈ honest := by rw [hmc]; exact hTh hk
+  have hreach : ReachesW U wk L m :=
+    reachesW_of_weakRule hqT hwr rs.holds_mono
+      (fun v hv c hc hcc => rs.toReactiveCore.le_built hv _ (rs.le_top_of_built v hv c hc hcc))
+      hmr hheld L hLU hLround
+  obtain ⟨N₀, hN₀⟩ := mem_deliverSeq_of_decided σ ht
+    (fun i hi => by
+      by_cases hib : i < C.cum (t + 2)
+      · exact hbelow i hib
+      · exact hupto i (by omega) hi) hL hm hreach hmh
+  exact delivers_of_mem σ ap ht hk (t := t') hN₀ hj
+
 theorem holds : Statement :=
   ⟨grows, runGrows, integrity, integritySD, totalOrder, totalOrderSD, agreement, validityPS,
     livenessPS, validityRoundRobin, validityRoundRobinSilent, validityAsync, livenessAsync,
-    validityPSWeak, validityAsyncWeak⟩
+    validityPSWeak, validityAsyncWeak, validityPSChains⟩
 
 end AtomicBroadcast
 

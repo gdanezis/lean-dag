@@ -24,7 +24,10 @@ rule counts has arrived, with the timeout only as a fallback
   weak-reference rule, a block of a reliable validator held by every
   reliable validator by `t` is delivered by every reliable validator once a
   run of reliably led slots starts at round `t + 2` or later past GST. The
-  author need not lead a slot.
+  author need not lead a slot;
+* **under a schedule with bounded anchor chains** (`RowsValidityChains`):
+  the same, once `t + 3w + c₀` rounds fit in the run, the schedule being a
+  configuration's with bounded anchor chains at gap `c₀`.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -98,8 +101,31 @@ def RowsValidityWeak : Prop :=
         S.slotRound (b₀ + d - 1) + (p.waveLength - 1) ≤ rs.waits →
         ∀ (P_j : Validator) (hj : P_j ∈ T), rs.toAsyncPace.Delivers p σ wk hj m
 
+/-- **Validity under a schedule with bounded anchor chains at every
+partially synchronous row**, at its own committee and parent quorum
+`n − f − c`. -/
+def RowsValidityChains : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [P.Mechanised] (honest : Finset Validator) (p : Params) (f c : ℕ)
+    [P.Quorate (Fintype.card Validator - f - c)],
+    p.PSRow (Fintype.card Validator) f c → honestᶜ.card ≤ f →
+    ∀ (σ : VoteSel Validator BlockId Payload P honest) (wk : BlockId → Finset BlockId)
+      (C : Barnacle.Config Validator),
+      letI : Slots Validator := C.sched
+      ∀ (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator)
+        (N R c₀ : ℕ) (rs : SchemeReactive (Fintype.card Validator - f - c) p σ U T N),
+        T ⊆ honest → Fintype.card Validator - f - c ≤ T.card → rs.gst ≤ R →
+        (∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) →
+        WeakRule U wk T rs.holds rs.built →
+        C.BoundedChains (f + c) (f + c) p.waveLength c₀ →
+        ∀ (P_k : Validator) (m : BlockId) (t : ℕ),
+          P_k ∈ T → m ∈ U.ids → (U.block m).creator = P_k → (U.block m).round ≤ t →
+          (∀ v ∈ T, m ∈ rs.holds v t) → R ≤ t + 2 → t + 3 * p.waveLength + c₀ ≤ rs.waits →
+          ∀ (P_j : Validator) (hj : P_j ∈ T), rs.toAsyncPace.Delivers p σ wk hj m
+
 /-- Responsive liveness at every partially synchronous row. -/
-def Statement : Prop := Inhabited ∧ RowsValidity ∧ RowsValidityWeak
+def Statement : Prop := Inhabited ∧ RowsValidity ∧ RowsValidityWeak ∧ RowsValidityChains
 
 end Responsive
 

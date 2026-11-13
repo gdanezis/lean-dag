@@ -12424,7 +12424,11 @@ any update rule that keeps the property, with crashed validators silent
 (`Scheme.Schedules.chainsSilent`) and run responsively
 (`chainsReactive`), and the mechanisms composed broadcast atomically
 (`Scheme.Compose.chainsBroadcast`). Runs of heads and runs of decided
-rounds are instances. Any assignment algorithm that draws the heads in
+rounds are instances. The decider's own Validity holds under any schedule
+with bounded anchor chains (`Scheme.AtomicBroadcast.validityPSChains`, per
+row `Scheme.Responsive.rowsValidityChains`): the scan from `t + 1 + w`
+reaches a committed leader, every slot below it is decided, and the
+weak-reference rule puts the block in its history. Any assignment algorithm that draws the heads in
 independent blocks, each opening with a wave of correct heads with
 probability at least `1 − ε`, has the property up to a horizon except with
 probability `2ⁿ · J · ε^M` (`Barnacle.Chains.randomChains`), against an
