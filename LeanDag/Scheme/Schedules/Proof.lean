@@ -113,10 +113,12 @@ theorem hammerHead : HammerHead := by
 
 theorem rowsScheduled : RowsScheduled := by
   intro n f c
-  refine ⟨fun h => ⟨?_, ?_⟩, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩ <;>
+  refine ⟨fun h => ⟨?_, ?_⟩, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_,
+    fun h => ?_⟩ <;>
   simp only [Scheme.Params.Scheduled, Scheme.Params.mysticeti, Scheme.Params.cordialMinersPS,
     Scheme.Params.blueBottlePS, Scheme.Params.orcaella, Scheme.Params.nemoNemo,
-    Scheme.Params.hybridMysticeti] <;> omega
+    Scheme.Params.hybridMysticeti, Scheme.Params.blueBottleAsync,
+    Scheme.Params.asyncOrcaella] <;> omega
 
 theorem silentDescends : SilentDescends := by
   intro Validator BlockId Payload _ _ _ P _ honest p σ rel fb hsub hw hw3 hcert hlive

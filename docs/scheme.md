@@ -143,8 +143,8 @@ are the evidence.
    crash faults enter only through `q`. Hydrozoan's fault model admits
    the committee, and the row lives there (§10).
 
-**Open.** The asynchronous liveness, and the gaps to the concrete
-algorithms; §9.2–§9.4 list them with a plan.
+**Open.** The gaps to the concrete algorithms; §9.2–§9.4 list them with
+a plan. The asynchronous liveness is proved (§11.2).
 
 ## 1. The parameters
 
@@ -1057,11 +1057,11 @@ is `p.waveLength`. `Scheme/Schedules/Statement.lean` states, and
   output's heads are a permutation of round-robin (`PermRR`), reach every
   height with gap `n + waveLength − 1`. A HammerHead score is safe at every
   tolerated row with no clause on the score;
-* **the partially synchronous rows meet `Params.Scheduled`**
-  (`RowsScheduled`): Mysticeti and Cordial Miners PS at slack `f` from
-  `3f + 1`, Blue Bottle PS from `5f + 1`, Orcaella at slack `f + c` from
-  `5f + 3c + 1`, Nemo-Nemo at slack `c` from `2c + 1`, and Hybrid
-  Mysticeti at slack `f + c` from `3f + 3c + 1`.
+* **the rows that meet `Params.Scheduled`** (`RowsScheduled`): Mysticeti
+  and Cordial Miners PS at slack `f` from `3f + 1`, Blue Bottle PS and
+  Blue Bottle Async from `5f + 1`, Orcaella and Async Orcaella at slack
+  `f + c` from `5f + 3c + 1`, Nemo-Nemo at slack `c` from `2c + 1`, and
+  Hybrid Mysticeti at slack `f + c` from `3f + 3c + 1`.
 
 Three limits. Barnacle's configurations have a slot in every round, so
 the schedules it emits are pipelined; a row run with one slot per wave is

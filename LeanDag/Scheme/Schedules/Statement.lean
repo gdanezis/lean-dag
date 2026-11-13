@@ -375,11 +375,11 @@ def HammerHead : Prop :=
         Barnacle.Live.RunsExist (schemeLive p σ rel) B Boundary.atThreshold
           (Adaptive.rule score) C₀ (n + p.waveLength - 1))
 
-/-- **The partially synchronous rows fit round-robin scheduling**, at slack
-`f` for the Byzantine rows and `f + c` for the hybrid ones: Mysticeti and
-Cordial Miners PS from `3f + 1`, Blue Bottle PS from `5f + 1`, Orcaella
-from `5f + 3c + 1`, Nemo-Nemo from `2c + 1`, and Hybrid Mysticeti from
-`3f + 3c + 1`. -/
+/-- **The rows that fit round-robin scheduling**, at slack `f` for the
+Byzantine rows and `f + c` for the hybrid ones: Mysticeti and Cordial
+Miners PS from `3f + 1`, Blue Bottle PS and Blue Bottle Async from
+`5f + 1`, Orcaella and Async Orcaella from `5f + 3c + 1`, Nemo-Nemo from
+`2c + 1`, and Hybrid Mysticeti from `3f + 3c + 1`. -/
 def RowsScheduled : Prop :=
   ∀ n f c : ℕ,
     (3 * f + 1 ≤ n → (Params.mysticeti n f).Scheduled n f ∧
@@ -387,7 +387,9 @@ def RowsScheduled : Prop :=
     (5 * f + 1 ≤ n → (Params.blueBottlePS n f).Scheduled n f) ∧
     (5 * f + 3 * c + 1 ≤ n → (Params.orcaella n f c).Scheduled n (f + c)) ∧
     (2 * c + 1 ≤ n → (Params.nemoNemo n c).Scheduled n c) ∧
-    (3 * f + 3 * c + 1 ≤ n → (Params.hybridMysticeti n f c).Scheduled n (f + c))
+    (3 * f + 3 * c + 1 ≤ n → (Params.hybridMysticeti n f c).Scheduled n (f + c)) ∧
+    (5 * f + 1 ≤ n → (Params.blueBottleAsync n f).Scheduled n f) ∧
+    (5 * f + 3 * c + 1 ≤ n → (Params.asyncOrcaella n f c).Scheduled n (f + c))
 
 /-- **With crashed validators silent, the decider has the descent laws and
 decides every slot a synchronised or silent validator leads**, the latter
