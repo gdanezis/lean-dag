@@ -195,11 +195,45 @@ omit [DecidableEq Validator] in
 theorem mem_flush {L b : BlockId} : b ∈ flush U wk L ↔ b ∈ U.ids ∧ ReachesW U wk L b := by
   simp [flush, List.mem_mergeSort]
 
+/-- **Delivery preserves prefixes** of the committed leaders. -/
+theorem deliverLeaders_prefix {Ls₁ Ls₂ : List BlockId} (h : Ls₁ <+: Ls₂) :
+    deliverLeaders U wk Ls₁ <+: deliverLeaders U wk Ls₂ := by
+  obtain ⟨t, rfl⟩ := h
+  unfold deliverLeaders
+  rw [List.flatMap_append]
+  exact keepFirst_prefix _ (List.prefix_append _ _) _
+
+/-- At most one block of each round and author is delivered, and so no
+block twice. -/
+theorem deliverLeaders_nodup (Ls : List BlockId) :
+    ((deliverLeaders U wk Ls).map (roundAuthor U)).Nodup ∧ (deliverLeaders U wk Ls).Nodup :=
+  ⟨(keepFirst_nodup _ _ _).1, (keepFirst_nodup _ _ _).1.of_map _⟩
+
+/-- **Every delivered block is a block of the record**, reached by one of
+the leaders. -/
+theorem mem_deliverLeaders {Ls : List BlockId} {b : BlockId} (hb : b ∈ deliverLeaders U wk Ls) :
+    b ∈ U.ids ∧ ∃ L ∈ Ls, ReachesW U wk L b := by
+  have hb' := (keepFirst_sublist _ _ _).subset hb
+  obtain ⟨L, hL, hbL⟩ := List.mem_flatMap.mp hb'
+  obtain ⟨hU, hr⟩ := mem_flush.mp hbL
+  exact ⟨hU, L, hL, hr⟩
+
+/-- **Every honest block a leader reaches is delivered.** -/
+theorem mem_deliverLeaders_of {Ls : List BlockId} {L b : BlockId} (hL : L ∈ Ls)
+    (hb : b ∈ U.ids) (hr : ReachesW U wk L b) (hh : (U.block b).creator ∈ honest) :
+    b ∈ deliverLeaders U wk Ls := by
+  have hm : b ∈ Ls.flatMap (flush U wk) := List.mem_flatMap.mpr ⟨L, hL, mem_flush.mpr ⟨hb, hr⟩⟩
+  obtain ⟨c, hc, hkey⟩ := exists_keepFirst (roundAuthor U) hm (List.not_mem_nil)
+  have hcU := (mem_deliverLeaders (wk := wk) hc).1
+  simp only [roundAuthor, Prod.mk.injEq] at hkey
+  have : b = c := U.no_equivocation b hb c hcU hh hkey.2.symm hkey.1.symm
+  exact this ▸ hc
+
 /-- **Delivery preserves prefixes** of the decisions. -/
 theorem deliverOf_prefix {D₁ D₂ : List (ℕ × Option BlockId)} (h : D₁ <+: D₂) :
     deliverOf U wk D₁ <+: deliverOf U wk D₂ := by
   obtain ⟨t, rfl⟩ := h
-  unfold deliverOf
+  unfold deliverOf deliverLeaders
   rw [List.filterMap_append, List.flatMap_append]
   exact keepFirst_prefix _ (List.prefix_append _ _) _
 

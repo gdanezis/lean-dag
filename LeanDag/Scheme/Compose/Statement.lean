@@ -5,6 +5,7 @@ import LeanDag.Barnacle.Live.Statement
 import LeanDag.Barnacle.Aimd.Rule
 import LeanDag.Adaptive.Score.Rule
 import LeanDag.Scheme.Schedules.Statement
+import LeanDag.Barnacle.Model.Run
 /-!
 # The mechanisms composed — statement
 
@@ -27,6 +28,16 @@ import LeanDag.Scheme.Schedules.Statement
   responsively with crashes and restarts from `δ` past its start, runs of
   every height exist on every signer's view, and every slot a closed
   configuration commits reaches second-tier finality.
+* **Atomic broadcast over scheduled runs** (Theorem 2's safety and
+  validity): a scheduled run's delivered sequence (`runDeliver`) holds at
+  most one block of each round and author and only blocks of the record
+  (`ScheduledIntegrity`); two runs' sequences never order two blocks both
+  ways, and a block delivered at one height is delivered by every run at
+  every higher height (`ScheduledAgreed`); under the weak-reference rule, a
+  block every reliable validator holds by `t` is delivered once the ledger
+  holds a leader of round `t + 2` or later (`ScheduledValidity`), which,
+  at Barnacle's boundary, a run of height `t + 2` has
+  (`AnchorLedger`).
 * **All three, asynchronously** (`AsyncComposed`): with crashes and
   restarts, under Barnacle's AIMD rule with heads drawn by a coin, and with
   checkpoints, runs of every height on every signer's view, finalizing what
@@ -276,10 +287,94 @@ def AsyncHammerHeadComposed : Prop :=
             (Tbls.card : ℝ≥0∞) * ((J : ℝ≥0∞) *
               Steelhead.Coin.badBlockBoundAt (Fin m) (e * (k + s - n)) (p.waveLength - 1 + 1) ^ M)
 
+/-- **A scheduled run's delivered sequence holds each round and author at
+most once, no block twice, and only blocks of the record.** -/
+def ScheduledIntegrity : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
+    (honest : Finset Validator)
+    (p : Params) (σ : VoteSel Validator BlockId Payload P honest) (Par : Barnacle.Params)
+    (B : Barnacle.Boundary Validator)
+    (upd : Barnacle.UpdateRule (Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl)))
+    (C₀ : Barnacle.Config Validator) (U : BlockRecord Validator BlockId Payload P honest)
+    (V : U.View) (K : ℕ)
+    (Rn : Barnacle.Run (Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl)) Par B upd C₀ U V K)
+    (wk : BlockId → Finset BlockId) (K' : ℕ),
+    ((runDeliver Rn wk K').map (roundAuthor U)).Nodup ∧ (runDeliver Rn wk K').Nodup ∧
+      ∀ b ∈ runDeliver Rn wk K', b ∈ U.ids
+
+/-- **Scheduled runs agree on what they deliver**, at the rows the
+inequalities cover and under an anchored update rule: two runs' sequences
+never order two blocks both ways (Sailfish's Total order), a block one
+delivers after another the other delivers after it too (Sui and Duan's),
+and a block delivered at one height is delivered by every run at every
+height at least as high (Agreement). -/
+def ScheduledAgreed : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised] (q : ℕ)
+    [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) (Par : Barnacle.Params)
+    (B : Barnacle.Boundary Validator)
+    (upd : Barnacle.UpdateRule (Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl)))
+    (C₀ : Barnacle.Config Validator),
+    p.Tolerates honest f q →
+    Barnacle.Anchored (Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl)) upd →
+    ∀ (U : BlockRecord Validator BlockId Payload P honest) (V₁ V₂ : U.View) (K₁ K₂ : ℕ)
+      (R₁ : Barnacle.Run (Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl)) Par B upd C₀
+        U V₁ K₁)
+      (R₂ : Barnacle.Run (Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl)) Par B upd C₀
+        U V₂ K₂)
+      (wk : BlockId → Finset BlockId) (K'₁ K'₂ : ℕ), K'₁ ≤ K₁ → K'₂ ≤ K₂ →
+      (∀ x y, Before (runDeliver R₁ wk K'₁) x y → ¬ Before (runDeliver R₂ wk K'₂) y x) ∧
+      (∀ x y, Before (runDeliver R₁ wk K'₁) x y → y ∈ runDeliver R₂ wk K'₂ →
+        Before (runDeliver R₂ wk K'₂) x y) ∧
+      (K'₁ ≤ K'₂ → ∀ b ∈ runDeliver R₁ wk K'₁, b ∈ runDeliver R₂ wk K'₂)
+
+/-- **Validity over a scheduled run**, under the weak-reference rule: a
+block of a reliable validator, held by every reliable validator by time
+`t ≥ round m`, is delivered once the run's ledger holds a leader of round
+`t + 2` or later. -/
+def ScheduledValidity : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised] (q : ℕ)
+    [P.Quorate q] (honest : Finset Validator) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) (Par : Barnacle.Params)
+    (B : Barnacle.Boundary Validator)
+    (upd : Barnacle.UpdateRule (Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl)))
+    (C₀ : Barnacle.Config Validator) (U : BlockRecord Validator BlockId Payload P honest)
+    (V : U.View) (K : ℕ)
+    (Rn : Barnacle.Run (Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl)) Par B upd C₀ U V K)
+    (wk : BlockId → Finset BlockId) (T : Finset Validator)
+    (holds : Validator → ℕ → Finset BlockId) (built : Validator → ℕ → ℕ),
+    T ⊆ honest → Fintype.card Validator < q + T.card → WeakRule U wk T holds built →
+    (∀ v, ∀ s t, s ≤ t → holds v s ⊆ holds v t) →
+    (∀ v ∈ T, ∀ b ∈ U.ids, (U.block b).creator = v →
+      (U.block b).round ≤ built v (U.block b).round) →
+    ∀ (m : BlockId) (t K' : ℕ), m ∈ U.ids → (U.block m).creator ∈ T →
+      (U.block m).round ≤ t → (∀ v ∈ T, m ∈ holds v t) →
+      (∃ A ∈ Rn.ledgerUpto K', A ∈ U.ids ∧ t + 2 ≤ (U.block A).round) →
+      m ∈ runDeliver Rn wk K'
+
+/-- **At Barnacle's boundary the ledger holds each closed configuration's
+pivot**: a run of height `K` has, for each `k < K`, a leader of round
+`k + 1` or later in its ledger to `K`. -/
+def AnchorLedger : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
+    (honest : Finset Validator) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) (Par : Barnacle.Params)
+    (upd : Barnacle.UpdateRule (Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl)))
+    (C₀ : Barnacle.Config Validator) (U : BlockRecord Validator BlockId Payload P honest)
+    (V : U.View) (K : ℕ)
+    (Rn : Barnacle.Run (Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl)) Par
+      Barnacle.Boundary.atAnchor upd C₀ U V K),
+    ∀ k, k < K → ∃ A ∈ Rn.ledgerUpto K, A ∈ U.ids ∧ k + 1 ≤ (U.block A).round
+
 /-- The mechanisms composed. -/
 def Statement : Prop :=
   CheckpointsResponsive ∧ CheckpointsCrash ∧ ScheduledCrash ∧ HammerHeadComposed ∧ AimdComposed ∧
-    AsyncComposed ∧ AsyncHammerHeadComposed
+    AsyncComposed ∧ AsyncHammerHeadComposed ∧ ScheduledIntegrity ∧ ScheduledAgreed ∧
+    ScheduledValidity ∧ AnchorLedger
 
 end Compose
 

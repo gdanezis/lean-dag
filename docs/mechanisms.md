@@ -199,6 +199,12 @@ Replace the `\george` notes of §4 by the results, as `\edits{…}`.
   (`reachesW_of_weakRule`; `scheme.md` §25). Next: Theorem 2's atomic
   broadcast over scheduled runs.
 
+* **Theorem 2 (atomic broadcast over scheduled runs)**: integrity, total
+  order, agreement and validity proved (`Compose.{ScheduledIntegrity,
+  ScheduledAgreed, ScheduledValidity, AnchorLedger}`, `scheme.md` §26).
+  Open: discharging Validity's ledger premise at HammerHead's boundary
+  (needs the interval to exceed the commit gap).
+
 ## 5. Order
 
 M1a → M1b → M2 → M5a → M5b → M5c → M3 → M4 → M6 → M1c → M7.

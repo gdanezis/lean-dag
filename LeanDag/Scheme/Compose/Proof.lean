@@ -6,6 +6,9 @@ import LeanDag.Barnacle.Aimd.Proof
 import LeanDag.Adaptive.Score.Proof
 import LeanDag.Scheme.Helpers.CoinHeads
 import LeanDag.Scheme.Helpers.AsyncPace
+import LeanDag.Scheme.Helpers.Validity
+import LeanDag.Scheme.Helpers.Deliver
+import LeanDag.Barnacle.Ledger.Proof
 /-!
 # The mechanisms composed — proof
 
@@ -160,9 +163,95 @@ theorem asyncHammerHeadComposed : AsyncHammerHeadComposed := by
             simpa only [Fintype.card_fin] using this
       _ = _ := by rw [Finset.sum_const, nsmul_eq_mul]
 
+theorem scheduledIntegrity : ScheduledIntegrity := by
+  intro Validator BlockId Payload _ _ _ P _ honest p σ Par B upd C₀ U V K Rn wk K'
+  obtain ⟨h1, h2⟩ := deliverLeaders_nodup (U := U) (wk := wk) (Rn.ledgerUpto K')
+  exact ⟨h1, h2, fun b hb => (mem_deliverLeaders hb).1⟩
+
+/-- Two scheduled runs' ledgers, to heights each has closed, are
+prefix-comparable. -/
+theorem ledger_comparable {Validator BlockId Payload : Type} [Fintype Validator]
+    [DecidableEq Validator] [LinearOrder BlockId] {P : Validity Validator BlockId Payload}
+    [P.Mechanised] {q : ℕ} [P.Quorate q] {honest : Finset Validator} {f : ℕ} {p : Params}
+    {σ : VoteSel Validator BlockId Payload P honest} {Par : Barnacle.Params}
+    {B : Barnacle.Boundary Validator}
+    {upd : Barnacle.UpdateRule (Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl))}
+    {C₀ : Barnacle.Config Validator} (ht : p.Tolerates honest f q)
+    (hanc : Barnacle.Anchored (Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl)) upd)
+    {U : BlockRecord Validator BlockId Payload P honest} {V₁ V₂ : U.View} {K₁ K₂ : ℕ}
+    (R₁ : Barnacle.Run (Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl)) Par B upd C₀
+      U V₁ K₁)
+    (R₂ : Barnacle.Run (Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl)) Par B upd C₀
+      U V₂ K₂)
+    {K'₁ K'₂ : ℕ} (h₁ : K'₁ ≤ K₁) (h₂ : K'₂ ≤ K₂) (h : K'₁ ≤ K'₂) :
+    R₁.ledgerUpto K'₁ <+: R₂.ledgerUpto K'₂ := by
+  obtain ⟨hag, hpre, -⟩ := Barnacle.Ledger.holds _ _ _ _ (Scheme.agree ht) Scheme.commitsCandidate
+    Par B upd C₀ hanc
+  rw [(hag U V₁ V₂ K₁ K₂ R₁ R₂).2 K'₁ (by omega)]
+  exact hpre U V₂ K₂ R₂ K'₁ K'₂ h
+
+theorem scheduledAgreed : ScheduledAgreed := by
+  intro Validator BlockId Payload _ _ _ P _ q _ honest f p σ Par B upd C₀ ht hanc U V₁ V₂ K₁ K₂
+    R₁ R₂ wk K'₁ K'₂ h₁ h₂
+  have hc : runDeliver R₁ wk K'₁ <+: runDeliver R₂ wk K'₂ ∨
+      runDeliver R₂ wk K'₂ <+: runDeliver R₁ wk K'₁ := by
+    rcases le_total K'₁ K'₂ with h | h
+    · exact Or.inl (deliverLeaders_prefix (ledger_comparable ht hanc R₁ R₂ h₁ h₂ h))
+    · exact Or.inr (deliverLeaders_prefix (ledger_comparable ht hanc R₂ R₁ h₂ h₁ h))
+  have hn₁ := (deliverLeaders_nodup (U := U) (wk := wk) (R₁.ledgerUpto K'₁)).2
+  have hn₂ := (deliverLeaders_nodup (U := U) (wk := wk) (R₂.ledgerUpto K'₂)).2
+  refine ⟨fun x y h => h.not_swap hc hn₁ hn₂, fun x y h hy => h.of_comparable hc hn₁ hy,
+    fun h b hb => ?_⟩
+  exact (deliverLeaders_prefix (ledger_comparable ht hanc R₁ R₂ h₁ h₂ h)).subset hb
+
+theorem scheduledValidity : ScheduledValidity := by
+  intro Validator BlockId Payload _ _ _ P _ q _ honest p σ Par B upd C₀ U V K Rn wk T holds built
+    hTh hqT hwr hmono hbuilt m t K' hm hmT hmr hheld hA
+  obtain ⟨A, hA, hAU, hAr⟩ := hA
+  exact mem_deliverLeaders_of hA hm
+    (reachesW_of_weakRule hqT hwr hmono hbuilt hmr hheld A hAU hAr) (hTh hmT)
+
+theorem anchorLedger : AnchorLedger := by
+  intro Validator BlockId Payload _ _ _ P _ honest p σ Par upd C₀ U V K Rn k hk
+  -- starts grow by at least one per configuration
+  have hstart : ∀ j, j ≤ K → j ≤ Rn.start j := by
+    intro j
+    induction j with
+    | zero => intro _; omega
+    | succ j ih =>
+      intro hj
+      have hs := Rn.start_succ j (by omega)
+      have hthr := (Rn.anchor_commits j (by omega)).2
+      have hpos := (Rn.bounds j).2.1
+      have := ih (by omega)
+      change Rn.start (j + 1) = (Rn.cfg j).roundOf (Rn.anchor j) at hs
+      omega
+  obtain ⟨⟨A, hA⟩, hthr⟩ := Rn.anchor_commits k hk
+  have hdec := Rn.closed k hk (Rn.anchor k) (by omega) le_rfl
+  rw [hA] at hdec
+  obtain ⟨hAU, hAr, -⟩ := Scheme.commitsCandidate _ _ _ _ _ hdec
+  have hs := Rn.start_succ k hk
+  change Rn.start (k + 1) = (Rn.cfg k).roundOf (Rn.anchor k) at hs
+  have hk' := hstart k (by omega)
+  refine ⟨A, ?_, hAU, ?_⟩
+  · refine List.mem_flatMap.mpr ⟨k, List.mem_range.mpr hk, ?_⟩
+    unfold Barnacle.Run.rangeLedger Barnacle.ledgerOf
+    refine List.mem_filterMap.mpr ⟨Rn.anchor k, List.mem_range'_1.mpr ⟨?_, ?_⟩, hA⟩
+    · exact (Rn.cfg k).cum_le_iff_le_roundOf.mpr (by omega)
+    · rw [hs]
+      have h1 := (Rn.cfg k).lt_cum_iff_roundOf_lt.mpr
+        (show (Rn.cfg k).roundOf (Rn.anchor k) < (Rn.cfg k).roundOf (Rn.anchor k) + 1 by omega)
+      have h2 : (Rn.cfg k).cum (Rn.start k + 1) ≤ Rn.anchor k :=
+        (Rn.cfg k).cum_le_iff_le_roundOf.mpr (by omega)
+      omega
+  · change (U.block A).round = (Rn.cfg k).sched.slotRound (Rn.anchor k) at hAr
+    rw [hAr, Barnacle.Config.sched_slotRound]
+    omega
+
 theorem holds : Statement :=
   ⟨checkpointsResponsive, checkpointsCrash, scheduledCrash, hammerHeadComposed, aimdComposed,
-    asyncComposed, asyncHammerHeadComposed⟩
+    asyncComposed, asyncHammerHeadComposed, scheduledIntegrity, scheduledAgreed, scheduledValidity,
+    anchorLedger⟩
 
 end Compose
 

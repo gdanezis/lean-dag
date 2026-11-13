@@ -4,6 +4,7 @@ import LeanDag.Barnacle.Model.Schedule
 import LeanDag.Timed.Silent
 import LeanDag.Scheme.Model.Reactive
 import LeanDag.Scheme.Model.Async
+import LeanDag.Scheme.Model.Deliver
 /-!
 # The decider as a Barnacle live rule
 
@@ -141,6 +142,18 @@ validators each fill at least `e` of its entries. A reputation distribution
 over leaders, read by a uniform index into the table. -/
 def Supports {m : ℕ} (tbl : Fin m → Validator) (k e : ℕ) : Prop :=
   ∃ D : Finset Validator, k ≤ D.card ∧ ∀ v ∈ D, e ≤ (Finset.univ.filter fun j => tbl j = v).card
+
+/-- **The delivered sequence of a scheduled run** to height `K'`: the
+blocks delivered for the committed leaders of its ledger, through
+references and weak references. -/
+noncomputable def runDeliver {p : Params} {σ : VoteSel Validator BlockId Payload P honest}
+    {Par : Barnacle.Params} {B : Barnacle.Boundary Validator}
+    {upd : Barnacle.UpdateRule (Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl))}
+    {C₀ : Barnacle.Config Validator} {U : BlockRecord Validator BlockId Payload P honest}
+    {V : U.View} {K : ℕ}
+    (Rn : Barnacle.Run (Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl)) Par B upd C₀ U V K)
+    (wk : BlockId → Finset BlockId) (K' : ℕ) : List BlockId :=
+  deliverLeaders U wk (Rn.ledgerUpto K')
 
 end Scheme
 

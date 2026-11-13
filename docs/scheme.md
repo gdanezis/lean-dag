@@ -1352,3 +1352,24 @@ round reference its block:
 
 With `wk` empty the delivered sequence is the one of §15, and its theorems
 hold as stated.
+
+## 26. Atomic broadcast over scheduled runs
+
+Statement `Scheme/Compose/Statement.lean`. A scheduled run delivers the
+committed leaders of its ledger (`Run.ledgerUpto`), through references and
+weak references (`runDeliver`, over `deliverLeaders`, which the fixed
+schedule's `deliverOf` also reads).
+
+| Claim | Lean |
+|---|---|
+| At most one block per round and author, none twice, only blocks of the record | `Compose.ScheduledIntegrity` |
+| Total order (both forms) and Agreement across runs and heights | `Compose.ScheduledAgreed` (from Barnacle's `LedgerAgreement`, `LedgerPrefix`) |
+| Validity under the weak-reference rule, given a ledger leader of round `t + 2` or later | `Compose.ScheduledValidity` |
+| At Barnacle's boundary, the ledger to height `K` holds a leader of round `k + 1` for every `k < K` | `Compose.AnchorLedger` |
+
+At Barnacle's boundary a configuration's range ends at its pivot, which is
+committed and therefore in the ledger; ranges start at least one round
+apart, so a run of height `t + 2` delivers every block every reliable
+validator held by `t`. At HammerHead's boundary the range ends at the
+threshold, before the pivot, and holds a commit of its own only when the
+interval exceeds the commit gap; that discharge is not yet proved.

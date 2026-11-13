@@ -75,12 +75,18 @@ noncomputable def flush (U : BlockRecord Validator BlockId Payload P honest)
   (U.ids.filter (fun b => ReachesW U wk L b)).toList.mergeSort
     (fun a b => decide (toLex ((U.block a).round, a) ≤ toLex ((U.block b).round, b)))
 
+/-- **The blocks delivered for the committed leaders `Ls`**: their flushes,
+in order, keeping the first block of each round and author. -/
+noncomputable def deliverLeaders (U : BlockRecord Validator BlockId Payload P honest)
+    (wk : BlockId → Finset BlockId) (Ls : List BlockId) : List BlockId :=
+  keepFirst (roundAuthor U) [] (Ls.flatMap (flush U wk))
+
 /-- **The blocks delivered for the decisions `D`**: the flushes of the
 leaders `D` commits, in slot order, keeping the first block of each round
 and author. -/
 noncomputable def deliverOf (U : BlockRecord Validator BlockId Payload P honest)
     (wk : BlockId → Finset BlockId) (D : List (ℕ × Option BlockId)) : List BlockId :=
-  keepFirst (roundAuthor U) [] ((D.filterMap Prod.snd).flatMap (flush U wk))
+  deliverLeaders U wk (D.filterMap Prod.snd)
 
 /-- **The weak-reference rule**: a reliable validator's block reaches,
 through references or weak references, every block of an older round the
