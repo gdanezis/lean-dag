@@ -1,4 +1,5 @@
 import LeanDag.Barnacle.Model.Heads
+import Mathlib.Probability.Distributions.Uniform
 /-!
 # Barnacle: bounded anchor chains
 
@@ -16,7 +17,12 @@ it is decided once its own scan, a wave above it, ends.
 * `Config.BoundedChains C slack fb g c₀`: for every split into `T ⊆ D`
   missing at most `slack` and `fb` validators, the scan from every round's
   first slot ends within `c₀` rounds. We call such a schedule one with
-  **bounded anchor chains**.
+  **bounded anchor chains**; `Config.BoundedChainsUpto` the same for the
+  rounds under a horizon `Nmax`;
+* `LiveRule.upTo R Nmax`: `R` with its DAGs good only up to `Nmax`;
+* `blockHead dflt g`: heads drawn in blocks of `L` rounds, block `k` being
+  `g k`; `PrefixIn T w`: the blocks whose first `w` heads lie in `T`;
+* `shuffle`: a uniformly random ordering of the validators.
 
 Definitions only.
 -/
@@ -42,6 +48,40 @@ ends by round `x + c₀`. -/
 def Config.BoundedChains (C : Config Validator) (slack fb g c₀ : ℕ) : Prop :=
   ∀ T D : Finset Validator, T ⊆ D → Fintype.card Validator ≤ T.card + slack →
     Fintype.card Validator ≤ D.card + fb → ∀ x, C.ChainEnds T D g (x + c₀) (C.cum x)
+
+/-- **Bounded anchor chains up to a horizon**: the same, for the rounds `x`
+whose scan and a wave above it fit under `Nmax`. -/
+def Config.BoundedChainsUpto (C : Config Validator) (slack fb g c₀ Nmax : ℕ) : Prop :=
+  ∀ T D : Finset Validator, T ⊆ D → Fintype.card Validator ≤ T.card + slack →
+    Fintype.card Validator ≤ D.card + fb → ∀ x, x + c₀ + g ≤ Nmax →
+      C.ChainEnds T D g (x + c₀) (C.cum x)
+
+/-- **Heads drawn in blocks**: `J · M` blocks of `L` rounds; the head of round
+`ρ` is entry `ρ mod L` of block `ρ / L`, and `dflt` past the blocks. -/
+def blockHead {J M L : ℕ} (dflt : Validator) (g : Fin (J * M) → Fin L → Validator) (ρ : ℕ) :
+    Validator :=
+  if h : ρ / L < J * M ∧ 0 < L then g ⟨ρ / L, h.1⟩ ⟨ρ % L, Nat.mod_lt _ h.2⟩ else dflt
+
+/-- **A block opens with `w` heads from `T`.** -/
+def PrefixIn {L : ℕ} (T : Finset Validator) (w : ℕ) : Set (Fin L → Validator) :=
+  {b | ∀ i : Fin L, (i : ℕ) < w → b i ∈ T}
+
+/-- **A random ordering of the validators**: a uniformly random bijection
+from the `n` positions to the validators, read as the heads of a block of
+`n` rounds. -/
+noncomputable def shuffle (Validator : Type) [Fintype Validator] [DecidableEq Validator] :
+    PMF (Fin (Fintype.card Validator) → Validator) :=
+  haveI : Nonempty (Fin (Fintype.card Validator) ≃ Validator) :=
+    ⟨(Fintype.equivFin Validator).symm⟩
+  PMF.map (fun e : Fin (Fintype.card Validator) ≃ Validator => ⇑e) (PMF.uniformOfFintype _)
+
+variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
+
+/-- **A live rule read up to a horizon**: its DAGs good only up to `Nmax`.
+Its base rule, and so its runs, are the rule's own. -/
+def LiveRule.upTo (R : LiveRule Validator BlockId Payload) (Nmax : ℕ) :
+    LiveRule Validator BlockId Payload :=
+  { R with Good := fun S U Rnd N => R.Good S U Rnd N ∧ N ≤ Nmax }
 
 end Barnacle
 

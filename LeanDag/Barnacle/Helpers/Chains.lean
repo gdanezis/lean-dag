@@ -98,20 +98,26 @@ theorem LiveRule.Descent.decisive {slack : ℕ} (hD : R.Descent slack) : R.Decis
     ⟨T, T, subset_rfl, hT, hT, hc, fun V κ hcov h1 h2 h3 =>
       let ⟨L, hL⟩ := hc V κ hcov h1 h2 h3; ⟨some L, hL⟩⟩
 
-/-- **A configuration with bounded anchor chains is live**, at any gap of at
-least `c₀ + 2w`. -/
-theorem liveOn_of_boundedChains {slack fb c₀ c : ℕ} (hD : R.Indirect) (hK : R.Decisive slack fb)
-    (hC : C.BoundedChains slack fb R.waveLength c₀) (hc : c₀ + 2 * R.waveLength ≤ c) :
-    R.LiveOn C.sched c := by
-  intro U V Rnd N hgood hcov
+/-- **Bounded anchor chains hold up to every horizon.** -/
+theorem boundedChainsUpto_of_boundedChains {slack fb g c₀ : ℕ}
+    (hC : C.BoundedChains slack fb g c₀) (Nmax : ℕ) : C.BoundedChainsUpto slack fb g c₀ Nmax :=
+  fun T D hTD hT hDc x _ => hC T D hTD hT hDc x
+
+/-- **A configuration with bounded anchor chains up to `Nmax` is live on the
+DAGs good up to `Nmax`**, at any gap of at least `c₀ + 2w`. -/
+theorem liveOn_upTo_of_boundedChainsUpto {slack fb c₀ c Nmax : ℕ} (hD : R.Indirect)
+    (hK : R.Decisive slack fb) (hC : C.BoundedChainsUpto slack fb R.waveLength c₀ Nmax)
+    (hc : c₀ + 2 * R.waveLength ≤ c) :
+    (R.upTo Nmax).LiveOn C.sched c := by
+  intro U V Rnd N ⟨hgood, hNmax⟩ hcov
   obtain ⟨T, D, hTD, hT, hDc, hcom, hdec⟩ := hK C.sched U Rnd N hgood
   have hscan : ∀ x, Rnd ≤ x → x + c₀ + R.waveLength ≤ N →
       ∃ top, C.cum x ≤ top ∧ C.sched.slotRound top ≤ x + c₀ ∧
         (∃ L, R.Decided C.sched V top (some L)) ∧
         ∀ j, C.cum x ≤ j → j < top → ∃ v, R.Decided C.sched V j v := fun x hx hN =>
     scan_of_chainEnds C hD V (fun κ h1 h2 h3 => hcom V κ hcov h1 h2 h3)
-      (fun κ h1 h2 h3 => hdec V κ hcov h1 h2 h3) hN (C.cum x) (hC T D hTD hT hDc x)
-      (by rw [Config_slotRound_head]; exact hx)
+      (fun κ h1 h2 h3 => hdec V κ hcov h1 h2 h3) hN (C.cum x)
+      (hC T D hTD hT hDc x (by omega)) (by rw [Config_slotRound_head]; exact hx)
   refine ⟨fun κ hR hN => ?_, fun r hR hN => ?_⟩
   · obtain ⟨top, hle, -, htop, hmid⟩ := hscan (C.sched.slotRound κ + R.waveLength) (by omega)
       (by omega)
@@ -119,21 +125,24 @@ theorem liveOn_of_boundedChains {slack fb c₀ c : ℕ} (hD : R.Indirect) (hK : 
   · obtain ⟨top, hle, hHt, htop, -⟩ := hscan r hR (by omega)
     exact ⟨top, (Config_cum_le_iff C).1 hle, by omega, htop⟩
 
-/-- **A configuration with bounded anchor chains settles the slots below
-the round its schedule turns good**, at any gap of at least `c₀ + 2w`. -/
-theorem settlesBelow_of_boundedChains {slack fb c₀ c : ℕ} (hD : R.Indirect)
+/-- **A configuration with bounded anchor chains up to `Nmax` settles the
+slots below the round its schedule turns good**, on the DAGs good up to
+`Nmax`, at any gap of at least `c₀ + 2w`. -/
+theorem settlesBelow_upTo_of_boundedChainsUpto {slack fb c₀ c Nmax : ℕ} (hD : R.Indirect)
     (hK : R.Decisive slack fb) (hw : 0 < R.waveLength)
-    (hC : C.BoundedChains slack fb R.waveLength c₀) (hc : c₀ + 2 * R.waveLength ≤ c) :
-    R.SettlesBelow C.sched c := by
-  intro U V Rnd N hgood hcov κ hκ hN
+    (hC : C.BoundedChainsUpto slack fb R.waveLength c₀ Nmax) (hc : c₀ + 2 * R.waveLength ≤ c) :
+    (R.upTo Nmax).SettlesBelow C.sched c := by
+  intro U V Rnd N ⟨hgood, hNmax⟩ hcov κ hκ hN
+  have hwl : (R.upTo Nmax).waveLength = R.waveLength := rfl
+  rw [hwl] at hN
   obtain ⟨T, D, hTD, hT, hDc, hcom, hdec⟩ := hK C.sched U Rnd N hgood
   have hscan : ∀ x, Rnd ≤ x → x + c₀ + R.waveLength ≤ N →
       ∃ top, C.cum x ≤ top ∧ C.sched.slotRound top ≤ x + c₀ ∧
         (∃ L, R.Decided C.sched V top (some L)) ∧
         ∀ j, C.cum x ≤ j → j < top → ∃ v, R.Decided C.sched V j v := fun x hx hN =>
     scan_of_chainEnds C hD V (fun κ h1 h2 h3 => hcom V κ hcov h1 h2 h3)
-      (fun κ h1 h2 h3 => hdec V κ hcov h1 h2 h3) hN (C.cum x) (hC T D hTD hT hDc x)
-      (by rw [Config_slotRound_head]; exact hx)
+      (fun κ h1 h2 h3 => hdec V κ hcov h1 h2 h3) hN (C.cum x)
+      (hC T D hTD hT hDc x (by omega)) (by rw [Config_slotRound_head]; exact hx)
   -- the scan from `Rnd + w − 1` reaches a committed slot
   obtain ⟨top, hle, -, htop, hmid⟩ := hscan (Rnd + R.waveLength - 1) (by omega) (by omega)
   have htopr := (Config_cum_le_iff C).1 hle
@@ -154,16 +163,28 @@ theorem settlesBelow_of_boundedChains {slack fb c₀ c : ℕ} (hD : R.Indirect)
     · obtain ⟨L, hL⟩ := htop
       exact ⟨some L, hL⟩
 
-/-- **Runs of heads are bounded anchor chains**: if from every round, within
-`c₀` rounds, `g` consecutive heads are `T`-led for every `T` missing at most
-`slack` validators, the scan from every round's first slot ends within
-`c₀` rounds. -/
-theorem boundedChains_of_headsRun {slack fb g c₀ : ℕ} (hg : 0 < g)
-    (hrun : ∀ T : Finset Validator, Fintype.card Validator ≤ T.card + slack →
-      HeadsRun C.head T g c₀) :
-    C.BoundedChains slack fb g c₀ := by
-  intro T D _ hT _ x
-  obtain ⟨ρ, hρ, hρc, hheads⟩ := hrun T hT x
+/-- **A configuration with bounded anchor chains is live**, at any gap of at
+least `c₀ + 2w`. -/
+theorem liveOn_of_boundedChains {slack fb c₀ c : ℕ} (hD : R.Indirect) (hK : R.Decisive slack fb)
+    (hC : C.BoundedChains slack fb R.waveLength c₀) (hc : c₀ + 2 * R.waveLength ≤ c) :
+    R.LiveOn C.sched c := fun U V Rnd N hgood hcov =>
+  liveOn_upTo_of_boundedChainsUpto C hD hK (boundedChainsUpto_of_boundedChains C hC N) hc
+    U V Rnd N ⟨hgood, le_rfl⟩ hcov
+
+/-- **A configuration with bounded anchor chains settles the slots below
+the round its schedule turns good**, at any gap of at least `c₀ + 2w`. -/
+theorem settlesBelow_of_boundedChains {slack fb c₀ c : ℕ} (hD : R.Indirect)
+    (hK : R.Decisive slack fb) (hw : 0 < R.waveLength)
+    (hC : C.BoundedChains slack fb R.waveLength c₀) (hc : c₀ + 2 * R.waveLength ≤ c) :
+    R.SettlesBelow C.sched c := fun U V Rnd N hgood hcov =>
+  settlesBelow_upTo_of_boundedChainsUpto C hD hK hw (boundedChainsUpto_of_boundedChains C hC N)
+    hc U V Rnd N ⟨hgood, le_rfl⟩ hcov
+
+/-- **A run of heads ends the scan**: `g` consecutive `T`-led heads from a
+round `ρ ≥ x`, ending by `x + c₀`, end the scan from the first slot of `x`. -/
+theorem chainEnds_of_heads {T D : Finset Validator} {g c₀ x ρ : ℕ} (hg : 0 < g) (hρ : x ≤ ρ)
+    (hρc : ρ + g ≤ x + c₀) (hheads : ∀ i, i < g → C.head (ρ + i) ∈ T) :
+    C.ChainEnds T D g (x + c₀) (C.cum x) := by
   -- every scan starting from a round in `[x, ρ + g)` ends at a head of the run
   have key : ∀ d y, x ≤ y → y < ρ + g → ρ + g - y ≤ d → C.ChainEnds T D g (x + c₀) (C.cum y) := by
     intro d
@@ -183,6 +204,18 @@ theorem boundedChains_of_headsRun {slack fb g c₀ : ℕ} (hg : 0 < g)
         have hjρ : C.sched.slotRound j < ρ := Config_slotRound_lt_of_lt_head C h2
         exact ih _ (by omega) (by omega) (by omega)
   exact key (ρ + g - x) x le_rfl (by omega) le_rfl
+
+/-- **Runs of heads are bounded anchor chains**: if from every round, within
+`c₀` rounds, `g` consecutive heads are `T`-led for every `T` missing at most
+`slack` validators, the scan from every round's first slot ends within
+`c₀` rounds. -/
+theorem boundedChains_of_headsRun {slack fb g c₀ : ℕ} (hg : 0 < g)
+    (hrun : ∀ T : Finset Validator, Fintype.card Validator ≤ T.card + slack →
+      HeadsRun C.head T g c₀) :
+    C.BoundedChains slack fb g c₀ := by
+  intro T D _ hT _ x
+  obtain ⟨ρ, hρ, hρc, hheads⟩ := hrun T hT x
+  exact chainEnds_of_heads C hg hρ hρc hheads
 
 /-- **Runs of decided rounds are bounded anchor chains**: from every round,
 within `c₀` rounds, `g − 1` rounds holding only `D`-led slots followed by a

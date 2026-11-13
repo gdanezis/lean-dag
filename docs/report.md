@@ -12424,7 +12424,15 @@ any update rule that keeps the property, with crashed validators silent
 (`Scheme.Schedules.chainsSilent`) and run responsively
 (`chainsReactive`), and the mechanisms composed broadcast atomically
 (`Scheme.Compose.chainsBroadcast`). Runs of heads and runs of decided
-rounds are instances.
+rounds are instances. Any assignment algorithm that draws the heads in
+independent blocks, each opening with a wave of correct heads with
+probability at least `1 − ε`, has the property up to a horizon except with
+probability `2ⁿ · J · ε^M` (`Barnacle.Chains.randomChains`), against an
+adversary that fixes the faults before the draw; a fresh uniformly random
+ordering of the validators per block of `n` rounds has
+`ε = 1 − (n − slack)^(w) / n^(w)` (`Barnacle.Chains.shuffleChains`), which
+is below `1` whenever `w ≤ n − slack`, a far weaker condition than
+`w · slack < n`.
 
 ### 27.23 What the arc does not contain
 
@@ -21332,7 +21340,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 659 theorems the body or Appendix A names, each
+The 660 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -26557,6 +26565,14 @@ The hypothesis is what "reads the history" means: the score's answer depends on 
 #### `holds`
 
 *theorem, `Adaptive.Score.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `Barnacle.Chains.Proof.lean`*
 
 ```lean
 theorem holds : Statement

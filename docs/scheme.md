@@ -1444,6 +1444,9 @@ it, ends.
 | With crashed validators silent, every update rule keeping bounded anchor chains reaches every height | `Schedules.ChainsSilent` |
 | Run responsively, the same, each configuration good from `δ` past its start | `Schedules.ChainsReactive` |
 | Theorem 2 under any anchored update rule keeping bounded anchor chains | `Compose.ChainsBroadcast` |
+| Up to a horizon: the property for the rounds under `Nmax`, and the rule read with good DAGs only up to `Nmax`, are live and settle | `Config.BoundedChainsUpto`, `LiveRule.upTo`, `liveOn_upTo_of_boundedChainsUpto`, `settlesBelow_upTo_of_boundedChainsUpto` |
+| **Random assignments**: heads drawn in `J · M` independent blocks of `L` rounds, each opening with `w` heads from every `T` missing at most `slack` except with probability `ε`, have bounded anchor chains up to `Nmax ≤ J·M·L`, gap `2ML`, except with probability `2ⁿ · J · ε^M` | `Barnacle.Chains.RandomChains` (`chainEnds_of_windows`, `window_le`) |
+| **A fresh random ordering per block of `n` rounds**: `ε = 1 − (n − slack)^(w) / n^(w)`, below `1` once `w ≤ n − slack` | `Barnacle.Chains.ShuffleChains` (`card_prefixIn_mul`, `shuffle_compl_le`) |
 
 The property is not a condition on the heads alone. With two leaders per
 round, Hybrid Mysticeti at `n = 6`, `f = 1`, `c = 1`, round-robin heads

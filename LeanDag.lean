@@ -245,6 +245,11 @@ import LeanDag.Barnacle.Model.Heads
 import LeanDag.Barnacle.Heads.Statement
 import LeanDag.Barnacle.Helpers.Heads
 import LeanDag.Barnacle.Helpers.Skips
+import LeanDag.Barnacle.Model.Chains
+import LeanDag.Barnacle.Helpers.Chains
+import LeanDag.Barnacle.Helpers.Shuffle
+import LeanDag.Barnacle.Chains.Statement
+import LeanDag.Barnacle.Chains.Proof
 import LeanDag.Barnacle.Heads.Proof
 import LeanDag.Minnow.Blocking
 import LeanDag.FinWhale.Model.Params
@@ -573,6 +578,7 @@ import LeanDag.Scheme.Rows.Proof
 import LeanDag.Scheme.Model.Schedules
 import LeanDag.Scheme.Schedules.Statement
 import LeanDag.Scheme.Schedules.Proof
+import LeanDag.Scheme.Model.AsyncRow
 import LeanDag.Scheme.Model.AsyncLive
 import LeanDag.Scheme.Helpers.TwoSafe
 import LeanDag.Scheme.Helpers.OneBuffer

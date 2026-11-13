@@ -224,7 +224,10 @@ independent and may move.
 * **Bounded anchor chains** (review item 1 on PR #55: scheduling liveness
   without `waveLength·slack + 1 ≤ n`). `Barnacle.Config.BoundedChains`;
   `Schedules.{ChainsSilent, ChainsReactive}`, `Compose.ChainsBroadcast`
-  (`scheme.md` §28). Open: a concrete assignment of several leaders per
-  round meeting the property at Hybrid Mysticeti's committee, and the
-  `n = 6` counterexample checked in Lean.
+  (`scheme.md` §28). Random assignments meet it up to a horizon with
+  probability `1 − 2ⁿ · J · ε^M` (`Barnacle.Chains.RandomChains`); a fresh
+  random ordering per block of `n` rounds has `ε = 1 − (n − slack)^(w) /
+  n^(w)` (`ShuffleChains`). Open: the run-level corollary under the
+  horizon form (`LiveRule.upTo` with `everyHeight_from`), and the `n = 6`
+  counterexample checked in Lean.
 
