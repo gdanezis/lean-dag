@@ -1137,3 +1137,20 @@ condition cannot be dropped: references reach one round down
 (`Validity.Mechanised.pred`), so a reliable validator the adversary keeps
 late at every round builds blocks that no later block references, and
 Sailfish's weak edges to older rounds have no counterpart in the model.
+
+## 16. Responsive liveness at every partially synchronous row
+
+`docs/mechanisms.md` M1; statement `Scheme/Responsive/Statement.lean`.
+
+| Claim | Lean |
+|---|---|
+| The partially synchronous rows at their committees, parent quorum `n − f − c` | `Params.PSRow` |
+| A responsive run exists at every such row, every vote and every schedule | `Responsive.Inhabited` (`Full.record`, `Full.run`) |
+| Validity (Sailfish) and the author's own delivery (Sui and Duan) at every such row | `Responsive.RowsValidity` |
+
+The witness is the full record run in lockstep: every block references the
+whole round below, so every block reaches every block of a lower round and
+every decision-round block certifies every leader block, and no validator
+waits a timeout. Validity at a row is `AtomicBroadcast.ValidityPS` with the
+row's coverage (`Table.RowsCovered`) and threshold fits discharged; the
+reactive run itself remains its premise, as GST is.

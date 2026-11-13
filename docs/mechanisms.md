@@ -130,7 +130,15 @@ Each step: full build, standard axioms, six audits, a section in
 
 Replace the `\george` notes of §4 by the results, as `\edits{…}`.
 
-## 4. Order
+## 4. Status
+
+* **M1a, M1b done.** `Scheme.Responsive.{Inhabited, RowsValidity}`
+  (`Scheme/Responsive/`, `Helpers/FullRun.lean`, `scheme.md` §16, report
+  §27.17). M1b needed no new argument: Nemo-Nemo was never excluded by
+  the Lean statement, which asks self-reference of the record, not of the
+  published protocol; its coverage is the crash-only one.
+
+## 5. Order
 
 M1a → M1b → M2 → M5a → M5b → M5c → M3 → M4 → M6 → M1c → M7.
 Partially synchronous first, since M5 depends on M2 and M1; M1c is

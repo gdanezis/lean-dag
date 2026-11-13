@@ -12296,7 +12296,28 @@ the on-time block (`Scheme.reaches_of_onTime`). Without such a round the
 claim fails: references reach one round down, so a reliable validator
 kept late at every round builds blocks no later block references.
 
-### 27.17 What the arc does not contain
+### 27.17 Responsive liveness at every partially synchronous row
+
+M1 (`mechanisms.md`). The partially synchronous rows at their committees
+are `Params.PSRow`: Mysticeti and Cordial Miners from `3f + 1`, Blue
+Bottle from `5f + 1`, without crash faults; Orcaella from `5f + 3c + 1`;
+Hybrid Mysticeti from `3f + 2c + 1`; Nemo-Nemo from `2c + 1` with `f = 0`;
+each at parent quorum `n − f − c`. At each, a responsive run exists
+(`Scheme.Responsive.inhabited`): the full record on `n` validators, every
+block referencing the whole round below (`Scheme.Full.record`, valid at
+every quorum `q ≤ n` with distinct authors and self-reference), run in
+lockstep with no delay, no processing time and a timeout of `1`, is a
+`SchemeReactive` over all validators at every vote rule and every schedule
+(`Scheme.Full.run`): every block reaches every block of a lower round
+(`Scheme.Full.reaches_of_lt`), so both wait clauses hold by their first
+disjunct. Validity holds at each row (`Scheme.Responsive.rowsValidity`):
+`AtomicBroadcast.validityPS` at the row's coverage (`Table.rowsCovered`),
+its certificate fitting and its commit threshold within `n − f − c`
+(`Scheme.Responsive.psRow_fits`). Nemo-Nemo is among the rows: its
+coverage is the crash-only one, and Validity asks only that blocks
+reference their author's previous block, which the family's row adds.
+
+### 27.18 What the arc does not contain
 
 The properties of Mahi-Mahi and Async BlueBottle that are proved of
 those rules alone reach the rows of §27.5 at the least vote only; the
@@ -13649,7 +13670,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 436 definitions and structures the report names, in
+The 437 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -20764,6 +20785,49 @@ def Live (p : Params) (n f c : ℕ) : Prop :=
 
 **Liveness**: every threshold is reachable by the correct validators.
 
+#### `SchemeReactive`
+
+*structure, `Scheme.Model.Reactive.lean`*
+
+```lean
+structure SchemeReactive [S : Slots Validator] (q : ℕ) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest)
+    (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N : ℕ)
+    extends ReactiveCore U T N where
+  /-- **The progress rule at `q`.** A reliable validator holding `q`
+  distinct round-`n` authors gets past round `n`. -/
+  advancesAt : ∀ v ∈ T, ∀ n < N, ∀ t, q ≤ (authorsIn U (holds v t) n).card → n < top v
+  /-- **Reach or wait.** At each round from the one above the proposal to
+  the vote round, a reliable block reaches the leader block, or its builder
+  waited the timeout and references the leader's block of the round below
+  if it holds it. -/
+  reach_or_wait : ∀ v ∈ T, ∀ k : ℕ, S.slotRound k + p.voteOffset ≤ N → S.leader k ∈ T →
+    ∀ L, IsLeaderBlock U k L → ∀ m, m < p.voteOffset →
+    ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + m + 1 →
+    Reaches U c L ∨
+      (built v (S.slotRound k + m) + timeout (S.slotRound k + m)
+          ≤ built v (S.slotRound k + m + 1) ∧
+        ∀ b ∈ U.ids, (U.block b).creator = S.leader k → (U.block b).round = S.slotRound k + m →
+          b ∈ holds v (built v (S.slotRound k + m + 1)) → b ∈ (U.block c).refs)
+  /-- **Certify or wait.** Where votes are certified a round later, a
+  reliable decision-round block certifies the leader block, or its builder
+  waited the timeout and references every reliable vote for it that it
+  holds. -/
+  cert_or_wait : p.voteIsCert = false → ∀ v ∈ T, ∀ k : ℕ,
+    S.slotRound k + p.voteOffset + 1 ≤ N → S.leader k ∈ T →
+    ∀ L, IsLeaderBlock U k L →
+    ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + p.voteOffset + 1 →
+    IsCert p σ U c L ∨
+      (built v (S.slotRound k + p.voteOffset) + timeout (S.slotRound k + p.voteOffset)
+          ≤ built v (S.slotRound k + p.voteOffset + 1) ∧
+        ∀ b ∈ U.ids, (U.block b).creator ∈ T →
+          (U.block b).round = S.slotRound k + p.voteOffset →
+          b ∈ holds v (built v (S.slotRound k + p.voteOffset + 1)) → σ.Votes U b L →
+          b ∈ (U.block c).refs)
+```
+
+**The family, run reactively**, at quorum `q`: the reactive timing, the pacemaker's progress rule at `q`, and the wait clauses of a wave.
+
 #### `IsCert`
 
 *def, `Scheme.Model.Rule.lean`*
@@ -21077,7 +21141,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 647 theorems the body or Appendix A names, each
+The 648 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -29258,6 +29322,14 @@ theorem decided_none_of_novel {p : Params} {σ : VoteSel Validator BlockId Paylo
 ```
 
 **The prompt skip**: after an extension, a slot whose candidates are all new is skipped at once, at a vote round one above the slot and a quorum of old blocks one round up that meets the skip threshold.
+
+#### `holds`
+
+*theorem, `Scheme.Responsive.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
 
 #### `holds`
 

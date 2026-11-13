@@ -166,4 +166,5 @@ import LeanDagTest.Scheme.HybridRow
 import LeanDagTest.Scheme.Async
 import LeanDagTest.Scheme.Reactive
 import LeanDagTest.Scheme.ReactiveHybrid
+import LeanDagTest.Scheme.Responsive
 import LeanDagTest.Scheme.AsyncLocal
