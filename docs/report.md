@@ -12432,7 +12432,13 @@ adversary that fixes the faults before the draw; a fresh uniformly random
 ordering of the validators per block of `n` rounds has
 `ε = 1 − (n − slack)^(w) / n^(w)` (`Barnacle.Chains.shuffleChains`), which
 is below `1` whenever `w ≤ n − slack`, a far weaker condition than
-`w · slack < n`.
+`w · slack < n`. Under such a schedule, with responsive validators that
+crash and restart and checkpoints, runs of every height up to the horizon
+exist on every signer's view, broadcast atomically and finalize what each
+closed configuration commits, except with probability
+`2ⁿ · J · ε^Mb` (`Scheme.Compose.shuffleBroadcast`): the runs are built on
+the rule read up to the horizon (`Barnacle.LiveRule.upTo`), whose good DAGs
+`everyHeight_from` needs only for the runs it constructs.
 
 ### 27.23 What the arc does not contain
 
@@ -21340,7 +21346,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 660 theorems the body or Appendix A names, each
+The 661 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -25817,6 +25823,33 @@ theorem progress (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBound
     (hN : Rn.start K + P.maxInterval + 1 + 2 * c + R.waveLength ≤ N) :
     Nonempty (Run R.toBaseRule P B upd C₀ U V (K + 1))
 ```
+
+#### `everyHeight_from`
+
+*theorem, `Barnacle.Helpers.Progress.lean`*
+
+```lean
+theorem everyHeight_from (hR : Properties.Agree R.toBaseRule.toDagRule)
+    (hupd : UpdBounded P upd) (hupdh : UpdKeeps upd Q) {c δ : ℕ}
+    (hlive : ∀ C : Config Validator, C.InBounds P → Q C → R.LiveOn C.sched c)
+    (hset : ∀ C : Config Validator, C.InBounds P → Q C → R.SettlesBelow C.sched c)
+    (h₀ : C₀.InBounds P) (hQ₀ : Q C₀)
+    {N : ℕ} {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
+    (hgood : ∀ K (Rn : Run R.toBaseRule P B upd C₀ U V K), Q (Rn.cfg K) →
+      Rn.start K ≤ K * (max (P.maxInterval + 1) δ + c) → horizonFrom P R c δ (K + 1) ≤ N →
+      R.Good (Rn.cfg K).sched U (Rn.start K + δ)
+          (Rn.start K + max (P.maxInterval + 1) δ + 2 * c + R.waveLength) ∨
+        ∃ Rn' : Run R.toBaseRule P B upd C₀ U V (K + 1),
+          Rn'.start (K + 1) ≤ Rn.start K + max (P.maxInterval + 1) δ + c ∧
+            Q (Rn'.cfg (K + 1))) :
+    ∀ K, horizonFrom P R c δ K ≤ N →
+      ∃ Rn : Run R.toBaseRule P B upd C₀ U V K,
+        Rn.start K ≤ K * (max (P.maxInterval + 1) δ + c) ∧ Q (Rn.cfg K)
+  | 0, _ => ⟨Run.zero _ P B upd C₀ h₀ U V, Nat.zero_le _, hQ₀⟩
+  | K + 1, hN =>
+```
+
+**Every height, each configuration's schedule good from `δ` past its start**, up to the round its step needs, unless the run has already moved past it.
 
 #### `headsRun_of_cycle`
 

@@ -1447,6 +1447,7 @@ it, ends.
 | Up to a horizon: the property for the rounds under `Nmax`, and the rule read with good DAGs only up to `Nmax`, are live and settle | `Config.BoundedChainsUpto`, `LiveRule.upTo`, `liveOn_upTo_of_boundedChainsUpto`, `settlesBelow_upTo_of_boundedChainsUpto` |
 | **Random assignments**: heads drawn in `J · M` independent blocks of `L` rounds, each opening with `w` heads from every `T` missing at most `slack` except with probability `ε`, have bounded anchor chains up to `Nmax ≤ J·M·L`, gap `2ML`, except with probability `2ⁿ · J · ε^M` | `Barnacle.Chains.RandomChains` (`chainEnds_of_windows`, `window_le`) |
 | **A fresh random ordering per block of `n` rounds**: `ε = 1 − (n − slack)^(w) / n^(w)`, below `1` once `w ≤ n − slack` | `Barnacle.Chains.ShuffleChains` (`card_prefixIn_mul`, `shuffle_compl_le`) |
+| **Theorem 2 under a random ordering per block**: runs of height `K` on every signer's view that broadcast atomically and finalize each closed configuration's commits fail to exist with probability at most `2ⁿ · J · ε^Mb` | `Compose.ShuffleBroadcast` (`broadcasts_of_ledger`; `everyHeight_from` on `LiveRule.upTo N`, its goodness asked only of the runs it builds) |
 
 The property is not a condition on the heads alone. With two leaders per
 round, Hybrid Mysticeti at `n = 6`, `f = 1`, `c = 1`, round-robin heads

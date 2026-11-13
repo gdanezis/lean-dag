@@ -227,7 +227,8 @@ independent and may move.
   (`scheme.md` §28). Random assignments meet it up to a horizon with
   probability `1 − 2ⁿ · J · ε^M` (`Barnacle.Chains.RandomChains`); a fresh
   random ordering per block of `n` rounds has `ε = 1 − (n − slack)^(w) /
-  n^(w)` (`ShuffleChains`). Open: the run-level corollary under the
-  horizon form (`LiveRule.upTo` with `everyHeight_from`), and the `n = 6`
-  counterexample checked in Lean.
+  n^(w)` (`ShuffleChains`); under it the mechanisms composed broadcast
+  atomically except with probability `2ⁿ · J · ε^Mb`
+  (`Compose.ShuffleBroadcast`). Open: the `n = 6` counterexample checked
+  in Lean.
 

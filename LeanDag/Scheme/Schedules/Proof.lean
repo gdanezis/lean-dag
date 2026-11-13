@@ -283,7 +283,7 @@ theorem hammerHeadReactive : HammerHeadReactive := by
     (Adaptive.Score.rule_bounded B score hkeep) (Adaptive.Score.rule_keeps score _ hQ)
     (fun C _ ⟨π, hπ⟩ => liveOn_of_permuted_heads C hD hw0 hbase π hπ)
     (fun C _ ⟨π, hπ⟩ => settlesBelow_of_permuted_heads C hD hw0 hbase π hπ)
-    h₀ hQ₀ hcov hgood K hK
+    h₀ hQ₀ hcov (fun K Rn hQ _ _ => hgood K Rn hQ) K hK
 
 attribute [local instance] noFaults in
 theorem reactiveGoodInhabited : ReactiveGoodInhabited := by
@@ -452,7 +452,7 @@ theorem chainsReactive : ChainsReactive := by
       (by rw [hwl]; exact hC C hQ) (by rw [hwl]))
     (fun C _ hQ => settlesBelow_of_boundedChains C hD.indirect hD.decisive hw0
       (by rw [hwl]; exact hC C hQ) (by rw [hwl]))
-    h₀ hQ₀ hcov hgood K hK
+    h₀ hQ₀ hcov (fun K Rn hQ _ _ => hgood K Rn hQ) K hK
 
 theorem holds : Statement :=
   ⟨safe, descends, runsExist, aimd, hammerHead, rowsScheduled, silentDescends, silentLive,
