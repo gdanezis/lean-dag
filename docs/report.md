@@ -12281,6 +12281,19 @@ every reliable validator once `n · (max R r + 2) + 2 · waveLength` lies
 below the horizon, `R` past GST and `r` the block's round
 (`Scheme.AtomicBroadcast.validityRoundRobin`); every rotation holds a run of
 `waveLength` reliably-led slots (`Scheme.AtomicBroadcast.roundRobin_run_within`).
+At Hybrid Mysticeti's committee `n = 3f + 2c + 1` that premise fails once
+`c ≥ 1`. When the validators of a set `Z` author no block from round `R`
+on, at most `fb` validators lie outside `T ∪ Z`, `(waveLength − 1) · fb <
+|T|`, the vote round is one above the proposal and `T` meets the skip
+threshold, the same conclusion holds at the same horizon
+(`Scheme.AtomicBroadcast.validityRoundRobinSilent`). A slot a member of `Z`
+leads is skipped directly (`Scheme.skipsUnsupported`); every rotation holds
+`waveLength` slots led from `T ∪ Z`, the last from `T`
+(`Barnacle.exists_run_perm_roundRobin`); and a window of decided slots
+ending at a committed one decides every slot below it
+(`AnchoredRule.decided_below_of_window`). Hybrid Mysticeti meets these
+premises for every `f` and `c` with `Z` the crashed validators and
+`fb = f`.
 Asynchronously, against an
 adversary that does not see the coin, when the author's block of a round `r` at
 or above `m`'s is referenced by every reliable block of round `r + 1`,

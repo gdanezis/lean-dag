@@ -132,6 +132,11 @@ Replace the `\george` notes of §4 by the results, as `\edits{…}`.
 
 ## 4. Status
 
+* **M1c done.** `Scheme.AtomicBroadcast.ValidityRoundRobinSilent`: the
+  validators of `Z` silent from `R`, at `(waveLength − 1) · fb < |T|`;
+  Hybrid Mysticeti meets it for every `f`, `c` (`scheme.md` §15, report
+  §27.16).
+
 * **M1a, M1b done.** `Scheme.Responsive.{Inhabited, RowsValidity}`
   (`Scheme/Responsive/`, `Helpers/FullRun.lean`, `scheme.md` §16, report
   §27.17). M1b needed no new argument: Nemo-Nemo was never excluded by

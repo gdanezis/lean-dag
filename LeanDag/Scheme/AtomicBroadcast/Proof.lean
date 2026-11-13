@@ -4,6 +4,7 @@ import LeanDag.Scheme.Loop.Proof
 import LeanDag.Scheme.Helpers.Validity
 import LeanDag.Scheme.Reactive.Proof
 import LeanDag.Steelhead.Helpers.Liveness
+import LeanDag.Barnacle.Helpers.Skips
 /-!
 # Byzantine atomic broadcast — proof
 
@@ -100,24 +101,40 @@ theorem delivers_of_mem {Validator BlockId Payload : Type} [Fintype Validator]
   ⟨N₀, fun M hM => agreement Validator BlockId Payload P q honest f p σ U T N qp ap M ht v hv t m
     (h M hM) w hw⟩
 
+attribute [local instance] noFaults in
+/-- **A reliably led slot past GST commits** on every view holding the
+reliable blocks, when its decision round lies within the run's waits. -/
+theorem reliable_commits {Validator BlockId Payload : Type} [Fintype Validator]
+    [DecidableEq Validator] [Nonempty Validator] [LinearOrder BlockId]
+    {P : Validity Validator BlockId Payload} [P.Mechanised] {q : ℕ} [P.Quorate q]
+    {honest : Finset Validator} {p : Params} (σ : VoteSel Validator BlockId Payload P honest)
+    [S : Slots Validator] {U : BlockRecord Validator BlockId Payload P honest}
+    {T : Finset Validator} {N R qr : ℕ} (rs : SchemeReactive qr p σ U T N) (hcf : p.CertFits qr)
+    (hcm : p.commitThreshold ≤ T.card) (hTh : T ⊆ honest) (hqr : qr ≤ T.card)
+    (hgst : rs.gst ≤ R) (htime : ∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) :
+    ∀ j, S.leader j ∈ T → R ≤ S.slotRound j →
+      S.slotRound j + (p.waveLength - 1) ≤ rs.waits →
+      ∃ L, IsLeaderBlock U j L ∧ ∀ V : U.View,
+        (∀ b ∈ U.ids, (U.block b).creator ∈ T → b ∈ V.ids) →
+        (schemeAnchored p σ).Decided U V j (some L) := by
+  intro j hjT hRj hjN
+  have hW := rs.waits_le
+  obtain ⟨L, hL, hLc, hLr⟩ := rs.toAsyncPace.populated hqr (S.slotRound j) (by omega)
+    (S.leader j) hjT
+  have hLB : IsLeaderBlock U j L := ⟨hL, hLr, hLc⟩
+  refine ⟨L, hLB, fun V hV => decided_of_certified σ hcm
+    (rs.toAsyncPace.populated hqr _ (by omega)) hLB ?_ hV⟩
+  intro C hC hCT hCr
+  exact ReactiveRun.certifies Validator BlockId Payload P honest p σ U T N R qr rs j L hcf hTh hqr
+    hgst htime hRj hjN hjT hLB _ hCT C hC rfl hCr
+
 theorem validityPS : ValidityPS := by
   intro Validator BlockId Payload _ _ _ _ P _ q _ honest f p σ S U T N R qr d rs ht hcf hcm hTh
     hqr hgst htime hP hd hspan P_k m k b₀ hk hm hmc hlead hRk hmk hkb hrun hN P_j hj
   set ap := rs.toAsyncPace
   obtain ⟨t, hdel⟩ := ap.delivered
   have hW := rs.waits_le
-  have hcommit : ∀ j, S.leader j ∈ T → R ≤ S.slotRound j →
-      S.slotRound j + (p.waveLength - 1) ≤ rs.waits →
-      ∃ L, IsLeaderBlock U j L ∧ ∀ V : U.View,
-        (∀ b ∈ U.ids, (U.block b).creator ∈ T → b ∈ V.ids) →
-        (schemeAnchored p σ).Decided U V j (some L) := by
-    intro j hjT hRj hjN
-    obtain ⟨L, hL, hLc, hLr⟩ := ap.populated hqr (S.slotRound j) (by omega) (S.leader j) hjT
-    have hLB : IsLeaderBlock U j L := ⟨hL, hLr, hLc⟩
-    refine ⟨L, hLB, fun V hV => decided_of_certified σ hcm (ap.populated hqr _ (by omega)) hLB ?_ hV⟩
-    intro C hC hCT hCr
-    exact ReactiveRun.certifies Validator BlockId Payload P honest p σ U T N R qr rs j L hcf hTh hqr
-      hgst htime hRj hjN hjT hLB _ hCT C hC rfl hCr
+  have hcommit := reliable_commits σ rs hcf hcm hTh hqr hgst htime
   have hlast : ∀ j, j ≤ b₀ + d - 1 → S.slotRound j + (p.waveLength - 1) ≤ rs.waits :=
     fun j hj => by
     have := S.mono hj; omega
@@ -188,6 +205,88 @@ theorem validityRoundRobin : ValidityRoundRobin := by
         have : n * (K + 2) = n * K + 2 * n := by ring
         omega) P_j hj
 
+theorem validityRoundRobinSilent : ValidityRoundRobinSilent := by
+  intro n _ BlockId Payload _ P _ q _ honest f p σ U T Z N R qr fb rs ht hcf hcm hsk hv hTh hqr
+    hgst htime hP hsil hZ hfb P_k m hk hm hmc hN P_j hj
+  letI S : Slots (Fin n) := roundRobinSlots n
+  have hn := NeZero.pos n
+  have hw := hcf.1
+  have hTn : T.card ≤ n := by simpa using Finset.card_le_univ T
+  set g := p.waveLength
+  set K := max R (U.block m).round
+  set k := n * K + P_k.val
+  have hkl : S.leader k = P_k := by
+    apply Fin.ext
+    change (n * K + P_k.val) % n = P_k.val
+    rw [Nat.mul_add_mod, Nat.mod_eq_of_lt P_k.isLt]
+  have hKk : K ≤ k := le_trans (Nat.le_mul_of_pos_left K hn) (Nat.le_add_right _ _)
+  have hPk := P_k.isLt
+  -- a window of `g` slots above `k`, its last leader in `T`, the others in `T ∪ Z`
+  obtain ⟨x, hxT, hxD⟩ := Barnacle.exists_run_perm_roundRobin hn (Equiv.refl _) T (T ∪ Z)
+    (n - T.card) fb g (k + g) (by omega) (by omega) hZ (by omega)
+  have hx := x.isLt
+  set t := k + g + x
+  have hleadT : S.leader t ∈ T := hxT
+  have hleadD : ∀ j, t + 1 - g ≤ j → j < t → S.leader j ∈ T ∪ Z := fun j h1 h2 => by
+    have := hxD ⟨t - 1 - j, by omega⟩
+    rwa [show k + g + ↑x - ((t - 1 - j : ℕ) + 1) = j by omega] at this
+  set ap := rs.toAsyncPace
+  obtain ⟨t₀, hdel⟩ := ap.delivered
+  have hW := rs.waits_le
+  have hround : ∀ j, S.slotRound j = j := fun _ => rfl
+  have hlast : ∀ j, j ≤ t → S.slotRound j + (g - 1) ≤ rs.waits := fun j hj => by
+    rw [hround]
+    have : n * (K + 2) = n * K + 2 * n := by ring
+    omega
+  have hcommit := reliable_commits σ rs hcf hcm hTh hqr hgst htime
+  set V := ap.viewAt hk t₀
+  have hV : ∀ b ∈ U.ids, (U.block b).creator ∈ T → b ∈ V.ids := fun b hb hbT =>
+    hdel t₀ le_rfl P_k hk b hb hbT
+  -- a silent leader's slot is skipped directly
+  have hskip : ∀ j, R ≤ j → j + 1 ≤ N → S.leader j ∈ Z →
+      (schemeAnchored p σ).Decided U V j none := by
+    intro j hRj hjN hjZ
+    refine Scheme.skipsUnsupported (σ := σ) hv S U V T j hsk (fun v hvT => ?_)
+      (fun c _ _ _ L hL _ => ?_)
+    · obtain ⟨b, hb, hbc, hbr⟩ := ap.populated hqr (S.slotRound j + 1) (by rw [hround]; omega)
+        v hvT
+      exact ⟨b, hV b hb (by rw [hbc]; exact hvT), hbc, hbr⟩
+    · obtain ⟨hLU, hLr, hLc⟩ := hL
+      have hLc' : (U.block L).creator = S.leader j := hLc
+      have hLr' : (U.block L).round = S.slotRound j := hLr
+      have := hsil L hLU (by rw [hLc']; exact hjZ)
+      rw [hLr', hround] at this
+      omega
+  have hspan : (schemeAnchored p σ).SpansEligible (S := S) g := by
+    have := AnchoredRule.spansEligible_of_identity (R := schemeAnchored p σ) (S := S)
+      (fun _ => rfl) (w := g - 1) (fun _ => le_rfl)
+    rwa [show g - 1 + 1 = g by omega] at this
+  have hbelow : ∀ i, i < t + 1 - g → ∃ v, (schemeAnchored p σ).Decided U V i v := by
+    refine AnchoredRule.decided_below_of_window
+      (fun _ h => AnchoredRule.exists_least_of_lt (fun _ _ => Iff.rfl) h) (b := t + 1 - g)
+      (n := t) (by omega) (fun i hi => by
+        have := hspan (t + 1 - g) i hi
+        rwa [show t + 1 - g + g - 1 = t by omega] at this) ?_ (fun j h1 h2 => ?_)
+    · obtain ⟨L, -, hL⟩ := hcommit t hleadT (by rw [hround]; omega) (hlast t le_rfl)
+      exact ⟨L, hL V hV⟩
+    · rcases Nat.lt_or_eq_of_le h2 with hlt | rfl
+      · rcases Finset.mem_union.mp (hleadD j h1 hlt) with hjT | hjZ
+        · obtain ⟨L, -, hL⟩ := hcommit j hjT (by rw [hround]; omega) (hlast j h2)
+          exact ⟨some L, hL V hV⟩
+        · exact ⟨none, hskip j (by omega) (by have := hlast j h2; rw [hround] at this; omega)
+            hjZ⟩
+      · obtain ⟨L, -, hL⟩ := hcommit _ hleadT (by rw [hround]; omega) (hlast _ le_rfl)
+        exact ⟨some L, hL V hV⟩
+  obtain ⟨L, hLB, hL⟩ := hcommit k (hkl ▸ hk) (by rw [hround]; omega) (hlast k (by omega))
+  have hmh : (U.block m).creator ∈ honest := by rw [hmc]; exact hTh hk
+  have hmk : (U.block m).round ≤ S.slotRound k := by
+    rw [hround]; exact le_trans (le_max_right _ _) hKk
+  have hreach : Reaches U L m := reaches_own hP hm hLB.1 hmh (hLB.2.2.trans (hkl.trans hmc.symm))
+    (by rw [hLB.2.1]; exact hmk)
+  obtain ⟨N₀, hN₀⟩ := mem_deliverSeq_of_decided σ ht (fun i hi => hbelow i (by omega)) (hL V hV)
+    hm hreach hmh
+  exact delivers_of_mem σ ap ht hk (t := t₀) hN₀ hj
+
 theorem validityAsync : ValidityAsync := by
   intro Validator BlockId Payload _ _ _ _ P _ q _ honest f p σ U T N qp ap S₀ hS dflt s₀ d M c
     ht hcf hcm hqp hTh hqT hd hspan hN hfloor hP P_k m x r hk hm hmc hmr hx hxc hxr hon hr2
@@ -239,7 +338,7 @@ theorem livenessAsync : LivenessAsync := by
 
 theorem holds : Statement :=
   ⟨grows, runGrows, integrity, integritySD, totalOrder, totalOrderSD, agreement, validityPS,
-    livenessPS, validityRoundRobin, validityAsync, livenessAsync⟩
+    livenessPS, validityRoundRobin, validityRoundRobinSilent, validityAsync, livenessAsync⟩
 
 end AtomicBroadcast
 

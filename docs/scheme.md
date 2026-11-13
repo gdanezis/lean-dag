@@ -1110,7 +1110,7 @@ each Lean statement reads against one clause of a paper:
 | Sailfish, Total order: `x` before `y` at `P_i` ⇒ not `y` before `x` at `P_j` | `AtomicBroadcast.TotalOrder` |
 | Sui–Duan, Total order: `x` before `y` at one ⇒ `y` at another only after `x` | `AtomicBroadcast.TotalOrderSD` |
 | Sailfish and Sui–Duan, Agreement | `AtomicBroadcast.Agreement` |
-| Sailfish, Validity: an honest sender's message delivered by every honest party | `AtomicBroadcast.ValidityPS`, `AtomicBroadcast.ValidityRoundRobin`, `AtomicBroadcast.ValidityAsync` |
+| Sailfish, Validity: an honest sender's message delivered by every honest party | `AtomicBroadcast.ValidityPS`, `AtomicBroadcast.ValidityRoundRobin`, `AtomicBroadcast.ValidityRoundRobinSilent`, `AtomicBroadcast.ValidityAsync` |
 | Sui–Duan, Liveness: an honest sender eventually delivers its own message | `AtomicBroadcast.LivenessPS`, `AtomicBroadcast.LivenessAsync` |
 
 A delivered message is a block; `deliverSeq` delivers committed leaders'
@@ -1129,7 +1129,17 @@ own view, the run decides every slot below it, and the leader block
 reaches the block by self-reference. Under round-robin on one slot per
 round, at `waveLength · (n − |T|) < n`, every rotation holds such a run, so
 the premise reduces to a horizon of `n · (max R r + 2) + 2 · waveLength`
-(`ValidityRoundRobin`). Asynchronously, against a coin-blind
+(`ValidityRoundRobin`). At Hybrid Mysticeti's committee
+`n = 3f + 2c + 1`, `|T| = n − f − c` and `waveLength = 3`, so
+`waveLength · (n − |T|) < n` fails once `c ≥ 1`. When the validators of a
+set `Z` author no block from a round `R` past GST on, a slot a member of
+`Z` leads is skipped directly (`skipsUnsupported`), and the descent needs
+only a window of `waveLength` slots led from `T ∪ Z` whose last leader is
+in `T` (`AnchoredRule.decided_below_of_window`). Such a window lies in
+every rotation when `(waveLength − 1) · fb < |T|`, for the `fb` validators
+outside `T ∪ Z` (`Barnacle.exists_run_perm_roundRobin`), at the same
+horizon (`ValidityRoundRobinSilent`); with `Z` the crashed validators and
+`fb = f`, Hybrid Mysticeti meets this for every `f` and `c`. Asynchronously, against a coin-blind
 adversary, the author's block of some round `r` is referenced by every
 reliable block of round `r + 1`; the failure probability over `M` blocks
 of coins from round `r + 2` is at most `badBlockBoundAt c d ^ M`. That

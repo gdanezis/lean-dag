@@ -50,6 +50,10 @@ synchronous (`SchemeReactive.toAsyncPace`).
 * `ValidityRoundRobin`: `ValidityPS` under round-robin on one slot per
   round, at `waveLength · (n − |T|) < n`, for every reliable block at
   least two rotations below the horizon.
+* `ValidityRoundRobinSilent`: the same with the validators of a set `Z`
+  silent from a round past GST, at `(waveLength − 1) · fb < |T|` for the `fb`
+  validators outside `T ∪ Z`; a silent leader's slot is skipped directly.
+  Hybrid Mysticeti meets this from `n = 3f + 2c + 1` (`fb = f`).
 * `ValidityAsync` (Sailfish) and `LivenessAsync` (Sui and Duan),
   asynchronous, against an adversary that does not see the coin: when the
   author's block of some round `r` is referenced by every reliable block
@@ -234,6 +238,30 @@ def ValidityRoundRobin : Prop :=
       ∀ (P_j : Fin n) (hj : P_j ∈ T),
         (rs.toAsyncPace (S := roundRobinSlots n)).Delivers (S := roundRobinSlots n) p σ hj m
 
+/-- **Validity under round-robin with silent crashes**: `ValidityRoundRobin`
+when the validators of `Z` author no block at round `R` or above, at most
+`fb` validators lie outside `T ∪ Z`, `(waveLength − 1) · fb < |T|`, the vote
+round is one above the proposal and `T` meets the skip threshold. -/
+def ValidityRoundRobinSilent : Prop :=
+  ∀ (n : ℕ) [NeZero n] (BlockId Payload : Type) [LinearOrder BlockId]
+    (P : Validity (Fin n) BlockId Payload) [P.Mechanised] (q : ℕ) [P.Quorate q]
+    (honest : Finset (Fin n)) (f : ℕ) (p : Params)
+    (σ : VoteSel (Fin n) BlockId Payload P honest)
+    (U : BlockRecord (Fin n) BlockId Payload P honest) (T Z : Finset (Fin n)) (N R qr fb : ℕ)
+    (rs : SchemeReactive (S := roundRobinSlots n) qr p σ U T N),
+    p.Tolerates honest f q → p.CertFits qr → p.commitThreshold ≤ T.card →
+    p.skipThreshold ≤ T.card → p.voteOffset = 1 →
+    T ⊆ honest → qr ≤ T.card → rs.gst ≤ R →
+    (∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) →
+    (∀ blk b, P blk b → Clause.selfParent blk b) →
+    (∀ b ∈ U.ids, (U.block b).creator ∈ Z → (U.block b).round < R) →
+    n ≤ (T ∪ Z).card + fb → (p.waveLength - 1) * fb < T.card →
+    ∀ (P_k : Fin n) (m : BlockId), P_k ∈ T → m ∈ U.ids → (U.block m).creator = P_k →
+      n * (max R (U.block m).round + 2) + 2 * p.waveLength ≤
+        SchemeReactive.waits (S := roundRobinSlots n) rs →
+      ∀ (P_j : Fin n) (hj : P_j ∈ T),
+        (rs.toAsyncPace (S := roundRobinSlots n)).Delivers (S := roundRobinSlots n) p σ hj m
+
 /-- **Validity, Sailfish's form**, asynchronous, at the rows the
 inequalities cover, against an adversary that does not see the coin: in an
 asynchronous run whose reliable set meets the commit threshold and, with
@@ -299,7 +327,7 @@ def LivenessAsync : Prop :=
 /-- The atomic-broadcast claims. -/
 def Statement : Prop :=
   Grows ∧ RunGrows ∧ Integrity ∧ IntegritySD ∧ TotalOrder ∧ TotalOrderSD ∧ Agreement ∧
-    ValidityPS ∧ LivenessPS ∧ ValidityRoundRobin ∧ ValidityAsync ∧ LivenessAsync
+    ValidityPS ∧ LivenessPS ∧ ValidityRoundRobin ∧ ValidityRoundRobinSilent ∧ ValidityAsync ∧ LivenessAsync
 
 end AtomicBroadcast
 
