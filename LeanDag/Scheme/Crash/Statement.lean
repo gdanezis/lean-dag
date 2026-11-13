@@ -1,8 +1,9 @@
 import LeanDag.Scheme.Model.Crash
 import LeanDag.Scheme.Responsive.Statement
 import LeanDag.Properties.Derived.LeaderCommits
+import LeanDag.Scheme.AtomicBroadcast.Statement
 /-!
-# Crash recovery, partially synchronous — statement
+# Crash recovery — statement
 
 `docs/mechanisms.md` M2. Validators may stop and start again, any number of
 times and all at once, until a time `tr`; from `tr` on the reliable
@@ -24,6 +25,19 @@ again; the network reaches it only while it runs.
 * **Every validator may crash at once** (`Inhabited`): at every partially
   synchronous row, a crash run exists in which every validator builds round
   `0`, all are down from time `1` to `D`, and all rebuild on restart.
+
+`docs/mechanisms.md` M3, asynchronously (`AsyncCrashRun`), where delivery
+reaches a validator once it runs from some time on:
+
+* **an asynchronous crash run is an asynchronous run** (`AsyncToPace`),
+  with the same holdings, so
+* **Agreement holds** (`AsyncAgreement`): if a reliable validator delivers a
+  block, every reliable validator delivers it from some time on;
+* **Validity holds with probability 1** (`AsyncValidity`), against an
+  adversary that does not see the coin, under the conditions of
+  `AtomicBroadcast.ValidityAsync`;
+* **every validator may crash at once** (`AsyncInhabited`), at every
+  quorum.
 
 Safety needs nothing of the crash run: a validator that keeps its blocks on
 disk builds no round twice, so the blocks form a `BlockRecord` and every
@@ -114,8 +128,73 @@ def Inhabited : Prop :=
         (∀ r, 2 * cr.delay + cr.proc ≤ cr.timeout r) ∧
         ∀ r ≤ N, ∀ v : Fin n, ∃ b ∈ U.ids, (U.block b).creator = v ∧ (U.block b).round = r
 
-/-- Crash recovery, partially synchronous. -/
-def Statement : Prop := ToReactive ∧ Live ∧ Commits ∧ RowsValidity ∧ Inhabited
+/-- **An asynchronous crash run is an asynchronous run**, with the same
+holdings and rounds. -/
+def AsyncToPace : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    (honest : Finset Validator) (U : BlockRecord Validator BlockId Payload P honest)
+    (T : Finset Validator) (N q : ℕ) (ac : AsyncCrashRun q U T N),
+    ∃ ap : AsyncPace q U T N, ap.holds = ac.holds ∧ ap.top = ac.top
+
+/-- **Agreement with crashes, asynchronously**, at the rows the
+inequalities cover. -/
+def AsyncAgreement : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
+    (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) [Slots Validator]
+    (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N qp : ℕ)
+    (ac : AsyncCrashRun qp U T N) (M : ℕ),
+    p.Tolerates honest f q →
+    ∀ (P_i : Validator) (hi : P_i ∈ T) (t : ℕ) (b : BlockId),
+      b ∈ ac.toAsyncPace.deliverAt p σ hi M t →
+      ∀ (P_j : Validator) (hj : P_j ∈ T),
+        ∃ t', ∀ t'', t' ≤ t'' → b ∈ ac.toAsyncPace.deliverAt p σ hj M t''
+
+/-- **Validity with crashes, asynchronously**, against an adversary that
+does not see the coin: `AtomicBroadcast.ValidityAsync` of the run. -/
+def AsyncValidity : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [P.Mechanised] (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest)
+    (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N qp : ℕ)
+    (ac : AsyncCrashRun qp U T N) (S₀ : Slots Validator) (hS : StrictMono S₀.slotRound)
+    (dflt : Validator) (s₀ d M c : ℕ),
+    p.Tolerates honest f q → p.CertFits q → p.commitThreshold ≤ T.card → qp ≤ T.card →
+    T ⊆ honest → Fintype.card Validator < q + T.card → 0 < d →
+    (schemeAnchored p σ).SpansEligible (S := S₀) d →
+    S₀.slotRound (s₀ + M * d) + (p.waveLength - 1) ≤ N →
+    (∀ s, s₀ ≤ s → s < s₀ + M * d → c ≤ (safeAt p U (S₀.slotRound s)).card) →
+    (∀ blk b, P blk b → Clause.selfParent blk b) →
+    ∀ (P_k : Validator) (m x : BlockId) (r : ℕ),
+      P_k ∈ T → m ∈ U.ids → (U.block m).creator = P_k → (U.block m).round ≤ r →
+      x ∈ U.ids → (U.block x).creator = P_k → (U.block x).round = r →
+      (∀ c ∈ U.ids, (U.block c).creator ∈ T → (U.block c).round = r + 1 →
+        x ∈ (U.block c).refs) →
+      r + 2 ≤ S₀.slotRound s₀ →
+      (PMF.uniformOfFintype (Fin M → Fin d → Validator)).toOuterMeasure
+          {g | ¬ ∀ (P_j : Validator) (hj : P_j ∈ T),
+            ac.toAsyncPace.Delivers (S := coinSlots S₀ hS (Steelhead.coinOfBlocksFrom s₀ g dflt))
+              p σ hj m} ≤
+        Steelhead.Coin.badBlockBoundAt Validator c d ^ M
+
+/-- **Every validator may crash at once, asynchronously**: at every quorum
+`q ≤ n`, an asynchronous crash run in which every validator builds round
+`0`, all are down from `1` to `D`, and all stay up from `D + 1` on. -/
+def AsyncInhabited : Prop :=
+  ∀ (n : ℕ) [NeZero n] (q N D : ℕ), q ≤ n →
+    ∃ (U : BlockRecord (Fin n) (Lex (ℕ × Fin n)) Unit
+        (ValidAt q (Clause.distinct.and Clause.selfParent)) Finset.univ)
+      (ac : AsyncCrashRun q U Finset.univ N),
+      ac.tr = D + 1 ∧ (∀ v t, 1 ≤ t → t ≤ D → ¬ ac.up v t) ∧
+      ∀ r ≤ N, ∀ v : Fin n, ∃ b ∈ U.ids, (U.block b).creator = v ∧ (U.block b).round = r
+
+/-- Crash recovery, partially synchronous and asynchronous. -/
+def Statement : Prop :=
+  ToReactive ∧ Live ∧ Commits ∧ RowsValidity ∧ Inhabited ∧
+    AsyncToPace ∧ AsyncAgreement ∧ AsyncValidity ∧ AsyncInhabited
 
 end Crash
 

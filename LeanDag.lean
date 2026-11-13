@@ -592,3 +592,5 @@ import LeanDag.Scheme.Responsive.Statement
 import LeanDag.Scheme.Responsive.Proof
 import LeanDag.Scheme.Crash.Statement
 import LeanDag.Scheme.Crash.Proof
+import LeanDag.Scheme.Compose.Statement
+import LeanDag.Scheme.Compose.Proof

@@ -146,6 +146,18 @@ Replace the `\george` notes of §4 by the results, as `\edits{…}`.
   restart) has no counterpart: the model's timers are set again at the
   restart, so the wait clause holds of every block.
 
+* **M3 done.** `Scheme.Crash.{AsyncToPace, AsyncAgreement, AsyncValidity,
+  AsyncInhabited}` (`AsyncCrashRun`, `CrashRun.toAsync`; `scheme.md` §18,
+  report §27.19).
+* **M5b done.** `Scheme.Compose.{CheckpointsResponsive, CheckpointsCrash}`
+  (`scheme.md` §19, report §27.20).
+* **M5a decision (user, 2026-11-13).** A responsive validator waits for the
+  leaders of the configuration in force, and past its interval keeps
+  waiting for the old configuration's leaders until the pivot commits.
+  Barnacle's goodness must therefore be indexed by schedule; the run
+  hypothesis: the DAG is good under each configuration's schedule as long
+  as no slot past its interval has committed.
+
 ## 5. Order
 
 M1a → M1b → M2 → M5a → M5b → M5c → M3 → M4 → M6 → M1c → M7.

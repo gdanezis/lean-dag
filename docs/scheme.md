@@ -1173,3 +1173,23 @@ the validator running (delivery, catch-up, the timeout ceiling). The
 reactive timing's ceiling and wait clauses are asked only past GST, which
 is where the proofs read them; that change is what lets a run with crashes
 before `tr` be a responsive run past `max gst tr`.
+
+## 18. Crash recovery, asynchronous
+
+`docs/mechanisms.md` M3; statement `Scheme/Crash/Statement.lean`.
+
+| Claim | Lean |
+|---|---|
+| An asynchronous crash run is an asynchronous run | `Crash.AsyncToPace` (`AsyncCrashRun.toAsyncPace`) |
+| Agreement | `Crash.AsyncAgreement` |
+| Validity with probability 1, coin-blind adversary | `Crash.AsyncValidity` |
+| Every validator may crash at once, at every quorum | `Crash.AsyncInhabited` (`CrashRun.toAsync`) |
+
+## 19. Checkpoints over responsive and crash runs
+
+`docs/mechanisms.md` M5b; statement `Scheme/Compose/Statement.lean`.
+
+| Claim | Lean |
+|---|---|
+| A reliably led slot reaches second-tier finality over a responsive run | `Compose.CheckpointsResponsive` |
+| The same with crashes and restarts, past `max gst tr` | `Compose.CheckpointsCrash` |

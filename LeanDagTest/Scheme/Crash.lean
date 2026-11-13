@@ -1,4 +1,5 @@
 import LeanDag.Scheme.Crash.Proof
+import LeanDag.Scheme.Compose.Proof
 import LeanDag.Scheme.Model.LeastSel
 /-!
 # Every validator crashes at once, on data
@@ -47,3 +48,4 @@ end Crash
 end LeanDagTest
 
 #print axioms LeanDag.Scheme.Crash.holds
+#print axioms LeanDag.Scheme.Compose.holds

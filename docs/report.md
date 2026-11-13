@@ -12346,7 +12346,32 @@ at time `r + D` (`Scheme.Full.crashRun`). Safety asks nothing of the crash
 run: a validator that keeps its blocks builds no round twice, so the blocks
 form a `BlockRecord`.
 
-### 27.19 What the arc does not contain
+### 27.19 Crash recovery, asynchronous
+
+M3 (`mechanisms.md`). An asynchronous crash run (`Scheme.AsyncCrashRun`)
+has no clock to lose: a validator keeps what it holds on disk, rebuilds
+every round it missed, and what a running reliable validator holds reaches
+every reliable validator that runs from some time on. From `tr` the
+reliable validators run, so the run is an asynchronous one
+(`Scheme.AsyncCrashRun.toAsyncPace`, `Scheme.Crash.asyncToPace`), and
+Agreement (`Scheme.Crash.asyncAgreement`) and Validity with probability 1
+against a coin-blind adversary (`Scheme.Crash.asyncValidity`) hold of it.
+A timed crash run forgets its clock into one (`Scheme.CrashRun.toAsync`),
+and the run in which every validator is down from `1` to `D` inhabits it at
+every quorum (`Scheme.Crash.asyncInhabited`).
+
+### 27.20 Checkpoints over responsive and crash runs
+
+M5b (`mechanisms.md`). The checkpoint bridge needs the wave of a slot
+populated and its candidates certified by the validators following the
+signing rule. The responsive precondition gives both
+(`live_of_reactiveLive`), so a slot a signer leads reaches second-tier
+finality when the signers run the family responsively past GST
+(`Scheme.Compose.checkpointsResponsive`), and, through `Scheme.Crash.live`,
+when they run it with crashes and restarts past `max gst tr`
+(`Scheme.Compose.checkpointsCrash`).
+
+### 27.21 What the arc does not contain
 
 The properties of Mahi-Mahi and Async BlueBottle that are proved of
 those rules alone reach the rows of §27.5 at the least vote only; the
@@ -21231,7 +21256,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 651 theorems the body or Appendix A names, each
+The 653 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -29206,6 +29231,14 @@ theorem holds : Statement
 theorem holds : Statement
 ```
 
+#### `holds`
+
+*theorem, `Scheme.Compose.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
 #### `live`
 
 *theorem, `Scheme.Crash.Proof.lean`*
@@ -29275,6 +29308,22 @@ theorem votes (hw : 2 ≤ p.waveLength) (hTh : T ⊆ honest) (hq : q ≤ T.card)
 ```
 
 **Every reliable vote-round block votes for the leader block.**
+
+#### `live_of_reactiveLive`
+
+*theorem, `Scheme.Helpers.Reactive.lean`*
+
+```lean
+theorem live_of_reactiveLive {rel : Reliability Validator}
+    (hw : 2 ≤ p.waveLength)
+    (hcv : p.voteIsCert = false →
+      3 ≤ p.waveLength ∧ p.certThreshold ≤ Fintype.card Validator - rel.slack)
+    {S : Slots Validator} {U : (schemeRule p σ).Universe} {V : (schemeRule p σ).View U}
+    {T : Finset Validator} {lo K : ℕ} (h : reactiveLive p σ rel S V T lo K) :
+    (familySupport p σ).live rel S V T lo K
+```
+
+**The reactive discipline reaches the family support's liveness precondition**, at any reliability: a reactive execution past GST is a quorum populating every round of each reliably-led slot's wave and certifying its candidates.
 
 #### `tryDecide_restart`
 

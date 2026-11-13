@@ -2,14 +2,20 @@ import LeanDag.Scheme.Crash.Statement
 import LeanDag.Scheme.Responsive.Proof
 import LeanDag.Scheme.Reactive.Proof
 import LeanDag.Scheme.Helpers.FullRun
+import LeanDag.Scheme.AtomicBroadcast.Proof
+import LeanDag.Scheme.Model.LeastSel
 /-!
-# Crash recovery, partially synchronous — proof
+# Crash recovery — proof
 
 A crash run read past `max gst tr` is a responsive run
 (`CrashRun.toReactive`), so the reactive results apply to it: the liveness
 precondition carries over (`Live`), whence `Commits` by
 `ReactiveRun.commits`, and Validity by `Responsive.rowsValidity`. The run in
-which every validator crashes at once is `Full.crashRun`.
+which every validator crashes at once is `Full.crashRun`. Asynchronously, a
+crash run is an asynchronous run (`AsyncCrashRun.toAsyncPace`), so Agreement
+and Validity are `AtomicBroadcast.agreement` and
+`AtomicBroadcast.validityAsync` of it; the timed run with every validator
+down, its clock forgotten, inhabits it.
 -/
 
 namespace LeanDag
@@ -50,7 +56,35 @@ theorem inhabited : Inhabited := by
   · show 2 * 0 + 0 ≤ 1
     omega
 
-theorem holds : Statement := ⟨toReactive, live, commits, rowsValidity, inhabited⟩
+theorem asyncToPace : AsyncToPace := by
+  intro Validator BlockId Payload _ _ _ P honest U T N q ac
+  exact ⟨ac.toAsyncPace, rfl, rfl⟩
+
+theorem asyncAgreement : AsyncAgreement := by
+  intro Validator BlockId Payload _ _ _ P _ q _ honest f p σ _ U T N qp ac M ht
+  exact AtomicBroadcast.agreement Validator BlockId Payload P q honest f p σ U T N qp
+    ac.toAsyncPace M ht
+
+theorem asyncValidity : AsyncValidity := by
+  intro Validator BlockId Payload _ _ _ _ P _ q _ honest f p σ U T N qp ac
+  exact AtomicBroadcast.validityAsync Validator BlockId Payload P q honest f p σ U T N qp
+    ac.toAsyncPace
+
+theorem asyncInhabited : AsyncInhabited := by
+  intro n _ q N D hq
+  letI : Slots (Fin n) :=
+    Slots.uniformSingle 1 (by omega) (fun k => ⟨k % n, Nat.mod_lt _ (NeZero.pos n)⟩)
+  let p : Params := ⟨2, true, 0, 0, 0, 0⟩
+  let σ : VoteSel (Fin n) (Lex (ℕ × Fin n)) Unit
+      (ValidAt q (Clause.distinct.and Clause.selfParent)) Finset.univ := leastSel
+  refine ⟨Full.record hq N, (Full.crashRun q p (Nat.zero_le _) σ D).toAsync, rfl,
+    fun v t h1 hD hup => ?_,
+    fun r hr v => ⟨toLex (r, v), Full.mem_record_ids.mpr (by simpa using hr), by simp, by simp⟩⟩
+  rcases hup with h | h <;> omega
+
+theorem holds : Statement :=
+  ⟨toReactive, live, commits, rowsValidity, inhabited, asyncToPace, asyncAgreement,
+    asyncValidity, asyncInhabited⟩
 
 end Crash
 

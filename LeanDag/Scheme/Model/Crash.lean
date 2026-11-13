@@ -1,4 +1,5 @@
 import LeanDag.Scheme.Model.Reactive
+import LeanDag.Scheme.Model.AsyncPace
 /-!
 # The family, run with crashes and restarts
 
@@ -29,6 +30,11 @@ responsive run (`SchemeReactive`) in which:
 `CrashRun.toReactive` reads a crash run as a responsive run past
 `max gst tr`, and `crashLive` is the liveness precondition of a crash run,
 as `reactiveLive` is of a responsive one.
+
+Asynchronously (`AsyncCrashRun`) there is no clock to lose: what a running
+validator holds reaches every reliable validator that runs from some time
+on, and `AsyncCrashRun.toAsyncPace` reads such a run as an asynchronous
+one. A timed crash run forgets its clock into one (`CrashRun.toAsync`).
 
 Definitions only; the claims are `Scheme/Crash/Statement.lean`.
 -/
@@ -185,6 +191,84 @@ def crashLive (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
       max cr.gst cr.tr ≤ R₀ ∧ (∀ n, R₀ ≤ n → 2 * cr.delay + cr.proc ≤ cr.timeout n) ∧
       R₀ ≤ S.slotRound lo ∧ Properties.CoversUpto (schemeRule p σ) V N ∧
       ∀ k, k < K → S.slotRound k + (p.waveLength - 1) ≤ N
+
+/-- **The family, run asynchronously with crashes and restarts**, at
+quorum `q`: an asynchronous run whose delivery reaches only validators
+that run from some time on. -/
+structure AsyncCrashRun (q : ℕ) (U : BlockRecord Validator BlockId Payload P honest)
+    (T : Finset Validator) (N : ℕ) where
+  /-- The highest round `v` reached. -/
+  top : Validator → ℕ
+  /-- **Every round `v` reached, it built in**: on restart it builds every
+  round it missed. -/
+  built_of_le_top : ∀ v ∈ T, ∀ n ≤ top v,
+    ∃ b ∈ U.ids, (U.block b).creator = v ∧ (U.block b).round = n
+  /-- What `v` holds at time `t`, on its disk. -/
+  holds : Validator → ℕ → Finset BlockId
+  holds_sub : ∀ v, ∀ t, holds v t ⊆ U.ids
+  holds_closed : ∀ v ∈ T, ∀ t, ∀ b ∈ holds v t, ∀ j ∈ (U.block b).refs, j ∈ holds v t
+  /-- **Persistence**: what a validator holds survives a crash. -/
+  holds_mono : ∀ v, ∀ s t, s ≤ t → holds v s ⊆ holds v t
+  holds_own : ∀ v ∈ T, ∀ b ∈ U.ids, (U.block b).creator = v → ∃ t, b ∈ holds v t
+  /-- Whether `v` is running at time `t`. -/
+  up : Validator → ℕ → Prop
+  /-- The time from which the reliable validators stay up. -/
+  tr : ℕ
+  /-- **The reliable validators stay up from `tr` on.** -/
+  up_from : ∀ v ∈ T, ∀ t, tr ≤ t → up v t
+  /-- **Eventual delivery to a validator that runs from some time on**:
+  what a running reliable validator holds, such a validator holds later. -/
+  converges : ∀ v ∈ T, ∀ w ∈ T, ∀ t, up w t → (∃ s, ∀ s', s ≤ s' → up v s') →
+    ∃ d, holds w t ⊆ holds v (t + d)
+  advancesAt : ∀ v ∈ T, ∀ n < N, ∀ t, q ≤ (authorsIn U (holds v t) n).card → n < top v
+
+/-- **An asynchronous crash run is an asynchronous run**: a block a
+reliable validator holds at `t` it still holds once up, at `max t tr`, and
+from then on every reliable validator runs. -/
+def AsyncCrashRun.toAsyncPace {q N : ℕ} {U : BlockRecord Validator BlockId Payload P honest}
+    {T : Finset Validator} (ac : AsyncCrashRun q U T N) : AsyncPace q U T N where
+  top := ac.top
+  built_of_le_top := ac.built_of_le_top
+  holds := ac.holds
+  holds_sub := ac.holds_sub
+  holds_closed := ac.holds_closed
+  holds_mono := ac.holds_mono
+  holds_own := ac.holds_own
+  converges := fun v hv w hw t => by
+    obtain ⟨d, hd⟩ := ac.converges v hv w hw (max t ac.tr)
+      (ac.up_from w hw _ (le_max_right _ _)) ⟨ac.tr, fun s' hs' => ac.up_from v hv s' hs'⟩
+    refine ⟨max t ac.tr + d - t, fun b hb => ?_⟩
+    have := hd (ac.holds_mono w t _ (le_max_left _ _) hb)
+    rwa [show t + (max t ac.tr + d - t) = max t ac.tr + d by omega]
+  advancesAt := ac.advancesAt
+
+/-- **A crash run forgets its clock**: past GST, delivery to a validator up
+throughout the delay is delivery to one that runs from some time on. -/
+def CrashRun.toAsync [S : Slots Validator] {q : ℕ} {p : Params}
+    {σ : VoteSel Validator BlockId Payload P honest}
+    {U : BlockRecord Validator BlockId Payload P honest} {T : Finset Validator} {N : ℕ}
+    (cr : CrashRun q p σ U T N) : AsyncCrashRun q U T N where
+  top := cr.top
+  built_of_le_top := cr.built_of_le_top
+  holds := cr.holds
+  holds_sub := cr.holds_sub
+  holds_closed := cr.holds_closed
+  holds_mono := cr.holds_mono
+  holds_own := fun v hv b hb hbc =>
+    ⟨_, cr.holds_own v hv _ (cr.rounds_le b hb) b hb hbc rfl⟩
+  up := cr.up
+  tr := cr.tr
+  up_from := cr.up_from
+  converges := fun v hv w hw t hup ⟨s, hs⟩ => by
+    -- deliver from a time past GST at which both run, carrying `w`'s holdings there
+    have hw' : cr.up w (max t (max cr.gst (max cr.tr s))) := cr.up_from w hw _ (by omega)
+    have h := cr.converges v hv w hw (max t (max cr.gst (max cr.tr s))) (by omega) hw'
+      (fun s' hs' _ => hs s' (by omega))
+    refine ⟨max t (max cr.gst (max cr.tr s)) + cr.delay - t, fun b hb => ?_⟩
+    have := h (cr.holds_mono w t _ (le_max_left _ _) hb)
+    rwa [show t + (max t (max cr.gst (max cr.tr s)) + cr.delay - t) =
+      max t (max cr.gst (max cr.tr s)) + cr.delay by omega]
+  advancesAt := cr.advancesAt
 
 end Scheme
 
