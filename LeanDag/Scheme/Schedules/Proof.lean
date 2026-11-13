@@ -45,9 +45,10 @@ theorem safe : Safe := by
 
 theorem descends : Descends := by
   intro Validator BlockId Payload _ _ _ P _ honest p σ rel hsub hw hw3 hcert hlive
-  exact Timed.descent_of_support _ _ _ (familySupport p σ)
-    (familySupport_ofCoverage hsub hw hw3 hcert) (familySupport_commits hlive) Scheme.indirect
-    (fun _ => Nat.le_succ _) (fun _ _ _ h => h)
+  exact LiveRule.Descent.ofProperties (fun _ => rfl)
+    (Timed.descent_of_support _ _ _ (familySupport p σ)
+      (familySupport_ofCoverage hsub hw hw3 hcert) (familySupport_commits hlive) Scheme.indirect
+      (fun _ => Nat.le_succ _) (fun _ _ _ h => h))
 
 theorem runsExist : RunsExist := by
   intro Validator BlockId Payload _ _ _ P _ q _ honest f p σ rel c₀ head ht hsub hcert hlive
@@ -99,7 +100,9 @@ theorem hammerHead : HammerHead := by
     (Adaptive.rule score) (Adaptive.Score.rule_bounded B score hkeep) C₀ (PermRR hn)
     (Adaptive.Score.rule_keeps score _ hQ) (n + (schemeLive p σ rel).waveLength - 1)).2
     (fun C _ ⟨π, hπ⟩ => liveOn_of_permuted_heads C hD (by omega) hbase π hπ) h₀ hC₀
-  rwa [hwl] at hev
+  intro U V Rnd N hg
+  have := hev U V Rnd N (fun C hC _ => hg C hC)
+  rwa [hwl] at this
 
 theorem rowsScheduled : RowsScheduled := by
   intro n f c
@@ -113,9 +116,11 @@ theorem silentDescends : SilentDescends := by
   have hcov := familySupport_ofCoverage (σ := σ) hsub hw hw3 hcert
   have hlc := familySupport_commits (σ := σ) (rel := rel) hlive
   have hwl : (schemeLiveSilent p σ rel fb).waveLength = p.waveLength - 1 + 1 := rfl
-  refine ⟨Timed.descent_of_support _ _ _ (familySupport p σ) hcov hlc Scheme.indirect
-    (fun _ => Nat.le_succ _) (fun _ _ _ h => h.good), fun hv hskip => ?_⟩
-  intro U Rnd N ⟨T, Z, hq, hs, hpop, hsil, hcard⟩
+  refine ⟨LiveRule.Descent.ofProperties
+    (G := Timed.SilentGood (schemeAnchored p σ).toDagRule rel fb) (fun _ => rfl)
+    (Timed.descent_of_support _ _ _ (familySupport p σ) hcov hlc Scheme.indirect
+      (fun _ => Nat.le_succ _) (fun _ _ _ h => h.good)), fun hv hskip => ?_⟩
+  intro S U Rnd N ⟨T, Z, hq, hs, hpop, hsil, hcard⟩
   have hcom : ∀ (S : Slots Validator) (V : (schemeLiveSilent p σ rel fb).View U) (κ : ℕ),
       (schemeLiveSilent p σ rel fb).toBaseRule.CoversUpto U V N → Rnd ≤ S.slotRound κ →
       S.slotRound κ + (schemeLiveSilent p σ rel fb).waveLength ≤ N → S.leader κ ∈ T →
@@ -127,8 +132,8 @@ theorem silentDescends : SilentDescends := by
         change S.slotRound j + (p.waveLength - 1) ≤ N
         omega) hl
     exact ⟨L, hL.2.1⟩
-  refine ⟨T, T ∪ Z, Finset.subset_union_left, by have := hq.2; omega, hcard, hcom,
-    fun S V κ hV hRnd hN hl => ?_⟩
+  refine ⟨T, T ∪ Z, Finset.subset_union_left, by have := hq.2; omega, hcard, hcom S,
+    fun V κ hV hRnd hN hl => ?_⟩
   rcases Finset.mem_union.mp hl with hT | hZ
   · obtain ⟨L, hL⟩ := hcom S V κ hV hRnd hN hT
     exact ⟨some L, hL⟩
@@ -160,7 +165,9 @@ theorem silentLive : SilentLive := by
     (fun C _ ⟨h1, π, hπ⟩ => liveOn_of_skipRun C hD hK (by omega)
       fun T D _ hT hDc => skipRun_perm_roundRobin hn C h1 π hπ T D rel.slack fb _ (by omega)
         (by simpa using hT) (by simpa using hDc) (by rw [hwl]; exact hbound)) h₀ hC₀
-  rwa [hwl] at hev
+  intro U V Rnd N hg
+  have := hev U V Rnd N (fun C hC _ => hg C hC)
+  rwa [hwl] at this
 
 theorem hammerHeadSilent : HammerHeadSilent := by
   intro n hn BlockId Payload _ P _ q _ honest f p σ rel fb ht hsub hsch B score C₀ hkeep hQ
@@ -182,7 +189,9 @@ theorem hammerHeadSilent : HammerHeadSilent := by
     (fun C _ ⟨h1, π, hπ⟩ => liveOn_of_skipRun C hD hK (by omega)
       fun T D _ hT hDc => skipRun_perm_roundRobin hn C h1 π hπ T D rel.slack fb _ (by omega)
         (by simpa using hT) (by simpa using hDc) (by rw [hwl]; exact hbound)) h₀ hC₀
-  rwa [hwl] at hev
+  intro U V Rnd N hg
+  have := hev U V Rnd N (fun C hC _ => hg C hC)
+  rwa [hwl] at this
 
 theorem rowsSkipScheduled : RowsSkipScheduled := by
   intro n f c

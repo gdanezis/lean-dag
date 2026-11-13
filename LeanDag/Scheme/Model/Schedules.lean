@@ -46,7 +46,7 @@ silent. -/
 def schemeLiveSilent (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
     (rel : Reliability Validator) (fb : ℕ) : Barnacle.LiveRule Validator BlockId Payload :=
   { Barnacle.ofAnchored (schemeAnchored p σ) (fun _ => rfl) with
-    Good := Timed.SilentGood (schemeAnchored p σ).toDagRule rel fb }
+    Good := fun _ => Timed.SilentGood (schemeAnchored p σ).toDagRule rel fb }
 
 /-- **The row fits round-robin scheduling on one slot per round with silent
 crashes**, on `n` validators with at most `slack` unreliable and `fb`

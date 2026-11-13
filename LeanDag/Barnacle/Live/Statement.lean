@@ -31,7 +31,8 @@ def RunsExist (R : LiveRule Validator BlockId Payload) (P : Params)
     (B : Boundary Validator) (upd : UpdateRule R.toBaseRule) (C₀ : Config Validator)
     (c : ℕ) : Prop :=
   C₀.InBounds P →
-  ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ), R.Good U Rnd N →
+  ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ),
+    (∀ C : Config Validator, C.InBounds P → R.Good C.sched U Rnd N) →
     R.toBaseRule.CoversUpto U V N → Rnd ≤ 1 →
     ∀ K, horizon P R c K ≤ N →
       Nonempty (Run R.toBaseRule P B upd C₀ U V K)

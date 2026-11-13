@@ -18,8 +18,8 @@ namespace Barnacle
 namespace Validity
 
 theorem holds : Statement := by
-  intro Validator BlockId Payload _ _ _ R hR P B upd C₀ slack hdel U V K Rn Rnd N hgood
-  obtain ⟨T, hcard, hT⟩ := hdel.reaches U Rnd N hgood
+  intro Validator BlockId Payload _ _ _ R hR P B upd C₀ slack hdel U V K Rn S Rnd N hgood
+  obtain ⟨T, hcard, hT⟩ := hdel.reaches S U Rnd N hgood
   refine ⟨T, hcard, ?_⟩
   intro b hb hbT hRnd hN k hkK hround
   obtain ⟨⟨A, hA⟩, hthr⟩ := Rn.anchor_commits k hkK

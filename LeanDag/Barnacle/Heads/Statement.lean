@@ -51,14 +51,15 @@ good-led heads from round `ρ` decide every slot at a round in
 `[ρ − waveLength, ρ)` and commit the head of `ρ`. -/
 def HeadsDecide (R : LiveRule Validator BlockId Payload) (slack : ℕ) : Prop :=
   R.Descent slack → 0 < R.waveLength →
-  ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ) (T : Finset Validator),
-    -- Given what `goodLeaders` gives for `T` on `U` from `Rnd` to `N`, on
-    -- any view caught up to `N`,
-    (∀ (S : Slots Validator) (κ : ℕ), Rnd ≤ S.slotRound κ → S.slotRound κ + R.waveLength ≤ N →
-      S.leader κ ∈ T → ∃ L, R.Decided S V κ (some L)) →
-    -- for every configuration `C` and every round `ρ` from `Rnd` whose
-    -- `waveLength` heads have their waves under `N` …
-    ∀ (C : Config Validator) (ρ : ℕ), Rnd ≤ ρ →
+  ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ) (T : Finset Validator)
+    (C : Config Validator),
+    -- Given what `goodLeaders` gives for `T` on `U` under `C`'s schedule
+    -- from `Rnd` to `N`, on any view caught up to `N`,
+    (∀ κ : ℕ, Rnd ≤ C.sched.slotRound κ → C.sched.slotRound κ + R.waveLength ≤ N →
+      C.sched.leader κ ∈ T → ∃ L, R.Decided C.sched V κ (some L)) →
+    -- for every round `ρ` from `Rnd` whose `waveLength` heads have their
+    -- waves under `N` …
+    ∀ (ρ : ℕ), Rnd ≤ ρ →
       ρ + R.waveLength + R.waveLength ≤ N + 1 →
       -- … if the heads of rounds `ρ, …, ρ + waveLength − 1` are `T`-led …
       (∀ i, i < R.waveLength → C.head (ρ + i) ∈ T) →

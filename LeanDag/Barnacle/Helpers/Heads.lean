@@ -77,6 +77,17 @@ theorem headsRun_perm_of_all {Validator : Type} [Fintype Validator] [DecidableEq
       HeadsRun (fun ρ => σ (head ρ)) T g c₀ :=
   fun T hT => headsRun_perm σ (h _ (by simpa using hT))
 
+/-- **The shared descent laws are Barnacle's**, at a goodness that does not
+read the schedule. -/
+theorem LiveRule.Descent.ofProperties {R : LiveRule Validator BlockId Payload} {slack : ℕ}
+    {G : R.Universe → ℕ → ℕ → Prop} (hG : ∀ S, R.Good S = G)
+    (h : Properties.Descent R.toBaseRule.toDagRule G R.waveLength slack) : R.Descent slack where
+  goodLeaders S U Rnd N hg := by
+    rw [hG S] at hg
+    obtain ⟨T, hT, hc⟩ := h.goodLeaders U Rnd N hg
+    exact ⟨T, hT, fun V κ => hc S V κ⟩
+  indirect := h.indirect
+
 section Heads
 
 variable {R : LiveRule Validator BlockId Payload} {slack : ℕ}
@@ -136,8 +147,8 @@ and their waves under `N`: every slot at rounds `[ρ, ρ + w)` is decided and th
 is committed, on the view `V` the caller supplies. -/
 theorem headsDecide (hD : R.Descent slack) (hw : 0 < R.waveLength)
     {U : R.Universe} (V : R.View U) {Rnd N : ℕ} {T : Finset Validator}
-    (hT : ∀ (S : Slots Validator) (κ : ℕ), Rnd ≤ S.slotRound κ → S.slotRound κ + R.waveLength ≤ N →
-      S.leader κ ∈ T → ∃ L, R.Decided S V κ (some L))
+    (hT : ∀ κ : ℕ, Rnd ≤ C.sched.slotRound κ → C.sched.slotRound κ + R.waveLength ≤ N →
+      C.sched.leader κ ∈ T → ∃ L, R.Decided C.sched V κ (some L))
     (ρ : ℕ) (hRnd : Rnd ≤ ρ + R.waveLength)
     (hN : ρ + R.waveLength + R.waveLength + R.waveLength ≤ N + 1)
     (hheads : ∀ i, i < R.waveLength → C.head (ρ + R.waveLength + i) ∈ T) :
@@ -148,7 +159,7 @@ theorem headsDecide (hD : R.Descent slack) (hw : 0 < R.waveLength)
   have hhead : ∀ i, i < R.waveLength →
       ∃ L, R.Decided C.sched V (C.cum (ρ + R.waveLength + i)) (some L) := by
     intro i hi
-    refine hT _ _ ?_ ?_ ?_
+    refine hT _ ?_ ?_ ?_
     · rw [Config_slotRound_head]; omega
     · rw [Config_slotRound_head]; omega
     · rw [Config_leader_head]; exact hheads i hi
@@ -164,8 +175,8 @@ theorem headsDecide (hD : R.Descent slack) (hw : 0 < R.waveLength)
 every slot at a round `r` with `r < ρ ≤ r + w` is decided, and the head of `ρ` is committed. -/
 theorem headsDecide_at (hD : R.Descent slack) (hw : 0 < R.waveLength)
     {U : R.Universe} (V : R.View U) {Rnd N : ℕ} {T : Finset Validator}
-    (hT : ∀ (S : Slots Validator) (κ : ℕ), Rnd ≤ S.slotRound κ → S.slotRound κ + R.waveLength ≤ N →
-      S.leader κ ∈ T → ∃ L, R.Decided S V κ (some L))
+    (hT : ∀ κ : ℕ, Rnd ≤ C.sched.slotRound κ → C.sched.slotRound κ + R.waveLength ≤ N →
+      C.sched.leader κ ∈ T → ∃ L, R.Decided C.sched V κ (some L))
     (ρ : ℕ) (hRnd : Rnd ≤ ρ) (hN : ρ + R.waveLength + R.waveLength ≤ N + 1)
     (hheads : ∀ i, i < R.waveLength → C.head (ρ + i) ∈ T) :
     (∀ κ, C.sched.slotRound κ < ρ → ρ ≤ C.sched.slotRound κ + R.waveLength →
@@ -174,7 +185,7 @@ theorem headsDecide_at (hD : R.Descent slack) (hw : 0 < R.waveLength)
   have hhead : ∀ i, i < R.waveLength →
       ∃ L, R.Decided C.sched V (C.cum (ρ + i)) (some L) := by
     intro i hi
-    refine hT _ _ ?_ ?_ ?_
+    refine hT _ ?_ ?_ ?_
     · rw [Config_slotRound_head]; omega
     · rw [Config_slotRound_head]; omega
     · rw [Config_leader_head]; exact hheads i hi
@@ -191,11 +202,11 @@ theorem liveOn_of_headsRun (hD : R.Descent slack) (hw : 0 < R.waveLength)
       HeadsRun C.head T R.waveLength c₀) :
     R.LiveOn C.sched c₀ := by
   intro U V Rnd N hgood hcov
-  obtain ⟨T, hcardT, hT0⟩ := hD.goodLeaders U Rnd N hgood
-  have hT : ∀ (S : Slots Validator) (κ : ℕ), Rnd ≤ S.slotRound κ →
-      S.slotRound κ + R.waveLength ≤ N → S.leader κ ∈ T →
-      ∃ L, R.Decided S V κ (some L) :=
-    fun S κ h1 h2 h3 => hT0 S V κ hcov h1 h2 h3
+  obtain ⟨T, hcardT, hT0⟩ := hD.goodLeaders C.sched U Rnd N hgood
+  have hT : ∀ κ : ℕ, Rnd ≤ C.sched.slotRound κ →
+      C.sched.slotRound κ + R.waveLength ≤ N → C.sched.leader κ ∈ T →
+      ∃ L, R.Decided C.sched V κ (some L) :=
+    fun κ h1 h2 h3 => hT0 V κ hcov h1 h2 h3
   have hrun := hheads T hcardT
   refine ⟨?_, ?_⟩
   · intro κ hRnd hN
@@ -222,7 +233,7 @@ theorem liveOn_of_headsRun (hD : R.Descent slack) (hw : 0 < R.waveLength)
     refine ⟨C.cum ρ', ?_, ?_, ?_⟩
     · rw [Config_slotRound_head]; exact hρ'lo
     · rw [Config_slotRound_head]; omega
-    · refine hT _ _ ?_ ?_ ?_
+    · refine hT _ ?_ ?_ ?_
       · rw [Config_slotRound_head]; omega
       · rw [Config_slotRound_head]; omega
       · rw [Config_leader_head]; simpa using hled 0 hw

@@ -14,7 +14,7 @@ namespace OptimalHydrozoanLive
 
 theorem descent : Descent := by
   intro Replica BlockId _ _ _ _
-  exact LeanDag.OptimalHydrozoanProperties.descent
+  exact LiveRule.Descent.ofProperties (fun _ => rfl) (LeanDag.OptimalHydrozoanProperties.descent)
 
 theorem roundRobinLive : RoundRobinLive := by
   intro n hn BlockId _ _ hb C hC

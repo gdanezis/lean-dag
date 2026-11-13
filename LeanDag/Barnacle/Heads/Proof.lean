@@ -19,7 +19,7 @@ theorem holds : Statement := by
     refine ⟨?_, ?_, ?_⟩
     · intro hD S U V b top hspan hdec htop
       exact stretchDescent hD S V hspan hdec htop
-    · intro hD hw U V Rnd N T hT C' ρ hRnd hN hheads
+    · intro hD hw U V Rnd N T C' hT ρ hRnd hN hheads
       exact headsDecide_at C' hD hw V hT ρ hRnd hN hheads
     · intro hD hw hheads
       exact liveOn_of_headsRun C hD hw hheads

@@ -104,8 +104,8 @@ theorem uodo_sync : SynchronisedOn Uodo {1, 2, 3, 4, 5} 1 := by
   rw [← odoCorrect]
   exact fun n hn => uodo_synchronised n (by omega)
 
-theorem uodo_good :
-    (odontocetiLive (Validator := Fin 6) (BlockId := Fin 24) (Payload := Unit)).Good Uodo 1 3 :=
+theorem uodo_good (S₀ : Slots (Fin 6)) :
+    (odontocetiLive (Validator := Fin 6) (BlockId := Fin 24) (Payload := Unit)).Good S₀ Uodo 1 3 :=
   ⟨{1, 2, 3, 4, 5}, ⟨by decide, by decide⟩, uodo_sync, fun r h1 h2 => by
     interval_cases r <;> decide⟩
 
@@ -116,8 +116,9 @@ slot of round `1`, and a member of `T` leads one of them. -/
 example : ∃ κ, bnCO6.sched.slotRound κ = 1 ∧
     ∃ L, bnOdo.Decided bnCO6.sched (View.full Uodo) κ (some L) := by
   obtain ⟨T, hcard, hT0⟩ :=
-    (Odontoceti.holds.2.1 (Fin 6) (Fin 24) Unit).goodLeaders Uodo 1 3 uodo_good
-  have hT := fun S κ => hT0 S (View.full Uodo) κ
+    (Odontoceti.holds.2.1 (Fin 6) (Fin 24) Unit).goodLeaders bnCO6.sched Uodo 1 3
+    (uodo_good _)
+  have hT := fun κ => hT0 (View.full Uodo) κ
     (coversUpto_full (Odontoceti.holds.1 (Fin 6) (Fin 24) Unit).full_ids Uodo 3)
   have h5 : 5 ≤ T.card := by
     have h := hcard
@@ -126,12 +127,12 @@ example : ∃ κ, bnCO6.sched.slotRound κ = 1 ∧
     omega
   obtain ⟨v, hv⟩ := Finset.card_pos.mp (show 0 < T.card by omega)
   fin_cases v
-  · exact ⟨11, by decide, hT _ 11 (by decide) (by decide) hv⟩
-  · exact ⟨6, by decide, hT _ 6 (by decide) (by decide) hv⟩
-  · exact ⟨7, by decide, hT _ 7 (by decide) (by decide) hv⟩
-  · exact ⟨8, by decide, hT _ 8 (by decide) (by decide) hv⟩
-  · exact ⟨9, by decide, hT _ 9 (by decide) (by decide) hv⟩
-  · exact ⟨10, by decide, hT _ 10 (by decide) (by decide) hv⟩
+  · exact ⟨11, by decide, hT 11 (by decide) (by decide) hv⟩
+  · exact ⟨6, by decide, hT 6 (by decide) (by decide) hv⟩
+  · exact ⟨7, by decide, hT 7 (by decide) (by decide) hv⟩
+  · exact ⟨8, by decide, hT 8 (by decide) (by decide) hv⟩
+  · exact ⟨9, by decide, hT 9 (by decide) (by decide) hv⟩
+  · exact ⟨10, by decide, hT 10 (by decide) (by decide) hv⟩
 
 /-! ## The laws, on `Uskip` -/
 
@@ -284,8 +285,8 @@ theorem unemo_sync : SynchronisedOn Unemo {0, 1} 1 := by
   rw [← h]
   exact fun n hn => unemo_synchronised n (by omega)
 
-theorem unemo_good :
-    (nemoLive (Validator := Fin 3) (BlockId := Fin 14) (Payload := Unit)).Good Unemo 1 5 :=
+theorem unemo_good (S₀ : Slots (Fin 3)) :
+    (nemoLive (Validator := Fin 3) (BlockId := Fin 14) (Payload := Unit)).Good S₀ Unemo 1 5 :=
   ⟨{0, 1}, ⟨by decide, by decide⟩, unemo_sync, fun r h1 h2 => by interval_cases r <;> decide⟩
 
 -- Not to round `6`: the universe ends at round `5`.
@@ -297,8 +298,9 @@ leads one; the crashed validator's round-`1` block is supported too. -/
 example : ∃ κ, bnCN3.sched.slotRound κ = 1 ∧
     ∃ L, bnNemo.Decided bnCN3.sched (View.full Unemo) κ (some L) := by
   obtain ⟨T, hcard, hT0⟩ :=
-    (Nemo.holds.2.1 (Fin 3) (Fin 14) Unit).goodLeaders Unemo 1 5 unemo_good
-  have hT := fun S κ => hT0 S (View.full Unemo) κ
+    (Nemo.holds.2.1 (Fin 3) (Fin 14) Unit).goodLeaders bnCN3.sched Unemo 1 5
+    (unemo_good _)
+  have hT := fun κ => hT0 (View.full Unemo) κ
     (coversUpto_full (Nemo.holds.1 (Fin 3) (Fin 14) Unit).full_ids Unemo 5)
   have h2 : 2 ≤ T.card := by
     have h := hcard
@@ -307,9 +309,9 @@ example : ∃ κ, bnCN3.sched.slotRound κ = 1 ∧
     omega
   obtain ⟨v, hv⟩ := Finset.card_pos.mp (show 0 < T.card by omega)
   fin_cases v
-  · exact ⟨5, by decide, hT _ 5 (by decide) (by decide) hv⟩
-  · exact ⟨3, by decide, hT _ 3 (by decide) (by decide) hv⟩
-  · exact ⟨4, by decide, hT _ 4 (by decide) (by decide) hv⟩
+  · exact ⟨5, by decide, hT 5 (by decide) (by decide) hv⟩
+  · exact ⟨3, by decide, hT 3 (by decide) (by decide) hv⟩
+  · exact ⟨4, by decide, hT 4 (by decide) (by decide) hv⟩
 
 /-- Agreement through `Nemo.holds`: slot `2`, the crashed validator's,
 skips on every view. -/
@@ -321,8 +323,8 @@ example : ∀ (V : LeanDag.Nemo.View (Fin 3) (Fin 14) Unit Unemo) (v : Option (F
 /-! ## `Good` has a horizon, and the slack in numbers -/
 
 /-- The horizon is real for `Good` itself, not just for `PopulatedOn`. -/
-theorem unemo_not_good_6 :
-    ¬ (nemoLive (Validator := Fin 3) (BlockId := Fin 14) (Payload := Unit)).Good Unemo 1 6 := by
+theorem unemo_not_good_6 (S₀ : Slots (Fin 3)) :
+    ¬ (nemoLive (Validator := Fin 3) (BlockId := Fin 14) (Payload := Unit)).Good S₀ Unemo 1 6 := by
   rintro ⟨T, ⟨-, hcard⟩, -, hpop⟩
   have h2 : 2 ≤ T.card := by
     change Fintype.card (Fin 3) - (Fintype.card (Fin 3) - LeanDag.Nemo.majority (Fin 3))

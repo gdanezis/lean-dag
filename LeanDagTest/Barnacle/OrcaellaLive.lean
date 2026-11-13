@@ -66,8 +66,8 @@ theorem ul_sync : SynchronisedOn UL {0, 1, 2} 0 := by
   have hn7 : n ≤ 7 := by have := h8 b; omega
   interval_cases n <;> revert b a <;> decide
 
-theorem ul_good :
-    (orcaellaLive (Validator := Fin 4) (BlockId := Fin 28) (Payload := Unit) 2).Good
+theorem ul_good (S₀ : Slots (Fin 4)) :
+    (orcaellaLive (Validator := Fin 4) (BlockId := Fin 28) (Payload := Unit) 2).Good S₀
       OUL 0 8 :=
   ⟨{0, 1, 2}, ⟨by decide, by decide⟩, ul_sync, fun r h1 h2 => by interval_cases r <;> decide⟩
 
@@ -91,7 +91,7 @@ theorem live_o1 :
       ∃ κ, r ≤ S1.slotRound κ ∧ S1.slotRound κ ≤ r + 5 ∧
         ∃ L, OL.Decided S1 (OL.full OUL) κ (some L)) :=
   LeanDag.Barnacle.Orcaella.holds.2.2 4 (by omega) (Fin 28) Unit 2 (by decide) C1 C1_head
-    OUL (OL.full OUL) 0 8 ul_good
+    OUL (OL.full OUL) 0 8 (ul_good _)
     (coversUpto_full (LeanDag.Barnacle.Orcaella.holds.1 (Fin 4) (Fin 28) Unit 2 (by decide)).full_ids
       OUL 8)
 
@@ -103,7 +103,7 @@ theorem live_o2 :
       ∃ κ, r ≤ S2.slotRound κ ∧ S2.slotRound κ ≤ r + 5 ∧
         ∃ L, OL.Decided S2 (OL.full OUL) κ (some L)) :=
   LeanDag.Barnacle.Orcaella.holds.2.2 4 (by omega) (Fin 28) Unit 2 (by decide) C2 C2_head
-    OUL (OL.full OUL) 0 8 ul_good
+    OUL (OL.full OUL) 0 8 (ul_good _)
     (coversUpto_full (LeanDag.Barnacle.Orcaella.holds.1 (Fin 4) (Fin 28) Unit 2 (by decide)).full_ids
       OUL 8)
 

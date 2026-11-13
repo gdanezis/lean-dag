@@ -255,8 +255,8 @@ theorem x9_both_pass :
 /-- The first `Good` at `fb, fc > 0`: the fully-correct class `{1, …, 7}`
 carries the quorum `7`, synchronised from genesis and populating all
 five rounds. -/
-theorem x9_good :
-    (orcaellaLive (Validator := Fin 9) (BlockId := Fin 40) (Payload := Unit) 4).Good
+theorem x9_good (S₀ : Slots (Fin 9)) :
+    (orcaellaLive (Validator := Fin 9) (BlockId := Fin 40) (Payload := Unit) 4).Good S₀
       OX 0 4 := by
   refine ⟨{1, 2, 3, 4, 5, 6, 7}, ⟨by decide, by decide⟩, ?_, fun r h1 h2 => by
     interval_cases r <;> decide⟩

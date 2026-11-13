@@ -17,9 +17,10 @@ namespace Live
 
 theorem holds : Statement := by
   intro Validator BlockId Payload _ _ _ R slack c₀ head hagree hD hw hheads P B upd hbnd hbh C₀ hC₀
-  intro h₀
+  intro h₀ U V Rnd N hgood
   exact (Progress.holds Validator BlockId Payload R hagree P B upd hbnd C₀ _ hbh c₀).2
-    (fun C _ hCh => liveOn_of_headsRun C hD hw (by rw [hCh]; exact hheads)) h₀ hC₀
+    (fun C _ hCh => liveOn_of_headsRun C hD hw (by rw [hCh]; exact hheads)) h₀ hC₀ U V Rnd N
+    (fun C hC _ => hgood C hC)
 
 /-- **Round-robin meets the heads-run hypothesis** once the committee bound
 `waveLength * slack + 1 ≤ n` holds, at gap `n + waveLength - 1`. -/

@@ -48,7 +48,7 @@ theorem progress_exists (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : U
     {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
     (Rn : Run R.toBaseRule P B upd C₀ U V K)
     (hlive : R.LiveOn (Rn.cfg K).sched c) (hQK : Q (Rn.cfg K))
-    (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ Rn.start K + 1)
+    (hgood : R.Good (Rn.cfg K).sched U Rnd N) (hRnd : Rnd ≤ Rn.start K + 1)
     (hN : Rn.start K + P.maxInterval + 1 + 2 * c + R.waveLength ≤ N) :
     ∃ Rn' : Run R.toBaseRule P B upd C₀ U V (K + 1),
       Rn'.start (K + 1) ≤ Rn.start K + P.maxInterval + 1 + c ∧ Q (Rn'.cfg (K + 1)) := by
@@ -190,7 +190,7 @@ theorem progress (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBound
     {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
     (Rn : Run R.toBaseRule P B upd C₀ U V K)
     (hlive : R.LiveOn (Rn.cfg K).sched c)
-    (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ Rn.start K + 1)
+    (hgood : R.Good (Rn.cfg K).sched U Rnd N) (hRnd : Rnd ≤ Rn.start K + 1)
     (hN : Rn.start K + P.maxInterval + 1 + 2 * c + R.waveLength ≤ N) :
     Nonempty (Run R.toBaseRule P B upd C₀ U V (K + 1)) :=
   let ⟨Rn', _⟩ := progress_exists (Q := fun _ => True) hR hupd (fun _ _ _ _ _ _ _ => trivial)
@@ -203,7 +203,8 @@ theorem everyHeight_bound (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd :
     (hlive : ∀ C : Config Validator, C.InBounds P → Q C → R.LiveOn C.sched c)
     (h₀ : C₀.InBounds P) (hQ₀ : Q C₀)
     {Rnd N : ℕ} {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
-    (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ 1) :
+    (hgood : ∀ C : Config Validator, C.InBounds P → Q C → R.Good C.sched U Rnd N)
+    (hRnd : Rnd ≤ 1) :
     ∀ K, horizon P R c K ≤ N →
       ∃ Rn : Run R.toBaseRule P B upd C₀ U V K,
         Rn.start K ≤ K * (P.maxInterval + 1 + c) ∧ Q (Rn.cfg K)
@@ -216,7 +217,7 @@ theorem everyHeight_bound (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd :
       everyHeight_bound hR hupd hupdh hlive h₀ hQ₀ hcov hgood hRnd K hhor
     obtain ⟨Rn', hstart', hhead'⟩ := progress_exists hR hupd hupdh hcov Rn
       (hlive (Rn.cfg K) (Rn.bounds K) hhead) hhead
-      hgood (by omega) (by omega)
+      (hgood (Rn.cfg K) (Rn.bounds K) hhead) (by omega) (by omega)
     exact ⟨Rn', by rw [Nat.succ_mul]; omega, hhead'⟩
 
 theorem everyHeight (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBounded P upd)
@@ -224,7 +225,8 @@ theorem everyHeight (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBo
     (hlive : ∀ C : Config Validator, C.InBounds P → Q C → R.LiveOn C.sched c)
     (h₀ : C₀.InBounds P) (hQ₀ : Q C₀)
     {Rnd N : ℕ} {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
-    (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ 1) (K : ℕ)
+    (hgood : ∀ C : Config Validator, C.InBounds P → Q C → R.Good C.sched U Rnd N)
+    (hRnd : Rnd ≤ 1) (K : ℕ)
     (hK : horizon P R c K ≤ N) :
     Nonempty (Run R.toBaseRule P B upd C₀ U V K) :=
   let ⟨Rn, _⟩ := everyHeight_bound hR hupd hupdh hlive h₀ hQ₀ hcov hgood hRnd K hK

@@ -75,8 +75,8 @@ example : ¬ SynchronisedOn U3 Finset.univ 0 := fun h =>
 example : (LeanDag.supporters U3 4 2 : Finset (Fin 3)) = {1} := by decide
 example : (LeanDag.supporters U3 1 1 : Finset (Fin 3)) = {1} := by decide
 
-theorem u3_good :
-    (nemoLive (Validator := Fin 3) (BlockId := Fin 24) (Payload := Unit)).Good U3 0 7 :=
+theorem u3_good (S₀ : Slots (Fin 3)) :
+    (nemoLive (Validator := Fin 3) (BlockId := Fin 24) (Payload := Unit)).Good S₀ U3 0 7 :=
   ⟨{0, 2}, ⟨by decide, by decide⟩, u3_sync, fun r h1 h2 => by interval_cases r <;> decide⟩
 
 example : ¬ PopulatedOn U3 {0, 2} 8 := by decide
@@ -101,7 +101,7 @@ theorem live_m1 :
       ∃ κ, r ≤ S1.slotRound κ ∧ S1.slotRound κ ≤ r + 4 ∧
         ∃ L, N3.Decided S1 (View.full U3) κ (some L)) :=
   Nemo.holds.2.2 3 (by omega) (Fin 24) Unit C1 C1_head U3
-    (View.full U3) 0 7 u3_good
+    (View.full U3) 0 7 (u3_good _)
     (coversUpto_full (Nemo.holds.1 (Fin 3) (Fin 24) Unit).full_ids U3 7)
 
 theorem live_m3 :
@@ -111,7 +111,7 @@ theorem live_m3 :
       ∃ κ, r ≤ S3.slotRound κ ∧ S3.slotRound κ ≤ r + 4 ∧
         ∃ L, N3.Decided S3 (View.full U3) κ (some L)) :=
   Nemo.holds.2.2 3 (by omega) (Fin 24) Unit C3 C3_head U3
-    (View.full U3) 0 7 u3_good
+    (View.full U3) 0 7 (u3_good _)
     (coversUpto_full (Nemo.holds.1 (Fin 3) (Fin 24) Unit).full_ids U3 7)
 
 /-! ### Count 1: slot 1 (round 1, leader 1) — skipped off the head of round 3 -/
@@ -221,10 +221,10 @@ theorem promise_m3 :
 theorem not_descent_zero :
     ¬ (nemoLive (Validator := Fin 3) (BlockId := Fin 24) (Payload := Unit)).Descent 0 := by
   intro hD
-  obtain ⟨T, hcard, hT⟩ := hD.goodLeaders U3 0 7 u3_good
+  obtain ⟨T, hcard, hT⟩ := hD.goodLeaders S1 U3 0 7 (u3_good _)
   have hTuniv : T = Finset.univ :=
     Finset.eq_univ_of_card T (le_antisymm (Finset.card_le_univ T) (by simpa using hcard))
-  obtain ⟨L, hL⟩ := hT S1 (View.full U3) 1
+  obtain ⟨L, hL⟩ := hT (View.full U3) 1
     (coversUpto_full (Nemo.holds.1 (Fin 3) (Fin 24) Unit).full_ids U3 7)
     (by decide) (by decide) (by rw [hTuniv]; exact Finset.mem_univ _)
   exact absurd ((Nemo.holds.1 (Fin 3) (Fin 24) Unit).agree S1 _ _ 1 _ _ hL hand1_slot1) (by simp)

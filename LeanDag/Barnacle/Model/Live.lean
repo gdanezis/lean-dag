@@ -5,7 +5,9 @@ import LeanDag.Barnacle.Model.Run
 A4's liveness half (`barnacle.md` §7): on a good DAG every slot is
 eventually decided and new leaders committed infinitely often, both
 read on any view caught up to a horizon. `LiveRule` adds one field,
-`Good`, the rule's own notion of a DAG good from `Rnd` to horizon `N`;
+`Good`, the rule's own notion of a DAG good under a schedule from `Rnd` to
+horizon `N` — a responsive validator waits only for the leaders its
+schedule names, so goodness is relative to one;
 `LiveOn S c` is that liveness on schedule `S`, with commit gap `c`
 supplied by the schedule's own liveness theorem.
 
@@ -19,20 +21,21 @@ namespace Barnacle
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 
-/-- **A base rule with a notion of a good DAG.** `Good U Rnd N`: the DAG
-`U` is good from round `Rnd` to horizon `N` — what the base liveness
-route asks of it, as the rule defines it. -/
+/-- **A base rule with a notion of a good DAG.** `Good S U Rnd N`: the DAG
+`U` is good under the schedule `S` from round `Rnd` to horizon `N` — what
+the base liveness route asks of it, as the rule defines it. -/
 structure LiveRule (Validator : Type) [Fintype Validator] [DecidableEq Validator]
     (BlockId : Type) [DecidableEq BlockId] (Payload : Type)
     extends BaseRule Validator BlockId Payload where
-  /-- The DAG is good from round `Rnd` to horizon `N`. -/
-  Good : Universe → ℕ → ℕ → Prop
+  /-- The DAG is good under schedule `S` from round `Rnd` to horizon `N`. -/
+  Good : Slots Validator → Universe → ℕ → ℕ → Prop
 
 /-- **A4, liveness, on one schedule with commit gap `c`.** -/
 def LiveRule.LiveOn (R : LiveRule Validator BlockId Payload) (S : Slots Validator) (c : ℕ) :
     Prop :=
-  -- On every DAG good from `Rnd` to `N` …
-  ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ), R.Good U Rnd N → R.toBaseRule.CoversUpto U V N →
+  -- On every DAG good under `S` from `Rnd` to `N` …
+  ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ), R.Good S U Rnd N →
+    R.toBaseRule.CoversUpto U V N →
     -- … every slot at a round from `Rnd`, with `c` rounds and a wave still
     -- under the horizon, is decided on any view caught up to `N` …
     (∀ κ, Rnd ≤ S.slotRound κ → S.slotRound κ + c + R.waveLength ≤ N →
@@ -60,7 +63,7 @@ live rule carries beside `Descent`. -/
 structure LiveRule.Delivers (R : LiveRule Validator BlockId Payload) (slack : ℕ) : Prop where
   /-- A good author's block is in the history of every block two rounds
   above it. -/
-  reaches : ∀ (U : R.Universe) (Rnd N : ℕ), R.Good U Rnd N →
+  reaches : ∀ (S : Slots Validator) (U : R.Universe) (Rnd N : ℕ), R.Good S U Rnd N →
     ∃ T : Finset Validator, Fintype.card Validator ≤ T.card + slack ∧
       ∀ b ∈ R.ids U, (R.block U b).creator ∈ T → Rnd ≤ (R.block U b).round →
         (R.block U b).round + 1 ≤ N →
