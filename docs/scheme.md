@@ -570,7 +570,9 @@ classes' `f`, the honest set leaving out Byzantine validators only, the
 checkpoint quorum `n − f − c`, and the reliability quorum discharged
 with alive-but-corrupt validators in it. The liveness hypothesis is the
 commit conjunct of `Params.Live` alone; the full `Live` is not available
-at the rows with no direct skip, whose skip threshold is `n`. The slack
+at the rows with no direct skip, whose skip threshold is `n`. `Row.commitThreshold_le` proves that conjunct at every row at its
+committee, and `liveCommitFinalized_classes_row` is the `*_classes` form
+with it discharged. The slack
 is arithmetic:
 a two-round committee `n ≥ 5f + 3c + 1` admits any `f_a ≤ 2f + c`
 (`resilient_of_twoRound`), a three-round committee at `3f + 2c + 1`
