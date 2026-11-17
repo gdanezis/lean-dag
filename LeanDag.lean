@@ -628,6 +628,10 @@ import LeanDag.KPartialSparse.Model.Node
 import LeanDag.KPartialSparse.Node.Statement
 import LeanDag.KPartialSparse.Helpers.Node
 import LeanDag.KPartialSparse.Node.Proof
+import LeanDag.KPartialSparse.Model.Live
+import LeanDag.KPartialSparse.Live.Statement
+import LeanDag.KPartialSparse.Helpers.Live
+import LeanDag.KPartialSparse.Live.Proof
 import LeanDag.Scheme.Model.Deliver
 import LeanDag.Scheme.Helpers.Deliver
 import LeanDag.Scheme.Helpers.Validity

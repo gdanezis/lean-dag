@@ -7,7 +7,7 @@ claims in its payload the leaders it has seen certified. The Lean
 development is `LeanDag/KPartialSparse`. The available sub-DAG (Theorem 1),
 agreement of the commit rule at the scheme's two-round and three-round rows
 (Theorem 2) and what a node reads (Theorem 3) are proved; §6 lists what is open. `LeanDagTest/KPartialSparse/Witness.lean`
-is a record on which all three apply.
+is a record on which all four apply.
 
 ## 1. The substrate
 
@@ -224,14 +224,58 @@ payload alone, so a node need not hold the claimers' references.
 The votes behind a claim lie outside every history, so `BuildsChecked` asks a
 correct node to fetch them; a correct claimer holds them.
 
-## 6. Open
+## 6. Liveness
 
-Safety is complete: Theorems 1 to 3 hold at every row of the scheme, at every
-crash bound, on a disciplined schedule and record, whose disciplines (chains,
+Liveness is read on the record, from a round `R` on, for a quorum `T` of
+correct validators. *Synchrony* in sparse terms (`SyncFrom`): `T` has a block
+at every round; one round above a slot led by `T`, every block of `T`
+references every leader block of the slot; and two rounds above a block that
+every block of `T` one round up references, every block of `T` claims it.
+*Responsiveness* (`Responds`, `RespondsFrom`): for every slot led by `T`, `T`
+has blocks at the round of the slot's certificates (`certRound`), and each
+certifies one leader block of the slot. A node decides a run once it holds the
+blocks of `T` over the run (`HeldBy`) and the available sub-DAG below every
+leader block up to the run's end (`AvailBelow`). A row is *live* when its
+commit and certificate thresholds are at most the quorum (`LiveRow`).
+
+**Theorem 4 (liveness; `Live.Statement`).**
+
+* *Synchrony implies responsiveness* (`Live.Weaker`), at every row: the
+  leader block of a slot led by `T` is referenced by every block of `T` one
+  round up, so it is certified by every block of `T` there or two rounds up.
+* *The votes behind a claim are there* (`Live.Backable`). Under synchrony, a
+  node holding a leader block of a slot led by `T` and the blocks of `T` one
+  round above it backs a claim for it (§5) at any threshold within the
+  quorum. So a correct node can meet `BuildsChecked` for the claims of `T`.
+* *A responsive slot commits* (`Live.Commits`). At a live row, a node holding
+  the blocks of `T` at the round of a slot's certificates commits the slot
+  directly: they are certificates from `|T| ≥ q` authors.
+* *A committed run decides below it* (`Live.Descends`). A node holding the
+  available sub-DAG below every leader block up to slot `n`, which has
+  committed every slot from `b` to `n`, decides every slot below `b` that `n`
+  may anchor: holding the sub-DAG fetches it (Theorem 3), so the indirect test
+  returns the least linked candidate or a skip.
+* *Every slot is decided* (`Live.Progress`). Past any slot and round `R`, a
+  schedule offering runs of slots led by `T` names a run, fixed before the
+  record; on every record responsive among `T` from `R` to the run's end, a
+  node holding what the run needs decides every slot below its end, at a live
+  row.
+
+With Theorem 3, every correct node that holds what a run needs decides every
+slot below it, and all decide each slot alike.
+
+## 7. Open
+
+Safety (Theorems 1 to 3) holds at every row of the scheme, at every crash
+bound, on a disciplined schedule and record, whose disciplines (chains,
 checked and truthful claims, leaders leading on the substrate) are what a
-correct node does. Open:
+correct node does. Liveness (Theorem 4) holds on responsive records. Open:
 
-* A bound in rounds on what a node fetches, and that a correct node can
-  obtain the votes behind a claim (a liveness question).
-* Liveness, order, the bounds of `docs/kpartial.md` Theorem 6, the timed
-  model, and adaptive schedules.
+* A bound in rounds on what a node fetches, and that a correct node obtains
+  the votes behind every claim in the history of what it references, not
+  only the claims of `T`.
+* The timed model: when a node goes dense, waits for votes before claiming,
+  and restarts, and the time to responsiveness after GST
+  (`docs/kpartial.md` Theorem 7).
+* Order, the bounds of `docs/kpartial.md` Theorem 6, and adaptive
+  schedules.

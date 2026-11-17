@@ -1,6 +1,7 @@
 import LeanDag.KPartialSparse.Avail.Proof
 import LeanDag.KPartialSparse.Agreement.Proof
 import LeanDag.KPartialSparse.Node.Proof
+import LeanDag.KPartialSparse.Live.Proof
 /-!
 # Sparse K-partial DAG — a witness
 
@@ -15,7 +16,9 @@ Theorem 1 at `K = 6`, and `Avail.Linked` applies to the claims at round `4`.
 With one slot a round, the schedule and record are disciplined, and at
 Mysticeti's row the full view commits slot `2` directly; by Theorem 2 every
 view that decides slot `2` decides it alike. A node holding only the
-round-`4` blocks commits slot `2`, and by Theorem 3 every node agrees.
+round-`4` blocks commits slot `2`, and by Theorem 3 every node agrees. The
+record is synchronous among the correct validators, and by Theorem 4 a node
+holding it decides every slot below `5`.
 -/
 
 namespace LeanDagTest
@@ -171,6 +174,46 @@ theorem wBuildsChecked : BuildsChecked wU 6 3 := by
   · exact KPartialSparse.historyUpto_subset_ids (U := wU) 6 (wU.complete z hz m hm)
   · exact (h z hz).2 m hm X (KPartialSparse.historyUpto_subset_ids (U := wU) 6
       (wU.complete z hz m hm) hX)
+
+/-! ## Liveness -/
+
+/-- The correct validators. -/
+def wT : Finset (Fin 4) := {0, 1, 2}
+
+/-- The record is synchronous among the correct validators over rounds `0` to
+`6`. -/
+theorem wSync : SyncFrom wU wT 0 6 := by
+  have hpop : ∀ r ≤ 6, PopulatedOn wU wT r := by decide
+  refine ⟨by decide, fun r _ hr => hpop r hr, fun k _ hk _ L hL C hC hCT hCr => ?_, ?_⟩
+  · have hsr : wSlots.slotRound k = k := rfl
+    obtain ⟨hL₁, hL₂, hL₃⟩ := hL
+    have key : ∀ L ∈ wIds, ∀ C ∈ wIds, (wBlock L).round ≤ 5 →
+        (wBlock L).creator = lead (wBlock L).round → (wBlock C).creator ∈ wT →
+        (wBlock C).round = (wBlock L).round + 1 → L ∈ (wBlock C).refs := by decide
+    have hLr : (wBlock L).round = k := hL₂.trans hsr
+    refine key L hL₁ C hC (by omega) ?_ hCT (by rw [hLr]; exact hCr.trans (by rw [hsr]))
+    rw [hLr]; exact hL₃
+  · unfold claimsOf; decide
+
+/-- Mysticeti at `n = 4`, `f = 1` is live on the substrate. -/
+theorem wLive : LiveRow (Fin 4) (Scheme.Params.mysticeti 4 1) := by unfold LiveRow; decide
+
+/-- **Theorem 4 at work**: a node holding the record decides every slot below
+`5`, slots `2` to `4` directly and slots `0` and `1` through the anchor of
+slot `4`. -/
+theorem wDecides : ∀ i, i < 5 →
+    ∃ v, NodeDecided (S := wSlots) (Scheme.Params.mysticeti 4 1) wU 6 wIds i v := by
+  have hresp : RespondsFrom (S := wSlots) (Scheme.Params.mysticeti 4 1) wU wT 0 6 :=
+    respondsFrom_of_syncFrom wSync
+  refine nodeDecided_of_run (b := 2) (c := 3) wLive hresp.1 (by omega) (fun b i hi => ?_)
+    (fun j _ hj => hresp.2 j (Nat.zero_le _) (by
+      change (if false = true then j + 1 else j + 2) ≤ 6; simp; omega)
+      (by change lead j ∈ wT; have : (lead j).val < 3 := Nat.mod_lt _ (by omega)
+          revert this; generalize lead j = w; revert w; decide)) ?_
+  · change i + (3 - 1) < b + 3 - 1; omega
+  · rintro z (hz | ⟨j, A, -, hA, hzA⟩)
+    · exact hz.1
+    · exact KPartialSparse.avail_subset_ids hA.1 hzA
 
 end KPartialSparse
 

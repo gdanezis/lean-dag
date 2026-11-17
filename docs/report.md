@@ -13753,7 +13753,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 446 definitions and structures the report names, in
+The 448 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -19753,6 +19753,41 @@ def Laws : Prop :=
 
 **The laws of an anchored rule** hold of the commit rule at a row and the depth the sub-DAG needs, on a disciplined schedule and record.
 
+#### `Commits`
+
+*def, `KPartialSparse.Live.Statement.lean`*
+
+```lean
+def Commits : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
+    [ClaimFormat BlockId Payload] [S : Slots Validator] (p : Params)
+    (U : SRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (T : Finset Validator)
+    (R k : ℕ), LiveRow Validator p → RespondsFrom p U T R (certRound p (S.slotRound k)) →
+    R ≤ S.slotRound k → S.leader k ∈ T →
+    HeldBy U T (certRound p (S.slotRound k)) (certRound p (S.slotRound k)) ⊆ ↑H →
+    ∃ L, IsLeaderBlock U k L ∧ NodeDecided p U K H k (some L)
+```
+
+**A responsive slot commits**: at a live row, a node holding the blocks of `T` at the round of a slot's certificates commits the slot directly, when the slot is led by `T` on a record responsive among `T`.
+
+#### `Descends`
+
+*def, `KPartialSparse.Live.Statement.lean`*
+
+```lean
+def Descends : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
+    [ClaimFormat BlockId Payload] [S : Slots Validator] (p : Params)
+    (U : SRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (b n : ℕ), b ≤ n →
+    (∀ i, i < b → EligibleAt (S := S) (p.waveLength - 1) i n) → AvailBelow U K n ⊆ ↑H →
+    (∀ j, b ≤ j → j ≤ n → ∃ A, NodeDecided p U K H j (some A)) →
+    ∀ i, i < b → ∃ v, NodeDecided p U K H i v
+```
+
+**A committed run decides below it**: a node holding the available sub-DAG below every leader block up to slot `n`, which has committed every slot from `b` to `n`, decides every slot below `b` that `n` may anchor.
+
 #### `LinkedIn`
 
 *def, `KPartialSparse.Model.Node.lean`*
@@ -21381,7 +21416,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 663 theorems the body or Appendix A names, each
+The 666 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -28266,6 +28301,30 @@ theorem eq_of_certified {t₁ t₂ : ℕ} (h : Fintype.card Validator + F.f < t�
 ```
 
 **Two certified blocks of one author and round are one**: their voters share a correct author, whose one block there references one block of each author.
+
+#### `commits`
+
+*theorem, `KPartialSparse.Live.Proof.lean`*
+
+```lean
+theorem commits : Commits
+```
+
+#### `progress`
+
+*theorem, `KPartialSparse.Live.Proof.lean`*
+
+```lean
+theorem progress : Progress
+```
+
+#### `holds`
+
+*theorem, `KPartialSparse.Live.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
 
 #### `holds`
 
