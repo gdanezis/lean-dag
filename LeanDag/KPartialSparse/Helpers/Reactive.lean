@@ -126,6 +126,19 @@ namespace TimedRules
 variable (h : TimedRules U tl T G δ τ γ R N)
 include h
 
+/-- A correct node holds each block it has built, from its disk. -/
+theorem own (b : BlockId) (hb : b ∈ U.ids)
+    (hbc : (U.block b).creator ∈ (Correct : Finset Validator)) (t : ℕ) (ht : tl.built b ≤ t) :
+    b ∈ tl.held (U.block b).creator t :=
+  h.disk_held _ hbc t (h.stores b hb hbc t ht)
+
+/-- The rules for nodes hold from any later round. -/
+theorem above {R' : ℕ} (hR : R ≤ R') : TimedRules U tl T G δ τ γ R' N :=
+  { h with
+    grounded := fun v hv t b hb hbc hb' => h.grounded v hv t b hb hbc (by omega)
+    waits := fun b hb hbc r hbr hr => h.waits b hb hbc r hbr (hR.trans hr)
+    prompt := fun v hv r t hr hrN hw => h.prompt v hv r t (hR.trans hr) hrN hw }
+
 /-- From `G` on, a correct block that a node of `T` holds at `t₀` is held by
 every node of `T` from `t₀ + δ` on. -/
 theorem mem_held_of_held {u : Validator} (hu : u ∈ T) {t₀ t : ℕ}
@@ -269,7 +282,113 @@ theorem reachedBy_succ {s t : ℕ} (hs : R ≤ s) (hsN : s < N) (hG : G ≤ t)
     (hb : ReachedBy U tl T s t) : ReachedBy U tl T (s + 1) (t + δ + τ) := fun _ hv =>
   h.built_of_quorumIn hv hs hsN (by omega) (h.quorumIn_of_reachedBy hs hG hb hv)
 
+/-- **Recovery**: once a validator of `T` has built at a round `r`, from
+`R + 1` to `N`, by a time `t₀ ≥ G`, every validator of `T` reaches round `r`
+by `t₀ + δ + τ`. Its author keeps its block of round `r` on disk. -/
+theorem reachedBy_of_built {b : BlockId} (hb : b ∈ U.ids)
+    (hbT : (U.block b).creator ∈ T) {t₀ : ℕ} (hG : G ≤ t₀) (hbt : tl.built b ≤ t₀)
+    (hRb : R < (U.block b).round) (hbN : (U.block b).round ≤ N) :
+    ReachedBy U tl T (U.block b).round (t₀ + δ + τ) := by
+  intro w hw
+  have hbc := h.stable hbT
+  have hbw := h.mem_held_of_held hbT hG (h.own b hb hbc t₀ hbt) hbc hw le_rfl
+  obtain ⟨b', hb', hb'w, hb'r, hb't⟩ := h.built_of_quorumIn hw (r := (U.block b).round - 1)
+    (t := t₀ + δ) (by omega) (by omega) (by omega)
+    (h.quorumIn_of_held (h.stable hw) (by omega) hbw hbc (by omega))
+  exact ⟨b', hb', hb'w, by omega, hb't⟩
+
 end TimedRules
+
+/-! ## Starting a run -/
+
+namespace TimedStarted
+
+variable (h : TimedStarted U tl T G δ τ γ R N)
+include h
+
+/-- **A timed run starts after `G + τ`**: the round `R'` after the last round
+from `R` on that a node of `T` reached before `G + τ`, or `R` if there is
+none, starts a timed run, and every validator of `T` reaches it within
+`2δ + 2τ` of `G + τ` and of the time all reached round `R`. -/
+theorem exists_run : ∃ R', R ≤ R' ∧ (R' = R ∨ ∃ x ∈ U.ids,
+    (U.block x).creator ∈ T ∧ (U.block x).round + 1 = R' ∧
+      tl.built x < G + τ) ∧ (R' ≤ N → TimedRun U tl T G δ τ γ R' N ∧
+    ∀ t₀, ReachedBy U tl T R t₀ → ReachedBy U tl T R' (max t₀ (G + τ) + 2 * δ + 2 * τ)) := by
+  classical
+  set X := U.ids.filter fun x => (U.block x).creator ∈ T ∧
+    R ≤ (U.block x).round ∧ tl.built x < G + τ
+  by_cases hX : X.Nonempty
+  · obtain ⟨x, hxX, hmax⟩ := X.exists_max_image (fun x => (U.block x).round) hX
+    obtain ⟨hx, hxc, hxR, hxt⟩ := Finset.mem_filter.mp hxX
+    refine ⟨(U.block x).round + 1, by omega, Or.inr ⟨x, hx, hxc, rfl, hxt⟩, fun hN => ?_⟩
+    have hbuilt : ∀ t₀, ReachedBy U tl T R t₀ →
+        ReachedBy U tl T ((U.block x).round + 1) (max t₀ (G + τ) + 2 * δ + 2 * τ) := by
+      intro t₀ ht₀
+      have hm : ReachedBy U tl T (U.block x).round (max t₀ (G + τ) + δ + τ) := by
+        rcases Nat.eq_or_lt_of_le hxR with heq | hlt
+        · exact reachedBy_mono (heq ▸ ht₀) (by omega)
+        exact reachedBy_mono (h.reachedBy_of_built hx hxc (t₀ := G + τ) (by omega) hxt.le hlt
+          (by omega)) (by omega)
+      exact reachedBy_mono (h.reachedBy_succ hxR (by omega) (by omega) hm) (by omega)
+    obtain ⟨t₀, ht₀⟩ := h.start
+    refine ⟨⟨⟨h.above (by omega), _, hbuilt t₀ ht₀⟩, fun b hb hbc hbr => ?_⟩, hbuilt⟩
+    by_contra hlt
+    have := hmax b (Finset.mem_filter.mpr ⟨hb, hbc, by omega, by omega⟩)
+    omega
+  · refine ⟨R, le_rfl, Or.inl rfl, fun _ => ⟨⟨h, fun b hb hbc hbr => ?_⟩,
+      fun t₀ ht₀ => reachedBy_mono ht₀ (by omega)⟩⟩
+    by_contra hlt
+    exact hX ⟨b, Finset.mem_filter.mpr ⟨hb, hbc, hbr, by omega⟩⟩
+
+end TimedStarted
+
+namespace TimedRules
+
+variable (h : TimedRules U tl T G δ τ γ R N)
+include h
+
+/-- **Operations resume**: once a validator of `T` has built above round `R` by
+`G`, a timed run starts above `R`, and every validator of `T` reaches it
+within `3δ + 3τ` of `G`. -/
+theorem exists_resumed {b : BlockId} (hb : b ∈ U.ids)
+    (hbc : (U.block b).creator ∈ T) (hbG : tl.built b ≤ G)
+    (hRb : R < (U.block b).round) :
+    ∃ R', R < R' ∧ (R' ≤ N → TimedRun U tl T G δ τ γ R' N ∧
+      ReachedBy U tl T R' (G + 3 * δ + 3 * τ)) := by
+  by_cases hbN : (U.block b).round ≤ N
+  · have hr := h.reachedBy_of_built hb hbc le_rfl hbG hRb hbN
+    have hstart : TimedStarted U tl T G δ τ γ (U.block b).round N := ⟨h.above hRb.le, _, hr⟩
+    obtain ⟨R', hR', -, hrun⟩ := hstart.exists_run
+    refine ⟨R', by omega, fun hR'N => ⟨(hrun hR'N).1, reachedBy_mono ((hrun hR'N).2 _ hr) ?_⟩⟩
+    omega
+  · exact ⟨_, hRb, fun h' => absurd h' hbN⟩
+
+end TimedRules
+
+omit [ClaimFormat BlockId Payload] S in
+/-- **Nothing the sub-DAG holds is lost**: when correct nodes keep histories on
+disk, every block of the available sub-DAG below a block with votes from
+`f + c + 1` distinct authors is on the disk of a node of a quorum `T` of
+correct nodes from some time on, through any crash. Its voters, or the
+`f + c + 1` authors reaching an anchor point, include a node of `T`. -/
+theorem exists_disk_of_avail (hT : T ⊆ (Correct : Finset Validator))
+    (hTq : kQuorum Validator ≤ T.card) {K : ℕ} (hK : KeepsHistory U tl K)
+    {A z : BlockId} (hA : A ∈ U.ids)
+    (hV : F.f + Cr.c + 1 ≤ (supporters U A ((U.block A).round + 1)).card)
+    (hz : z ∈ Avail U K A) : ∃ w ∈ T, ∃ t₀, ∀ t, t₀ ≤ t → z ∈ tl.disk w t := by
+  obtain ⟨y, d, hy, hzy⟩ := hz
+  cases hy with
+  | anchor =>
+    obtain ⟨c, hc, hcT⟩ := exists_mem_of_card hTq hV
+    obtain ⟨b, hbi, -, hbA, rfl⟩ := mem_supporters.mp hc
+    exact ⟨_, hcT, _, fun t ht => hK b hbi (hT hcT) t ht A hbA hzy⟩
+  | reached i S m yf df yf' df' hyf hzf hyf' hmz hi hm hcard =>
+    obtain ⟨c, hc, hcT⟩ := exists_mem_of_card hTq hcard
+    obtain ⟨w, hw, rfl⟩ := mem_creatorsOf.mp hc
+    have hwi : w ∈ U.ids := historyUpto_subset_ids _ ((hyf w hw).mem hA) (hzf w hw)
+    have hzm := historyUpto_trans (hm w hw).2 hzy
+    rw [show i + (K - i) = K by omega] at hzm
+    exact ⟨_, hcT, _, fun t ht => hK w hwi (hT hcT) t ht (m w) (hm w hw).1 hzm⟩
 
 /-! ## A timed run -/
 

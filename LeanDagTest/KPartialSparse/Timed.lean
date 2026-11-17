@@ -8,7 +8,9 @@ every block of round `r` is built at time `4 + 3r`, its author holds it from
 then on, and every other validator one step later. Each round is built `γ`
 after the round below is delivered. The timeline is a timed run from round
 `0` to round `6`; by Theorem 5 it is synchronous among the correct
-validators, and each of them commits slot `2` by time `17`.
+validators, and each of them commits slot `2` by time `17`. Read with a later
+`G = 10`, the timeline meets the rules for nodes, and a run resumes above
+round `0`.
 -/
 
 namespace LeanDagTest
@@ -26,8 +28,12 @@ def tBuilt (b : ℕ) : ℕ := 4 + 3 * (b / 4)
 def tHeld (v : Fin 4) (t : ℕ) : Finset ℕ :=
   wIds.filter fun b : ℕ => tBuilt b + (if (wBlock b).creator = v then 0 else 1) ≤ t
 
+/-- A validator keeps its own blocks on disk once built. -/
+def tDisk (v : Fin 4) (t : ℕ) : Finset ℕ :=
+  wIds.filter fun b : ℕ => (wBlock b).creator = v ∧ tBuilt b ≤ t
+
 /-- The timeline. -/
-def tTl : Timeline (Fin 4) ℕ := ⟨tHeld, fun _ _ => ∅, tBuilt⟩
+def tTl : Timeline (Fin 4) ℕ := ⟨tHeld, tDisk, tBuilt⟩
 
 theorem mem_tHeld {v : Fin 4} {t : ℕ} {b : ℕ} :
     b ∈ tHeld v t ↔ b ∈ wIds ∧ tBuilt b + (if (wBlock b).creator = v then 0 else 1) ≤ t := by
@@ -217,10 +223,12 @@ theorem wTimed : TimedRun (S := wSlots) wU tTl wT 0 1 4 2 0 6 where
     have hbv' : (wBlock b).creator ≠ v := hbv
     rw [if_neg hbv'] at hbt
     rw [built_eq]; unfold tBuilt at hbt; omega
-  own := fun b hb _ t hbt => by
+  disk_held := fun v _ t b hb => by
+    obtain ⟨hb, hbv, hbt⟩ := Finset.mem_filter.mp hb
     refine mem_tHeld.mpr ⟨hb, ?_⟩
-    rw [if_pos (show (wBlock b).creator = (wU.block b).creator from rfl)]
-    rw [built_eq] at hbt; unfold tBuilt; omega
+    rw [if_pos hbv]; omega
+  stores := fun b hb _ t hbt =>
+    Finset.mem_filter.mpr ⟨hb, rfl, by rw [built_eq] at hbt; unfold tBuilt; omega⟩
   waits := fun b hb _ r hbr _ => by
     change (wBlock b).round = r + 1 at hbr
     rw [round_wBlock] at hbr
@@ -296,6 +304,27 @@ theorem wTimedCommits (v : Fin 4) (hv : v ∈ wT) :
       change (wBlock (bid 2 w)).round = 2
       rw [round_wBlock]; unfold bid; have := w.isLt; omega, by
       rw [built_eq]; unfold bid; have := w.isLt; omega⟩) v hv
+
+/-- The timeline meets the rules for nodes for any later `G`. -/
+theorem wRules (G : ℕ) : TimedRules (S := wSlots) wU tTl wT G 1 4 2 0 6 :=
+  { wTimed.toTimedRules with
+    mono := fun v hv t t' _ h => wTimed.mono v hv t t' (Nat.zero_le _) h
+    delivers := fun v hv t _ b hb hbc w hw => wTimed.delivers v hv t (Nat.zero_le _) b hb hbc w hw
+    prompt := fun v hv r t hr hrN hw => wTimed.prompt v hv r t hr hrN (by
+      rcases hw with ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩
+      · exact Or.inl ⟨by omega, h2⟩
+      · exact Or.inr (Or.inl ⟨by omega, h2⟩)
+      · exact Or.inr (Or.inr ⟨by omega, h2⟩)) }
+
+/-- **Theorem 5, resuming**: with `G = 10`, validator `0` has built round `2` by
+`G`, so a timed run starts above round `0`, which every correct validator
+reaches by `G + 3δ + 3τ = 25`. -/
+theorem wResumes : ∃ R', 0 < R' ∧ (R' ≤ 6 → TimedRun (S := wSlots) wU tTl wT 10 1 4 2 R' 6 ∧
+    ReachedBy wU tTl wT R' 25) :=
+  Reactive.resumes (Fin 4) ℕ (Finset ℕ) wU tTl wT 10 1 4 2 0 6 (wRules 10) (bid 2 0)
+    (by decide) (by decide) (by rw [built_eq, bid_div]) (by
+      change 0 < (wBlock (bid 2 0)).round
+      rw [round_wBlock, bid_div]; omega)
 
 end KPartialSparse
 

@@ -38,7 +38,20 @@ theorem commits : Commits := by
     hN hlead hb v hv
   exact h.nodeDecided_fast hlive hτ hδ hγτ K hk hN hlead hb hv
 
-theorem holds : Statement := ⟨built, catchesUp, slow, fast, synchronised, commits⟩
+theorem starts : Starts := by
+  intro Validator BlockId Payload _ _ _ _ _ _ _ _ U tl T G δ τ γ R N h
+  exact h.exists_run
+
+theorem resumes : Resumes := by
+  intro Validator BlockId Payload _ _ _ _ _ _ _ _ U tl T G δ τ γ R N h b hb hbc hbG hRb
+  exact h.exists_resumed hb hbc hbG hRb
+
+theorem durable : Durable := by
+  intro Validator BlockId Payload _ _ _ _ _ _ U tl T K hT hTq hK A hA hV z hz
+  exact exists_disk_of_avail hT hTq hK hA hV hz
+
+theorem holds : Statement :=
+  ⟨built, catchesUp, slow, fast, synchronised, commits, starts, resumes, durable⟩
 
 end Reactive
 

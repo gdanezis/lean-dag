@@ -287,7 +287,19 @@ a node holding a correct block above round `R` holds a quorum of the round
 below, as its author did (`grounded`), and the votes behind its claims
 (`backed`). Bluestreak's round-advance messages and its acceptance of a block
 only once its claims can be backed realise them. A *timed run* (`TimedRun`)
-adds that `T` has reached round `R` and built there from `G + τ` on.
+adds that `T` has reached round `R` (`TimedStarted`) and built there from
+`G + τ` on.
+
+Crashes and restarts are those of `docs/kpartial.md` §11: before `G`, correct
+nodes may crash and restart, holding after a restart only what they keep on
+disk. A correct node keeps on disk every block it has built (`stores`) and
+holds what it keeps there (`disk_held`); it may also keep the histories to
+depth `K` of its blocks' references (`KeepsHistory`). From `G` on, the nodes
+of `T` are up and keep what they hold. Persisting the last round built
+(`Persists`) and building above the disk (`BuildsAboveDisk`) read only the
+block map, so `docs/kpartial.md` Theorem 7, *Persisted* and *OnDisk*, apply to
+the sparse record as they stand: a correct node builds at most one block a
+round across restarts.
 
 **Theorem 5 (nodes in time; `Reactive.Statement`).**
 
@@ -306,6 +318,22 @@ adds that `T` has reached round `R` and built there from `G + τ` on.
 * *Commits* (`Reactive.Commits`). At a live row, `τ ≥ 2δ` and `δ < γ ≤ τ`,
   when the slots around a slot are led by `T`, every node of `T` commits the
   slot directly within `3δ + 2γ` of `T` building its round.
+* *Starts* (`Reactive.Starts`). Under the rules started at round `R`, the
+  round after the last round a node of `T` reached before `G + τ`, or `R`,
+  starts a timed run, which every validator of `T` reaches within `2δ + 2τ` of
+  `G + τ` and of the time all reached `R`.
+* *Resumes* (`Reactive.Resumes`). With any crashes and restarts before `G`,
+  once a validator of `T` has built above round `R` by `G`, a timed run starts
+  above `R`, and every validator of `T` reaches it by `G + 3δ + 3τ`: its block
+  is on its disk, reaches every node of `T` within `δ`, and grounds a quorum
+  below it.
+* *Durable* (`Reactive.Durable`). When correct nodes keep histories on disk,
+  every block of the available sub-DAG below a block with votes from
+  `f + c + 1` distinct authors is on the disk of a node of any quorum `T` of
+  correct nodes from some time on, through any crash: among the voters of the
+  anchor, or the `f + c + 1` authors reaching an anchor point, is a node of
+  `T`, which keeps on disk the history to depth `K` of the block it
+  references.
 
 The proofs follow `docs/kpartial.md` §11. A node of `T` skips no round of a
 run (`builtBy_below`): a quorum held at round `s` brings every node of `T`
@@ -317,7 +345,8 @@ every claimer of `T` (`certIn_held`). A block built behind inherits both from
 the block of `T` it holds: through `closed` for the leader block, and through
 `backed` for the votes. `LeanDagTest/KPartialSparse/Timed.lean` is a timed run
 of the witness record at `G = 0`, `δ = 1`, `γ = 2`, `τ = 4`, on which every
-correct validator commits slot `2` by time `17`.
+correct validator commits slot `2` by time `17`; read with `G = 10`, it meets
+the rules for nodes, and a run resumes above round `0` by time `25`.
 
 ## 8. Open
 
@@ -325,11 +354,12 @@ Safety (Theorems 1 to 3) holds at every row of the scheme, at every crash
 bound, on a disciplined schedule and record, whose disciplines (chains,
 checked and truthful claims, leaders leading on the substrate) are what a
 correct node does. Liveness holds on responsive records (Theorem 4), and timed
-nodes produce them after `G` (Theorem 5). Open:
+nodes produce them after `G`, through crashes and restarts before it
+(Theorem 5). Open:
 
-* Crashes and restarts in time: persisting the last round built, building
-  above the disk, the start of a run after `G` (`docs/kpartial.md` §11,
-  *Persisted*, *OnDisk*, *Resumes*, *Starts*), and durability.
+* Crashes of nodes of `T` after `G` (a stable set per window, as
+  `docs/kpartial.md` §12 leaves open), and a witness with a restart before
+  `G`.
 * A bound in rounds on what a node fetches, and that a correct node obtains
   the votes behind every claim in the history of what it references.
 * Order, the bounds of `docs/kpartial.md` Theorem 6, and adaptive

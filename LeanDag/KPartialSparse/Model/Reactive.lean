@@ -5,9 +5,10 @@ import LeanDag.KPartialDag.Model.Reactive
 
 `docs/kpartial-sparse.md` §7. What a node waits for (`WaitsFor`), being behind
 (`BehindIn`), progress over a timeline (`BuiltBy`, `ReachedBy`), the rules
-for nodes up from `G` (`TimedRules`), and a run started after `G + τ`
-(`TimedRun`). Timelines are those of `docs/kpartial.md` §11
-(`KPartialDag.Timeline`); the disk is not read.
+for nodes up from `G`, through crashes and restarts before it (`TimedRules`),
+started at a round (`TimedStarted`), and a run after `G + τ` (`TimedRun`), and
+histories kept on disk (`KeepsHistory`). Timelines are those of
+`docs/kpartial.md` §11 (`KPartialDag.Timeline`).
 -/
 
 namespace LeanDag
@@ -102,9 +103,11 @@ structure TimedRules (U : SRecord Validator BlockId Payload) (tl : Timeline Vali
   prior : ∀ v ∈ (Correct : Finset Validator), ∀ t, ∀ b ∈ tl.held v t,
     (U.block b).creator ∈ (Correct : Finset Validator) → (U.block b).creator ≠ v →
     tl.built b < t
-  /-- A correct node holds each block it has built. -/
-  own : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) → ∀ t,
-    tl.built b ≤ t → b ∈ tl.held (U.block b).creator t
+  /-- A correct node holds what it keeps on disk. -/
+  disk_held : ∀ v ∈ (Correct : Finset Validator), ∀ t, tl.disk v t ⊆ tl.held v t
+  /-- A correct node keeps on disk every block it has built. -/
+  stores : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) → ∀ t,
+    tl.built b ≤ t → b ∈ tl.disk (U.block b).creator t
   /-- **The wait**: a correct block above round `r ≥ R` is built once its
   author has held what it waits for for `γ` and still holds it, has held a
   quorum of round `r` for `τ`, or is behind round `r + 1`. -/
@@ -134,15 +137,29 @@ structure TimedRules (U : SRecord Validator BlockId Payload) (tl : Timeline Vali
     S.slotRound k + 2 = (U.block b).round → ∀ L, IsLeaderBlock U k L →
     CertIn U (tl.held (U.block b).creator (tl.built b)) (S.slotRound k + 1) L → L ∈ claimsOf U b
 
-/-- **A timed run from round `R` to round `N`**: the rules for nodes, with
-every validator of `T` at round `R` or above, and the blocks of `T` from
-round `R` on built at `G + τ` or later. -/
-structure TimedRun (U : SRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
+/-- **The rules for nodes, started at round `R`**: every validator of `T` has a
+block at round `R` or above. -/
+structure TimedStarted (U : SRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (T : Finset Validator) (G δ τ γ R N : ℕ) : Prop extends TimedRules U tl T G δ τ γ R N where
   /-- Every validator of `T` has a block at round `R` or above. -/
   start : ∃ t, ReachedBy U tl T R t
+
+/-- **A timed run from round `R` to round `N`**: the rules for nodes, started
+at round `R`, with the blocks of `T` from round `R` on built at `G + τ` or
+later. -/
+structure TimedRun (U : SRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
+    (T : Finset Validator) (G δ τ γ R N : ℕ) : Prop extends TimedStarted U tl T G δ τ γ R N where
   /-- Blocks of `T` from round `R` on are built at `G + τ` or later. -/
   late : ∀ b ∈ U.ids, (U.block b).creator ∈ T → R ≤ (U.block b).round → G + τ ≤ tl.built b
+
+omit [ClaimFormat BlockId Payload] S in
+/-- **Keeping histories on disk**: a correct node keeps on disk, from the time it
+builds a block on, the history to depth `K` of each of the block's
+references. -/
+def KeepsHistory (U : SRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
+    (K : ℕ) : Prop :=
+  ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) → ∀ t, tl.built b ≤ t →
+    ∀ y ∈ (U.block b).refs, historyUpto U K y ⊆ tl.disk (U.block b).creator t
 
 end KPartialSparse
 
