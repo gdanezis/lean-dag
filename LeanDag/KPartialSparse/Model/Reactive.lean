@@ -6,8 +6,9 @@ import LeanDag.KPartialDag.Model.Reactive
 `docs/kpartial-sparse.md` §7. What a node waits for (`WaitsFor`), being behind
 (`BehindIn`), progress over a timeline (`BuiltBy`, `ReachedBy`), the rules
 for nodes up from `G`, through crashes and restarts before it (`TimedRules`),
-started at a round (`TimedStarted`), and a run after `G + τ` (`TimedRun`), and
-histories kept on disk (`KeepsHistory`). Timelines are those of
+started at a round (`TimedStarted`), and a run after `G + τ` (`TimedRun`),
+claims checked by timed nodes (`TimedChecks`), and histories kept on disk
+(`KeepsHistory`). Timelines are those of
 `docs/kpartial.md` §11 (`KPartialDag.Timeline`).
 -/
 
@@ -126,9 +127,10 @@ structure TimedRules (U : SRecord Validator BlockId Payload) (tl : Timeline Vali
       (G + τ ≤ t ∧ QuorumIn U (tl.held v (t - τ)) r) ∨ (G ≤ t ∧ BehindIn U (tl.held v t) v r) →
     ∃ b ∈ U.ids, (U.block b).creator = v ∧ r + 1 ≤ (U.block b).round ∧ tl.built b ≤ t
   /-- **Votes**: a correct block references a leader block of each slot one
-  round below whose leader block its author holds. -/
+  round below, led by a correct validator, whose leader block its author
+  holds. -/
   votes : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) → ∀ k,
-    S.slotRound k + 1 = (U.block b).round →
+    S.leader k ∈ (Correct : Finset Validator) → S.slotRound k + 1 = (U.block b).round →
     (∃ L ∈ tl.held (U.block b).creator (tl.built b), IsLeaderBlock U k L) →
     ∃ L ∈ (U.block b).refs, IsLeaderBlock U k L
   /-- **Claims**: a correct block claims each leader block two rounds below for
@@ -151,6 +153,30 @@ structure TimedRun (U : SRecord Validator BlockId Payload) (tl : Timeline Valida
     (T : Finset Validator) (G δ τ γ R N : ℕ) : Prop extends TimedStarted U tl T G δ τ γ R N where
   /-- Blocks of `T` from round `R` on are built at `G + τ` or later. -/
   late : ∀ b ∈ U.ids, (U.block b).creator ∈ T → R ≤ (U.block b).round → G + τ ≤ tl.built b
+
+omit S in
+/-- **Timed nodes check claims**: a correct node references a block only once it
+is referenceable on what the node holds, and claims only what it backs; and a
+node holding a correct block holds the evidence its author held: the history
+to depth `K` of each reference, with the votes behind every claim there and
+behind the block's own claims. -/
+structure TimedChecks (U : SRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
+    (K t : ℕ) : Prop where
+  /-- A correct block references only blocks referenceable for its author. -/
+  refs_checked : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) →
+    ∀ m ∈ (U.block b).refs, Referenceable U K t (tl.held (U.block b).creator (tl.built b)) m
+  /-- A correct block claims only what its author backs. -/
+  claims_backed : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) →
+    ∀ L ∈ claimsOf U b, Backs U t (tl.held (U.block b).creator (tl.built b)) L
+  /-- A correct node holding a correct block holds its references as
+  referenceable. -/
+  carries : ∀ v ∈ (Correct : Finset Validator), ∀ s, ∀ b ∈ tl.held v s,
+    (U.block b).creator ∈ (Correct : Finset Validator) → ∀ m ∈ (U.block b).refs,
+      Referenceable U K t (tl.held v s) m
+  /-- A correct node holding a correct block backs its claims. -/
+  carries_claims : ∀ v ∈ (Correct : Finset Validator), ∀ s, ∀ b ∈ tl.held v s,
+    (U.block b).creator ∈ (Correct : Finset Validator) → ∀ L ∈ claimsOf U b,
+      Backs U t (tl.held v s) L
 
 omit [ClaimFormat BlockId Payload] S in
 /-- **Keeping histories on disk**: a correct node keeps on disk, from the time it

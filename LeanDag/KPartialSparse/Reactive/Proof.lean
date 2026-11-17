@@ -50,8 +50,22 @@ theorem durable : Durable := by
   intro Validator BlockId Payload _ _ _ _ _ _ U tl T K hT hTq hK A hA hV z hz
   exact exists_disk_of_avail hT hTq hK hA hV hz
 
+theorem checked : Checked := by
+  intro Validator BlockId Payload _ _ _ _ _ _ _ U tl K t hids h
+  exact checks_of_buildsChecked (buildsChecked_of_timed hids h)
+
+theorem unblocked : Unblocked := by
+  intro Validator BlockId Payload _ _ _ _ _ _ _ U tl K t v s b h hv hb hbc
+  exact referenceable_of_held h hv hb hbc
+
+theorem claimable : Claimable := by
+  intro Validator BlockId Payload _ _ _ _ _ _ _ _ U tl T G δ τ γ R N k t c L h hτ hδ hγτ ht hk
+    hN hlead hc hcT hcr hL
+  exact h.backs_of_leader hτ hδ hγτ ht hk hN hlead hc hcT hcr hL
+
 theorem holds : Statement :=
-  ⟨built, catchesUp, slow, fast, synchronised, commits, starts, resumes, durable⟩
+  ⟨built, catchesUp, slow, fast, synchronised, commits, starts, resumes, durable, checked,
+    unblocked, claimable⟩
 
 end Reactive
 

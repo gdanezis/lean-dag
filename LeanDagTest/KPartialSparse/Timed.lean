@@ -10,7 +10,8 @@ after the round below is delivered. The timeline is a timed run from round
 `0` to round `6`; by Theorem 5 it is synchronous among the correct
 validators, and each of them commits slot `2` by time `17`. Read with a later
 `G = 10`, the timeline meets the rules for nodes, and a run resumes above
-round `0`.
+round `0`. The timed nodes check claims at `K = 6`, so the record meets the
+claim disciplines.
 -/
 
 namespace LeanDagTest
@@ -250,7 +251,7 @@ theorem wTimed : TimedRun (S := wSlots) wU tTl wT 0 1 4 2 0 6 where
       · have := quorum_time hW.1; omega
       · have := quorum_time hQ; omega
       · have := behind_time hB; omega
-  votes := fun b hb _ k hk _ => by
+  votes := fun b hb _ k _ hk _ => by
     change wSlots.slotRound k + 1 = (wBlock b).round at hk
     rw [round_wBlock] at hk
     have hsr : wSlots.slotRound k = k := rfl
@@ -325,6 +326,96 @@ theorem wResumes : ∃ R', 0 < R' ∧ (R' ≤ 6 → TimedRun (S := wSlots) wU tT
     (by decide) (by decide) (by rw [built_eq, bid_div]) (by
       change 0 < (wBlock (bid 2 0)).round
       rw [round_wBlock, bid_div]; omega)
+
+/-! ## Checked claims -/
+
+theorem backs_mono {H H' : Finset ℕ} (hH : H ⊆ H') {L : ℕ} (h : Backs wU 3 H L) :
+    Backs wU 3 H' L :=
+  ⟨hH h.1, le_trans h.2 (Finset.card_le_card (Finset.image_subset_image
+    (Finset.filter_subset_filter _ hH)))⟩
+
+/-- A claim of a block at round `r + 1` or below is backed by the blocks up to
+round `r`. -/
+theorem backs_upto {X : ℕ} (hX : X ∈ wIds) {r : ℕ} (hr : X / 4 ≤ r + 1) {L : ℕ}
+    (hL : L ∈ claimsOf wU X) : Backs wU 3 (upto r) L := by
+  have h6 := round_le_six hX
+  by_cases h2 : 2 ≤ X / 4
+  · rw [claims_lead X hX h2, Finset.mem_singleton] at hL
+    subst hL
+    obtain ⟨m, hm⟩ : ∃ m, X / 4 = m + 2 := ⟨X / 4 - 2, by omega⟩
+    rw [hm, show m + 2 - 2 = m by omega]
+    have hr' : (wU.block (bid m (lead m))).round = m := (isLeader_bid m (by omega)).2.1
+    obtain ⟨-, -, hc⟩ := waitsFor_upto (m + 1) (by omega)
+    obtain ⟨L', hL', hc'⟩ := hc m rfl
+    have := isLeaderBlock_unique_of_honest (S := wSlots) (U := wU) (lead_mem _ |> wT_correct)
+      hL' (isLeader_bid m (by omega))
+    rw [this] at hc'
+    have hsub : upto (m + 1) ⊆ upto r := by
+      intro b hb
+      simp only [upto, Finset.mem_filter] at hb ⊢
+      exact ⟨hb.1, by omega⟩
+    have hmem : bid m (lead m) ∈ upto (m + 1) := by
+      refine Finset.mem_filter.mpr ⟨bid_mem m (by omega), ?_⟩
+      show bid m (lead m) / 4 ≤ m + 1
+      rw [bid_div]; omega
+    exact backs_mono hsub (backs_of_certIn (by decide) hmem (by rw [hr']; exact hc'))
+  · rw [claims_low X hX (by omega)] at hL
+    simp at hL
+
+/-- A block at round `r` or below is referenceable on the blocks up to round
+`r`. -/
+theorem referenceable_upto {m : ℕ} (hm : m ∈ wIds) {r : ℕ} (hr : m / 4 ≤ r) :
+    Referenceable wU 6 3 (upto r) m := by
+  have hsub : historyUpto wU 6 m ⊆ upto r := by
+    intro z hz
+    have hzi := KPartialSparse.historyUpto_subset_ids (U := wU) 6 hm hz
+    have hzr := round_le_of_mem_historyUpto (U := wU) 6 hm hz
+    change (wBlock z).round ≤ (wBlock m).round at hzr
+    rw [round_wBlock, round_wBlock] at hzr
+    exact Finset.mem_filter.mpr ⟨hzi, by omega⟩
+  refine ⟨hsub, fun X hX L hL => backs_upto ?_ ?_ hL⟩
+  · exact (Finset.mem_filter.mp (hsub hX)).1
+  · have := (Finset.mem_filter.mp (hsub hX)).2; omega
+
+theorem upto_held {r t : ℕ} {v : Fin 4} (ht : 4 + 3 * r + 1 ≤ t) {m : ℕ} (hm : m ∈ wIds)
+    (hr : m / 4 ≤ r) : Referenceable wU 6 3 (tHeld v t) m := by
+  obtain ⟨h1, h2⟩ := referenceable_upto hm hr
+  exact ⟨h1.trans (upto_subset ht), fun X hX L hL => backs_mono (upto_subset ht) (h2 X hX L hL)⟩
+
+/-- **The timed nodes check claims**, at `K = 6` and threshold `3`. -/
+theorem wChecked : TimedChecks wU tTl 6 3 where
+  refs_checked := fun b hb _ m hm => by
+    have hmi := wU.complete b hb m hm
+    have hlt := (wU.valid b hb).below m hm
+    change (wBlock m).round < (wBlock b).round at hlt
+    rw [round_wBlock, round_wBlock] at hlt
+    exact upto_held (r := b / 4 - 1) (by rw [built_eq]; omega) hmi (by omega)
+  claims_backed := fun b hb _ L hL => by
+    have h6 := round_le_six hb
+    by_cases h1 : 1 ≤ b / 4
+    · exact backs_mono (upto_subset (r := b / 4 - 1) (by rw [built_eq]; omega))
+        (backs_upto hb (by omega) hL)
+    · rw [claims_low b hb (by omega)] at hL; simp at hL
+  carries := fun v _ s b hb _ m hm => by
+    have hbi := (mem_tHeld.mp hb).1
+    have hbt := held_built hb
+    have hmi := wU.complete b hbi m hm
+    have hlt := (wU.valid b hbi).below m hm
+    change (wBlock m).round < (wBlock b).round at hlt
+    rw [round_wBlock, round_wBlock] at hlt
+    exact upto_held (r := b / 4 - 1) (by omega) hmi (by omega)
+  carries_claims := fun v _ s b hb _ L hL => by
+    have hbi := (mem_tHeld.mp hb).1
+    have hbt := held_built hb
+    have h6 := round_le_six hbi
+    by_cases h1 : 1 ≤ b / 4
+    · exact backs_mono (upto_subset (r := b / 4 - 1) (by omega)) (backs_upto hbi (by omega) hL)
+    · rw [claims_low b hbi (by omega)] at hL; simp at hL
+
+/-- **Theorem 5, checked**: the timed nodes meet the record's claim
+disciplines. -/
+theorem wTimedDisciplines : Checks wU 6 3 ∧ Truthful wU 3 :=
+  Reactive.checked (Fin 4) ℕ (Finset ℕ) wU tTl 6 3 (fun _ _ => Finset.filter_subset _ _) wChecked
 
 end KPartialSparse
 

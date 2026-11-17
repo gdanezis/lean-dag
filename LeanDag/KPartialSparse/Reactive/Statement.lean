@@ -8,7 +8,9 @@ period `γ`, under message delay `δ` from time `G` and any crashes and restarts
 before it, reach every round, catch up within `δ`, build each round within
 `δ + τ`, and within `δ + γ` when led by `T`, produce a synchronous run, and
 commit a slot led by `T` within `3δ + 2γ`; a run starts after `G + τ` and
-resumes after crashes, and the available sub-DAG survives them on disk.
+resumes after crashes, and the available sub-DAG survives them on disk; and
+nodes that wait for referenceable blocks meet the claim disciplines, while
+the wait never blocks a correct block or a claim of `T`.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -142,9 +144,45 @@ def Durable : Prop :=
       F.f + Cr.c + 1 ≤ (supporters U A ((U.block A).round + 1)).card →
       ∀ z ∈ Avail U K A, ∃ w ∈ T, ∃ t₀, ∀ t, t₀ ≤ t → z ∈ tl.disk w t
 
+/-- **Timed nodes meet the claim disciplines**: correct nodes that reference only
+referenceable blocks and claim only what they back, on what they hold, check
+claims to depth `K` and claim truthfully on the record. -/
+def Checked : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
+    [ClaimFormat BlockId Payload] (U : SRecord Validator BlockId Payload)
+    (tl : Timeline Validator BlockId) (K t : ℕ), (∀ v s, tl.held v s ⊆ U.ids) →
+    TimedChecks U tl K t → Checks U K t ∧ Truthful U t
+
+/-- **The wait never blocks a correct block**: when delivery carries what a
+block's author held, a correct node holding a correct block holds it
+referenceable. -/
+def Unblocked : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
+    [ClaimFormat BlockId Payload] (U : SRecord Validator BlockId Payload)
+    (tl : Timeline Validator BlockId) (K t : ℕ) (v : Validator) (s : ℕ) (b : BlockId),
+    TimedChecks U tl K t → v ∈ (Correct : Finset Validator) → b ∈ tl.held v s →
+    (U.block b).creator ∈ (Correct : Finset Validator) → Referenceable U K t (tl.held v s) b
+
+/-- **Every claimer of `T` backs its claim**: on a timed run, at `τ ≥ 2δ`,
+`δ < γ ≤ τ` and a threshold within the quorum, a block of `T` two rounds above
+a slot led by `T`, from round `R + 1` on, is built once its author backs a
+claim for the slot's leader block. -/
+def Claimable : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
+    [ClaimFormat BlockId Payload] [S : Slots Validator] (U : SRecord Validator BlockId Payload)
+    (tl : Timeline Validator BlockId) (T : Finset Validator) (G δ τ γ R N k t : ℕ)
+    (c L : BlockId), TimedRun U tl T G δ τ γ R N → 2 * δ ≤ τ → δ < γ → γ ≤ τ →
+    t ≤ kQuorum Validator → R + 1 ≤ S.slotRound k → S.slotRound k + 2 ≤ N → S.leader k ∈ T →
+    c ∈ U.ids → (U.block c).creator ∈ T → (U.block c).round = S.slotRound k + 2 →
+    IsLeaderBlock U k L → Backs U t (tl.held (U.block c).creator (tl.built c)) L
+
 /-- Nodes in time. -/
 def Statement : Prop :=
-  Built ∧ CatchesUp ∧ Slow ∧ Fast ∧ Synchronised ∧ Commits ∧ Starts ∧ Resumes ∧ Durable
+  Built ∧ CatchesUp ∧ Slow ∧ Fast ∧ Synchronised ∧ Commits ∧ Starts ∧ Resumes ∧ Durable ∧
+    Checked ∧ Unblocked ∧ Claimable
 
 end Reactive
 

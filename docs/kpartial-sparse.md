@@ -280,7 +280,8 @@ from a quorum for a leader block of every slot at round `r − 1`. It builds
 once it has held these for `γ`, once it has held a quorum of round `r` for
 `τ`, or once it is behind round `r + 1`, holding blocks of `f + c + 1` other
 authors there (`BehindIn`). A correct block references a leader block of each
-slot one round below whose leader block its author holds (`votes`), so it is
+slot one round below, led by a correct validator, whose leader block its
+author holds (`votes`), so it is
 sparse when it holds the leaders and dense otherwise, and claims each leader
 block two rounds below for which its author holds votes from a quorum
 (`claims`). Two delivery rules carry what a dense DAG carries in references:
@@ -328,6 +329,19 @@ round across restarts.
   above `R`, and every validator of `T` reaches it by `G + 3δ + 3τ`: its block
   is on its disk, reaches every node of `T` within `δ`, and grounds a quorum
   below it.
+* *Checked* (`Reactive.Checked`). Timed nodes that reference a block only once
+  it is referenceable on what they hold (§2, `Referenceable`) and claim only
+  what they back (`TimedChecks`) meet the record's claim disciplines,
+  `Checks` and `Truthful`.
+* *Unblocked* (`Reactive.Unblocked`). The wait never blocks a correct block:
+  when delivery carries what a block's author held, the history to depth `K`
+  of each reference with the votes behind every claim there, and the votes
+  behind the block's own claims, a correct node holding a correct block holds
+  it referenceable. So the votes for a leader of `T`, and the quorum a dense
+  block references, are never held up by the check.
+* *Claimable* (`Reactive.Claimable`). Every claimer of `T` backs its claim for
+  a leader of `T`, at a threshold within the quorum: when it builds, it holds
+  the leader block and votes for it from a quorum.
 * *Durable* (`Reactive.Durable`). When correct nodes keep histories on disk,
   every block of the available sub-DAG below a block with votes from
   `f + c + 1` distinct authors is on the disk of a node of any quorum `T` of
@@ -347,7 +361,8 @@ the block of `T` it holds: through `closed` for the leader block, and through
 `backed` for the votes. `LeanDagTest/KPartialSparse/Timed.lean` is a timed run
 of the witness record at `G = 0`, `δ = 1`, `γ = 2`, `τ = 4`, on which every
 correct validator commits slot `2` by time `17`; read with `G = 10`, it meets
-the rules for nodes, and a run resumes above round `0` by time `25`.
+the rules for nodes, and a run resumes above round `0` by time `25`; its
+nodes check claims at `K = 6`, so the record meets the claim disciplines.
 
 ## 8. The order
 
@@ -409,8 +424,7 @@ includes every block of `T` once leaders of `T` cover `T` (Theorem 6). Open:
 * Crashes of nodes of `T` after `G` (a stable set per window, as
   `docs/kpartial.md` §12 leaves open), and a witness with a restart before
   `G`.
-* A bound in rounds on what a node fetches, and that a correct node obtains
-  the votes behind every claim in the history of what it references.
+* A bound in rounds on what a node fetches.
 * Leaders of `T` covering `T` (`CoversFrom`) as a rule of timed nodes, from a
   leader's rule to reference the latest block of every node it holds, when
   that block is one round below; the dense arc derives synchrony among `T`

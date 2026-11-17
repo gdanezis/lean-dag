@@ -5,8 +5,9 @@ import LeanDag.KPartialSparse.Model.Rule
 `docs/kpartial-sparse.md` §5. The available sub-DAG and the link as read on
 the blocks `H` a node holds (`AnchoredIn`, `AvailIn`, `LinkedIn`), the
 sub-DAG fetched into `H` down to a round (`FetchedIn`), a claim backed by
-votes a node holds (`Backs`, `BuildsChecked`), and the node's decisions at a
-row (`NodeDecided`).
+votes a node holds and a block referenceable on what it holds (`Backs`,
+`Referenceable`, `BuildsChecked`), and the node's decisions at a row
+(`NodeDecided`).
 -/
 
 namespace LeanDag
@@ -68,6 +69,12 @@ def Backs (U : SRecord Validator BlockId Payload) (t : ℕ) (H : Finset BlockId)
     Prop :=
   L ∈ H ∧ t ≤ (creatorsOf U.block (H.filter fun b =>
     (U.block b).round = (U.block L).round + 1 ∧ L ∈ (U.block b).refs)).card
+
+/-- **`m` is referenceable on `H`** at threshold `t`: `H` holds the history to
+depth `K` of `m` and backs every claim in it. -/
+abbrev Referenceable (U : SRecord Validator BlockId Payload) (K t : ℕ) (H : Finset BlockId)
+    (m : BlockId) : Prop :=
+  historyUpto U K m ⊆ H ∧ ∀ X ∈ historyUpto U K m, ∀ L ∈ claimsOf U X, Backs U t H L
 
 /-- **Correct authors check what they hold**: each correct block was built by a
 node holding blocks of the record that back its claims, hold the history to

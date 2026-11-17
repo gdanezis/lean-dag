@@ -390,6 +390,47 @@ theorem exists_disk_of_avail (hT : T ⊆ (Correct : Finset Validator))
     rw [show i + (K - i) = K by omega] at hzm
     exact ⟨_, hcT, _, fun t ht => hK w hwi (hT hcT) t ht (m w) (hm w hw).1 hzm⟩
 
+/-! ## Checked claims -/
+
+omit S in
+/-- **Timed nodes meet the claim disciplines**: correct nodes that reference only
+referenceable blocks and claim only what they back, on what they hold, check
+and claim truthfully on the record. -/
+theorem buildsChecked_of_timed {K t : ℕ} (hids : ∀ v s, tl.held v s ⊆ U.ids)
+    (h : TimedChecks U tl K t) : BuildsChecked U K t :=
+  fun z hz hzc => ⟨_, hids _ _, h.claims_backed z hz hzc, fun m hm => h.refs_checked z hz hzc m hm⟩
+
+omit S in
+/-- **The wait never blocks a correct block**: a correct node holding a correct
+block holds it referenceable, since it holds the evidence its author held for
+each reference, and backs its own claims. -/
+theorem referenceable_of_held {K t : ℕ} (h : TimedChecks U tl K t) {v : Validator}
+    (hv : v ∈ (Correct : Finset Validator)) {s : ℕ} {b : BlockId} (hb : b ∈ tl.held v s)
+    (hbc : (U.block b).creator ∈ (Correct : Finset Validator)) :
+    Referenceable U K t (tl.held v s) b := by
+  rcases Nat.eq_zero_or_pos K with rfl | hK
+  · refine ⟨fun w hw => ?_, fun X hX L hL => ?_⟩
+    · rw [historyUpto_zero, Finset.mem_singleton] at hw; exact hw ▸ hb
+    · rw [historyUpto_zero, Finset.mem_singleton] at hX; subst hX
+      exact h.carries_claims v hv s X hb hbc L hL
+  obtain ⟨k, rfl⟩ : ∃ k, K = k + 1 := ⟨K - 1, by omega⟩
+  refine ⟨fun w hw => ?_, fun X hX L hL => ?_⟩
+  · rcases mem_historyUpto_succ.mp hw with rfl | ⟨m, hm, hwm⟩
+    · exact hb
+    · exact (h.carries v hv s b hb hbc m hm).1 (historyUpto_mono (by omega) _ hwm)
+  · rcases mem_historyUpto_succ.mp hX with rfl | ⟨m, hm, hXm⟩
+    · exact h.carries_claims v hv s X hb hbc L hL
+    · exact (h.carries v hv s b hb hbc m hm).2 X (historyUpto_mono (by omega) _ hXm) L hL
+
+omit [ClaimFormat BlockId Payload] S in
+/-- **Votes from a quorum back a claim**: holding a block and votes for it from a
+quorum one round above backs a claim for it at any threshold within the
+quorum. -/
+theorem backs_of_certIn {H : Finset BlockId} {L : BlockId} {t : ℕ}
+    (ht : t ≤ kQuorum Validator) (hL : L ∈ H) (h : CertIn U H ((U.block L).round + 1) L) :
+    Backs U t H L :=
+  ⟨hL, ht.trans h⟩
+
 /-! ## A timed run -/
 
 namespace TimedRun
@@ -504,7 +545,8 @@ theorem leader_mem_held (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ
       _ hlead
     exact ⟨L, h.mem_held_of_round hL (hLc ▸ hlead) (by omega) hbT hLt (by omega), hL, by omega,
       hLc⟩
-  · obtain ⟨L, hL, hlead'⟩ := h.votes y (h.held_ids _ _ hyH) (h.stable hyT) k (by omega) hy
+  · obtain ⟨L, hL, hlead'⟩ :=
+      h.votes y (h.held_ids _ _ hyH) (h.stable hyT) k (h.stable hlead) (by omega) hy
     exact ⟨L, h.closed _ (h.stable hbT) _ y hyH (h.stable hyT) hL, hlead'⟩
 
 /-- **Every voter of `T` votes for a leader of `T`**: a block of `T` one round
@@ -515,7 +557,7 @@ theorem mem_refs_of_leader (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤
     {b : BlockId} (hb : b ∈ U.ids) (hbT : (U.block b).creator ∈ T)
     (hbr : (U.block b).round = S.slotRound k + 1) {L : BlockId} (hL : IsLeaderBlock U k L) :
     L ∈ (U.block b).refs := by
-  obtain ⟨L', hL', hlead'⟩ := h.votes b hb (h.stable hbT) k hbr.symm
+  obtain ⟨L', hL', hlead'⟩ := h.votes b hb (h.stable hbT) k (h.stable hlead) hbr.symm
     (h.leader_mem_held hτ hδ hγτ hk hN hlead hb hbT hbr)
   exact isLeaderBlock_unique_of_honest (h.stable hlead) hL hlead' ▸ hL'
 
@@ -575,6 +617,22 @@ theorem mem_claims_of_leader (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ �
   obtain ⟨L', hL', hcert⟩ := h.certIn_held hτ hδ hγτ hk hN hlead hc hcT hcr
   obtain rfl := isLeaderBlock_unique_of_honest (h.stable hlead) hL hL'
   exact h.claims c hc (h.stable hcT) k hcr.symm L hL hcert
+
+/-- **Every claimer of `T` backs its claim for a leader of `T`**, at `τ ≥ 2δ`,
+`δ < γ ≤ τ` and a threshold within the quorum: when it builds two rounds above
+a slot led by a validator of `T`, from round `R + 1` on, its author holds the
+slot's leader block and votes for it from a quorum. -/
+theorem backs_of_leader (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ) {k t : ℕ}
+    (ht : t ≤ kQuorum Validator) (hk : R + 1 ≤ S.slotRound k) (hN : S.slotRound k + 2 ≤ N)
+    (hlead : S.leader k ∈ T) {c : BlockId} (hc : c ∈ U.ids) (hcT : (U.block c).creator ∈ T)
+    (hcr : (U.block c).round = S.slotRound k + 2) {L : BlockId} (hL : IsLeaderBlock U k L) :
+    Backs U t (tl.held (U.block c).creator (tl.built c)) L := by
+  obtain ⟨L', hL', hcert⟩ := h.certIn_held hτ hδ hγτ hk hN hlead hc hcT hcr
+  obtain rfl := isLeaderBlock_unique_of_honest (h.stable hlead) hL hL'
+  obtain ⟨y, hy, hyT⟩ := exists_mem_of_quorum h.large hcert
+  obtain ⟨hyH, -, hLy⟩ := Finset.mem_filter.mp hy
+  refine backs_of_certIn ht (h.closed _ (h.stable hcT) _ y hyH (h.stable hyT) hLy) ?_
+  rw [hL.2.1]; exact hcert
 
 /-- **A round led by `T` is built within `δ + γ`**, at `τ ≥ 2δ` and
 `δ < γ ≤ τ`: when the slots at round `s ≥ R + 2` and one round below have
