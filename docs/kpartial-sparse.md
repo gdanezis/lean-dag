@@ -4,10 +4,10 @@ This document adapts the K-partial DAG of `docs/kpartial.md` to sparse
 blocks, after Bluestreak [PVM26]: a block that references a leader of the
 round below references nothing else but its author's block, and a block
 claims in its payload the leaders it has seen certified. The Lean
-development is `LeanDag/KPartialSparse`. The available sub-DAG (Theorem 1)
-and agreement of the commit rule (Theorem 2) are proved; §5 lists what is
-open. `LeanDagTest/KPartialSparse/Witness.lean` is a record on which both
-apply.
+development is `LeanDag/KPartialSparse`. The available sub-DAG (Theorem 1),
+agreement of the commit rule (Theorem 2) and what a node reads (Theorem 3)
+are proved; §6 lists what is open. `LeanDagTest/KPartialSparse/Witness.lean`
+is a record on which all three apply.
 
 ## 1. The substrate
 
@@ -47,14 +47,15 @@ shows that a correct author checked each of those.
 
 Below a block `A`, a block `x` is an *anchor point* when it is `A`, which
 brings its history to depth `K`, or when blocks of the sub-DAG from
-`f + c + 1` distinct authors each reach `x` through one of their references
-and `i ≤ K` further steps; `x` then brings its history to depth `K − i`
-(`Anchored`). A correct author holds the history to depth `K` of each block
-it references, so one of the `f + c + 1` authors holds what `x` brings and
-checked its claims. At `i = 0` the authors reference `x`, and at `i = 1` they
-reach it in two steps, the two cases of `docs/kpartial.md` §3; there the
-second needs crashes, here neither does, and the intermediate blocks need
-not lie in the sub-DAG. The *available sub-DAG* below `A` is the union of
+`f + c + 1` distinct authors reach `x` through one of their references and
+`i ≤ 1` further steps; `x` then brings its history to depth `K − i`, and
+when `i = 1` the reference lies in the sub-DAG (`Anchored`). At `i = 0` the
+authors reference `x`; at `i = 1` they reach it in two steps. These are the
+two cases of `docs/kpartial.md` §3, where the second needs crashes; here it
+does not. A correct author holds the history to depth `K` of each block it
+references, so one of the `f + c + 1` authors holds what `x` brings and
+checked its claims. Reaching further needs a node to hold the path to `x`,
+which §5 does not fetch. The *available sub-DAG* below `A` is the union of
 the histories the anchor points bring (`Avail`).
 
 **Theorem 1 (the available sub-DAG; `Avail.Statement`).**
@@ -67,6 +68,9 @@ the histories the anchor points bring (`Avail`).
 * *Backed* (`Avail.Backed`). At `K ≥ 1`, when correct authors check claims,
   below a block that a correct author references every claim in the
   sub-DAG names a certified block.
+* *Held* (`Avail.Held`). At `K ≥ 1`, below a block that a correct author
+  references, every block of the sub-DAG is held by a correct node
+  (`CorrectHeld`).
 
 The proof of *Linked* has four steps.
 
@@ -97,10 +101,10 @@ The proof of *Linked* has four steps.
    most `t − ρ − 3` steps. The claim therefore lies within depth
    `t − ρ − 1 ≤ K − 1` of the anchor point.
 
-*Backed* follows from the definition of anchor points. Among `f + c + 1`
-distinct authors one is correct. It references a block whose history to
-depth `K` contains the history the anchor point brings, and so checked its
-claims. For `A` itself, the premise supplies the correct author.
+*Backed* and *Held* follow from the definition of anchor points
+(`exists_holder`). Among `f + c + 1` distinct authors one is correct. It
+references a block whose history to depth `K` contains the history the
+anchor point brings, so it holds that history and checked its claims. For `A` itself, the premise supplies the correct author.
 
 Together, if a quorum claims `L` directly, an anchor above finds a claim for
 `L` in its sub-DAG; and any claim found there names a certified block. With
@@ -151,15 +155,49 @@ is not directly skipped: its voters and the blamers share a correct author
 eligible anchor, is Theorem 1 *Linked*, since an eligible anchor is a leader
 block three rounds or more above the slot.
 
-## 5. Open
+## 5. What a node reads
+
+A node holds a set `H` of blocks of the record. It reads anchor points on `H`
+when it holds the history each brings and, for a two-step reach, the
+intermediate block (`AnchoredIn`, `AvailIn`), and links a candidate when it
+holds there a claim for it two rounds above the slot (`LinkedIn`). It has
+*fetched the sub-DAG down to round `ρ`* when it holds the anchor's history to
+depth `K`, and the history every anchor point brings when the blocks of the
+sub-DAG on `H` that reach it lie above `ρ` (`FetchedIn`). It decides by the
+commit rule read on `H` (`NodeDecided`): the direct tests count the claimers
+and blamers it holds, and the indirect tests need the sub-DAG fetched down
+to the round of the slot's claims. A claim is read from the claiming block's
+payload alone, so a node need not hold the claimers' references.
+
+**Theorem 3 (what a node reads; `Node.Statement`).**
+
+* *Local* (`Node.Local`). The link and the fetch test read only `H`: they
+  are the same on every record whose blocks agree on `H`.
+* *Fetchable* (`Node.Fetchable`). A node holding what every anchor point
+  brings has fetched the sub-DAG down to every round. Unlike
+  `docs/kpartial.md` §5, the bound is not a number of rounds: a block's
+  reference to its author's latest block may skip rounds, so a history to
+  depth `K` may span more than `K` rounds.
+* *Sound* (`Node.Sound`). A decision a node takes on what it holds is a
+  decision of the commit rule on every view holding `H`. Fetched down to
+  `ρ`, the sub-DAG read on `H` is the record's at and above `ρ`, since an
+  anchor point lies below the blocks that reach it.
+* *Agreement* (`Node.Agrees`). At a row, under the spreading condition, at
+  `K ≥ 6`, on a disciplined schedule and record, two nodes decide each slot
+  alike.
+
+Checking claims (§2) needs the votes behind each claim, which lie outside
+every history; `Checks` remains a premise on the record, and the fetch
+obligation it implies is open (§6).
+
+## 6. Open
 
 * Two-round rows: votes are references, so no claims are needed, but
   *Linked* must be restated for votes one round above the slot.
-* *Held*: every block of the sub-DAG is held by a correct node.
-* What a node reads (`docs/kpartial.md` §5), with the votes behind the claims
-  it checks as a new fetch obligation.
+* The votes behind a claim as a fetch obligation of correct nodes, and a
+  bound in rounds on what a node fetches.
 * The crash case beyond `c ≤ 1` at `n = 3f + 2c + 1`, where the spreading
   condition fails; anchor points reached in more steps may give the core
-  argument there.
+  argument there, if nodes fetch the paths to them.
 * Liveness, order, the bounds of `docs/kpartial.md` Theorem 6, the timed
   model, and adaptive schedules.

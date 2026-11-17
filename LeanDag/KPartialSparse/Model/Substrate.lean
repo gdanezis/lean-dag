@@ -6,8 +6,9 @@ import LeanDag.KPartialDag.Model.Substrate
 payload claims certified (`ClaimFormat`), the two block shapes (`Dense`,
 `Sparse`) and the substrate's validity and record (`SValid`, `SRecord`),
 certification and claims (`Certified`, `claimersOf`), the honest
-disciplines (`Chains`, `Checks`), and the available sub-DAG with anchor
-points reached in any number of steps up to `K + 1` (`Anchored`, `Avail`).
+disciplines (`Chains`, `Checks`), what correct nodes hold (`CorrectHeld`),
+and the available sub-DAG with anchor
+points reached in one step or two (`Anchored`, `Avail`).
 -/
 
 namespace LeanDag
@@ -111,17 +112,26 @@ def Checks (U : SRecord Validator BlockId Payload) (K t : ℕ) : Prop :=
   ∀ z ∈ U.ids, (U.block z).creator ∈ (Correct : Finset Validator) → ∀ m ∈ (U.block z).refs,
     ∀ X ∈ historyUpto U K m, ∀ L ∈ claimsOf U X, Certified U t L
 
+/-- **Held by a correct node**: a block of a correct author, or a block in the
+history to depth `K` of a block that a correct author's block references. -/
+def CorrectHeld (U : SRecord Validator BlockId Payload) (K : ℕ) : Set BlockId :=
+  {z | ∃ w ∈ U.ids, (U.block w).creator ∈ (Correct : Finset Validator) ∧
+    (z = w ∨ ∃ y ∈ (U.block w).refs, z ∈ historyUpto U K y)}
+
 /-- **The anchor points below `A`, with the depth of history each brings**: `A`
 to depth `K`; and a block that blocks of the sub-DAG from `f + c + 1` distinct
-authors reach through one of their references and `i ≤ K` further steps, to
-depth `K − i`. -/
+authors reach through one of their references `m z` and `i ≤ 1` further
+steps, to depth `K − i`, the reference lying in the sub-DAG when `i = 1`. -/
 inductive Anchored (U : SRecord Validator BlockId Payload) (K : ℕ) (A : BlockId) :
     BlockId → ℕ → Prop
   | anchor : Anchored U K A A K
-  | reached {x : BlockId} (i : ℕ) (S : Finset BlockId) (y : BlockId → BlockId) (d : BlockId → ℕ)
+  | reached {x : BlockId} (i : ℕ) (S : Finset BlockId) (m : BlockId → BlockId)
+      (y : BlockId → BlockId) (d : BlockId → ℕ) (y' : BlockId → BlockId) (d' : BlockId → ℕ)
       (hy : ∀ z ∈ S, Anchored U K A (y z) (d z))
       (hz : ∀ z ∈ S, z ∈ historyUpto U (d z) (y z))
-      (hi : i ≤ K) (hx : ∀ z ∈ S, ∃ m ∈ (U.block z).refs, x ∈ historyUpto U i m)
+      (hy' : ∀ z ∈ S, 0 < i → Anchored U K A (y' z) (d' z))
+      (hmz : ∀ z ∈ S, 0 < i → m z ∈ historyUpto U (d' z) (y' z))
+      (hi : i ≤ 1) (hm : ∀ z ∈ S, m z ∈ (U.block z).refs ∧ x ∈ historyUpto U i (m z))
       (hcard : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card) : Anchored U K A x (K - i)
 
 /-- **The available sub-DAG below `A`**: the history each anchor point

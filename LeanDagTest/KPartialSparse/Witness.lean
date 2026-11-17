@@ -1,5 +1,6 @@
 import LeanDag.KPartialSparse.Avail.Proof
 import LeanDag.KPartialSparse.Agreement.Proof
+import LeanDag.KPartialSparse.Node.Proof
 /-!
 # Sparse K-partial DAG — a witness
 
@@ -13,7 +14,8 @@ every block one round below references. The record meets every premise of
 Theorem 1 at `K = 6`, and `Avail.Linked` applies to the claims at round `4`.
 With one slot a round, the schedule and record are disciplined, and at
 Mysticeti's row the full view commits slot `2` directly; by Theorem 2 every
-view that decides slot `2` decides it alike.
+view that decides slot `2` decides it alike. A node holding only the
+round-`4` blocks commits slot `2`, and by Theorem 3 every node agrees.
 -/
 
 namespace LeanDagTest
@@ -111,7 +113,7 @@ theorem wLinked : ∃ C ∈ Avail wU 6 (bid 5 2), (wU.block C).round = 2 + 2 ∧
 /-- **Theorem 1, backed**: the round-`6` block of validator `0` references the
 leader block of round `5`, so every claim below it is certified. -/
 theorem wBacked : ∀ X ∈ Avail wU 6 (bid 5 2), ∀ L ∈ claimsOf wU X, Certified wU 3 L :=
-  Avail.holds.2 (Fin 4) Id (Finset Id) wU 6 3 (bid 5 2) (by decide) wChecks
+  Avail.holds.2.1 (Fin 4) Id (Finset Id) wU 6 3 (bid 5 2) (by decide) wChecks
     ⟨bid 6 0, by decide, by decide, by decide⟩
 
 /-! ## The commit rule -/
@@ -139,6 +141,24 @@ theorem wAgrees (V : wU.View) (v : Option Id)
     v = some (bid 2 2) :=
   (Agreement.agrees (Fin 4) Id (Finset Id) (Scheme.Params.mysticeti 4 1) wU 6 V (View.full wU) 2
     v _ wRow.1 wRow.2 le_rfl wDisciplined h wCommits)
+
+/-! ## What a node reads -/
+
+/-- The three round-`4` blocks. -/
+def wHeld : Finset Id := {bid 4 0, bid 4 1, bid 4 2}
+
+/-- **Theorem 3 at work**: a node holding only the three round-`4` blocks
+commits slot `2` directly, and every node holding blocks of the record that
+decides slot `2` decides it alike. -/
+theorem wNodeCommits :
+    NodeDecided (S := wSlots) (Scheme.Params.mysticeti 4 1) wU 6 wHeld 2 (some (bid 2 2)) :=
+  NodeDecided.directCommit ⟨by decide, rfl, rfl⟩ (by decide)
+
+theorem wNodeAgrees (H : Finset Id) (hH : H ⊆ wU.ids) (v : Option Id)
+    (h : NodeDecided (S := wSlots) (Scheme.Params.mysticeti 4 1) wU 6 H 2 v) :
+    v = some (bid 2 2) :=
+  (Node.agrees (Fin 4) Id (Finset Id) (Scheme.Params.mysticeti 4 1) wU 6 H wHeld 2 v _ wRow.1
+    wRow.2 le_rfl wDisciplined hH (by decide) h wNodeCommits)
 
 end KPartialSparse
 

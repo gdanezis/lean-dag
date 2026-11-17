@@ -4,8 +4,8 @@ import LeanDag.KPartialSparse.Model.Substrate
 
 `docs/kpartial-sparse.md` §3: below a leader block, a claim from a quorum of
 authors two rounds above some block lies in the available sub-DAG
-(`Linked`), and every claim in the available sub-DAG names a certified block
-(`Backed`).
+(`Linked`), every claim in the available sub-DAG names a certified block
+(`Backed`), and every block of it is held by a correct node (`Held`).
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -44,8 +44,18 @@ def Backed : Prop :=
     (∃ z ∈ U.ids, (U.block z).creator ∈ (Correct : Finset Validator) ∧ A ∈ (U.block z).refs) →
     ∀ X ∈ Avail U K A, ∀ L ∈ claimsOf U X, Certified U t L
 
+/-- **The sub-DAG is held by correct nodes**: at `K ≥ 1`, below a block a
+correct author references, every block of the available sub-DAG is held by a
+correct node. -/
+def Held : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [Crashes Validator] [Leaders Validator]
+    [LinearOrder BlockId] (U : SRecord Validator BlockId Payload) (K : ℕ) (A : BlockId), 1 ≤ K →
+    (∃ z ∈ U.ids, (U.block z).creator ∈ (Correct : Finset Validator) ∧ A ∈ (U.block z).refs) →
+    Avail U K A ⊆ CorrectHeld U K
+
 /-- The available sub-DAG of a sparse K-partial DAG. -/
-def Statement : Prop := Linked ∧ Backed
+def Statement : Prop := Linked ∧ Backed ∧ Held
 
 end Avail
 

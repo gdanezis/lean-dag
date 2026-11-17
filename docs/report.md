@@ -13753,7 +13753,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 444 definitions and structures the report names, in
+The 446 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -19753,6 +19753,18 @@ def Laws : Prop :=
 
 **The laws of an anchored rule** hold of the commit rule at a row, under the spreading condition, at `K ≥ 6`, on a disciplined schedule and record.
 
+#### `LinkedIn`
+
+*def, `KPartialSparse.Model.Node.lean`*
+
+```lean
+def LinkedIn (U : SRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (A L : BlockId)
+    (r : ℕ) : Prop :=
+  ∃ C ∈ AvailIn U K H A, (U.block C).round = r + 2 ∧ L ∈ claimsOf U C
+```
+
+**The link, read on `H`**: the sub-DAG below `A` read on `H` holds a claim for `L` two rounds above round `r`.
+
 #### `Disciplined`
 
 *def, `KPartialSparse.Model.Rule.lean`*
@@ -19772,14 +19784,32 @@ def Disciplined (K t : ℕ) (S : Slots Validator) (U : SRecord Validator BlockId
 inductive Anchored (U : SRecord Validator BlockId Payload) (K : ℕ) (A : BlockId) :
     BlockId → ℕ → Prop
   | anchor : Anchored U K A A K
-  | reached {x : BlockId} (i : ℕ) (S : Finset BlockId) (y : BlockId → BlockId) (d : BlockId → ℕ)
+  | reached {x : BlockId} (i : ℕ) (S : Finset BlockId) (m : BlockId → BlockId)
+      (y : BlockId → BlockId) (d : BlockId → ℕ) (y' : BlockId → BlockId) (d' : BlockId → ℕ)
       (hy : ∀ z ∈ S, Anchored U K A (y z) (d z))
       (hz : ∀ z ∈ S, z ∈ historyUpto U (d z) (y z))
-      (hi : i ≤ K) (hx : ∀ z ∈ S, ∃ m ∈ (U.block z).refs, x ∈ historyUpto U i m)
+      (hy' : ∀ z ∈ S, 0 < i → Anchored U K A (y' z) (d' z))
+      (hmz : ∀ z ∈ S, 0 < i → m z ∈ historyUpto U (d' z) (y' z))
+      (hi : i ≤ 1) (hm : ∀ z ∈ S, m z ∈ (U.block z).refs ∧ x ∈ historyUpto U i (m z))
       (hcard : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card) : Anchored U K A x (K - i)
 ```
 
-**The anchor points below `A`, with the depth of history each brings**: `A` to depth `K`; and a block that blocks of the sub-DAG from `f + c + 1` distinct authors reach through one of their references and `i ≤ K` further steps, to depth `K − i`.
+**The anchor points below `A`, with the depth of history each brings**: `A` to depth `K`; and a block that blocks of the sub-DAG from `f + c + 1` distinct authors reach through one of their references `m z` and `i ≤ 1` further steps, to depth `K − i`, the reference lying in the sub-DAG when `i = 1`.
+
+#### `Local`
+
+*def, `KPartialSparse.Node.Statement.lean`*
+
+```lean
+def Local : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
+    [ClaimFormat BlockId Payload] (U U' : SRecord Validator BlockId Payload) (K : ℕ)
+    (H : Finset BlockId) (A L : BlockId) (r ρ : ℕ), (∀ i ∈ H, U.block i = U'.block i) →
+    (LinkedIn U K H A L r ↔ LinkedIn U' K H A L r) ∧ (FetchedIn U K H A ρ ↔ FetchedIn U' K H A ρ)
+```
+
+**The node's tests read only what it holds**: on two records whose blocks agree on `H`, the link and the fetch test read on `H` hold alike.
 
 #### `onRecord`
 
@@ -21350,7 +21380,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 659 theorems the body or Appendix A names, each
+The 663 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -28183,6 +28213,14 @@ theorem stack_core (sk : SkipMsg U) (hd : G ≤ S.slotRound d) :
 theorem holds : Statement
 ```
 
+#### `held`
+
+*theorem, `KPartialSparse.Avail.Proof.lean`*
+
+```lean
+theorem held : Held
+```
+
 #### `holds`
 
 *theorem, `KPartialSparse.Avail.Proof.lean`*
@@ -28190,6 +28228,30 @@ theorem holds : Statement
 ```lean
 theorem holds : Statement
 ```
+
+#### `NodeDecided.decided`
+
+*theorem, `KPartialSparse.Helpers.Node.lean`*
+
+```lean
+theorem NodeDecided.decided {p : Params} (hH : H ⊆ U.ids) {V : U.View} (hHV : H ⊆ V.ids) {k : ℕ}
+    {v : Option BlockId} (h : NodeDecided p U K H k v) : (sRule p K).Decided U V k v
+```
+
+**A node's decision is a decision on every view holding what it holds**, for a node holding blocks of the record.
+
+#### `NodeDecided.agree`
+
+*theorem, `KPartialSparse.Helpers.Node.lean`*
+
+```lean
+theorem NodeDecided.agree {p : Params} (hrow : Row Validator p) (hsp : Spread Validator)
+    (hK : 6 ≤ K) (hI : Disciplined K p.certThreshold S U) {H₁ H₂ : Finset BlockId}
+    (hH₁ : H₁ ⊆ U.ids) (hH₂ : H₂ ⊆ U.ids) {k : ℕ} {v₁ v₂ : Option BlockId}
+    (h₁ : NodeDecided p U K H₁ k v₁) (h₂ : NodeDecided p U K H₂ k v₂) : v₁ = v₂
+```
+
+**Two nodes decide each slot alike**, at a row, under the spreading condition, at `K ≥ 6`, on a disciplined schedule and record.
 
 #### `eq_of_certified`
 
@@ -28203,6 +28265,14 @@ theorem eq_of_certified (hrow : Row Validator p) {L₁ L₂ : BlockId}
 ```
 
 **Two certified blocks of one author and round are one**: their voters share a correct author, whose one block there references one block of each author.
+
+#### `holds`
+
+*theorem, `KPartialSparse.Node.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
 
 #### `selfParent`
 

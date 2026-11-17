@@ -20,7 +20,11 @@ theorem backed : Backed := by
   intro Validator BlockId Payload _ _ _ _ _ _ _ U K t A hK hck hA X hX L hL
   exact KPartialSparse.backed hK hck hA hX hL
 
-theorem holds : Statement := ⟨linked, backed⟩
+theorem held : Held := by
+  intro Validator BlockId Payload _ _ _ _ _ _ U K A hK hA X hX
+  exact avail_correctHeld hK hA hX
+
+theorem holds : Statement := ⟨linked, backed, held⟩
 
 end Avail
 
