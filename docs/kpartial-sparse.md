@@ -73,6 +73,24 @@ The sub-DAG needs a depth (`Deep`): `K ≥ 6` under the spreading condition
 `(n − f)(f + c) < q(q − f)`, which holds without crashes
 and at `n ≥ 5f + 3c + 1`; or `K ≥ 10` at any `n ≥ 3f + 2c + 1`.
 
+These depths come from the descent (§4, step 3), not from the core. Anchor
+points recur `g` rounds apart and bring `K − i` rounds, and the window of an
+anchor point must reach `g + 1` rounds down, one more when the anchor point is
+sparse and its dense leader lies a round below it. Under the spreading
+condition the reach takes two steps (`i = 1`) and lands three rounds below a
+dense block, and a sparse anchor point adds a round: `g = 4`, so
+`K − 1 ≥ 5`. With the core, `i = 3` and `g = 6`, so `K − 3 ≥ 7`. The dense
+arc needs `K ≥ 2` and `K ≥ 4` (`docs/kpartial.md` §3).
+
+The two-step reach cannot become one step through leaders. A sparse block
+references two blocks one round below, its own and a leader block, and a
+Byzantine leader may equivocate. At `n = 4`, `f = 1`, `c = 0`, with leaders
+`B` (Byzantine) and `c₁` at round `t − 2`, the sparse blocks of `c₁`, `c₂`,
+`c₃` at `t − 1` may reference `c₁`, `{c₂, B₁}` and `{c₃, B₂}`: no block at
+`t − 2` has the `f + c + 1 = 2` referencing authors an anchor point reached
+in one step needs. These depths are what the proof gives; no record shows
+that smaller depths fail.
+
 **Theorem 1 (the available sub-DAG; `Avail.Statement`).**
 
 * *Linked* (`Avail.Linked`). At the depth the sub-DAG needs, with correct
