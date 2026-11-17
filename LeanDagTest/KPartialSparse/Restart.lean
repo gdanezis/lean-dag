@@ -186,6 +186,26 @@ theorem rResumes : ∃ R', 0 < R' ∧ (R' ≤ 6 → TimedRun (S := wSlots) wU rT
 theorem rDisciplines : Checks wU 6 3 ∧ Truthful wU 3 :=
   Reactive.checked (Fin 4) ℕ (Finset ℕ) wU rTl 6 3 rRules.held_ids rChecked
 
+/-- From `G = 10` on, the restarted timeline fetches as the timed one. -/
+theorem rFetches : Fetches (S := wSlots) wU rTl wT 6 10 1 := by
+  intro v hv t hG j A hA hAH z hz
+  rw [rHeld_eq (by omega)] at hAH ⊢
+  exact wFetches v hv t (Nat.zero_le _) j A hA hAH z hz
+
+/-- **Theorem 5, recovering**: after validator `2` restarts at time `9`, past
+any slot, every correct validator decides every slot below the end of a run of
+slots led by them, once the record reaches its last certificates. -/
+theorem rRecovers (k : ℕ) : ∃ b, k ≤ b ∧ (certRound (Scheme.Params.mysticeti 4 1)
+    (wSlots.slotRound (b + 3 - 1)) ≤ 6 → ∃ t, ∀ v ∈ wT, ∃ g : ℕ → Option ℕ, ∀ i, i < b + 3 →
+      NodeDecided (S := wSlots) (Scheme.Params.mysticeti 4 1) wU 6 (rTl.held v t) i (g i) ∧
+        ∀ L, g i = some L → FetchedIn wU 6 (rTl.held v t) L ((wU.block L).round - 1)) :=
+  Reactive.recovers (Fin 4) ℕ (Finset ℕ) (Scheme.Params.mysticeti 4 1) wU rTl wT 10 1 4 2 0 6 6 1
+    1 3 wRow.1 (fun h => absurd h (by decide)) wDisciplined wLive rRules (by omega) (by omega)
+    (by omega) rFetches (by omega) (fun b i hi => by change i + (3 - 1) < b + 3 - 1; omega)
+    (fun k => ⟨k, le_rfl, fun _ _ => lead_mem _⟩) (bid 2 0) (by decide) (by decide)
+    (by change tBuilt (bid 2 0) ≤ 10; unfold tBuilt; rw [bid_div])
+    (by change 0 < (wBlock (bid 2 0)).round; rw [round_wBlock, bid_div]; omega) k
+
 end KPartialSparse
 
 end LeanDagTest

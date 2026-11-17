@@ -979,6 +979,33 @@ theorem exists_ledger {p : Params} (hrow : Row Validator p)
 
 end TimedRun
 
+/-- **Commits resume after a recovery**: under the rules for nodes, with the
+nodes of `T` up from `G` on after any crashes and restarts before it, once a
+validator of `T` has built above round `R` by `G`, past any slot `k` there is a
+slot `b` such that, if the record reaches the round of its last certificates,
+every node of `T`, at one time, decides every slot below `b + c` and has
+fetched each leader it commits down to `D` rounds below it. A run resumes
+(`exists_resumed`), and the ledger grows on it (`exists_ledger`). -/
+theorem TimedRules.exists_recovered (h : TimedRules U tl T G δ τ γ R N) {p : Params}
+    (hrow : Row Validator p) (hlink : p.voteIsCert = true → F.f + Cr.c + 1 ≤ p.linkSize)
+    {K : ℕ} (hI : Disciplined K p.certThreshold S U) (hlive : LiveRow Validator p)
+    (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ) {Δ : ℕ} (D : ℕ)
+    (hF : Fetches U tl T K G Δ) {c : ℕ} (hc : 0 < c)
+    (hspan : ∀ b i, i < b → EligibleAt (S := S) (p.waveLength - 1) i (b + c - 1))
+    (fair : FairRunOn T c) {b₀ : BlockId} (hb₀ : b₀ ∈ U.ids) (hb₀c : (U.block b₀).creator ∈ T)
+    (hb₀G : tl.built b₀ ≤ G) (hRb₀ : R < (U.block b₀).round) (k : ℕ) :
+    ∃ b, k ≤ b ∧ (certRound p (S.slotRound (b + c - 1)) ≤ N → ∃ t, ∀ v ∈ T,
+      ∃ g : ℕ → Option BlockId, ∀ i, i < b + c → NodeDecided p U K (tl.held v t) i (g i) ∧
+        ∀ L, g i = some L → FetchedIn U K (tl.held v t) L ((U.block L).round - D)) := by
+  obtain ⟨R', -, hrun⟩ := h.exists_resumed hb₀ hb₀c hb₀G hRb₀
+  by_cases hR'N : R' ≤ N
+  · exact (hrun hR'N).1.exists_ledger hrow hlink hI hlive hτ hδ hγτ D hF hc hspan fair k
+  · obtain ⟨k₀, hk₀⟩ := S.unbounded (N + 1)
+    refine ⟨max k k₀, le_max_left _ _, fun hN => absurd hN ?_⟩
+    have := S.mono (show k₀ ≤ max k k₀ + c - 1 by omega)
+    have := certRound_bounds (p := p) (S.slotRound (max k k₀ + c - 1))
+    omega
+
 end KPartialSparse
 
 end LeanDag

@@ -405,6 +405,10 @@ round across restarts.
   anchor, or the `f + c + 1` authors reaching an anchor point, is a node of
   `T`, which keeps on disk the window to depth `K` of the block it
   references.
+* *Recovers* (`Reactive.Recovers`). Under the rules for nodes, with the nodes
+  of `T` up from `G` on after any crashes and restarts before it, once a
+  validator of `T` has built above round `R` by `G`, the conclusion of
+  *Ledger* holds: a run resumes (*Resumes*), and the ledger grows on it.
 
 The proofs follow `docs/kpartial.md` §11. A node of `T` skips no round of a
 run (`builtBy_below`): a quorum held at round `s` brings every node of `T`
@@ -422,8 +426,13 @@ nodes check claims at `K = 6`, so the record meets the claim disciplines.
 `LeanDagTest/KPartialSparse/Restart.lean` reads it with `G = 10` and validator
 `2` restarting at time `9`, holding only its own blocks and the blocks below
 them: the rules and the claim checks hold through the restart, and a run
-resumes by time `25`.
+resumes by time `25`, on which *Recovers* applies.
 
+`G` is not the time message delay becomes bounded, but any later time from
+which the nodes of `T` stay up. Validators that crash after delay becomes
+bounded, any number of them, and then recover and stay up, are the case where
+`G` is the time the last of them has recovered: before `G` they crash and
+restart, holding only their disk, and *Recovers* resumes commits after it.
 Crashes of nodes of `T` after `G` are covered when `T` has more than a quorum:
 the theorems apply to any quorum `T' ⊆ T` that stays up, so up to `|T| − q` of
 its nodes may crash after `G`, for good or to restart.
@@ -523,12 +532,12 @@ Safety (Theorems 1 to 3) holds at every row of the scheme, at every crash
 bound, on a disciplined schedule and record, whose disciplines (chains,
 checked and truthful claims, leaders leading on the substrate) are what a
 correct node does. Liveness holds on responsive records (Theorem 4), and timed
-nodes produce them after `G`, through crashes and restarts before it
-(Theorem 5). The ledger is agreed, totally ordered and never retracted, and
+nodes produce them after `G`, through crashes and restarts before it, and
+commits resume once crashed nodes recover and stay up (Theorem 5). The ledger is agreed, totally ordered and never retracted, and
 includes every block of `T` once leaders of `T` cover `T` (Theorem 6), and
 the validators of `T` can close the channel (Theorem 7). Open:
 
-* Nodes leaving and rejoining the stable set after `G`, a stable set per
-  window (`docs/kpartial.md` §12 leaves it open): rules and results bounded
-  by the end of a window.
+* Liveness while nodes keep leaving and rejoining, with no time after which
+  a quorum stays up: a stable set per window, as `docs/kpartial.md` §12
+  leaves open.
 * The bounds of `docs/kpartial.md` Theorem 6, and adaptive schedules.

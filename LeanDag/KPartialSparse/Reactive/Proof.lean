@@ -85,9 +85,14 @@ theorem ledger : Ledger := by
     h hτ hδ hγτ hF hc hspan fair k
   exact h.exists_ledger hrow hlink hI hlive hτ hδ hγτ D hF hc hspan fair k
 
+theorem recovers : Recovers := by
+  intro Validator BlockId Payload _ _ _ _ _ _ _ _ p U tl T G δ τ γ R N K D Δ c hrow hlink hI hlive
+    h hτ hδ hγτ hF hc hspan fair b₀ hb₀ hb₀c hb₀G hRb₀ k
+  exact h.exists_recovered hrow hlink hI hlive hτ hδ hγτ D hF hc hspan fair hb₀ hb₀c hb₀G hRb₀ k
+
 theorem holds : Statement :=
   ⟨built, catchesUp, slow, fast, synchronised, commits, starts, resumes, durable, checked,
-    unblocked, claimable, chained, buildable, covered, ledger⟩
+    unblocked, claimable, chained, buildable, covered, ledger, recovers⟩
 
 end Reactive
 

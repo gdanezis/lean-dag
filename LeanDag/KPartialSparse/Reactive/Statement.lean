@@ -9,7 +9,8 @@ period `γ`, under message delay `δ` from time `G` and any crashes and restarts
 before it, reach every round, catch up within `δ`, build each round within
 `δ + τ`, and within `δ + γ` when led by `T`, produce a synchronous run, and
 commit a slot led by `T` within `3δ + 2γ`; a run starts after `G + τ` and
-resumes after crashes, and the available sub-DAG survives them on disk; and
+resumes after crashes, and the available sub-DAG survives them on disk;
+commits resume once crashed nodes recover and stay up; and
 nodes that wait for referenceable blocks meet the claim disciplines, while
 the wait never blocks a correct block or a claim of `T`.
 
@@ -251,10 +252,34 @@ def Ledger : Prop :=
       ∃ g : ℕ → Option BlockId, ∀ i, i < b + c → NodeDecided p U K (tl.held v t) i (g i) ∧
         ∀ L, g i = some L → FetchedIn U K (tl.held v t) L ((U.block L).round - D))
 
+/-- **Commits resume after a recovery**: at a live row, `τ ≥ 2δ` and
+`δ < γ ≤ τ`, on a disciplined record, with the nodes of `T` up from `G` on, any
+time after message delay is bounded, after any crashes and restarts before
+it, when nodes of `T` fetch, a two-round row links by `f + c + 1` votes or
+more, the schedule offers runs of `c` leaders of `T` spanning eligibility, and
+a validator of `T` has built above round `R` by `G`: past any slot `k` there
+is a slot `b` such that, if the record reaches the round of its last
+certificates, every node of `T`, at one time, decides every slot below
+`b + c` and has fetched each leader it commits down to `D` rounds below it. -/
+def Recovers : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [F : Faults Validator] [Cr : Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
+    [ClaimFormat BlockId Payload] [S : Slots Validator] (p : Params)
+    (U : SRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
+    (T : Finset Validator) (G δ τ γ R N K D Δ c : ℕ), Row Validator p →
+    (p.voteIsCert = true → F.f + Cr.c + 1 ≤ p.linkSize) → Disciplined K p.certThreshold S U →
+    LiveRow Validator p → TimedRules U tl T G δ τ γ R N → 2 * δ ≤ τ → δ < γ → γ ≤ τ →
+    Fetches U tl T K G Δ → 0 < c →
+    (∀ b i, i < b → EligibleAt (S := S) (p.waveLength - 1) i (b + c - 1)) → FairRunOn T c →
+    ∀ b₀ ∈ U.ids, (U.block b₀).creator ∈ T → tl.built b₀ ≤ G → R < (U.block b₀).round →
+    ∀ k, ∃ b, k ≤ b ∧ (certRound p (S.slotRound (b + c - 1)) ≤ N → ∃ t, ∀ v ∈ T,
+      ∃ g : ℕ → Option BlockId, ∀ i, i < b + c → NodeDecided p U K (tl.held v t) i (g i) ∧
+        ∀ L, g i = some L → FetchedIn U K (tl.held v t) L ((U.block L).round - D))
+
 /-- Nodes in time. -/
 def Statement : Prop :=
   Built ∧ CatchesUp ∧ Slow ∧ Fast ∧ Synchronised ∧ Commits ∧ Starts ∧ Resumes ∧ Durable ∧
-    Checked ∧ Unblocked ∧ Claimable ∧ Chained ∧ Buildable ∧ Covered ∧ Ledger
+    Checked ∧ Unblocked ∧ Claimable ∧ Chained ∧ Buildable ∧ Covered ∧ Ledger ∧ Recovers
 
 end Reactive
 
