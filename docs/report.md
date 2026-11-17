@@ -13753,7 +13753,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 442 definitions and structures the report names, in
+The 444 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -19737,6 +19737,33 @@ def onRecord : (rule (Replica := Replica) (BlockId := BlockId)).OnRecord ValidWr
 
 **The carrier, on the record**: every map the identity.
 
+#### `Laws`
+
+*def, `KPartialSparse.Agreement.Statement.lean`*
+
+```lean
+def Laws : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [Crashes Validator] [Leaders Validator]
+    [LinearOrder BlockId] [ClaimFormat BlockId Payload] (p : Params) (K : ℕ),
+    Row Validator p → Spread Validator → 6 ≤ K →
+    (sRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) p K).Laws
+      (Disciplined K p.certThreshold)
+```
+
+**The laws of an anchored rule** hold of the commit rule at a row, under the spreading condition, at `K ≥ 6`, on a disciplined schedule and record.
+
+#### `Disciplined`
+
+*def, `KPartialSparse.Model.Rule.lean`*
+
+```lean
+def Disciplined (K t : ℕ) (S : Slots Validator) (U : SRecord Validator BlockId Payload) : Prop :=
+  (∀ k, S.leader k ∈ Ld.leaders (S.slotRound k)) ∧ Chains U ∧ Checks U K t ∧ Truthful U t
+```
+
+**What the rule asks of the schedule and the record**: every slot's leader leads its round on the substrate, correct authors keep chains, check the claims of what they reference to depth `K`, and claim truthfully.
+
 #### `Anchored`
 
 *inductive, `KPartialSparse.Model.Substrate.lean`*
@@ -21323,7 +21350,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 657 theorems the body or Appendix A names, each
+The 659 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -28150,11 +28177,32 @@ theorem stack_core (sk : SkipMsg U) (hd : G ≤ S.slotRound d) :
 
 #### `holds`
 
+*theorem, `KPartialSparse.Agreement.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
 *theorem, `KPartialSparse.Avail.Proof.lean`*
 
 ```lean
 theorem holds : Statement
 ```
+
+#### `eq_of_certified`
+
+*theorem, `KPartialSparse.Helpers.Rule.lean`*
+
+```lean
+theorem eq_of_certified (hrow : Row Validator p) {L₁ L₂ : BlockId}
+    (hc : (U.block L₁).creator = (U.block L₂).creator)
+    (hr : (U.block L₁).round = (U.block L₂).round)
+    (c₁ : Certified U p.certThreshold L₁) (c₂ : Certified U p.certThreshold L₂) : L₁ = L₂
+```
+
+**Two certified blocks of one author and round are one**: their voters share a correct author, whose one block there references one block of each author.
 
 #### `selfParent`
 

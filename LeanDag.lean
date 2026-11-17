@@ -620,6 +620,10 @@ import LeanDag.KPartialSparse.Model.Substrate
 import LeanDag.KPartialSparse.Avail.Statement
 import LeanDag.KPartialSparse.Helpers.Avail
 import LeanDag.KPartialSparse.Avail.Proof
+import LeanDag.KPartialSparse.Model.Rule
+import LeanDag.KPartialSparse.Agreement.Statement
+import LeanDag.KPartialSparse.Helpers.Rule
+import LeanDag.KPartialSparse.Agreement.Proof
 import LeanDag.Scheme.Model.Deliver
 import LeanDag.Scheme.Helpers.Deliver
 import LeanDag.Scheme.Helpers.Validity

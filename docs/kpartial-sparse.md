@@ -4,8 +4,10 @@ This document adapts the K-partial DAG of `docs/kpartial.md` to sparse
 blocks, after Bluestreak [PVM26]: a block that references a leader of the
 round below references nothing else but its author's block, and a block
 claims in its payload the leaders it has seen certified. The Lean
-development is `LeanDag/KPartialSparse`. Only the available sub-DAG
-(Theorem 1) is proved so far; §4 lists what is open.
+development is `LeanDag/KPartialSparse`. The available sub-DAG (Theorem 1)
+and agreement of the commit rule (Theorem 2) are proved; §5 lists what is
+open. `LeanDagTest/KPartialSparse/Witness.lean` is a record on which both
+apply.
 
 ## 1. The substrate
 
@@ -104,15 +106,60 @@ Together, if a quorum claims `L` directly, an anchor above finds a claim for
 `L` in its sub-DAG; and any claim found there names a certified block. With
 `cm = q` at `n = 3f + 1`, `n + f < q + cm` holds.
 
-## 4. Open
+## 4. The commit rule and agreement
 
-* The commit rule on claims (a direct commit by `commitThreshold` claims, the
-  indirect link by one claim in the sub-DAG) and agreement, from Theorem 1
-  and the uniqueness of a certified block.
+The rule runs the scheme's three-round rows with a claim in place of a
+certificate. A row (`Row`) has a link of one claim and asks that two
+certificate thresholds, a certificate and a skip threshold, and the quorum
+and the commit threshold each exceed `n + f`. The commit rule (`sRule`) is
+an anchored rule of `Common/Anchored.lean`, at wave `2`:
+
+* *direct commit*: claims for the candidate from `commitThreshold` distinct
+  authors two rounds above it;
+* *direct skip*: `skipThreshold` authors whose block one round above
+  references no candidate of the slot;
+* *link*: a claim for the candidate two rounds above it, in the available
+  sub-DAG below the anchor (`ClaimLinked`); twins are broken by the least
+  identifier;
+* *anchor*: a certified block.
+
+The rule asks of the schedule and the record (`Disciplined`) that each
+slot's leader leads its round on the substrate, that correct authors keep
+chains and check claims (§1, §2), and that a correct author claims only
+certified blocks (`Truthful`).
+
+**Theorem 2 (agreement; `Agreement.Statement`).**
+
+* *Laws* (`Agreement.Laws`). At a row, under the spreading condition, at
+  `K ≥ 6`, the rule meets the laws of an anchored rule on a disciplined
+  schedule and record.
+* *Agreement* (`Agreement.Agrees`). So two views of one record decide each
+  slot alike.
+* *Rows* (`Agreement.Rows`). Without crashes, Mysticeti and Cordial Miners
+  are rows and the spreading condition holds; under any crash bound, Hybrid
+  Mysticeti is a row.
+
+Every law reduces to four facts. A direct commit names a certified block,
+since one of its claimers is correct and claims truthfully
+(`certified_of_commit`). A link from a certified anchor names a certified
+block, since a correct voter references the anchor and Theorem 1 *Backed*
+applies (`certified_of_link`). Two certified blocks of one author and round
+are one: their voters share a correct author, whose one block there
+references one block of each author (`eq_of_certified`). A certified block
+is not directly skipped: its voters and the blamers share a correct author
+(`not_certified_skip`). Visibility, a direct commit linked from every
+eligible anchor, is Theorem 1 *Linked*, since an eligible anchor is a leader
+block three rounds or more above the slot.
+
+## 5. Open
+
+* Two-round rows: votes are references, so no claims are needed, but
+  *Linked* must be restated for votes one round above the slot.
 * *Held*: every block of the sub-DAG is held by a correct node.
+* What a node reads (`docs/kpartial.md` §5), with the votes behind the claims
+  it checks as a new fetch obligation.
 * The crash case beyond `c ≤ 1` at `n = 3f + 2c + 1`, where the spreading
-  condition fails; `docs/kpartial.md` used a two-step core there, which
-  here would need a third step.
-* Liveness, order, the bounds of `docs/kpartial.md` Theorem 6, and a witness
-  record.
-* Adaptive schedules.
+  condition fails; anchor points reached in more steps may give the core
+  argument there.
+* Liveness, order, the bounds of `docs/kpartial.md` Theorem 6, the timed
+  model, and adaptive schedules.

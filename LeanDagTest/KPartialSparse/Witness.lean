@@ -1,4 +1,5 @@
 import LeanDag.KPartialSparse.Avail.Proof
+import LeanDag.KPartialSparse.Agreement.Proof
 /-!
 # Sparse K-partial DAG — a witness
 
@@ -10,6 +11,9 @@ its author's block and the leader's block one round below, and is sparse.
 From round `2` up a block claims the leader block two rounds below, which
 every block one round below references. The record meets every premise of
 Theorem 1 at `K = 6`, and `Avail.Linked` applies to the claims at round `4`.
+With one slot a round, the schedule and record are disciplined, and at
+Mysticeti's row the full view commits slot `2` directly; by Theorem 2 every
+view that decides slot `2` decides it alike.
 -/
 
 namespace LeanDagTest
@@ -109,6 +113,32 @@ leader block of round `5`, so every claim below it is certified. -/
 theorem wBacked : ∀ X ∈ Avail wU 6 (bid 5 2), ∀ L ∈ claimsOf wU X, Certified wU 3 L :=
   Avail.holds.2 (Fin 4) Id (Finset Id) wU 6 3 (bid 5 2) (by decide) wChecks
     ⟨bid 6 0, by decide, by decide, by decide⟩
+
+/-! ## The commit rule -/
+
+/-- One slot a round, led by the round's leader. -/
+instance wSlots : Slots (Fin 4) := Slots.identity lead
+
+theorem wTruthful : Truthful wU 3 := fun C hC _ L hL => wCertified C hC L hL
+
+theorem wDisciplined : Disciplined 6 3 wSlots wU :=
+  ⟨fun _ => Finset.mem_singleton.mpr rfl, wChains, wChecks, wTruthful⟩
+
+/-- Mysticeti at `n = 4`, `f = 1`: a row, and the spreading condition holds. -/
+theorem wRow : KPartialSparse.Row (Fin 4) (Scheme.Params.mysticeti 4 1) ∧ Spread (Fin 4) :=
+  Agreement.rows (Fin 4) |>.1 rfl
+
+/-- **Theorem 2 at work**: the full view commits slot `2` directly, and every
+view that decides slot `2` decides it alike. -/
+theorem wCommits : (sRule (Scheme.Params.mysticeti 4 1) 6).Decided (S := wSlots) wU (View.full wU)
+    2 (some (bid 2 2)) :=
+  AnchoredRule.Decided.directCommit ⟨by decide, rfl, rfl⟩ (by decide)
+
+theorem wAgrees (V : wU.View) (v : Option Id)
+    (h : (sRule (Scheme.Params.mysticeti 4 1) 6).Decided (S := wSlots) wU V 2 v) :
+    v = some (bid 2 2) :=
+  (Agreement.agrees (Fin 4) Id (Finset Id) (Scheme.Params.mysticeti 4 1) wU 6 V (View.full wU) 2
+    v _ wRow.1 wRow.2 le_rfl wDisciplined h wCommits)
 
 end KPartialSparse
 
