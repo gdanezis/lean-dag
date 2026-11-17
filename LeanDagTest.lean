@@ -175,3 +175,4 @@ import LeanDagTest.Scheme.AtomicBroadcast
 import LeanDagTest.KPartialSparse.Witness
 import LeanDagTest.KPartialSparse.Timed
 import LeanDagTest.KPartialSparse.Order
+import LeanDagTest.KPartialSparse.Restart

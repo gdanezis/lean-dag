@@ -391,6 +391,14 @@ of the witness record at `G = 0`, `δ = 1`, `γ = 2`, `τ = 4`, on which every
 correct validator commits slot `2` by time `17`; read with `G = 10`, it meets
 the rules for nodes, and a run resumes above round `0` by time `25`; its
 nodes check claims at `K = 6`, so the record meets the claim disciplines.
+`LeanDagTest/KPartialSparse/Restart.lean` reads it with `G = 10` and validator
+`2` restarting at time `9`, holding only its own blocks and the blocks below
+them: the rules and the claim checks hold through the restart, and a run
+resumes by time `25`.
+
+Crashes of nodes of `T` after `G` are covered when `T` has more than a quorum:
+the theorems apply to any quorum `T' ⊆ T` that stays up, so up to `|T| − q` of
+its nodes may crash after `G`, for good or to restart.
 
 ## 8. The order
 
@@ -449,8 +457,8 @@ nodes produce them after `G`, through crashes and restarts before it
 (Theorem 5). The ledger is agreed, totally ordered and never retracted, and
 includes every block of `T` once leaders of `T` cover `T` (Theorem 6). Open:
 
-* Crashes of nodes of `T` after `G` (a stable set per window, as
-  `docs/kpartial.md` §12 leaves open), and a witness with a restart before
-  `G`.
+* Nodes leaving and rejoining the stable set after `G`, a stable set per
+  window (`docs/kpartial.md` §12 leaves it open): rules and results bounded
+  by the end of a window.
 * A bound in rounds on what a node fetches.
 * The bounds of `docs/kpartial.md` Theorem 6, and adaptive schedules.
