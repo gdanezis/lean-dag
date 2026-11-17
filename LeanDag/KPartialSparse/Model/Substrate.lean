@@ -51,6 +51,14 @@ def Sparse (blk : BlockId → Block Validator BlockId Payload) (b : Block Valida
       (blk i).round + 1 = b.round ∧ (blk i).creator ∈ Ld.leaders (b.round - 1)) ∧
     ∃ i ∈ b.refs, (blk i).round + 1 = b.round ∧ (blk i).creator ∈ Ld.leaders (b.round - 1)
 
+instance (q : ℕ) (blk : BlockId → Block Validator BlockId Payload)
+    (b : Block Validator BlockId Payload) : Decidable (Dense q blk b) :=
+  inferInstanceAs (Decidable (_ ≤ _))
+
+instance (blk : BlockId → Block Validator BlockId Payload) (b : Block Validator BlockId Payload) :
+    Decidable (Sparse blk b) :=
+  inferInstanceAs (Decidable (_ ∧ _ ∧ _))
+
 variable (Validator BlockId Payload) in
 /-- **The sparse substrate's validity**: references lie below, those of other
 authors one round below, at most one per author; a non-genesis block is dense

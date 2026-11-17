@@ -172,3 +172,4 @@ import LeanDagTest.Scheme.CoinTable
 import LeanDagTest.Scheme.AsyncLocal
 import LeanDagTest.KPartialDag.Reactive
 import LeanDagTest.Scheme.AtomicBroadcast
+import LeanDagTest.KPartialSparse.Witness
