@@ -463,6 +463,32 @@ theorem wTimedCovers : CoversFrom (S := wSlots) wU wT 1 6 :=
   Reactive.covered (Fin 4) ℕ (Finset ℕ) wU tTl wT 0 1 4 2 0 6 wTimed (by omega) (by omega)
     (by omega) (fun _ => Finset.mem_singleton.mpr rfl)
 
+/-- The witness's nodes hold a held leader block's available sub-DAG one step
+later: it lies at or below the leader, so was built no later. -/
+theorem wFetches : Fetches (S := wSlots) wU tTl wT 6 0 1 := by
+  intro v _ t _ j A hA hAH z hz
+  have hAi := hA.1
+  have hzi := KPartialSparse.avail_subset_ids hAi hz
+  have hzr := round_le_of_avail (U := wU) hAi hz
+  change (wBlock z).round ≤ (wBlock A).round at hzr
+  rw [round_wBlock, round_wBlock] at hzr
+  have hAt := held_built hAH
+  refine mem_tHeld.mpr ⟨hzi, ?_⟩
+  unfold tBuilt; split_ifs <;> omega
+
+/-- **Theorem 5, the ledger**: every slot below the end of a run of slots led by
+the correct validators is decided by every one of them at one time, once the
+run fits in the record. -/
+theorem wTimedLedger : ∃ b, 0 ≤ b ∧ (certRound (Scheme.Params.mysticeti 4 1)
+    (wSlots.slotRound (b + 3 - 1)) ≤ 6 → ∃ t, ∀ v ∈ wT, ∃ g : ℕ → Option ℕ, ∀ i, i < b + 3 →
+      NodeDecided (S := wSlots) (Scheme.Params.mysticeti 4 1) wU 6 (tTl.held v t) i (g i) ∧
+        ∀ L, g i = some L → FetchedIn wU 6 (tTl.held v t) L ((wU.block L).round - 1)) :=
+  Reactive.ledger (Fin 4) ℕ (Finset ℕ) (Scheme.Params.mysticeti 4 1) wU tTl wT 0 1 4 2 0 6 6 1 1 3
+    wRow.1 (fun h => absurd h (by decide)) wDisciplined wLive wTimed (by omega) (by omega)
+    (by omega) wFetches (by omega) (fun b i hi => by
+      show i + (3 - 1) < b + 3 - 1; omega)
+    (fun k => ⟨k, le_rfl, fun _ _ => lead_mem _⟩) 0
+
 end KPartialSparse
 
 end LeanDagTest

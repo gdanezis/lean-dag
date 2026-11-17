@@ -80,9 +80,14 @@ theorem covered : Covered := by
   intro Validator BlockId Payload _ _ _ _ _ _ _ _ U tl T G δ τ γ R N h hγ hδ hγτ hsl
   exact h.coversFrom hγ hδ hγτ hsl
 
+theorem ledger : Ledger := by
+  intro Validator BlockId Payload _ _ _ _ _ _ _ _ p U tl T G δ τ γ R N K D Δ c hrow hlink hI hlive
+    h hτ hδ hγτ hF hc hspan fair k
+  exact h.exists_ledger hrow hlink hI hlive hτ hδ hγτ D hF hc hspan fair k
+
 theorem holds : Statement :=
   ⟨built, catchesUp, slow, fast, synchronised, commits, starts, resumes, durable, checked,
-    unblocked, claimable, chained, buildable, covered⟩
+    unblocked, claimable, chained, buildable, covered, ledger⟩
 
 end Reactive
 

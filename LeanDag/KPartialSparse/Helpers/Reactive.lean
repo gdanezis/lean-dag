@@ -486,6 +486,53 @@ theorem exists_sparse_block {H : Finset BlockId} (hH : H ⊆ U.ids) {r : ℕ} {v
     exact hil.resolve_left hic
   · intro _ hl; exact absurd hl hvl
 
+/-! ## Committed leaders are certified -/
+
+/-- **A leader a node commits is certified**, at a row, on a disciplined record,
+when a two-round row links by `f + c + 1` votes or more: at the certificate
+threshold in a three-round row, and by `f + c + 1` voters in every row. -/
+theorem NodeDecided.certified {p : Params} (hrow : Row Validator p)
+    (hlink : p.voteIsCert = true → F.f + Cr.c + 1 ≤ p.linkSize) {K : ℕ}
+    (hI : Disciplined K p.certThreshold S U) {H : Finset BlockId} (hH : H ⊆ U.ids) {j : ℕ}
+    {A : BlockId} (h : NodeDecided p U K H j (some A)) :
+    (p.voteIsCert = false → Certified U p.certThreshold A) ∧
+      F.f + Cr.c + 1 ≤ (supporters U A ((U.block A).round + 1)).card := by
+  have ha := row_arith hrow
+  have hn := Cr.card_validators
+  suffices key : ∀ j v, NodeDecided p U K H j v → ∀ A, v = some A →
+      (p.voteIsCert = false → Certified U p.certThreshold A) ∧
+        F.f + Cr.c + 1 ≤ (supporters U A ((U.block A).round + 1)).card from key j _ h A rfl
+  intro j v h
+  induction h with
+  | @directCommit k L hL hc =>
+    intro A hA
+    cases hA
+    have hc' : p.commitThreshold ≤ (creatorsOf U.block (certsFor p U L (S.slotRound k))).card :=
+      hc.trans (Finset.card_le_card (Finset.image_subset_image (Finset.filter_subset _ _)))
+    have hcert := certified_of_commit hrow hI.2.2.2 hL.2.1 hc'
+    unfold Certified at hcert
+    refine ⟨fun hv => by unfold Certified; simpa [commitStrength, hv] using hcert, ?_⟩
+    have : F.f + Cr.c + 1 ≤ commitStrength p := by omega
+    omega
+  | directSkip _ => intro A hA; cases hA
+  | @indirectCommit k j' A₀ L hkj helig hj hmid hf hL hlink' hleast ihj ihm =>
+    intro A hA
+    cases hA
+    have hanc : p.voteIsCert = true ∨ Certified U p.certThreshold A₀ := by
+      cases hv : p.voteIsCert
+      · exact Or.inr ((ihj A₀ rfl).1 hv)
+      · exact Or.inl rfl
+    have hcert := certified_of_link hrow hI.2.2.1 hanc hL.2.1 (linkedIn_certLinked hH hlink')
+    unfold Certified at hcert
+    refine ⟨fun hv => by unfold Certified; simpa [linkStrength, hv] using hcert, ?_⟩
+    have : F.f + Cr.c + 1 ≤ linkStrength p := by
+      cases hv : p.voteIsCert
+      · have := ha.1; simp only [commitStrength, linkStrength, hv, Bool.false_eq_true,
+          if_false] at this ⊢; omega
+      · simp only [linkStrength, hv, if_true]; exact hlink hv
+    omega
+  | indirectSkip _ _ _ _ _ _ => intro A hA; cases hA
+
 /-! ## Checked claims -/
 
 omit S in
@@ -857,6 +904,55 @@ theorem exists_valid_block (hγ : 2 * δ ≤ γ) (hδ : δ < γ) (hγτ : γ ≤
   have hxT : (U.block x).creator ∈ T := hxw ▸ hw
   exact mem_creatorsOf.mpr ⟨x, Finset.mem_filter.mpr ⟨h.mem_held_below hγ hδ hγτ hr hrN hx hxT hxr
     hb hbT hbr, h.stable hxT, hxr⟩, hxw⟩
+
+/-- **The ledger grows**, at a live row, `τ ≥ 2δ` and `δ < γ ≤ τ`, on a
+disciplined record, when nodes of `T` fetch the available sub-DAG of the leader
+blocks they hold within `Δ`, a two-round row links by `f + c + 1` votes or more,
+and the schedule offers runs of `c` leaders of `T` spanning eligibility: past
+any slot `k` there is a slot `b` such that, if the run reaches the round of
+its last certificates, every node of `T`, at one time, decides every slot
+below `b + c` and has fetched each leader it commits down to `D` rounds below
+it. Every leader it commits has a voter in `T`, whose block brings it. -/
+theorem exists_ledger {p : Params} (hrow : Row Validator p)
+    (hlink : p.voteIsCert = true → F.f + Cr.c + 1 ≤ p.linkSize) {K : ℕ}
+    (hI : Disciplined K p.certThreshold S U) (hlive : LiveRow Validator p)
+    (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ) {Δ : ℕ} (D : ℕ)
+    (hF : Fetches U tl T K G Δ) {c : ℕ} (hc : 0 < c)
+    (hspan : ∀ b i, i < b → EligibleAt (S := S) (p.waveLength - 1) i (b + c - 1))
+    (fair : FairRunOn T c) (k : ℕ) :
+    ∃ b, k ≤ b ∧ (certRound p (S.slotRound (b + c - 1)) ≤ N → ∃ t, ∀ v ∈ T,
+      ∃ g : ℕ → Option BlockId, ∀ i, i < b + c → NodeDecided p U K (tl.held v t) i (g i) ∧
+        ∀ L, g i = some L → FetchedIn U K (tl.held v t) L ((U.block L).round - D)) := by
+  classical
+  obtain ⟨b, hkb, hRb, hrun⟩ := Slots.exists_run_past fair k (R + 1)
+  set T₀ := max G (U.ids.sup tl.built)
+  have hT₀ : ∀ x ∈ U.ids, tl.built x ≤ T₀ := fun x hx =>
+    (Finset.le_sup (f := tl.built) hx).trans (le_max_right _ _)
+  refine ⟨b, hkb, fun hN => ⟨T₀ + δ + Δ, fun v hv => ?_⟩⟩
+  have hresp' : RespondsFrom p U T (R + 1) N := respondsFrom_of_syncFrom (h.syncFrom hτ hδ hγτ)
+  have hresp := responds_of_run hc hRb hrun
+    ⟨hresp'.1, fun j h1 h2 h3 => hresp'.2 j h1 (h2.trans hN) h3⟩
+  have hheld : HeldBy U T (S.slotRound b) (certRound p (S.slotRound (b + c - 1))) ⊆
+      ↑(tl.held v (T₀ + δ + Δ)) := fun z hz =>
+    h.mem_held_of_round hz.1 hz.2.1 (by have := hz.2.2.1; omega) hv (hT₀ z hz.1) (by omega)
+  have hav : ∀ j A, NodeDecided p U K (tl.held v (T₀ + δ + Δ)) j (some A) →
+      Avail U K A ⊆ ↑(tl.held v (T₀ + δ + Δ)) := by
+    intro j A hA z hz
+    obtain ⟨-, hvote⟩ := hA.certified hrow hlink hI (h.held_ids v _)
+    obtain ⟨u, hu, huT⟩ := exists_mem_of_card h.large hvote
+    obtain ⟨y, hy, -, hAy, rfl⟩ := mem_supporters.mp hu
+    have hyc := h.stable huT
+    have hyv := h.mem_held_of_held huT (le_max_left _ _) (h.own y hy hyc _ (hT₀ y hy)) hyc hv
+      le_rfl
+    have hAv := h.closed v (h.stable hv) _ y hyv hyc hAy
+    exact h.mono v hv _ _ (by omega) le_rfl (hF v hv _ (by omega) j A hA.isLeaderBlock hAv z hz)
+  have hdec := nodeDecided_of_run hlive h.large hc hspan hresp hheld
+    (fun j A _ hA => hav j A hA)
+  refine ⟨fun i => if hi : i < b + c then (hdec i hi).choose else none, fun i hi => ?_⟩
+  simp only [dif_pos hi]
+  refine ⟨(hdec i hi).choose_spec, fun L hL => ?_⟩
+  exact fetchedIn_of_subset fun y d hy z hz =>
+    hav i L (hL ▸ (hdec i hi).choose_spec) ⟨y, d, hy, hz⟩
 
 end TimedRun
 

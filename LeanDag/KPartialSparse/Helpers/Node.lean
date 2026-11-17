@@ -178,6 +178,26 @@ theorem round_le_of_mem_historyUpto : ∀ (n : ℕ) {y w : BlockId}, y ∈ U.ids
       have := round_le_of_mem_historyUpto n (U.complete y hy j hj) hwj
       omega
 
+/-- **The available sub-DAG lies at or below its anchor.** -/
+theorem round_le_of_avail (hA : A ∈ U.ids) {z : BlockId} (hz : z ∈ Avail U K A) :
+    (U.block z).round ≤ (U.block A).round := by
+  obtain ⟨y, d, hy, hzy⟩ := hz
+  suffices h : (U.block y).round ≤ (U.block A).round from
+    (round_le_of_mem_historyUpto d (hy.mem hA) hzy).trans h
+  clear hzy
+  induction hy with
+  | anchor => exact le_rfl
+  | @reached x i S m y d y' d' hy hz hy' hmz hi hm hcard ih ih' =>
+    obtain ⟨z, hzS⟩ : S.Nonempty := by
+      rw [← Finset.card_pos]; exact lt_of_lt_of_le (by omega) (hcard.trans Finset.card_image_le)
+    have hzi := historyUpto_subset_ids _ ((hy z hzS).mem hA) (hz z hzS)
+    have hmi := U.complete z hzi _ (hm z hzS).1
+    have := (U.valid z hzi).below _ (hm z hzS).1
+    have := round_le_of_mem_historyUpto _ hmi (hm z hzS).2
+    have := round_le_of_mem_historyUpto _ ((hy z hzS).mem hA) (hz z hzS)
+    have := ih z hzS
+    omega
+
 /-- **A sub-DAG fetched down to round `ρ` is the record's at and above `ρ`.** -/
 theorem avail_subset_availIn (hH : H ⊆ U.ids) {ρ : ℕ} (hf : FetchedIn U K H A ρ) {z : BlockId}
     (hz : z ∈ Avail U K A) (hρ : ρ ≤ (U.block z).round) : z ∈ AvailIn U K H A := by

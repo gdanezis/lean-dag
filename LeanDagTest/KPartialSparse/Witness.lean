@@ -215,11 +215,10 @@ theorem wDecides : ∀ i, i < 5 →
     (fun j _ hj => hresp.2 j (Nat.zero_le _) (by
       change (if false = true then j + 1 else j + 2) ≤ 6; simp; omega)
       (by change lead j ∈ wT; have : (lead j).val < 3 := Nat.mod_lt _ (by omega)
-          revert this; generalize lead j = w; revert w; decide)) ?_
+          revert this; generalize lead j = w; revert w; decide)) (fun z hz => hz.1) ?_
   · change i + (3 - 1) < b + 3 - 1; omega
-  · rintro z (hz | ⟨j, A, -, hA, hzA⟩)
-    · exact hz.1
-    · exact KPartialSparse.avail_subset_ids hA.1 hzA
+  · intro j A _ hA z hzA
+    exact KPartialSparse.avail_subset_ids hA.isLeaderBlock.1 hzA
 
 end KPartialSparse
 

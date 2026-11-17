@@ -229,10 +229,32 @@ def Covered : Prop :=
     TimedRun U tl T G δ τ γ R N → 2 * δ ≤ γ → δ < γ → γ ≤ τ →
     (∀ k, S.leader k ∈ Ld.leaders (S.slotRound k)) → CoversFrom U T (R + 1) N
 
+/-- **The ledger grows**: at a live row, on a disciplined record and a timed run,
+at `τ ≥ 2δ` and `δ < γ ≤ τ`, when nodes of `T` fetch the available sub-DAG of
+the leader blocks they hold within `Δ`, a two-round row links by `f + c + 1`
+votes or more, and the schedule offers runs of `c` leaders of `T` spanning
+eligibility, past any slot `k` there is a slot `b` such that, if the run
+reaches the round of its last certificates, every node of `T`, at one time,
+decides every slot below `b + c` and has fetched each leader it commits down
+to `D` rounds below it. -/
+def Ledger : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [F : Faults Validator] [Cr : Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
+    [ClaimFormat BlockId Payload] [S : Slots Validator] (p : Params)
+    (U : SRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
+    (T : Finset Validator) (G δ τ γ R N K D Δ c : ℕ), Row Validator p →
+    (p.voteIsCert = true → F.f + Cr.c + 1 ≤ p.linkSize) → Disciplined K p.certThreshold S U →
+    LiveRow Validator p → TimedRun U tl T G δ τ γ R N → 2 * δ ≤ τ → δ < γ → γ ≤ τ →
+    Fetches U tl T K G Δ → 0 < c →
+    (∀ b i, i < b → EligibleAt (S := S) (p.waveLength - 1) i (b + c - 1)) → FairRunOn T c →
+    ∀ k, ∃ b, k ≤ b ∧ (certRound p (S.slotRound (b + c - 1)) ≤ N → ∃ t, ∀ v ∈ T,
+      ∃ g : ℕ → Option BlockId, ∀ i, i < b + c → NodeDecided p U K (tl.held v t) i (g i) ∧
+        ∀ L, g i = some L → FetchedIn U K (tl.held v t) L ((U.block L).round - D))
+
 /-- Nodes in time. -/
 def Statement : Prop :=
   Built ∧ CatchesUp ∧ Slow ∧ Fast ∧ Synchronised ∧ Commits ∧ Starts ∧ Resumes ∧ Durable ∧
-    Checked ∧ Unblocked ∧ Claimable ∧ Chained ∧ Buildable ∧ Covered
+    Checked ∧ Unblocked ∧ Claimable ∧ Chained ∧ Buildable ∧ Covered ∧ Ledger
 
 end Reactive
 

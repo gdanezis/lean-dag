@@ -7,8 +7,8 @@ import LeanDag.KPartialDag.Model.Reactive
 (`BehindIn`), progress over a timeline (`BuiltBy`, `ReachedBy`), the rules
 for nodes up from `G`, through crashes and restarts before it (`TimedRules`),
 started at a round (`TimedStarted`), and a run after `G + τ` (`TimedRun`),
-claims checked by timed nodes (`TimedChecks`), and histories kept on disk
-(`KeepsHistory`). Timelines are those of
+claims checked by timed nodes (`TimedChecks`), fetching the available sub-DAG
+(`Fetches`), and histories kept on disk (`KeepsHistory`). Timelines are those of
 `docs/kpartial.md` §11 (`KPartialDag.Timeline`).
 -/
 
@@ -190,6 +190,14 @@ structure TimedChecks (U : SRecord Validator BlockId Payload) (tl : Timeline Val
   carries_claims : ∀ v ∈ (Correct : Finset Validator), ∀ s, ∀ b ∈ tl.held v s,
     (U.block b).creator ∈ (Correct : Finset Validator) → ∀ L ∈ claimsOf U b,
       Backs U t (tl.held v s) L
+
+omit [ClaimFormat BlockId Payload] in
+/-- **Fetching the available sub-DAG**: from `G` on, a node of `T` that holds a
+leader block holds the block's available sub-DAG `Δ` later. -/
+def Fetches (U : SRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
+    (T : Finset Validator) (K G Δ : ℕ) : Prop :=
+  ∀ v ∈ T, ∀ t, G ≤ t → ∀ j A, IsLeaderBlock U j A → A ∈ tl.held v t →
+    ∀ z ∈ Avail U K A, z ∈ tl.held v (t + Δ)
 
 omit [ClaimFormat BlockId Payload] S in
 /-- **Keeping histories on disk**: a correct node keeps on disk, from the time it

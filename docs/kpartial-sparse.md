@@ -255,7 +255,8 @@ commit and certificate thresholds are at most the quorum (`LiveRow`).
   the blocks of `T` at the round of a slot's certificates commits the slot
   directly: they are certificates from `|T| ≥ q` authors.
 * *A committed run decides below it* (`Live.Descends`). A node holding the
-  available sub-DAG below every leader block up to slot `n`, which has
+  available sub-DAG below every leader block up to slot `n`, or only below
+  those it commits (`nodeDecided_below`), which has
   committed every slot from `b` to `n`, decides every slot below `b` that `n`
   may anchor: holding the sub-DAG fetches it (Theorem 3), so the indirect test
   returns the least linked candidate or a skip.
@@ -359,6 +360,16 @@ round across restarts.
   at `2δ ≤ γ ≤ τ` and `δ < γ`, with each slot's leader leading its round on the
   substrate, leaders of `T` cover `T` (§8, `CoversFrom`), so *Included* holds
   of timed runs.
+* *Ledger* (`Reactive.Ledger`). At a live row, on a disciplined record and a
+  timed run, at `τ ≥ 2δ` and `δ < γ ≤ τ`, when nodes of `T` fetch the available
+  sub-DAG of the leader blocks they hold within `Δ` (`Fetches`), a two-round
+  row links by `f + c + 1` votes or more, and the schedule offers runs of
+  leaders of `T` spanning eligibility, past any slot there is a run such that
+  every node of `T`, at one time, decides every slot below its end and has
+  fetched each leader it commits down to `D` rounds below it. A leader a node
+  commits is certified by `f + c + 1` voters (`NodeDecided.certified`), one of
+  them in `T`, whose block brings it; and a node decides below a committed run
+  holding the sub-DAG below the leaders it commits only (Theorem 4).
 * *Durable* (`Reactive.Durable`). When correct nodes keep histories on disk,
   every block of the available sub-DAG below a block with votes from
   `f + c + 1` distinct authors is on the disk of a node of any quorum `T` of

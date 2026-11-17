@@ -21467,7 +21467,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 672 theorems the body or Appendix A names, each
+The 673 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -28426,6 +28426,14 @@ theorem built : Built
 
 ```lean
 theorem commits : Commits
+```
+
+#### `ledger`
+
+*theorem, `KPartialSparse.Reactive.Proof.lean`*
+
+```lean
+theorem ledger : Ledger
 ```
 
 #### `holds`

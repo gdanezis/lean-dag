@@ -98,11 +98,11 @@ theorem NodeDecided.isLeaderBlock [ClaimFormat BlockId Payload] {j : ℕ} {A : B
   | indirectCommit _ _ _ _ _ hL _ _ => exact hL
 
 /-- **A committed run decides below it**: a node holding the available sub-DAG
-below every leader block up to slot `n`, which has committed every slot from
-`b` to `n`, decides every slot below `b` that `n` may anchor. -/
+below every leader block it commits up to slot `n`, which has committed every
+slot from `b` to `n`, decides every slot below `b` that `n` may anchor. -/
 theorem nodeDecided_below {b n : ℕ} (hbn : b ≤ n)
     (hspan : ∀ i, i < b → EligibleAt (S := S) (p.waveLength - 1) i n)
-    (hav : AvailBelow U K n ⊆ ↑H)
+    (hav : ∀ j A, j ≤ n → NodeDecided p U K H j (some A) → Avail U K A ⊆ ↑H)
     (hrun : ∀ j, b ≤ j → j ≤ n → ∃ A, NodeDecided p U K H j (some A)) :
     ∀ i, i < b → ∃ v, NodeDecided p U K H i v := by
   classical
@@ -128,9 +128,8 @@ theorem nodeDecided_below {b n : ℕ} (hbn : b ≤ n)
           cases v with
           | none => exact hv
           | some A' => exact absurd ⟨A', hv⟩ hnot
-      have hAL := hA.isLeaderBlock
       have hf : FetchedIn U K H A (certRound p (S.slotRound i)) :=
-        fetchedIn_of_subset fun y d hy z hz => hav ⟨Nat.find hex, A, hjn, hAL, y, d, hy, hz⟩
+        fetchedIn_of_subset fun y d hy z hz => hav _ A hjn hA ⟨y, d, hy, hz⟩
       set cands := U.ids.filter fun L => IsLeaderBlock U i L ∧ LinkedIn p U K H A L (S.slotRound i)
       by_cases hc : cands.Nonempty
       · obtain ⟨hLi, hL, hlink⟩ := Finset.mem_filter.mp (cands.min'_mem hc)
@@ -154,14 +153,14 @@ theorem responds_of_run {R b c : ℕ} (hc : 0 < c) (hR : R ≤ S.slotRound b)
   rwa [Nat.add_sub_cancel' h1] at this
 
 /-- **A responsive run decides every slot up to its end** at a live row: a node
-holding the blocks of `T` over the run and the available sub-DAG below its
-leader blocks decides every slot below the run's end. -/
+holding the blocks of `T` over the run and the available sub-DAG below the
+leader blocks it commits decides every slot below the run's end. -/
 theorem nodeDecided_of_run (hlive : LiveRow Validator p) (hcard : kQuorum Validator ≤ T.card)
     {b c : ℕ} (hc : 0 < c)
     (hspan : ∀ b i, i < b → EligibleAt (S := S) (p.waveLength - 1) i (b + c - 1))
     (hresp : ∀ j, b ≤ j → j ≤ b + c - 1 → Responds p U T j)
-    (hheld : HeldBy U T (S.slotRound b) (certRound p (S.slotRound (b + c - 1))) ∪
-      AvailBelow U K (b + c - 1) ⊆ ↑H) :
+    (hheld : HeldBy U T (S.slotRound b) (certRound p (S.slotRound (b + c - 1))) ⊆ ↑H)
+    (hav : ∀ j A, j ≤ b + c - 1 → NodeDecided p U K H j (some A) → Avail U K A ⊆ ↑H) :
     ∀ i, i < b + c → ∃ v, NodeDecided p U K H i v := by
   have hcommit : ∀ j, b ≤ j → j ≤ b + c - 1 → ∃ A, NodeDecided p U K H j (some A) := by
     intro j h1 h2
@@ -170,13 +169,11 @@ theorem nodeDecided_of_run (hlive : LiveRow Validator p) (hcard : kQuorum Valida
       certRound_mono (S.mono h2)
     have hcb := certRound_bounds (p := p) (S.slotRound j)
     obtain ⟨L, -, hL⟩ := nodeDecided_of_responds (K := K) hlive hcard (hresp j h1 h2)
-      (fun z hz => hheld (Set.mem_union_left _ ⟨hz.1, hz.2.1, by have := hz.2.2.1; omega,
-        by have := hz.2.2.2; omega⟩))
+      (fun z hz => hheld ⟨hz.1, hz.2.1, by have := hz.2.2.1; omega, by have := hz.2.2.2; omega⟩)
     exact ⟨L, hL⟩
   intro i hi
   by_cases hib : i < b
-  · exact nodeDecided_below (by omega) (fun i hi => hspan b i hi)
-      (fun z hz => hheld (Set.mem_union_right _ hz)) hcommit i hib
+  · exact nodeDecided_below (by omega) (fun i hi => hspan b i hi) hav hcommit i hib
   · obtain ⟨A, hA⟩ := hcommit i (by omega) (by omega)
     exact ⟨some A, hA⟩
 

@@ -26,13 +26,16 @@ theorem commits : Commits := by
 
 theorem descends : Descends := by
   intro Validator BlockId Payload _ _ _ _ _ _ _ _ p U K H b n hbn hspan hav hrun
-  exact nodeDecided_below hbn hspan hav hrun
+  exact nodeDecided_below hbn hspan
+    (fun j A hj hA z hz => hav ⟨j, A, hj, hA.isLeaderBlock, hz⟩) hrun
 
 theorem progress : Progress := by
   intro Validator BlockId Payload _ _ _ _ _ _ _ _ p K T c hlive hc hspan fair R k
   obtain ⟨b, hkb, hRb, hrun⟩ := Slots.exists_run_past fair k R
   exact ⟨b, hkb, hRb, fun U h H hheld =>
-    nodeDecided_of_run hlive h.1 hc hspan (responds_of_run hc hRb hrun h) hheld⟩
+    nodeDecided_of_run hlive h.1 hc hspan (responds_of_run hc hRb hrun h)
+      (fun z hz => hheld (Set.mem_union_left _ hz))
+      (fun j A hj hA z hz => hheld (Set.mem_union_right _ ⟨j, A, hj, hA.isLeaderBlock, hz⟩))⟩
 
 theorem holds : Statement := ⟨weaker, backable, commits, descends, progress⟩
 
