@@ -41,18 +41,15 @@ def lead (r : ℕ) : Fin 4 := ⟨r % 3, by omega⟩
 
 instance wLeaders : Leaders (Fin 4) := ⟨fun r => {lead r}⟩
 
-/-- Block `4r + v` is validator `v`'s block of round `r`. -/
-abbrev Id := ℕ
-
 /-- The block of validator `v` at round `r`. -/
-def bid (r : ℕ) (v : Fin 4) : Id := 4 * r + v.val
+def bid (r : ℕ) (v : Fin 4) : ℕ := 4 * r + v.val
 
-instance : ClaimFormat Id (Finset Id) := ⟨id⟩
+instance : ClaimFormat ℕ (Finset ℕ) := ⟨id⟩
 
 /-- Block `bid r v`: a leader's block references the correct blocks one round
 below; any other block references its own and the leader's block one round
 below. From round `2` up it claims the leader block two rounds below. -/
-def wBlock (b : Id) : Block (Fin 4) Id (Finset Id) :=
+def wBlock (b : ℕ) : Block (Fin 4) ℕ (Finset ℕ) :=
   let r := b / 4
   let v : Fin 4 := ⟨b % 4, Nat.mod_lt _ (by omega)⟩
   ⟨r, v,
@@ -62,11 +59,11 @@ def wBlock (b : Id) : Block (Fin 4) Id (Finset Id) :=
     if 2 ≤ r then {bid (r - 2) (lead (r - 2))} else ∅⟩
 
 /-- The blocks of the correct validators at rounds `0` to `6`. -/
-def wIds : Finset Id := (Finset.range 28).filter fun b => b % 4 ≠ 3
+def wIds : Finset ℕ := (Finset.range 28).filter fun b => b % 4 ≠ 3
 
 theorem wComplete : ∀ i ∈ wIds, ∀ j ∈ (wBlock i).refs, j ∈ wIds := by decide
 
-theorem wValid : ∀ i ∈ wIds, SValid (Fin 4) Id (Finset Id) wBlock (wBlock i) := by
+theorem wValid : ∀ i ∈ wIds, SValid (Fin 4) ℕ (Finset ℕ) wBlock (wBlock i) := by
   have h₁ : ∀ i ∈ wIds, ∀ j ∈ (wBlock i).refs, (wBlock j).round < (wBlock i).round := by decide
   have h₂ : ∀ i ∈ wIds, ∀ j ∈ (wBlock i).refs, (wBlock j).creator ≠ (wBlock i).creator →
       (wBlock j).round + 1 = (wBlock i).round := by decide
@@ -84,7 +81,7 @@ theorem wNoEquivocation : ∀ i ∈ wIds, ∀ j ∈ wIds,
     (wBlock i).round = (wBlock j).round → i = j := by decide
 
 /-- The witness record. -/
-def wU : SRecord (Fin 4) Id (Finset Id) where
+def wU : SRecord (Fin 4) ℕ (Finset ℕ) where
   ids := wIds
   block := wBlock
   complete := wComplete
@@ -110,13 +107,13 @@ theorem wChecks : Checks wU 6 3 := by
 holds a round-`4` claim for the leader block of round `2`. -/
 theorem wLinked : ∃ C ∈ Avail wU 6 (bid 5 2), (wU.block C).round = 2 + 2 ∧
     bid 2 2 ∈ claimsOf wU C :=
-  Avail.holds.1 (Fin 4) Id (Finset Id) wU 6 3 2 (bid 5 2) (bid 2 2) (Or.inl ⟨wSpread, le_rfl⟩) wChains
+  Avail.holds.1 (Fin 4) ℕ (Finset ℕ) wU 6 3 2 (bid 5 2) (bid 2 2) (Or.inl ⟨wSpread, le_rfl⟩) wChains
     (by decide) (by decide) (by decide) (by decide) (by decide)
 
 /-- **Theorem 1, backed**: the round-`6` block of validator `0` references the
 leader block of round `5`, so every claim below it is certified. -/
 theorem wBacked : ∀ X ∈ Avail wU 6 (bid 5 2), ∀ L ∈ claimsOf wU X, Certified wU 3 L :=
-  Avail.holds.2.1 (Fin 4) Id (Finset Id) wU 6 3 (bid 5 2) wChecks
+  Avail.holds.2.1 (Fin 4) ℕ (Finset ℕ) wU 6 3 (bid 5 2) wChecks
     ⟨bid 6 0, by decide, by decide, by decide⟩
 
 /-! ## The commit rule -/
@@ -139,16 +136,16 @@ theorem wCommits : (sRule (Scheme.Params.mysticeti 4 1) 6).Decided (S := wSlots)
     2 (some (bid 2 2)) :=
   AnchoredRule.Decided.directCommit ⟨by decide, rfl, rfl⟩ (by decide)
 
-theorem wAgrees (V : wU.View) (v : Option Id)
+theorem wAgrees (V : wU.View) (v : Option ℕ)
     (h : (sRule (Scheme.Params.mysticeti 4 1) 6).Decided (S := wSlots) wU V 2 v) :
     v = some (bid 2 2) :=
-  (Agreement.agrees (Fin 4) Id (Finset Id) (Scheme.Params.mysticeti 4 1) wU 6 V (View.full wU) 2
+  (Agreement.agrees (Fin 4) ℕ (Finset ℕ) (Scheme.Params.mysticeti 4 1) wU 6 V (View.full wU) 2
     v _ wRow.1 (Or.inl ⟨wRow.2, le_rfl⟩) wDisciplined h wCommits)
 
 /-! ## What a node reads -/
 
 /-- The three round-`4` blocks. -/
-def wHeld : Finset Id := {bid 4 0, bid 4 1, bid 4 2}
+def wHeld : Finset ℕ := {bid 4 0, bid 4 1, bid 4 2}
 
 /-- **Theorem 3 at work**: a node holding only the three round-`4` blocks
 commits slot `2` directly, and every node holding blocks of the record that
@@ -157,10 +154,10 @@ theorem wNodeCommits :
     NodeDecided (S := wSlots) (Scheme.Params.mysticeti 4 1) wU 6 wHeld 2 (some (bid 2 2)) :=
   NodeDecided.directCommit ⟨by decide, rfl, rfl⟩ (by decide)
 
-theorem wNodeAgrees (H : Finset Id) (hH : H ⊆ wU.ids) (v : Option Id)
+theorem wNodeAgrees (H : Finset ℕ) (hH : H ⊆ wU.ids) (v : Option ℕ)
     (h : NodeDecided (S := wSlots) (Scheme.Params.mysticeti 4 1) wU 6 H 2 v) :
     v = some (bid 2 2) :=
-  (Node.agrees (Fin 4) Id (Finset Id) (Scheme.Params.mysticeti 4 1) wU 6 H wHeld 2 v _ wRow.1
+  (Node.agrees (Fin 4) ℕ (Finset ℕ) (Scheme.Params.mysticeti 4 1) wU 6 H wHeld 2 v _ wRow.1
     (Or.inl ⟨wRow.2, le_rfl⟩) wDisciplined hH (by decide) h wNodeCommits)
 
 /-- Every correct node checks claims on what it holds: holding the whole
@@ -193,7 +190,16 @@ theorem wSync : SyncFrom wU wT 0 6 := by
     have hLr : (wBlock L).round = k := hL₂.trans hsr
     refine key L hL₁ C hC (by omega) ?_ hCT (by rw [hLr]; exact hCr.trans (by rw [hsr]))
     rw [hLr]; exact hL₃
-  · unfold claimsOf; decide
+  · intro k _ hk _ L hL D hD hDT hDr
+    have hsr : wSlots.slotRound k = k := rfl
+    obtain ⟨hL₁, hL₂, hL₃⟩ := hL
+    have key : ∀ L ∈ wIds, ∀ D ∈ wIds, (wBlock L).round ≤ 4 →
+        (wBlock L).creator = lead (wBlock L).round → (wBlock D).creator ∈ wT →
+        (wBlock D).round = (wBlock L).round + 2 → L ∈ ClaimFormat.claims (wBlock D).payload := by
+      decide
+    have hLr : (wBlock L).round = k := hL₂.trans hsr
+    refine key L hL₁ D hD (by omega) ?_ hDT (by rw [hLr]; exact hDr.trans (by rw [hsr]))
+    rw [hLr]; exact hL₃
 
 /-- Mysticeti at `n = 4`, `f = 1` is live on the substrate. -/
 theorem wLive : LiveRow (Fin 4) (Scheme.Params.mysticeti 4 1) := by unfold LiveRow; decide

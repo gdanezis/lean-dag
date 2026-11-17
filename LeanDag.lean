@@ -632,6 +632,10 @@ import LeanDag.KPartialSparse.Model.Live
 import LeanDag.KPartialSparse.Live.Statement
 import LeanDag.KPartialSparse.Helpers.Live
 import LeanDag.KPartialSparse.Live.Proof
+import LeanDag.KPartialSparse.Model.Reactive
+import LeanDag.KPartialSparse.Reactive.Statement
+import LeanDag.KPartialSparse.Helpers.Reactive
+import LeanDag.KPartialSparse.Reactive.Proof
 import LeanDag.Scheme.Model.Deliver
 import LeanDag.Scheme.Helpers.Deliver
 import LeanDag.Scheme.Helpers.Validity

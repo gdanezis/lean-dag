@@ -6,8 +6,11 @@ round below references nothing else but its author's block, and a block
 claims in its payload the leaders it has seen certified. The Lean
 development is `LeanDag/KPartialSparse`. The available sub-DAG (Theorem 1),
 agreement of the commit rule at the scheme's two-round and three-round rows
-(Theorem 2) and what a node reads (Theorem 3) are proved; §6 lists what is open. `LeanDagTest/KPartialSparse/Witness.lean`
-is a record on which all four apply.
+(Theorem 2), what a node reads (Theorem 3), liveness (Theorem 4) and nodes in
+time (Theorem 5) are proved; §8 lists what is open.
+`LeanDagTest/KPartialSparse/Witness.lean` is a record on which Theorems 1 to
+4 apply, and `LeanDagTest/KPartialSparse/Timed.lean` a timed run of it for
+Theorem 5.
 
 ## 1. The substrate
 
@@ -264,18 +267,70 @@ commit and certificate thresholds are at most the quorum (`LiveRow`).
 With Theorem 3, every correct node that holds what a run needs decides every
 slot below it, and all decide each slot alike.
 
-## 7. Open
+## 7. Nodes in time
+
+Nodes follow timed rules from round `R` to round `N` (`TimedRules`), with the
+nodes of a quorum `T` correct and up from time `G`, message delay `δ` from
+`G`, a timeout `τ` and a grace period `γ`; the timeline of held blocks and
+build times is that of `docs/kpartial.md` §11 (`Timeline`). Before building
+above round `r`, a node waits for what the sparse policy needs (`WaitsFor`):
+a quorum at round `r`, a leader block of every slot at round `r`, and votes
+from a quorum for a leader block of every slot at round `r − 1`. It builds
+once it has held these for `γ`, once it has held a quorum of round `r` for
+`τ`, or once it is behind round `r + 1`, holding blocks of `f + c + 1` other
+authors there (`BehindIn`). A correct block references a leader block of each
+slot one round below whose leader block its author holds (`votes`), so it is
+sparse when it holds the leaders and dense otherwise, and claims each leader
+block two rounds below for which its author holds votes from a quorum
+(`claims`). Two delivery rules carry what a dense DAG carries in references:
+a node holding a correct block above round `R` holds a quorum of the round
+below, as its author did (`grounded`), and the votes behind its claims
+(`backed`). Bluestreak's round-advance messages and its acceptance of a block
+only once its claims can be backed realise them. A *timed run* (`TimedRun`)
+adds that `T` has reached round `R` and built there from `G + τ` on.
+
+**Theorem 5 (nodes in time; `Reactive.Statement`).**
+
+* *Built* (`Reactive.Built`). On a timed run, every validator of `T` reaches
+  every round from `R` to `N`.
+* *Catching up* (`Reactive.CatchesUp`). Once a node of `T` holds a quorum at
+  round `s` at a time `t ≥ G`, every validator of `T` has reached round `s`
+  by `t + δ`.
+* *Slow* (`Reactive.Slow`). At `δ < γ ≤ τ`, each round is built by every
+  validator of `T` within `δ + τ` of the round below.
+* *Fast* (`Reactive.Fast`). At `τ ≥ 2δ` and `δ < γ ≤ τ`, a round whose slots
+  and the slots one round below are led by `T` is built within `δ + γ`.
+* *Synchronised* (`Reactive.Synchronised`). At `τ ≥ 2δ` and `δ < γ ≤ τ`, a
+  timed run is synchronous among `T` from round `R + 1` (§6), so responsive at
+  every row.
+* *Commits* (`Reactive.Commits`). At a live row, `τ ≥ 2δ` and `δ < γ ≤ τ`,
+  when the slots around a slot are led by `T`, every node of `T` commits the
+  slot directly within `3δ + 2γ` of `T` building its round.
+
+The proofs follow `docs/kpartial.md` §11. A node of `T` skips no round of a
+run (`builtBy_below`): a quorum held at round `s` brings every node of `T`
+there within `δ`, through the `f + c + 1` correct authors it contains. A
+leader of `T` reaches every voter of `T` before its timeout, since a timeout
+fires `τ ≥ 2δ` after a quorum, by which time the leader has built and its
+block has arrived (`leader_mem_held`); in the same way the votes of `T` reach
+every claimer of `T` (`certIn_held`). A block built behind inherits both from
+the block of `T` it holds: through `closed` for the leader block, and through
+`backed` for the votes. `LeanDagTest/KPartialSparse/Timed.lean` is a timed run
+of the witness record at `G = 0`, `δ = 1`, `γ = 2`, `τ = 4`, on which every
+correct validator commits slot `2` by time `17`.
+
+## 8. Open
 
 Safety (Theorems 1 to 3) holds at every row of the scheme, at every crash
 bound, on a disciplined schedule and record, whose disciplines (chains,
 checked and truthful claims, leaders leading on the substrate) are what a
-correct node does. Liveness (Theorem 4) holds on responsive records. Open:
+correct node does. Liveness holds on responsive records (Theorem 4), and timed
+nodes produce them after `G` (Theorem 5). Open:
 
+* Crashes and restarts in time: persisting the last round built, building
+  above the disk, the start of a run after `G` (`docs/kpartial.md` §11,
+  *Persisted*, *OnDisk*, *Resumes*, *Starts*), and durability.
 * A bound in rounds on what a node fetches, and that a correct node obtains
-  the votes behind every claim in the history of what it references, not
-  only the claims of `T`.
-* The timed model: when a node goes dense, waits for votes before claiming,
-  and restarts, and the time to responsiveness after GST
-  (`docs/kpartial.md` Theorem 7).
+  the votes behind every claim in the history of what it references.
 * Order, the bounds of `docs/kpartial.md` Theorem 6, and adaptive
   schedules.

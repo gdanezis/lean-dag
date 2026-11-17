@@ -13753,7 +13753,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 448 definitions and structures the report names, in
+The 450 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -19847,6 +19847,42 @@ def Local : Prop :=
 
 **The node's tests read only what it holds**: on two records whose blocks agree on `H`, the link and the fetch test read on `H` hold alike.
 
+#### `Synchronised`
+
+*def, `KPartialSparse.Reactive.Statement.lean`*
+
+```lean
+def Synchronised : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
+    [ClaimFormat BlockId Payload] [Slots Validator] (U : SRecord Validator BlockId Payload)
+    (tl : Timeline Validator BlockId) (T : Finset Validator) (G δ τ γ R N : ℕ),
+    TimedRun U tl T G δ τ γ R N → 2 * δ ≤ τ → δ < γ → γ ≤ τ → SyncFrom U T (R + 1) N
+```
+
+**The run is synchronous**: at `τ ≥ 2δ` and `δ < γ ≤ τ`, a timed run from round `R` to round `N` is synchronous among `T` from round `R + 1` to `N`, so responsive at every row (Theorem 4, *Weaker*).
+
+#### `Commits`
+
+*def, `KPartialSparse.Reactive.Statement.lean`*
+
+```lean
+def Commits : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
+    [ClaimFormat BlockId Payload] [S : Slots Validator] (p : Params)
+    (U : SRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
+    (T : Finset Validator) (G δ τ γ R K N : ℕ), LiveRow Validator p →
+    TimedRun U tl T G δ τ γ R N → 2 * δ ≤ τ → δ < γ → γ ≤ τ → ∀ k t,
+      R + 2 ≤ S.slotRound k → S.slotRound k + 2 ≤ N →
+      (∀ j, S.slotRound k ≤ S.slotRound j + 1 → S.slotRound j ≤ S.slotRound k + 1 →
+        S.leader j ∈ T) →
+      BuiltBy U tl T (S.slotRound k) t → ∀ v ∈ T,
+        ∃ L, IsLeaderBlock U k L ∧ NodeDecided p U K (tl.held v (t + 3 * δ + 2 * γ)) k (some L)
+```
+
+**A slot led by `T` commits within `3δ + 2γ`**: at a live row, `τ ≥ 2δ` and `δ < γ ≤ τ`, when every slot from one round below a slot at round `r`, from `R + 2` to `N − 2`, to one round above it has a leader in `T`, and every validator of `T` has built at round `r` by `t`, every node of `T` commits the slot directly on what it holds at `t + 3δ + 2γ`.
+
 #### `onRecord`
 
 *def, `MahiMahi.Record.lean`*
@@ -21416,7 +21452,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 666 theorems the body or Appendix A names, each
+The 670 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -28289,6 +28325,17 @@ theorem NodeDecided.agree {p : Params} (hrow : Row Validator p) (hdeep : Deep Va
 
 **Two nodes decide each slot alike**, at a row and the depth the sub-DAG needs, on a disciplined schedule and record.
 
+#### `populatedOn`
+
+*theorem, `KPartialSparse.Helpers.Reactive.lean`*
+
+```lean
+theorem populatedOn (hδ : δ < γ) (hγτ : γ ≤ τ) {s : ℕ} (hs : R + 1 ≤ s) (hsN : s ≤ N) :
+    PopulatedOn U T s
+```
+
+Every validator of `T` builds at every round from `R + 1` to `N`, at `δ < γ ≤ τ`.
+
 #### `eq_of_certified`
 
 *theorem, `KPartialSparse.Helpers.Rule.lean`*
@@ -28329,6 +28376,30 @@ theorem holds : Statement
 #### `holds`
 
 *theorem, `KPartialSparse.Node.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `built`
+
+*theorem, `KPartialSparse.Reactive.Proof.lean`*
+
+```lean
+theorem built : Built
+```
+
+#### `commits`
+
+*theorem, `KPartialSparse.Reactive.Proof.lean`*
+
+```lean
+theorem commits : Commits
+```
+
+#### `holds`
+
+*theorem, `KPartialSparse.Reactive.Proof.lean`*
 
 ```lean
 theorem holds : Statement

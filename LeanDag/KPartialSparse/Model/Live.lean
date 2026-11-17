@@ -23,17 +23,14 @@ variable [S : Slots Validator]
 /-- **Partial synchrony among `T` from round `R` to round `N`**, in sparse
 terms: `T` is a quorum with a block at every round from `R` to `N`; one round
 above a slot led by `T`, every block of `T` references every leader block of
-the slot; and two rounds above a block that every block of `T` one round up
-references, every block of `T` claims it. -/
+the slot, and two rounds above, every block of `T` claims it. -/
 def SyncFrom (U : SRecord Validator BlockId Payload) (T : Finset Validator) (R N : ℕ) : Prop :=
   kQuorum Validator ≤ T.card ∧ (∀ r, R ≤ r → r ≤ N → PopulatedOn U T r) ∧
     (∀ k, R ≤ S.slotRound k → S.slotRound k + 1 ≤ N → S.leader k ∈ T → ∀ L, IsLeaderBlock U k L →
       ∀ C ∈ U.ids, (U.block C).creator ∈ T → (U.block C).round = S.slotRound k + 1 →
         L ∈ (U.block C).refs) ∧
-    ∀ L ∈ U.ids, R ≤ (U.block L).round → (U.block L).round + 2 ≤ N →
-      (∀ C ∈ U.ids, (U.block C).creator ∈ T → (U.block C).round = (U.block L).round + 1 →
-        L ∈ (U.block C).refs) →
-      ∀ D ∈ U.ids, (U.block D).creator ∈ T → (U.block D).round = (U.block L).round + 2 →
+    ∀ k, R ≤ S.slotRound k → S.slotRound k + 2 ≤ N → S.leader k ∈ T → ∀ L, IsLeaderBlock U k L →
+      ∀ D ∈ U.ids, (U.block D).creator ∈ T → (U.block D).round = S.slotRound k + 2 →
         L ∈ claimsOf U D
 
 /-- **Slot `k` responds among `T`** at a row: `T` has blocks at the round of the

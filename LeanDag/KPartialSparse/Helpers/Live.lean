@@ -58,9 +58,7 @@ theorem respondsFrom_of_syncFrom {R N : ℕ} (h : SyncFrom U T R N) : RespondsFr
   unfold certRound at hCr hN
   split_ifs at hCr hN ⊢ with hv
   · exact ⟨hCr, hvote k hR (by omega) hk L hLl C hC hCT hCr⟩
-  · refine ⟨hCr, hclaim L hL (by rw [hLr]; exact hR) (by rw [hLr]; omega)
-      (fun C' hC' hC'T hC'r => hvote k hR (by omega) hk L hLl C' hC' hC'T (by rw [hC'r, hLr]))
-      C hC hCT (by rw [hCr, hLr])⟩
+  · exact ⟨hCr, hclaim k hR (by omega) hk L hLl C hC hCT hCr⟩
 
 /-- **Under synchrony a node holding the votes of `T` backs a claim** for a
 leader block of a slot led by `T`, at a certificate threshold within the
