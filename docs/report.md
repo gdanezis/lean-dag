@@ -19746,12 +19746,12 @@ def Laws : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [Crashes Validator] [Leaders Validator]
     [LinearOrder BlockId] [ClaimFormat BlockId Payload] (p : Params) (K : ℕ),
-    Row Validator p → Spread Validator → 6 ≤ K →
+    Row Validator p → Deep Validator K →
     (sRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) p K).Laws
       (Disciplined K p.certThreshold)
 ```
 
-**The laws of an anchored rule** hold of the commit rule at a row, under the spreading condition, at `K ≥ 6`, on a disciplined schedule and record.
+**The laws of an anchored rule** hold of the commit rule at a row and the depth the sub-DAG needs, on a disciplined schedule and record.
 
 #### `LinkedIn`
 
@@ -19790,12 +19790,12 @@ inductive Anchored (U : SRecord Validator BlockId Payload) (K : ℕ) (A : BlockI
       (hy : ∀ z ∈ S, Anchored U K A (y z) (d z))
       (hz : ∀ z ∈ S, z ∈ historyUpto U (d z) (y z))
       (hy' : ∀ z ∈ S, 0 < i → Anchored U K A (y' z) (d' z))
-      (hmz : ∀ z ∈ S, 0 < i → m z ∈ historyUpto U (d' z) (y' z))
-      (hi : i ≤ 1) (hm : ∀ z ∈ S, m z ∈ (U.block z).refs ∧ x ∈ historyUpto U i (m z))
+      (hmz : ∀ z ∈ S, 0 < i → historyUpto U (i - 1) (m z) ⊆ historyUpto U (d' z) (y' z))
+      (hi : i ≤ K) (hm : ∀ z ∈ S, m z ∈ (U.block z).refs ∧ x ∈ historyUpto U i (m z))
       (hcard : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card) : Anchored U K A x (K - i)
 ```
 
-**The anchor points below `A`, with the depth of history each brings**: `A` to depth `K`; and a block that blocks of the sub-DAG from `f + c + 1` distinct authors reach through one of their references `m z` and `i ≤ 1` further steps, to depth `K − i`, the reference lying in the sub-DAG when `i = 1`.
+**The anchor points below `A`, with the depth of history each brings**: `A` to depth `K`; and a block that blocks of the sub-DAG from `f + c + 1` distinct authors reach through one of their references `m z` and `i ≤ K` further steps, to depth `K − i`, the history of `m z` to depth `i − 1`, through which they reach it, lying in the history an anchor point brings.
 
 #### `Local`
 
@@ -28246,13 +28246,13 @@ theorem NodeDecided.decided {p : Params} (hH : H ⊆ U.ids) {V : U.View} (hHV : 
 *theorem, `KPartialSparse.Helpers.Node.lean`*
 
 ```lean
-theorem NodeDecided.agree {p : Params} (hrow : Row Validator p) (hsp : Spread Validator)
-    (hK : 6 ≤ K) (hI : Disciplined K p.certThreshold S U) {H₁ H₂ : Finset BlockId}
+theorem NodeDecided.agree {p : Params} (hrow : Row Validator p) (hdeep : Deep Validator K)
+    (hI : Disciplined K p.certThreshold S U) {H₁ H₂ : Finset BlockId}
     (hH₁ : H₁ ⊆ U.ids) (hH₂ : H₂ ⊆ U.ids) {k : ℕ} {v₁ v₂ : Option BlockId}
     (h₁ : NodeDecided p U K H₁ k v₁) (h₂ : NodeDecided p U K H₂ k v₂) : v₁ = v₂
 ```
 
-**Two nodes decide each slot alike**, at a row, under the spreading condition, at `K ≥ 6`, on a disciplined schedule and record.
+**Two nodes decide each slot alike**, at a row and the depth the sub-DAG needs, on a disciplined schedule and record.
 
 #### `eq_of_certified`
 

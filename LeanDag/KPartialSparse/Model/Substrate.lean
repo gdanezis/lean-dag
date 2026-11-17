@@ -8,7 +8,7 @@ payload claims certified (`ClaimFormat`), the two block shapes (`Dense`,
 certification and claims (`Certified`, `claimersOf`), the honest
 disciplines (`Chains`, `Checks`), what correct nodes hold (`CorrectHeld`),
 and the available sub-DAG with anchor
-points reached in one step or two (`Anchored`, `Avail`).
+points reached through paths in the sub-DAG (`Anchored`, `Avail`).
 -/
 
 namespace LeanDag
@@ -59,6 +59,11 @@ instance (q : ℕ) (blk : BlockId → Block Validator BlockId Payload)
 instance (blk : BlockId → Block Validator BlockId Payload) (b : Block Validator BlockId Payload) :
     Decidable (Sparse blk b) :=
   inferInstanceAs (Decidable (_ ∧ _ ∧ _))
+
+variable (Validator) in
+/-- **The depth the sub-DAG needs**: `K ≥ 6` under the spreading condition,
+and `K ≥ 10` at any `n ≥ 3f + 2c + 1`. -/
+def Deep (K : ℕ) : Prop := (Spread Validator ∧ 6 ≤ K) ∨ 10 ≤ K
 
 variable (Validator BlockId Payload) in
 /-- **The sparse substrate's validity**: references lie below, those of other
@@ -120,8 +125,9 @@ def CorrectHeld (U : SRecord Validator BlockId Payload) (K : ℕ) : Set BlockId 
 
 /-- **The anchor points below `A`, with the depth of history each brings**: `A`
 to depth `K`; and a block that blocks of the sub-DAG from `f + c + 1` distinct
-authors reach through one of their references `m z` and `i ≤ 1` further
-steps, to depth `K − i`, the reference lying in the sub-DAG when `i = 1`. -/
+authors reach through one of their references `m z` and `i ≤ K` further
+steps, to depth `K − i`, the history of `m z` to depth `i − 1`, through which
+they reach it, lying in the history an anchor point brings. -/
 inductive Anchored (U : SRecord Validator BlockId Payload) (K : ℕ) (A : BlockId) :
     BlockId → ℕ → Prop
   | anchor : Anchored U K A A K
@@ -130,8 +136,8 @@ inductive Anchored (U : SRecord Validator BlockId Payload) (K : ℕ) (A : BlockI
       (hy : ∀ z ∈ S, Anchored U K A (y z) (d z))
       (hz : ∀ z ∈ S, z ∈ historyUpto U (d z) (y z))
       (hy' : ∀ z ∈ S, 0 < i → Anchored U K A (y' z) (d' z))
-      (hmz : ∀ z ∈ S, 0 < i → m z ∈ historyUpto U (d' z) (y' z))
-      (hi : i ≤ 1) (hm : ∀ z ∈ S, m z ∈ (U.block z).refs ∧ x ∈ historyUpto U i (m z))
+      (hmz : ∀ z ∈ S, 0 < i → historyUpto U (i - 1) (m z) ⊆ historyUpto U (d' z) (y' z))
+      (hi : i ≤ K) (hm : ∀ z ∈ S, m z ∈ (U.block z).refs ∧ x ∈ historyUpto U i (m z))
       (hcard : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card) : Anchored U K A x (K - i)
 
 /-- **The available sub-DAG below `A`**: the history each anchor point

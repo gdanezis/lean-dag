@@ -98,7 +98,7 @@ theorem avail_subset_ids {K : ℕ} {A C : BlockId} (hA : A ∈ U.ids) (hC : C �
 /-- **A link from an anchor names a certified block**: votes in the sub-DAG
 certify it directly, and a claim in the sub-DAG was checked by a correct
 author. -/
-theorem certified_of_link (hrow : Row Validator p) {K : ℕ} (hK : 1 ≤ K)
+theorem certified_of_link (hrow : Row Validator p) {K : ℕ}
     (hck : Checks U K p.certThreshold) {A L : BlockId}
     (hA : p.voteIsCert = true ∨ Certified U p.certThreshold A) {r : ℕ}
     (hr : (U.block L).round = r) (h : CertLinked p U K A L r) :
@@ -114,7 +114,7 @@ theorem certified_of_link (hrow : Row Validator p) {K : ℕ} (hK : 1 ≤ K)
     rw [if_neg (by simp [hv])] at hCc
     have hAc : Certified U p.certThreshold A := hA.resolve_left (by simp [hv])
     have := F.card_validators
-    exact backed (by omega) hck (exists_correct_voter (by omega) hAc) hCa hCc.2
+    exact backed hck (exists_correct_voter (by omega) hAc) hCa hCc.2
   · simp only [linkStrength, hv, if_true]
     unfold Certified supporters
     rw [hr]
@@ -174,8 +174,8 @@ theorem not_certified_skip {t s : ℕ} (h : Fintype.card Validator + F.f < t + s
 /-- **A direct commit is linked from every leader block above its
 certificates**: the sub-DAG holds the certificates of `q + cm − n − f`
 authors, which the row makes the link size or more. -/
-theorem certLinked_of_commit (hrow : Row Validator p) (hsp : Spread Validator) {K : ℕ}
-    (hK : 6 ≤ K) (hch : Chains U) {A L : BlockId} (hA : A ∈ U.ids)
+theorem certLinked_of_commit (hrow : Row Validator p) {K : ℕ} (hdeep : Deep Validator K)
+    (hch : Chains U) {A L : BlockId} (hA : A ∈ U.ids)
     (hAl : (U.block A).creator ∈ Ld.leaders (U.block A).round) {r : ℕ}
     (hAr : r + (p.waveLength - 1) + 1 ≤ (U.block A).round)
     (h : p.commitThreshold ≤ (creatorsOf U.block (certsFor p U L r)).card) :
@@ -193,16 +193,16 @@ theorem certLinked_of_commit (hrow : Row Validator p) (hsp : Spread Validator) {
     · rw [if_pos hv] at hC ⊢
       obtain ⟨hCi, hCr, hLC⟩ := mem_votesFor.mp hC
       exact ⟨hCi, by rw [hw]; omega, hCr, hLC⟩
-  obtain ⟨X, hXs, hXa, hXn⟩ := linked_count hsp hK hch hA hAl hAr
+  obtain ⟨X, hXs, hXa, hXn⟩ := linked_count hdeep hch hA hAl hAr
     (Cl := certsFor p U L r) fun C hC => ⟨(hmem C hC).1, (hmem C hC).2.1⟩
   refine ⟨X, fun C hC => ⟨(hmem C (hXs hC)).1, hXa C hC, (hmem C (hXs hC)).2.2⟩, ?_⟩
   rcases hrow with ⟨-, -, h1, -, -, hq⟩ | ⟨-, -, -, -, h3⟩ <;> omega
 
 /-! ## The laws -/
 
-/-- **The laws of an anchored rule** hold of the commit rule at a row, under the
-spreading condition, at `K ≥ 6`, on a disciplined schedule and record. -/
-theorem sRule_laws (hrow : Row Validator p) (hsp : Spread Validator) {K : ℕ} (hK : 6 ≤ K) :
+/-- **The laws of an anchored rule** hold of the commit rule at a row and the
+depth the sub-DAG needs, on a disciplined schedule and record. -/
+theorem sRule_laws (hrow : Row Validator p) {K : ℕ} (hdeep : Deep Validator K) :
     (sRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) p K).Laws
       (Disciplined K p.certThreshold) where
   commit_unique := by
@@ -225,17 +225,17 @@ theorem sRule_laws (hrow : Row Validator p) (hsp : Spread Validator) {K : ℕ} (
     refine ⟨0, Nat.one_pos, ?_⟩
     have hAl : (U.block A).creator ∈ Ld.leaders (U.block A).round := by
       rw [hA.2.2, hA.2.1]; exact hI.1 j
-    exact certLinked_of_commit hrow hsp hK hI.2.1 hA.1 hAl (by rw [hA.2.1]; exact he) h.le
+    exact certLinked_of_commit hrow hdeep hI.2.1 hA.1 hAl (by rw [hA.2.1]; exact he) h.le
   commit_link_unique := by
     intro S U V k j i L₁ L₂ A hI hL₁ hL₂ h hA hanc _ _ _ hlink _
     exact eq_of_certified (row_arith hrow).2.2.1 (hL₁.2.2.trans hL₂.2.2.symm)
       (hL₁.2.1.trans hL₂.2.1.symm)
       (certified_of_commit hrow hI.2.2.2 hL₁.2.1 h.le)
-      (certified_of_link hrow (by omega) hI.2.2.1 hanc hL₂.2.1 hlink)
+      (certified_of_link hrow hI.2.2.1 hanc hL₂.2.1 hlink)
   skip_link := by
     intro S U V k i L A hI hskip hL _ hanc hlink
     exact not_certified_skip (row_arith hrow).2.2.2 hL.2.1
-      (certified_of_link hrow (by omega) hI.2.2.1 hanc hL.2.1 hlink)
+      (certified_of_link hrow hI.2.2.1 hanc hL.2.1 hlink)
       (hskip.le.trans (Finset.card_le_card
         (Finset.image_subset_image (slotBlamers_subset_omissionsOf hL))))
   link_unique := by
@@ -254,7 +254,7 @@ theorem sRule_laws (hrow : Row Validator p) (hsp : Spread Validator) {K : ℕ} (
     · exact Or.inl hv
   anchor_link := by
     intro S U k j i A L hI hA hanc _ hL _ hlink
-    have hc := certified_of_link hrow (by omega) hI.2.2.1 hanc hL.2.1 hlink
+    have hc := certified_of_link hrow hI.2.2.1 hanc hL.2.1 hlink
     cases hv : p.voteIsCert
     · right; simpa [linkStrength, hv] using hc
     · exact Or.inl hv

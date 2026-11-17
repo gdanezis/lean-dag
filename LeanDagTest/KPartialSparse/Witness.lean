@@ -107,13 +107,13 @@ theorem wChecks : Checks wU 6 3 := by
 holds a round-`4` claim for the leader block of round `2`. -/
 theorem wLinked : ∃ C ∈ Avail wU 6 (bid 5 2), (wU.block C).round = 2 + 2 ∧
     bid 2 2 ∈ claimsOf wU C :=
-  Avail.holds.1 (Fin 4) Id (Finset Id) wU 6 3 2 (bid 5 2) (bid 2 2) wSpread le_rfl wChains
+  Avail.holds.1 (Fin 4) Id (Finset Id) wU 6 3 2 (bid 5 2) (bid 2 2) (Or.inl ⟨wSpread, le_rfl⟩) wChains
     (by decide) (by decide) (by decide) (by decide) (by decide)
 
 /-- **Theorem 1, backed**: the round-`6` block of validator `0` references the
 leader block of round `5`, so every claim below it is certified. -/
 theorem wBacked : ∀ X ∈ Avail wU 6 (bid 5 2), ∀ L ∈ claimsOf wU X, Certified wU 3 L :=
-  Avail.holds.2.1 (Fin 4) Id (Finset Id) wU 6 3 (bid 5 2) (by decide) wChecks
+  Avail.holds.2.1 (Fin 4) Id (Finset Id) wU 6 3 (bid 5 2) wChecks
     ⟨bid 6 0, by decide, by decide, by decide⟩
 
 /-! ## The commit rule -/
@@ -140,7 +140,7 @@ theorem wAgrees (V : wU.View) (v : Option Id)
     (h : (sRule (Scheme.Params.mysticeti 4 1) 6).Decided (S := wSlots) wU V 2 v) :
     v = some (bid 2 2) :=
   (Agreement.agrees (Fin 4) Id (Finset Id) (Scheme.Params.mysticeti 4 1) wU 6 V (View.full wU) 2
-    v _ wRow.1 wRow.2 le_rfl wDisciplined h wCommits)
+    v _ wRow.1 (Or.inl ⟨wRow.2, le_rfl⟩) wDisciplined h wCommits)
 
 /-! ## What a node reads -/
 
@@ -158,7 +158,7 @@ theorem wNodeAgrees (H : Finset Id) (hH : H ⊆ wU.ids) (v : Option Id)
     (h : NodeDecided (S := wSlots) (Scheme.Params.mysticeti 4 1) wU 6 H 2 v) :
     v = some (bid 2 2) :=
   (Node.agrees (Fin 4) Id (Finset Id) (Scheme.Params.mysticeti 4 1) wU 6 H wHeld 2 v _ wRow.1
-    wRow.2 le_rfl wDisciplined hH (by decide) h wNodeCommits)
+    (Or.inl ⟨wRow.2, le_rfl⟩) wDisciplined hH (by decide) h wNodeCommits)
 
 /-- Every correct node checks claims on what it holds: holding the whole
 record backs every claim. -/

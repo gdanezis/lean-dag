@@ -26,8 +26,8 @@ theorem sound : Sound := by
   exact h.decided hH hHV
 
 theorem agrees : Agrees := by
-  intro Validator BlockId Payload _ _ _ _ _ _ _ _ p U K H₁ H₂ k v₁ v₂ hrow hsp hK hI hH₁ hH₂ h₁ h₂
-  exact h₁.agree hrow hsp hK hI hH₁ hH₂ h₂
+  intro Validator BlockId Payload _ _ _ _ _ _ _ _ p U K H₁ H₂ k v₁ v₂ hrow hdeep hI hH₁ hH₂ h₁ h₂
+  exact h₁.agree hrow hdeep hI hH₁ hH₂ h₂
 
 theorem checked : Checked := by
   intro Validator BlockId Payload _ _ _ _ _ _ _ U U' K t H L

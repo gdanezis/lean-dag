@@ -13,16 +13,16 @@ namespace KPartialSparse
 namespace Avail
 
 theorem linked : Linked := by
-  intro Validator BlockId Payload _ _ _ _ _ _ _ U K cm ρ A L hsp hK hch hA hAl hAr hcm hcl
-  exact KPartialSparse.linked hsp hK hch hA hAl hAr hcm hcl
+  intro Validator BlockId Payload _ _ _ _ _ _ _ U K cm ρ A L hdeep hch hA hAl hAr hcm hcl
+  exact KPartialSparse.linked hdeep hch hA hAl hAr hcm hcl
 
 theorem backed : Backed := by
-  intro Validator BlockId Payload _ _ _ _ _ _ _ U K t A hK hck hA X hX L hL
-  exact KPartialSparse.backed hK hck hA hX hL
+  intro Validator BlockId Payload _ _ _ _ _ _ _ U K t A hck hA X hX L hL
+  exact KPartialSparse.backed hck hA hX hL
 
 theorem held : Held := by
-  intro Validator BlockId Payload _ _ _ _ _ _ U K A hK hA X hX
-  exact avail_correctHeld hK hA hX
+  intro Validator BlockId Payload _ _ _ _ _ _ U K A hA X hX
+  exact avail_correctHeld hA hX
 
 theorem holds : Statement := ⟨linked, backed, held⟩
 

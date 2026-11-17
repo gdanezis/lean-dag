@@ -46,14 +46,14 @@ def Sound : Prop :=
     (v : Option BlockId), H ⊆ U.ids → H ⊆ V.ids → NodeDecided p U K H k v →
     (sRule p K).Decided (S := S) U V k v
 
-/-- **Two nodes decide each slot alike**, at a row, under the spreading
-condition, at `K ≥ 6`, on a disciplined schedule and record. -/
+/-- **Two nodes decide each slot alike**, at a row and the depth the sub-DAG
+needs, on a disciplined schedule and record. -/
 def Agrees : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
     [ClaimFormat BlockId Payload] [S : Slots Validator] (p : Params)
     (U : SRecord Validator BlockId Payload) (K : ℕ) (H₁ H₂ : Finset BlockId) (k : ℕ)
-    (v₁ v₂ : Option BlockId), Row Validator p → Spread Validator → 6 ≤ K →
+    (v₁ v₂ : Option BlockId), Row Validator p → Deep Validator K →
     Disciplined K p.certThreshold S U → H₁ ⊆ U.ids → H₂ ⊆ U.ids →
     NodeDecided p U K H₁ k v₁ → NodeDecided p U K H₂ k v₂ → v₁ = v₂
 

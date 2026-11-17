@@ -6,7 +6,9 @@ import LeanDag.KPartialDag.Helpers.Avail
 `docs/kpartial-sparse.md` §3. Every block reaches the correct blocks of `q − f`
 authors two rounds down in two steps (`card_reach2`), so a quorum of the
 sub-DAG anchors a correct block (`exists_reached`); dense blocks of the
-sub-DAG recur within four rounds (`DenseAt`, `denseAt_step`), and a quorum's
+sub-DAG recur within four rounds; without the spreading condition, every
+block of a quorum reaches one block in four steps (`exists_core_reached`), and
+dense blocks recur within six rounds (`Recurs`, `exists_recurs`); a quorum's
 claim lies under one of them (`linked`). Every block of the sub-DAG lies in
 the history a correct author holds (`exists_holder`), so it is held
 (`avail_correctHeld`) and its claims were checked (`backed`).
@@ -93,7 +95,7 @@ theorem Anchored.mem {K : ℕ} {A : BlockId} (hA : A ∈ U.ids) {x : BlockId} {d
 /-- **Anchoring from the sub-DAG in two steps**: a block that blocks of the
 available sub-DAG from `f + c + 1` distinct authors reach through references
 in the sub-DAG is an anchor point bringing `K − 1` rounds. -/
-theorem Anchored.of_avail_two {K : ℕ} {A x : BlockId} {S : Finset BlockId}
+theorem Anchored.of_avail_two {K : ℕ} (hK : 1 ≤ K) {A x : BlockId} {S : Finset BlockId}
     {m : BlockId → BlockId} (hS : ∀ z ∈ S, z ∈ Avail U K A ∧ m z ∈ Avail U K A)
     (hm : ∀ z ∈ S, m z ∈ (U.block z).refs) (href : ∀ z ∈ S, x ∈ (U.block (m z)).refs)
     (hcard : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card) :
@@ -103,11 +105,16 @@ theorem Anchored.of_avail_two {K : ℕ} {A x : BlockId} {S : Finset BlockId}
     (fun z => if h : z ∈ S then (hS z h).1.choose_spec.choose else K)
     (fun z => if h : z ∈ S then (hS z h).2.choose else A)
     (fun z => if h : z ∈ S then (hS z h).2.choose_spec.choose else K)
-    (fun z hz => ?_) (fun z hz => ?_) (fun z hz _ => ?_) (fun z hz _ => ?_) le_rfl
+    (fun z hz => ?_) (fun z hz => ?_) (fun z hz _ => ?_) (fun z hz _ => ?_) hK
     (fun z hz => ⟨hm z hz, ref_mem_historyUpto (k := 0) (href z hz)⟩) hcard <;>
     simp only [dif_pos hz]
-  exacts [(hS z hz).1.choose_spec.choose_spec.1, (hS z hz).1.choose_spec.choose_spec.2,
-    (hS z hz).2.choose_spec.choose_spec.1, (hS z hz).2.choose_spec.choose_spec.2]
+  · exact (hS z hz).1.choose_spec.choose_spec.1
+  · exact (hS z hz).1.choose_spec.choose_spec.2
+  · exact (hS z hz).2.choose_spec.choose_spec.1
+  · intro w hw
+    rw [show 1 - 1 = 0 from rfl, historyUpto_zero, Finset.mem_singleton] at hw
+    subst hw
+    exact (hS z hz).2.choose_spec.choose_spec.2
 
 /-! ## The double count -/
 
@@ -223,8 +230,8 @@ theorem exists_correct_named (hsp : Spread Validator) {S : Finset BlockId}
 blocks of the available sub-DAG at round `ρ + 2` from a quorum of distinct
 authors, whose references lie in the sub-DAG, reach in two steps a correct
 author's round-`ρ` block from `f + c + 1` of those authors. -/
-theorem exists_reached (hsp : Spread Validator) {K : ℕ} {A : BlockId} {S : Finset BlockId}
-    {ρ : ℕ}
+theorem exists_reached (hsp : Spread Validator) {K : ℕ} (hK : 1 ≤ K) {A : BlockId}
+    {S : Finset BlockId} {ρ : ℕ}
     (hS : ∀ z ∈ S, z ∈ U.ids ∧ (U.block z).round = ρ + 2 ∧ z ∈ Avail U K A ∧
       ∀ m ∈ (U.block z).refs, m ∈ Avail U K A)
     (hq : kQuorum Validator ≤ (creatorsOf U.block S).card) :
@@ -255,26 +262,166 @@ theorem exists_reached (hsp : Spread Validator) {K : ℕ} {A : BlockId} {S : Fin
     have : x' = x := U.no_equivocation x' hx'i x hx' (hx'w ▸ hwC) (hx'w.trans hxw.symm)
       (hx'r.trans hxr.symm)
     exact this ▸ hx'm
-  refine ⟨x, hx', hxr, hxw ▸ hwC, Anchored.of_avail_two (S := S') (m := m)
+  refine ⟨x, hx', hxr, hxw ▸ hwC, Anchored.of_avail_two hK (S := S') (m := m)
     (fun z hz => ?_) (fun z hz => (hmz z hz).1) (fun z hz => (hmz z hz).2) hcard⟩
   have hzS := (Finset.mem_filter.mp hz).1
   exact ⟨(hS z hzS).2.2.1, (hS z hzS).2.2.2 _ (hmz z hz).1⟩
 
+/-! ## The core, without the spreading condition -/
+
+/-- The arithmetic of the core: `m` correct authors each naming `q − b` of
+`n − b` correct authors cannot leave every author named by `m − (q − b)` or
+fewer of them, at `n ≥ 3f + 2c + 1`. -/
+theorem core_arith {n f c b Cc m g : ℕ} (hn : 3 * f + 2 * c + 1 ≤ n) (hb : b ≤ f)
+    (hC : Cc + b = n) (hmC : m ≤ Cc) (hbig : m * (n - f - c - b) ≤ Cc * g)
+    (hg : g + (n - f - c - b) ≤ m) : False := by
+  obtain ⟨Q, hQ⟩ : ∃ Q, n = Q + f + c + b := ⟨n - f - c - b, by omega⟩
+  have eQ : n - f - c - b = Q := by omega
+  rw [eQ] at hbig hg
+  have hCc : Cc = Q + f + c := by omega
+  subst hCc
+  have hQf : f + c + 1 ≤ Q := by omega
+  have k1 : (Q + f + c) * g + (Q + f + c) * Q ≤ (Q + f + c) * m := by
+    rw [← Nat.mul_add]; exact Nat.mul_le_mul_left _ hg
+  have k2 : (f + c) * m ≤ (f + c) * (Q + f + c) := Nat.mul_le_mul_left _ hmC
+  have k3 : (f + c + 1) * (Q + f + c) ≤ Q * (Q + f + c) := Nat.mul_le_mul_right _ hQf
+  nlinarith
+
+/-- **The core**: blocks of the sub-DAG at round `ρ + 4` from a quorum of
+distinct authors, with their history to depth three in the history an anchor
+point brings, all reach in four steps one correct author's round-`ρ` block,
+an anchor point bringing `K − 3` rounds; at `n ≥ 3f + 2c + 1`, with no
+spreading condition. -/
+theorem exists_core_reached {K : ℕ} (hK : 3 ≤ K) {A : BlockId} {S : Finset BlockId} {ρ : ℕ}
+    (hS : ∀ z ∈ S, z ∈ U.ids ∧ (U.block z).round = ρ + 4 ∧
+      ∃ y d, Anchored U K A y d ∧ historyUpto U 3 z ⊆ historyUpto U d y)
+    (hq : kQuorum Validator ≤ (creatorsOf U.block S).card) :
+    ∃ x ∈ U.ids, (U.block x).round = ρ ∧ (U.block x).creator ∈ (Correct : Finset Validator) ∧
+      Anchored U K A x (K - 3) := by
+  classical
+  obtain ⟨hcb, hbf, hnv⟩ := faults_arith (Validator := Validator)
+  have hnc := Cr.card_validators
+  -- two-step names, from a block at round `ρ + 4` and from one at round `ρ + 2`
+  let R : BlockId → Validator → Prop := fun z w => ∃ m ∈ (U.block z).refs, ∃ b ∈ (U.block m).refs,
+    (U.block b).round = ρ + 2 ∧ (U.block b).creator = w
+  let R' : Validator → Validator → Prop := fun w x => ∃ b ∈ U.ids, (U.block b).round = ρ + 2 ∧
+    (U.block b).creator = w ∧ ∃ m ∈ (U.block b).refs, ∃ c ∈ (U.block m).refs,
+      (U.block c).round = ρ ∧ (U.block c).creator = x
+  set Cs := (Correct : Finset Validator)
+  set M := Cs.filter fun w => ∃ z ∈ S, R z w
+  have hRz : ∀ z ∈ S, kQuorum Validator - F.byzantine.card ≤ (Cs.filter (R z)).card :=
+    fun z hz => card_reach2 (hS z hz).1 (by rw [(hS z hz).2.1])
+  have hRzM : ∀ z ∈ S, Cs.filter (R z) ⊆ M := fun z hz w hw => by
+    obtain ⟨hwC, hR⟩ := Finset.mem_filter.mp hw
+    exact Finset.mem_filter.mpr ⟨hwC, z, hz, hR⟩
+  -- each author of `M` names `q − f` correct authors two rounds further down
+  have hM : ∀ w ∈ M, kQuorum Validator - F.byzantine.card ≤ (Cs.filter (R' w)).card := by
+    intro w hw
+    obtain ⟨hwC, z, hz, m, hm, b, hb, hbr, hbw⟩ := Finset.mem_filter.mp hw
+    have hmi : m ∈ U.ids := U.complete z (hS z hz).1 m hm
+    have hbi : b ∈ U.ids := U.complete m hmi b hb
+    refine (card_reach2 hbi hbr).trans (Finset.card_le_card fun x hx => ?_)
+    obtain ⟨hxC, m', hm', c, hc, hcr, hcx⟩ := Finset.mem_filter.mp hx
+    exact Finset.mem_filter.mpr ⟨hxC, b, hbi, hbr, hbw, m', hm', c, hc, hcr, hcx⟩
+  have hCne : Cs.Nonempty := by rw [← Finset.card_pos]; omega
+  let g : Validator → ℕ := fun x => (M.filter fun w => R' w x).card
+  obtain ⟨x, hxC, hxmax⟩ := Cs.exists_max_image g hCne
+  have hbig : M.card * (kQuorum Validator - F.byzantine.card) ≤ Cs.card * g x := by
+    have := Finset.card_nsmul_le_card_nsmul (r := fun w x => R' w x) (s := M) (t := Cs)
+      (m := kQuorum Validator - F.byzantine.card) (n := g x)
+      (fun w hw => hM w hw) (fun v hv => hxmax v hv)
+    simpa [smul_eq_mul] using this
+  obtain ⟨z₀, hz₀⟩ : S.Nonempty := by
+    rw [← Finset.card_pos]; exact lt_of_lt_of_le (by omega) (hq.trans Finset.card_image_le)
+  have hmq : kQuorum Validator - F.byzantine.card ≤ M.card :=
+    (hRz z₀ hz₀).trans (Finset.card_le_card (hRzM z₀ hz₀))
+  have hgx : M.card < (M.filter fun w => R' w x).card + (kQuorum Validator - F.byzantine.card) := by
+    by_contra hle
+    push Not at hle
+    exact core_arith hnc hbf hcb (Finset.card_le_card (Finset.filter_subset _ _)) hbig hle
+  -- the round-`ρ` block of `x`
+  obtain ⟨w₀, hw₀⟩ : (M.filter fun w => R' w x).Nonempty := by
+    rw [← Finset.card_pos]; omega
+  obtain ⟨-, b₀, hb₀i, -, -, m₀, hm₀, x₀, hx₀, hx₀r, hx₀x⟩ := Finset.mem_filter.mp hw₀
+  have hm₀i : m₀ ∈ U.ids := U.complete b₀ hb₀i m₀ hm₀
+  have hx₀i : x₀ ∈ U.ids := U.complete m₀ hm₀i x₀ hx₀
+  -- every block of `S` reaches it through an author of `M` that names `x`
+  have hreach : ∀ z ∈ S, ∃ m ∈ (U.block z).refs, x₀ ∈ historyUpto U 3 m := by
+    intro z hz
+    have hu := Finset.card_union_add_card_inter (Cs.filter (R z)) (M.filter fun w => R' w x)
+    have hsub : Cs.filter (R z) ∪ M.filter (fun w => R' w x) ⊆ M :=
+      Finset.union_subset (hRzM z hz) (Finset.filter_subset _ _)
+    have := Finset.card_le_card hsub
+    have := hRz z hz
+    obtain ⟨w, hw⟩ : (Cs.filter (R z) ∩ M.filter fun w => R' w x).Nonempty := by
+      rw [← Finset.card_pos]; omega
+    obtain ⟨hw₁, hw₂⟩ := Finset.mem_inter.mp hw
+    obtain ⟨hwC, m, hm, b, hb, hbr, hbw⟩ := Finset.mem_filter.mp hw₁
+    obtain ⟨-, b', hb'i, hb'r, hb'w, m', hm', c, hc, hcr, hcx⟩ := Finset.mem_filter.mp hw₂
+    have hmi : m ∈ U.ids := U.complete z (hS z hz).1 m hm
+    have hbi : b ∈ U.ids := U.complete m hmi b hb
+    have hbb : b' = b := U.no_equivocation b' hb'i b hbi (hb'w ▸ hwC) (hb'w.trans hbw.symm)
+      (hb'r.trans hbr.symm)
+    subst hbb
+    have hm'i : m' ∈ U.ids := U.complete b' hb'i m' hm'
+    have hci : c ∈ U.ids := U.complete m' hm'i c hc
+    have hcc : c = x₀ := U.no_equivocation c hci x₀ hx₀i (hcx ▸ hxC) (hcx.trans hx₀x.symm)
+      (hcr.trans hx₀r.symm)
+    subst hcc
+    refine ⟨m, hm, ?_⟩
+    have h1 : b' ∈ historyUpto U 1 m := ref_mem_historyUpto (k := 0) hb
+    have h2 : c ∈ historyUpto U 2 b' :=
+      historyUpto_trans (ref_mem_historyUpto (k := 0) hm') (ref_mem_historyUpto (k := 0) hc)
+    exact historyUpto_trans h1 h2
+  let mz : BlockId → BlockId := fun z => if h : z ∈ S then (hreach z h).choose else z
+  let yz : BlockId → BlockId := fun z => if h : z ∈ S then (hS z h).2.2.choose else A
+  let dz : BlockId → ℕ := fun z => if h : z ∈ S then (hS z h).2.2.choose_spec.choose else K
+  have hyz : ∀ z ∈ S, Anchored U K A (yz z) (dz z) ∧ historyUpto U 3 z ⊆ historyUpto U (dz z) (yz z) :=
+    fun z hz => by
+      simp only [yz, dz, dif_pos hz]
+      exact (hS z hz).2.2.choose_spec.choose_spec
+  have hmzs : ∀ z ∈ S, mz z ∈ (U.block z).refs ∧ x₀ ∈ historyUpto U 3 (mz z) := fun z hz => by
+    simp only [mz, dif_pos hz]
+    exact (hreach z hz).choose_spec
+  have hcard : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card := by omega
+  refine ⟨x₀, hx₀i, hx₀r, hx₀x ▸ hxC, Anchored.reached 3 S mz yz dz yz dz
+    (fun z hz => (hyz z hz).1) (fun z hz => (hyz z hz).2 mem_historyUpto_self)
+    (fun z hz _ => (hyz z hz).1) (fun z hz _ => ?_) hK hmzs hcard⟩
+  intro w hw
+  exact (hyz z hz).2 (historyUpto_trans (ref_mem_historyUpto (k := 0) (hmzs z hz).1) hw)
+
 /-! ## Descent -/
 
 /-- A dense block at round `t` within one step of an anchor point bringing
-`K − 1` rounds or more. -/
-def DenseAt (U : SRecord Validator BlockId Payload) (K : ℕ) (A : BlockId) (t : ℕ) : Prop :=
-  ∃ y d v, Anchored U K A y d ∧ K - 1 ≤ d ∧ v ∈ historyUpto U 1 y ∧ v ∈ U.ids ∧
+`e` rounds or more. -/
+def DenseAt (U : SRecord Validator BlockId Payload) (K : ℕ) (A : BlockId) (e t : ℕ) : Prop :=
+  ∃ y d v, Anchored U K A y d ∧ e ≤ d ∧ v ∈ historyUpto U 1 y ∧ v ∈ U.ids ∧
     Dense (kQuorum Validator) U.block (U.block v) ∧ (U.block v).round = t
 
-/-- **Dense blocks of the sub-DAG recur within four rounds**: below a dense
-block at round `t ≥ 5` near an anchor point, a correct block three rounds down
+/-- Dense blocks near anchor points bringing `e` rounds recur at most `g`
+rounds apart. -/
+def Recurs (U : SRecord Validator BlockId Payload) (K : ℕ) (A : BlockId) (e g : ℕ) : Prop :=
+  ∀ t, DenseAt U K A e t → g + 1 ≤ t → ∃ t', t - g ≤ t' ∧ t' < t ∧ DenseAt U K A e t'
+
+/-- An anchor point, or the leader block it references, is dense. -/
+theorem denseAt_of_anchored {K e d : ℕ} {A x : BlockId} (hx : x ∈ U.ids)
+    (hxr : 2 ≤ (U.block x).round) (hxa : Anchored U K A x d) (hd : e ≤ d) :
+    DenseAt U K A e (U.block x).round ∨ DenseAt U K A e ((U.block x).round - 1) := by
+  rcases (U.valid x hx).shape (by omega) with hdx | ⟨-, -, ℓ, hℓ, hℓr, hℓL⟩
+  · exact Or.inl ⟨x, d, x, hxa, hd, mem_historyUpto_self, hx, hdx, rfl⟩
+  · have hℓ' : ℓ ∈ U.ids := U.complete x hx ℓ hℓ
+    have hdl := (U.valid ℓ hℓ').leader (by omega)
+      (by rw [show (U.block ℓ).round = (U.block x).round - 1 by omega]; exact hℓL)
+    exact Or.inr ⟨x, d, ℓ, hxa, hd, ref_mem_historyUpto (k := 0) hℓ, hℓ', hdl, by omega⟩
+
+/-- **Under the spreading condition, dense blocks recur within four rounds**:
+below a dense block near an anchor point, a correct block three rounds down
 is an anchor point, and it or its leader reference is dense. -/
-theorem denseAt_step (hsp : Spread Validator) {K : ℕ} (hK : 4 ≤ K) {A : BlockId} {t : ℕ}
-    (h : DenseAt U K A t) (ht : 5 ≤ t) : ∃ t', t - 4 ≤ t' ∧ t' < t ∧ DenseAt U K A t' := by
+theorem recurs_spread (hsp : Spread Validator) {K : ℕ} (hK : 4 ≤ K) {A : BlockId} :
+    Recurs U K A (K - 1) 4 := by
+  intro t h ht
   obtain ⟨y, d, v, hy, hd, hvy, hv, hdv, hvr⟩ := h
-  obtain ⟨x, hx, hxr, -, hxa⟩ := exists_reached hsp (K := K) (A := A)
+  obtain ⟨x, hx, hxr, -, hxa⟩ := exists_reached hsp (by omega) (K := K) (A := A)
     (S := below1 U.block (U.block v)) (ρ := t - 3)
     (fun z hz => by
       obtain ⟨hz₁, hzr⟩ := Finset.mem_filter.mp hz
@@ -282,27 +429,47 @@ theorem denseAt_step (hsp : Spread Validator) {K : ℕ} (hK : 4 ≤ K) {A : Bloc
       refine ⟨U.complete v hv z hz₁, by omega, ⟨y, d, hy, historyUpto_mono (by omega) _ hz2⟩,
         fun m hm => ⟨y, d, hy, historyUpto_mono (by omega) _
           (historyUpto_trans hz2 (ref_mem_historyUpto (k := 0) hm))⟩⟩) hdv
-  rcases (U.valid x hx).shape (by omega) with hdx | ⟨-, -, ℓ, hℓ, hℓr, hℓL⟩
-  · exact ⟨t - 3, by omega, by omega, x, K - 1, x, hxa, le_refl _, mem_historyUpto_self, hx, hdx, hxr⟩
-  · have hℓ' : ℓ ∈ U.ids := U.complete x hx ℓ hℓ
-    have hℓr' : (U.block ℓ).round = t - 4 := by omega
-    have hdl := (U.valid ℓ hℓ').leader (by omega)
-      (by rw [hℓr', show t - 4 = (U.block x).round - 1 by omega]; exact hℓL)
-    exact ⟨t - 4, le_refl _, by omega, x, K - 1, ℓ, hxa, le_refl _,
-      ref_mem_historyUpto (k := 0) hℓ, hℓ', hdl, hℓr'⟩
+  rcases denseAt_of_anchored hx (by omega) hxa le_rfl with h' | h'
+  · exact ⟨_, by omega, by omega, h'⟩
+  · exact ⟨_, by omega, by omega, h'⟩
 
-/-- **A dense block of the sub-DAG in every four-round window** from `u + 1`
+/-- **At any `n ≥ 3f + 2c + 1`, dense blocks recur within six rounds**: below a
+dense block near an anchor point, the core five rounds down is an anchor
+point, and it or its leader reference is dense. -/
+theorem recurs_core {K : ℕ} (hK : 8 ≤ K) {A : BlockId} : Recurs U K A (K - 3) 6 := by
+  intro t h ht
+  obtain ⟨y, d, v, hy, hd, hvy, hv, hdv, hvr⟩ := h
+  obtain ⟨x, hx, hxr, -, hxa⟩ := exists_core_reached (by omega) (K := K) (A := A)
+    (S := below1 U.block (U.block v)) (ρ := t - 5)
+    (fun z hz => by
+      obtain ⟨hz₁, hzr⟩ := Finset.mem_filter.mp hz
+      have hz2 : z ∈ historyUpto U 2 y := historyUpto_trans hvy (ref_mem_historyUpto (k := 0) hz₁)
+      refine ⟨U.complete v hv z hz₁, by omega, y, d, hy, fun w hw => ?_⟩
+      exact historyUpto_mono (by omega) _ (historyUpto_trans hz2 hw)) hdv
+  rcases denseAt_of_anchored hx (by omega) hxa le_rfl with h' | h'
+  · exact ⟨_, by omega, by omega, h'⟩
+  · exact ⟨_, by omega, by omega, h'⟩
+
+/-- **A dense block of the sub-DAG in every window of `g` rounds** from `u + 1`
 up to a dense block of the sub-DAG. -/
-theorem denseAt_window (hsp : Spread Validator) {K : ℕ} (hK : 4 ≤ K) {A : BlockId} (u : ℕ) :
-    ∀ t, DenseAt U K A t → u + 1 ≤ t → ∃ t', u + 1 ≤ t' ∧ t' ≤ u + 4 ∧ DenseAt U K A t' := by
+theorem denseAt_window {K e g : ℕ} {A : BlockId} (hrec : Recurs U K A e g) (u : ℕ) :
+    ∀ t, DenseAt U K A e t → u + 1 ≤ t → ∃ t', u + 1 ≤ t' ∧ t' ≤ u + g ∧ DenseAt U K A e t' := by
   intro t
   induction t using Nat.strong_induction_on with
   | _ t ih =>
     intro h ht
-    by_cases hle : t ≤ u + 4
+    by_cases hle : t ≤ u + g
     · exact ⟨t, ht, hle, h⟩
-    · obtain ⟨t', ht'₁, ht'₂, h'⟩ := denseAt_step hsp hK h (by omega)
+    · obtain ⟨t', ht'₁, ht'₂, h'⟩ := hrec t h (by omega)
       exact ih t' ht'₂ h' (by omega)
+
+/-- **At the depth the sub-DAG needs, dense blocks recur** close enough for the
+history an anchor point brings to reach a whole window. -/
+theorem exists_recurs {K : ℕ} (hdeep : Deep Validator K) {A : BlockId} :
+    ∃ e g, Recurs U K A e g ∧ g + 1 ≤ e ∧ e ≤ K := by
+  rcases hdeep with ⟨hsp, hK⟩ | hK
+  · exact ⟨K - 1, 4, recurs_spread hsp (by omega), by omega, by omega⟩
+  · exact ⟨K - 3, 6, recurs_core (by omega), by omega, by omega⟩
 
 /-! ## Linked and backed -/
 
@@ -325,7 +492,7 @@ omit [ClaimFormat BlockId Payload] in
 /-- **The sub-DAG holds a quorum's overlap**: below a leader block above round
 `u`, of blocks at round `u` from `cm` distinct authors, the sub-DAG holds those
 of `q + cm − n − f` authors or more. -/
-theorem linked_count (hsp : Spread Validator) {K : ℕ} (hK : 6 ≤ K) (hch : Chains U)
+theorem linked_count {K : ℕ} (hdeep : Deep Validator K) (hch : Chains U)
     {A : BlockId} (hA : A ∈ U.ids) (hAl : (U.block A).creator ∈ Ld.leaders (U.block A).round)
     {u : ℕ} (hAr : u + 1 ≤ (U.block A).round) {Cl : Finset BlockId}
     (hCl : ∀ C ∈ Cl, C ∈ U.ids ∧ (U.block C).round = u) :
@@ -334,8 +501,9 @@ theorem linked_count (hsp : Spread Validator) {K : ℕ} (hK : 6 ≤ K) (hch : Ch
         Fintype.card Validator + F.f + (creatorsOf U.block X).card := by
   classical
   have hdA := (U.valid A hA).leader (by omega) hAl
+  obtain ⟨e, g, hrec, hge, heK⟩ := exists_recurs (U := U) hdeep (A := A)
   obtain ⟨t, ht₁, ht₂, y, d, v, hy, hd, hvy, hv, hdv, hvr⟩ :=
-    denseAt_window hsp (by omega) u _ ⟨A, K, A, Anchored.anchor, by omega, mem_historyUpto_self,
+    denseAt_window hrec u _ ⟨A, K, A, Anchored.anchor, heK, mem_historyUpto_self,
       hA, hdA, rfl⟩ hAr
   set R := creatorsOf U.block (below1 U.block (U.block v))
   set W := (R ∩ creatorsOf U.block Cl) ∩ (Correct : Finset Validator)
@@ -366,13 +534,13 @@ theorem linked_count (hsp : Spread Validator) {K : ℕ} (hK : 6 ≤ K) (hch : Ch
 
 /-- **A quorum's claim lies in the sub-DAG** below a leader block at round
 `ρ + 3` or above. -/
-theorem linked (hsp : Spread Validator) {K cm ρ : ℕ} (hK : 6 ≤ K) (hch : Chains U) {A L : BlockId}
+theorem linked {K cm ρ : ℕ} (hdeep : Deep Validator K) (hch : Chains U) {A L : BlockId}
     (hA : A ∈ U.ids) (hAl : (U.block A).creator ∈ Ld.leaders (U.block A).round)
     (hAr : ρ + 3 ≤ (U.block A).round)
     (hcm : Fintype.card Validator + F.f < kQuorum Validator + cm)
     (hcl : cm ≤ (creatorsOf U.block (claimersOf U L (ρ + 2))).card) :
     ∃ C ∈ Avail U K A, (U.block C).round = ρ + 2 ∧ L ∈ claimsOf U C := by
-  obtain ⟨X, hXs, hXa, hXn⟩ := linked_count hsp hK hch hA hAl (u := ρ + 2) hAr
+  obtain ⟨X, hXs, hXa, hXn⟩ := linked_count hdeep hch hA hAl (u := ρ + 2) hAr
     (Cl := claimersOf U L (ρ + 2)) fun C hC => mem_blocksAt.mp (Finset.mem_filter.mp hC).1
   have hpos : 0 < (creatorsOf U.block X).card := by omega
   obtain ⟨C, hC⟩ : X.Nonempty := by
@@ -384,7 +552,7 @@ theorem linked (hsp : Spread Validator) {K cm ρ : ℕ} (hK : 6 ≤ K) (hch : Ch
 omit [ClaimFormat BlockId Payload] in
 /-- **Every block of the sub-DAG has a correct holder**: it lies in the history
 to depth `K` of a block a correct author references. -/
-theorem exists_holder {K : ℕ} (hK : 1 ≤ K) {A : BlockId}
+theorem exists_holder {K : ℕ} {A : BlockId}
     (hA : ∃ z ∈ U.ids, (U.block z).creator ∈ (Correct : Finset Validator) ∧ A ∈ (U.block z).refs)
     {X : BlockId} (hX : X ∈ Avail U K A) :
     ∃ z ∈ U.ids, (U.block z).creator ∈ (Correct : Finset Validator) ∧
@@ -410,19 +578,19 @@ theorem exists_holder {K : ℕ} (hK : 1 ≤ K) {A : BlockId}
 omit [ClaimFormat BlockId Payload] in
 /-- **The sub-DAG is held by correct nodes**, below a block a correct author
 references. -/
-theorem avail_correctHeld {K : ℕ} (hK : 1 ≤ K) {A : BlockId}
+theorem avail_correctHeld {K : ℕ} {A : BlockId}
     (hA : ∃ z ∈ U.ids, (U.block z).creator ∈ (Correct : Finset Validator) ∧ A ∈ (U.block z).refs)
     {X : BlockId} (hX : X ∈ Avail U K A) : X ∈ CorrectHeld U K := by
-  obtain ⟨z, hz, hzc, m, hm, hXm⟩ := exists_holder hK hA hX
+  obtain ⟨z, hz, hzc, m, hm, hXm⟩ := exists_holder hA hX
   exact ⟨z, hz, hzc, Or.inr ⟨m, hm, hXm⟩⟩
 
 /-- **Claims of the sub-DAG are backed**: each lies in the history to depth `K`
 of a block a correct author references, which that author checked. -/
-theorem backed {K t : ℕ} (hK : 1 ≤ K) (hck : Checks U K t) {A : BlockId}
+theorem backed {K t : ℕ} (hck : Checks U K t) {A : BlockId}
     (hA : ∃ z ∈ U.ids, (U.block z).creator ∈ (Correct : Finset Validator) ∧ A ∈ (U.block z).refs)
     {X : BlockId} (hX : X ∈ Avail U K A) {L : BlockId} (hL : L ∈ claimsOf U X) :
     Certified U t L := by
-  obtain ⟨z, hz, hzc, m, hm, hXm⟩ := exists_holder hK hA hX
+  obtain ⟨z, hz, hzc, m, hm, hXm⟩ := exists_holder hA hX
   exact hck z hz hzc m hm X hXm L hL
 
 end KPartialSparse

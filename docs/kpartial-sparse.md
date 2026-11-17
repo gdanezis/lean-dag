@@ -47,28 +47,33 @@ shows that a correct author checked each of those.
 
 Below a block `A`, a block `x` is an *anchor point* when it is `A`, which
 brings its history to depth `K`, or when blocks of the sub-DAG from
-`f + c + 1` distinct authors reach `x` through one of their references and
-`i ≤ 1` further steps; `x` then brings its history to depth `K − i`, and
-when `i = 1` the reference lies in the sub-DAG (`Anchored`). At `i = 0` the
-authors reference `x`; at `i = 1` they reach it in two steps. These are the
-two cases of `docs/kpartial.md` §3, where the second needs crashes; here it
-does not. A correct author holds the history to depth `K` of each block it
-references, so one of the `f + c + 1` authors holds what `x` brings and
-checked its claims. Reaching further needs a node to hold the path to `x`,
-which §5 does not fetch. The *available sub-DAG* below `A` is the union of
-the histories the anchor points bring (`Avail`).
+`f + c + 1` distinct authors each reach `x` through one of their references
+`m` and `i ≤ K` further steps; `x` then brings its history to depth `K − i`,
+and the history of `m` to depth `i − 1`, through which the path runs, lies
+in the history some anchor point brings (`Anchored`). At `i = 0` the authors
+reference `x`; at `i = 1` they reach it in two steps, the two cases of
+`docs/kpartial.md` §3, where the second needs crashes and here does not. A
+correct author holds the history to depth `K` of each block it references,
+so one of the `f + c + 1` authors holds what `x` brings and checked its
+claims; a node holding the sub-DAG holds the path (§5). The *available
+sub-DAG* below `A` is the union of the histories the anchor points bring
+(`Avail`).
+
+The sub-DAG needs a depth (`Deep`): `K ≥ 6` under the spreading condition
+`(n − f)(f + c) < q(q − f)`, which holds without crashes
+and at `n ≥ 5f + 3c + 1`; or `K ≥ 10` at any `n ≥ 3f + 2c + 1`.
 
 **Theorem 1 (the available sub-DAG; `Avail.Statement`).**
 
-* *Linked* (`Avail.Linked`). Under the spreading condition
-  `(n − f)(f + c) < q(q − f)`, at `K ≥ 6`, with correct chains: if blocks
+* *Linked* (`Avail.Linked`). At the depth the sub-DAG needs, with correct
+  chains: if blocks
   of `cm` distinct authors at round `ρ + 2` claim `L` and `n + f < q + cm`,
   then below a leader block at round `ρ + 3` or above the sub-DAG holds a
   claim for `L` at round `ρ + 2`.
-* *Backed* (`Avail.Backed`). At `K ≥ 1`, when correct authors check claims,
+* *Backed* (`Avail.Backed`). When correct authors check claims,
   below a block that a correct author references every claim in the
   sub-DAG names a certified block.
-* *Held* (`Avail.Held`). At `K ≥ 1`, below a block that a correct author
+* *Held* (`Avail.Held`). Below a block that a correct author
   references, every block of the sub-DAG is held by a correct node
   (`CorrectHeld`).
 
@@ -81,25 +86,36 @@ The proof of *Linked* has four steps.
    round below. If one of them is dense, the block reaches through it.
    Otherwise each of them is sparse and references its author's block of
    round `ρ` (rule 2), and these are blocks of distinct correct authors.
-2. *Double count* (`exists_correct_named`, `exists_reached`). Blocks of the
-   sub-DAG from a quorum of distinct authors, with their references in the
-   sub-DAG, reach some correct author's round-`ρ` block from `f + c + 1` of
-   those authors, under the spreading condition. That block is an anchor
-   point. This is the count of `docs/kpartial.md` §3, *Broad*, taken two
-   steps down.
-3. *Descent* (`denseAt_step`, `denseAt_window`). A dense block within one
-   step of an anchor point gives, from its references, an anchor point
-   three rounds down. That anchor point is dense, or it is sparse and
-   references a leader block one round lower, which is dense. So, from `A`
-   down, dense blocks within one step of an anchor point recur at most
-   four rounds apart, and one lies at a round `t` with
-   `ρ + 3 ≤ t ≤ ρ + 6`.
-4. *Overlap* (`linked`). The references of that dense block are blocks of
-   `q` distinct authors at round `t − 1`. They share a correct author with
-   the `cm` claimers, since `n + f < q + cm`. That author's chain leads
-   from its block at round `t − 1` down to its claim at round `ρ + 2`, at
-   most `t − ρ − 3` steps. The claim therefore lies within depth
-   `t − ρ − 1 ≤ K − 1` of the anchor point.
+2. *A new anchor point*, by one of two counts.
+   * Under the spreading condition (`exists_correct_named`,
+     `exists_reached`): blocks of the sub-DAG from a quorum of distinct
+     authors, with their references in the sub-DAG, reach some correct
+     author's round-`ρ` block from `f + c + 1` of those authors. This is the
+     count of `docs/kpartial.md` §3, *Broad*, taken two steps down.
+   * At any `n ≥ 3f + 2c + 1` (`exists_core_reached`): let `M` be the correct
+     blocks two rounds below a quorum that some block of the quorum reaches
+     in two steps, `m` of them. Each block of the quorum reaches `q − f` of
+     `M`, and each block of `M` reaches `q − f` correct blocks two rounds
+     further down. Counting, some such block `x` is reached by more than
+     `m − (q − f)` blocks of `M`, since `(n − f)(q − f) > m(f + c)` when
+     `q − f > f + c` (`core_arith`). So every block of the quorum reaches a
+     block of `M` that reaches `x`: all of them reach `x` in four steps. This
+     is the two-step core of `docs/kpartial.md` §3, *Core*, with two-step
+     layers.
+3. *Descent* (`recurs_spread`, `recurs_core`, `denseAt_window`). A dense
+   block within one step of an anchor point gives, from its references, an
+   anchor point three rounds down (first count) or five (second). That
+   anchor point is dense, or it is sparse and references a leader block one
+   round lower, which is dense. So dense blocks near anchor points recur at
+   most four, or six, rounds apart, and one lies in every such window above
+   round `u`.
+4. *Overlap* (`linked_count`). The references of that dense block are blocks
+   of `q` distinct authors one round below it. Of blocks at round `u` from
+   `cm` distinct authors, they share `q + cm − n − f` correct authors or
+   more, and each such author's chain leads from its referenced block down
+   to its block at round `u`, within the history the anchor point brings at
+   the depth the sub-DAG needs. With claims at round `ρ + 2` and
+   `n + f < q + cm`, one claim lies in the sub-DAG.
 
 *Backed* and *Held* follow from the definition of anchor points
 (`exists_holder`). Among `f + c + 1` distinct authors one is correct. It
@@ -139,9 +155,10 @@ certified blocks (`Truthful`).
 
 **Theorem 2 (agreement; `Agreement.Statement`).**
 
-* *Laws* (`Agreement.Laws`). At a row, under the spreading condition, at
-  `K ≥ 6`, the rule meets the laws of an anchored rule on a disciplined
-  schedule and record.
+* *Laws* (`Agreement.Laws`). At a row and the depth the sub-DAG needs, the
+  rule meets the laws of an anchored rule on a disciplined schedule and
+  record. Hybrid Mysticeti is therefore safe at every crash bound, at
+  `K ≥ 10`.
 * *Agreement* (`Agreement.Agrees`). So two views of one record decide each
   slot alike.
 * *Rows* (`Agreement.Rows`). Without crashes, Mysticeti and Cordial Miners
@@ -170,8 +187,9 @@ the row makes `linkSize` or more (`certLinked_of_commit`).
 ## 5. What a node reads
 
 A node holds a set `H` of blocks of the record. It reads anchor points on `H`
-when it holds the history each brings and, for a two-step reach, the
-intermediate block (`AnchoredIn`, `AvailIn`), and links a candidate when it
+when it holds the history each brings and the path through which it is
+reached, which lies in the history an anchor point brings
+(`AnchoredIn`, `AvailIn`), and links a candidate when it
 holds there a claim for it two rounds above the slot (`LinkedIn`). It has
 *fetched the sub-DAG down to round `ρ`* when it holds the anchor's history to
 depth `K`, and the history every anchor point brings when the blocks of the
@@ -194,9 +212,8 @@ payload alone, so a node need not hold the claimers' references.
   decision of the commit rule on every view holding `H`. Fetched down to
   `ρ`, the sub-DAG read on `H` is the record's at and above `ρ`, since an
   anchor point lies below the blocks that reach it.
-* *Agreement* (`Node.Agrees`). At a row, under the spreading condition, at
-  `K ≥ 6`, on a disciplined schedule and record, two nodes decide each slot
-  alike.
+* *Agreement* (`Node.Agrees`). At a row and the depth the sub-DAG needs, on
+  a disciplined schedule and record, two nodes decide each slot alike.
 * *Checked* (`Node.Checked`). A node *backs* a claim for `L` when it holds `L`
   and votes for it from `t` distinct authors one round above (`Backs`); this
   reads only what it holds. If each correct block was built by a node holding
@@ -209,10 +226,12 @@ correct node to fetch them; a correct claimer holds them.
 
 ## 6. Open
 
+Safety is complete: Theorems 1 to 3 hold at every row of the scheme, at every
+crash bound, on a disciplined schedule and record, whose disciplines (chains,
+checked and truthful claims, leaders leading on the substrate) are what a
+correct node does. Open:
+
 * A bound in rounds on what a node fetches, and that a correct node can
   obtain the votes behind a claim (a liveness question).
-* The crash case beyond `c ≤ 1` at `n = 3f + 2c + 1`, where the spreading
-  condition fails; anchor points reached in more steps may give the core
-  argument there, if nodes fetch the paths to them.
 * Liveness, order, the bounds of `docs/kpartial.md` Theorem 6, the timed
   model, and adaptive schedules.

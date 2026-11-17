@@ -16,12 +16,12 @@ namespace Agreement
 open KPartialDag Scheme
 
 theorem laws : Laws := by
-  intro Validator BlockId Payload _ _ _ _ _ _ _ p K hrow hsp hK
-  exact sRule_laws hrow hsp hK
+  intro Validator BlockId Payload _ _ _ _ _ _ _ p K hrow hdeep
+  exact sRule_laws hrow hdeep
 
 theorem agrees : Agrees := by
-  intro Validator BlockId Payload _ _ _ _ _ _ _ S p U K V₁ V₂ k v₁ v₂ hrow hsp hK hI h₁ h₂
-  exact (sRule p K).decided_unique (sRule_laws hrow hsp hK) hI h₁ V₂ v₂ h₂
+  intro Validator BlockId Payload _ _ _ _ _ _ _ S p U K V₁ V₂ k v₁ v₂ hrow hdeep hI h₁ h₂
+  exact (sRule p K).decided_unique (sRule_laws hrow hdeep) hI h₁ V₂ v₂ h₂
 
 theorem rows : Rows := by
   intro Validator _ _ F Cr

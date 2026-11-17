@@ -30,8 +30,8 @@ inductive AnchoredIn (U : SRecord Validator BlockId Payload) (K : ℕ) (H : Fins
       (hy : ∀ z ∈ S, AnchoredIn U K H A (y z) (d z))
       (hz : ∀ z ∈ S, z ∈ historyUpto U (d z) (y z))
       (hy' : ∀ z ∈ S, 0 < i → AnchoredIn U K H A (y' z) (d' z))
-      (hmz : ∀ z ∈ S, 0 < i → m z ∈ historyUpto U (d' z) (y' z))
-      (hi : i ≤ 1) (hm : ∀ z ∈ S, m z ∈ (U.block z).refs ∧ x ∈ historyUpto U i (m z))
+      (hmz : ∀ z ∈ S, 0 < i → historyUpto U (i - 1) (m z) ⊆ historyUpto U (d' z) (y' z))
+      (hi : i ≤ K) (hm : ∀ z ∈ S, m z ∈ (U.block z).refs ∧ x ∈ historyUpto U i (m z))
       (hcard : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card)
       (hx : historyUpto U (K - i) x ⊆ H) : AnchoredIn U K H A x (K - i)
 
@@ -52,12 +52,14 @@ def LinkedIn (p : Params) (U : SRecord Validator BlockId Payload) (K : ℕ) (H :
 omit [ClaimFormat BlockId Payload] in
 /-- **The sub-DAG below `A` is fetched into `H` down to round `ρ`**: `H` holds
 the history to depth `K` of `A`, and the history every anchor point brings
-when the blocks of the sub-DAG read on `H` that reach it lie above `ρ`. -/
+when the blocks of the sub-DAG read on `H` that reach it, through a path in
+the history an anchor point read on `H` brings, lie above `ρ`. -/
 def FetchedIn (U : SRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (A : BlockId)
     (ρ : ℕ) : Prop :=
   historyUpto U K A ⊆ H ∧ ∀ (i : ℕ) (S : Finset BlockId) (m : BlockId → BlockId) (x : BlockId),
-    i ≤ 1 → (∀ z ∈ S, z ∈ AvailIn U K H A ∧ ρ < (U.block z).round ∧
-      (0 < i → m z ∈ AvailIn U K H A) ∧ m z ∈ (U.block z).refs ∧ x ∈ historyUpto U i (m z)) →
+    i ≤ K → (∀ z ∈ S, z ∈ AvailIn U K H A ∧ ρ < (U.block z).round ∧
+      (0 < i → ∃ y d, AnchoredIn U K H A y d ∧ historyUpto U (i - 1) (m z) ⊆ historyUpto U d y) ∧
+      m z ∈ (U.block z).refs ∧ x ∈ historyUpto U i (m z)) →
     F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card → historyUpto U (K - i) x ⊆ H
 
 /-- **`H` backs a claim for `L`** at threshold `t`: it holds `L`, and votes for

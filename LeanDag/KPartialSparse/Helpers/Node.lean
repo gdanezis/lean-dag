@@ -31,14 +31,31 @@ theorem historyUpto_eq_of_subset (hb : ∀ i ∈ H, U.block i = U'.block i) {n :
     (h : historyUpto U n y ⊆ H) : historyUpto U' n y = historyUpto U n y :=
   historyUptoFrom_eq_of_subset hb n y h
 
-/-- One step below a held block, or none, is read alike. -/
-theorem historyUpto_le_one_eq (hb : ∀ i ∈ H, U.block i = U'.block i) {i : ℕ} (hi : i ≤ 1)
-    {b : BlockId} (h : i = 0 ∨ b ∈ H) : historyUpto U' i b = historyUpto U i b := by
-  rcases Nat.le_one_iff_eq_zero_or_eq_one.mp hi with rfl | rfl
+omit [Fintype Validator] [DecidableEq Validator] Ld in
+/-- One step beyond a held history is read alike. -/
+theorem historyUptoFrom_succ_eq {blk blk' : BlockId → Block Validator BlockId Payload}
+    (hb : ∀ i ∈ H, blk i = blk' i) :
+    ∀ (n : ℕ) (b : BlockId), historyUptoFrom blk n b ⊆ H →
+      historyUptoFrom blk' (n + 1) b = historyUptoFrom blk (n + 1) b
+  | 0, b, h => by
+    have hbH : b ∈ H := h mem_historyUptoFrom_self
+    rw [historyUptoFrom_succ, historyUptoFrom_succ, ← hb b hbH]; rfl
+  | n + 1, b, h => by
+    have hbH : b ∈ H := h mem_historyUptoFrom_self
+    rw [historyUptoFrom_succ (n := n + 1), historyUptoFrom_succ (n := n + 1), ← hb b hbH]
+    refine congrArg (insert b) (Finset.biUnion_congr rfl fun j hj =>
+      historyUptoFrom_succ_eq hb n j fun i hi => h ?_)
+    rw [historyUptoFrom_succ]
+    exact Finset.mem_insert_of_mem (Finset.mem_biUnion.mpr ⟨j, hj, hi⟩)
+
+/-- **A block reached through a held path is read alike**: the history to depth
+`i` of a block whose history to depth `i − 1` is held. -/
+theorem historyUpto_eq_of_path (hb : ∀ i ∈ H, U.block i = U'.block i) {i : ℕ} {b : BlockId}
+    (h : 0 < i → historyUpto U (i - 1) b ⊆ H) : historyUpto U' i b = historyUpto U i b := by
+  rcases Nat.eq_zero_or_pos i with rfl | hpos
   · rfl
-  · rcases h with h | h
-    · omega
-    · rw [historyUpto_succ, historyUpto_succ, ← hb b h]; rfl
+  · obtain ⟨n, rfl⟩ : ∃ n, i = n + 1 := ⟨i - 1, by omega⟩
+    exact historyUptoFrom_succ_eq hb n b (h hpos)
 
 /-- An anchor point read on `H` has the history it brings held. -/
 theorem AnchoredIn.window {y : BlockId} {d : ℕ} (h : AnchoredIn U K H A y d) :
@@ -59,15 +76,15 @@ theorem AnchoredIn.congr (hb : ∀ i ∈ H, U.block i = U'.block i) {x : BlockId
   | anchor h => exact AnchoredIn.anchor (by rw [historyUpto_eq_of_subset hb h]; exact h)
   | @reached x i S m y d y' d' hy hz hy' hmz hi hm hcard hx ih ih' =>
     have hzH : ∀ z ∈ S, z ∈ H := fun z hzS => (hy z hzS).window (hz z hzS)
-    have hmH : ∀ z ∈ S, i = 0 ∨ m z ∈ H := fun z hzS => by
-      rcases Nat.eq_zero_or_pos i with h0 | hpos
-      · exact Or.inl h0
-      · exact Or.inr ((hy' z hzS hpos).window (hmz z hzS hpos))
+    have hpath : ∀ z ∈ S, 0 < i → historyUpto U (i - 1) (m z) ⊆ H := fun z hzS hpos =>
+      (hmz z hzS hpos).trans (hy' z hzS hpos).window
     refine AnchoredIn.reached i S m y d y' d' ih (fun z hzS => ?_) ih' (fun z hzS hpos => ?_) hi
       (fun z hzS => ?_) ?_ ?_
     · rw [historyUpto_eq_of_subset hb ((hy z hzS).window)]; exact hz z hzS
-    · rw [historyUpto_eq_of_subset hb ((hy' z hzS hpos).window)]; exact hmz z hzS hpos
-    · rw [← hb z (hzH z hzS), historyUpto_le_one_eq hb hi (hmH z hzS)]; exact hm z hzS
+    · rw [historyUpto_eq_of_subset hb ((hy' z hzS hpos).window),
+        historyUpto_eq_of_subset hb (hpath z hzS hpos)]
+      exact hmz z hzS hpos
+    · rw [← hb z (hzH z hzS), historyUpto_eq_of_path hb (hpath z hzS)]; exact hm z hzS
     · have : creatorsOf U'.block S = creatorsOf U.block S :=
         Finset.image_congr fun z hzS => by rw [hb z (hzH z hzS)]
       rw [this]; exact hcard
@@ -87,6 +104,7 @@ theorem availIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i) :
 /-- **The fetch test reads only `H`.** -/
 theorem fetchedIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i) {ρ : ℕ}
     (h : FetchedIn U K H A ρ) : FetchedIn U' K H A ρ := by
+  have hb' : ∀ i ∈ H, U'.block i = U.block i := fun i hi => (hb i hi).symm
   refine ⟨by rw [historyUpto_eq_of_subset hb h.1]; exact h.1, fun i S m x hi hS hcard => ?_⟩
   have hav := availIn_congr (K := K) (A := A) hb
   have hzH : ∀ z ∈ S, z ∈ H := fun z hzS => availIn_subset_held (hav ▸ (hS z hzS).1)
@@ -96,13 +114,18 @@ theorem fetchedIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i) {ρ : ℕ}
     rwa [this] at hcard
   have hx := h.2 i S m x hi (fun z hzS => by
     obtain ⟨h₁, h₂, h₃, h₄, h₅⟩ := hS z hzS
-    have hmH : i = 0 ∨ m z ∈ H := by
-      rcases Nat.eq_zero_or_pos i with h0 | hpos
-      · exact Or.inl h0
-      · exact Or.inr (availIn_subset_held (hav ▸ h₃ hpos))
-    refine ⟨hav ▸ h₁, by rw [hb z (hzH z hzS)]; exact h₂, fun hpos => hav ▸ h₃ hpos,
+    have hpath : 0 < i → historyUpto U' (i - 1) (m z) ⊆ H := fun hpos => by
+      obtain ⟨y, d, hy, hmy⟩ := h₃ hpos
+      exact hmy.trans hy.window
+    have hpath' : 0 < i → historyUpto U (i - 1) (m z) ⊆ H := fun hpos => by
+      rw [historyUpto_eq_of_subset hb' (hpath hpos)]; exact hpath hpos
+    refine ⟨hav ▸ h₁, by rw [hb z (hzH z hzS)]; exact h₂, fun hpos => ?_,
       by rw [hb z (hzH z hzS)]; exact h₄, ?_⟩
-    rw [← historyUpto_le_one_eq hb hi hmH]; exact h₅) hcard'
+    · obtain ⟨y, d, hy, hmy⟩ := h₃ hpos
+      refine ⟨y, d, hy.congr hb', ?_⟩
+      rw [historyUpto_eq_of_subset hb' (hpath hpos), historyUpto_eq_of_subset hb' hy.window]
+      exact hmy
+    · rw [← historyUpto_eq_of_path hb hpath']; exact h₅) hcard'
   rw [historyUpto_eq_of_subset hb hx]; exact hx
 
 variable [ClaimFormat BlockId Payload]
@@ -178,7 +201,8 @@ theorem avail_subset_availIn (hH : H ⊆ U.ids) {ρ : ℕ} (hf : FetchedIn U K H
     have i₁ : ∀ z ∈ S, AnchoredIn U K H A (y z) (d z) := fun z hzS => ih z hzS (hzr z hzS).2.1
     have i₂ : ∀ z ∈ S, 0 < i → AnchoredIn U K H A (y' z) (d' z) := fun z hzS hpos =>
       ih' z hzS hpos (le_trans (hzr z hzS).2.2
-        (round_le_of_mem_historyUpto _ ((hy' z hzS hpos).mem hA) (hmz z hzS hpos)))
+        (round_le_of_mem_historyUpto _ ((hy' z hzS hpos).mem hA)
+          (hmz z hzS hpos mem_historyUpto_self)))
     exact AnchoredIn.reached i S m y d y' d' i₁ hz i₂ hmz hi hm hcard
       (hf.2 i S m x hi (fun z hzS => ⟨⟨y z, d z, i₁ z hzS, hz z hzS⟩, (hzr z hzS).1,
         fun hpos => ⟨y' z, d' z, i₂ z hzS hpos, hmz z hzS hpos⟩, hm z hzS⟩) hcard)
@@ -190,8 +214,10 @@ theorem fetchedIn_of_subset {ρ : ℕ}
   classical
   refine ⟨hsub A K Anchored.anchor, fun i S m x hi hS hcard => hsub x (K - i) ?_⟩
   have h₁ : ∀ z ∈ S, z ∈ Avail U K A := fun z hzS => availIn_subset (hS z hzS).1
-  have h₂ : ∀ z ∈ S, 0 < i → m z ∈ Avail U K A := fun z hzS hpos =>
-    availIn_subset ((hS z hzS).2.2.1 hpos)
+  have h₂ : ∀ z ∈ S, 0 < i → ∃ y d, Anchored U K A y d ∧
+      historyUpto U (i - 1) (m z) ⊆ historyUpto U d y := fun z hzS hpos => by
+    obtain ⟨y, d, hy, hmy⟩ := (hS z hzS).2.2.1 hpos
+    exact ⟨y, d, hy.toAnchored, hmy⟩
   refine Anchored.reached i S m (fun z => if h : z ∈ S then (h₁ z h).choose else A)
     (fun z => if h : z ∈ S then (h₁ z h).choose_spec.choose else K)
     (fun z => if h : z ∈ S ∧ 0 < i then (h₂ z h.1 h.2).choose else A)
@@ -231,6 +257,7 @@ theorem certLinked_linkedIn (hH : H ⊆ U.ids) {p : Params} {L : BlockId} {r : �
 
 /-! ## Checks -/
 
+omit [ClaimFormat BlockId Payload] in
 /-- Backing reads only what is held. -/
 theorem backs_congr (hb : ∀ i ∈ H, U.block i = U'.block i) {t : ℕ} {L : BlockId}
     (h : Backs U t H L) : Backs U' t H L := by
@@ -246,6 +273,7 @@ theorem backs_congr (hb : ∀ i ∈ H, U.block i = U'.block i) {t : ℕ} {L : Bl
     Finset.image_congr fun b hbH => by rw [hb b (Finset.mem_filter.mp hbH).1]
   rw [hf, hc]; exact hn
 
+omit [ClaimFormat BlockId Payload] in
 /-- **A backed claim names a certified block**: the votes held are votes of the
 record. -/
 theorem certified_of_backs (hH : H ⊆ U.ids) {t : ℕ} {L : BlockId} (h : Backs U t H L) :
@@ -290,13 +318,13 @@ theorem NodeDecided.decided {p : Params} (hH : H ⊆ U.ids) {V : U.View} (hHV : 
     exact AnchoredRule.Decided.indirectSkip_single rfl hkj helig ihj ihm
       (fun L hL hlink => hnone L hL (certLinked_linkedIn hH hf hlink))
 
-/-- **Two nodes decide each slot alike**, at a row, under the spreading
-condition, at `K ≥ 6`, on a disciplined schedule and record. -/
-theorem NodeDecided.agree {p : Params} (hrow : Row Validator p) (hsp : Spread Validator)
-    (hK : 6 ≤ K) (hI : Disciplined K p.certThreshold S U) {H₁ H₂ : Finset BlockId}
+/-- **Two nodes decide each slot alike**, at a row and the depth the sub-DAG
+needs, on a disciplined schedule and record. -/
+theorem NodeDecided.agree {p : Params} (hrow : Row Validator p) (hdeep : Deep Validator K)
+    (hI : Disciplined K p.certThreshold S U) {H₁ H₂ : Finset BlockId}
     (hH₁ : H₁ ⊆ U.ids) (hH₂ : H₂ ⊆ U.ids) {k : ℕ} {v₁ v₂ : Option BlockId}
     (h₁ : NodeDecided p U K H₁ k v₁) (h₂ : NodeDecided p U K H₂ k v₂) : v₁ = v₂ :=
-  (sRule p K).decided_unique (sRule_laws hrow hsp hK) hI
+  (sRule p K).decided_unique (sRule_laws hrow hdeep) hI
     (h₁.decided (V := View.full U) hH₁ hH₁) _ _ (h₂.decided (V := View.full U) hH₂ hH₂)
 
 end KPartialSparse
