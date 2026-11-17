@@ -43,14 +43,17 @@ shows that a correct author checked each of those.
 
 ## 3. The available sub-DAG
 
-Below a block `A`, a block is an *anchor point* when it is `A`, or when
-blocks of the sub-DAG from `f + c + 1` distinct authors reference it, and
-each brings its history to depth `K`; or when blocks of the sub-DAG from
-`f + c + 1` distinct authors reach it in two steps through blocks of the
-sub-DAG, and it brings its history to depth `K − 1` (`Anchored`). Unlike
-`docs/kpartial.md` §3, the two-step anchor points do not need crashes. The
-*available sub-DAG* below `A` is the union of the histories the anchor
-points bring (`Avail`).
+Below a block `A`, a block `x` is an *anchor point* when it is `A`, which
+brings its history to depth `K`, or when blocks of the sub-DAG from
+`f + c + 1` distinct authors each reach `x` through one of their references
+and `i ≤ K` further steps; `x` then brings its history to depth `K − i`
+(`Anchored`). A correct author holds the history to depth `K` of each block
+it references, so one of the `f + c + 1` authors holds what `x` brings and
+checked its claims. At `i = 0` the authors reference `x`, and at `i = 1` they
+reach it in two steps, the two cases of `docs/kpartial.md` §3; there the
+second needs crashes, here neither does, and the intermediate blocks need
+not lie in the sub-DAG. The *available sub-DAG* below `A` is the union of
+the histories the anchor points bring (`Avail`).
 
 **Theorem 1 (the available sub-DAG; `Avail.Statement`).**
 
@@ -93,9 +96,9 @@ The proof of *Linked* has four steps.
    `t − ρ − 1 ≤ K − 1` of the anchor point.
 
 *Backed* follows from the definition of anchor points. Among `f + c + 1`
-distinct authors one is correct. It referenced the anchor point, or a block
-that references it, and so checked the claims of the history the anchor
-point brings. For `A` itself, the premise supplies the correct author.
+distinct authors one is correct. It references a block whose history to
+depth `K` contains the history the anchor point brings, and so checked its
+claims. For `A` itself, the premise supplies the correct author.
 
 Together, if a quorum claims `L` directly, an anchor above finds a claim for
 `L` in its sub-DAG; and any claim found there names a certified block. With
