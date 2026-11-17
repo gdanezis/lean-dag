@@ -13753,7 +13753,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 441 definitions and structures the report names, in
+The 442 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -19737,6 +19737,30 @@ def onRecord : (rule (Replica := Replica) (BlockId := BlockId)).OnRecord ValidWr
 
 **The carrier, on the record**: every map the identity.
 
+#### `Anchored`
+
+*inductive, `KPartialSparse.Model.Substrate.lean`*
+
+```lean
+inductive Anchored (U : SRecord Validator BlockId Payload) (K : ℕ) (A : BlockId) :
+    BlockId → ℕ → Prop
+  | anchor : Anchored U K A A K
+  | referenced {x : BlockId} (S : Finset BlockId) (y : BlockId → BlockId) (d : BlockId → ℕ)
+      (hy : ∀ z ∈ S, Anchored U K A (y z) (d z))
+      (hz : ∀ z ∈ S, z ∈ historyUpto U (d z) (y z))
+      (href : ∀ z ∈ S, x ∈ (U.block z).refs)
+      (hcard : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card) : Anchored U K A x K
+  | reached {x : BlockId} (S : Finset BlockId) (m : BlockId → BlockId)
+      (y : BlockId → BlockId) (d : BlockId → ℕ) (y' : BlockId → BlockId) (d' : BlockId → ℕ)
+      (hy : ∀ z ∈ S, Anchored U K A (y z) (d z)) (hz : ∀ z ∈ S, z ∈ historyUpto U (d z) (y z))
+      (hy' : ∀ z ∈ S, Anchored U K A (y' z) (d' z))
+      (hmz : ∀ z ∈ S, m z ∈ historyUpto U (d' z) (y' z))
+      (hm : ∀ z ∈ S, m z ∈ (U.block z).refs) (href : ∀ z ∈ S, x ∈ (U.block (m z)).refs)
+      (hcard : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card) : Anchored U K A x (K - 1)
+```
+
+**The anchor points below `A`, with the depth of history each brings**: `A` to depth `K`; a block referenced by blocks of the sub-DAG from `f + c + 1` distinct authors, to depth `K`; and a block they reach in two steps through the sub-DAG, to depth `K − 1`.
+
 #### `onRecord`
 
 *def, `MahiMahi.Record.lean`*
@@ -21306,7 +21330,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 656 theorems the body or Appendix A names, each
+The 657 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -28130,6 +28154,14 @@ theorem stack_core (sk : SkipMsg U) (hd : G ≤ S.slotRound d) :
 ```
 
 **The core's fill-then-cut is a stack**, settling at the later of the gap's top and the horizon, shifted by the horizon, re-indexed from the base slot.
+
+#### `holds`
+
+*theorem, `KPartialSparse.Avail.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
 
 #### `selfParent`
 
