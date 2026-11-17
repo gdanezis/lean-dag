@@ -640,6 +640,10 @@ import LeanDag.KPartialSparse.Model.Order
 import LeanDag.KPartialSparse.Order.Statement
 import LeanDag.KPartialSparse.Helpers.Order
 import LeanDag.KPartialSparse.Order.Proof
+import LeanDag.KPartialSparse.Model.Close
+import LeanDag.KPartialSparse.Helpers.Close
+import LeanDag.KPartialSparse.Close.Statement
+import LeanDag.KPartialSparse.Close.Proof
 import LeanDag.Scheme.Model.Deliver
 import LeanDag.Scheme.Helpers.Deliver
 import LeanDag.Scheme.Helpers.Validity

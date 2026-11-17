@@ -920,22 +920,24 @@ any slot `k` there is a slot `b` such that, if the run reaches the round of
 its last certificates, every node of `T`, at one time, decides every slot
 below `b + c` and has fetched each leader it commits down to `D` rounds below
 it. Every leader it commits has a voter in `T`, whose block brings it. -/
-theorem exists_ledger {p : Params} (hrow : Row Validator p)
+theorem exists_ledger_at {p : Params} (hrow : Row Validator p)
     (hlink : p.voteIsCert = true → F.f + Cr.c + 1 ≤ p.linkSize) {K : ℕ}
     (hI : Disciplined K p.certThreshold S U) (hlive : LiveRow Validator p)
     (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ) {Δ : ℕ} (D : ℕ)
     (hF : Fetches U tl T K G Δ) {c : ℕ} (hc : 0 < c)
     (hspan : ∀ b i, i < b → EligibleAt (S := S) (p.waveLength - 1) i (b + c - 1))
     (fair : FairRunOn T c) (k : ℕ) :
-    ∃ b, k ≤ b ∧ (certRound p (S.slotRound (b + c - 1)) ≤ N → ∃ t, ∀ v ∈ T,
-      ∃ g : ℕ → Option BlockId, ∀ i, i < b + c → NodeDecided p U K (tl.held v t) i (g i) ∧
-        ∀ L, g i = some L → FetchedIn U K (tl.held v t) L ((U.block L).round - D)) := by
+    ∃ b, k ≤ b ∧ (certRound p (S.slotRound (b + c - 1)) ≤ N →
+      ∀ v ∈ T, ∃ g : ℕ → Option BlockId, ∀ i, i < b + c →
+        NodeDecided p U K (tl.held v (max G (U.ids.sup tl.built) + δ + Δ)) i (g i) ∧
+        ∀ L, g i = some L → FetchedIn U K (tl.held v (max G (U.ids.sup tl.built) + δ + Δ)) L
+          ((U.block L).round - D)) := by
   classical
   obtain ⟨b, hkb, hRb, hrun⟩ := Slots.exists_run_past fair k (R + 1)
   set T₀ := max G (U.ids.sup tl.built)
   have hT₀ : ∀ x ∈ U.ids, tl.built x ≤ T₀ := fun x hx =>
     (Finset.le_sup (f := tl.built) hx).trans (le_max_right _ _)
-  refine ⟨b, hkb, fun hN => ⟨T₀ + δ + Δ, fun v hv => ?_⟩⟩
+  refine ⟨b, hkb, fun hN v hv => ?_⟩
   have hresp' : RespondsFrom p U T (R + 1) N := respondsFrom_of_syncFrom (h.syncFrom hτ hδ hγτ)
   have hresp := responds_of_run hc hRb hrun
     ⟨hresp'.1, fun j h1 h2 h3 => hresp'.2 j h1 (h2.trans hN) h3⟩
@@ -960,6 +962,20 @@ theorem exists_ledger {p : Params} (hrow : Row Validator p)
   refine ⟨(hdec i hi).choose_spec, fun L hL => ?_⟩
   exact fetchedIn_of_subset fun y d hy z hz =>
     hav i L (hL ▸ (hdec i hi).choose_spec) ⟨y, d, hy, hz⟩
+
+/-- **The ledger grows**, as `exists_ledger_at`, at some time. -/
+theorem exists_ledger {p : Params} (hrow : Row Validator p)
+    (hlink : p.voteIsCert = true → F.f + Cr.c + 1 ≤ p.linkSize) {K : ℕ}
+    (hI : Disciplined K p.certThreshold S U) (hlive : LiveRow Validator p)
+    (hτ : 2 * δ ≤ τ) (hδ : δ < γ) (hγτ : γ ≤ τ) {Δ : ℕ} (D : ℕ)
+    (hF : Fetches U tl T K G Δ) {c : ℕ} (hc : 0 < c)
+    (hspan : ∀ b i, i < b → EligibleAt (S := S) (p.waveLength - 1) i (b + c - 1))
+    (fair : FairRunOn T c) (k : ℕ) :
+    ∃ b, k ≤ b ∧ (certRound p (S.slotRound (b + c - 1)) ≤ N → ∃ t, ∀ v ∈ T,
+      ∃ g : ℕ → Option BlockId, ∀ i, i < b + c → NodeDecided p U K (tl.held v t) i (g i) ∧
+        ∀ L, g i = some L → FetchedIn U K (tl.held v t) L ((U.block L).round - D)) := by
+  obtain ⟨b, hkb, hb⟩ := h.exists_ledger_at hrow hlink hI hlive hτ hδ hγτ D hF hc hspan fair k
+  exact ⟨b, hkb, fun hN => ⟨_, hb hN⟩⟩
 
 end TimedRun
 

@@ -271,15 +271,11 @@ theorem round_le_of_avail (hA : A ∈ U.ids) {z : BlockId} (hz : z ∈ Avail U K
     have := ih z hzS
     omega
 
-/-- **A sub-DAG fetched down to round `ρ` is the record's at and above `ρ`.** -/
-theorem avail_subset_availIn (hH : H ⊆ U.ids) {ρ : ℕ} (hf : FetchedIn U K H A ρ) {z : BlockId}
-    (hz : z ∈ Avail U K A) (hρ : ρ ≤ (U.block z).round) : z ∈ AvailIn U K H A := by
+/-- **An anchor point of the record at or above `ρ` is read on a sub-DAG fetched
+down to `ρ`.** -/
+theorem Anchored.anchoredIn (hH : H ⊆ U.ids) {ρ : ℕ} (hf : FetchedIn U K H A ρ) {y : BlockId}
+    {d : ℕ} (hy : Anchored U K A y d) : ρ ≤ (U.block y).round → AnchoredIn U K H A y d := by
   have hA : A ∈ U.ids := hH (hf.1 self_mem_window)
-  obtain ⟨y, d, hy, hzy⟩ := hz
-  suffices h : ρ ≤ (U.block y).round → AnchoredIn U K H A y d from
-    ⟨y, d, h (le_trans hρ (round_le_of_mem_historyUpto d (hy.mem hA)
-      (window_subset_historyUpto hzy))), hzy⟩
-  clear hzy
   induction hy with
   | anchor => exact fun _ => AnchoredIn.anchor hf.1
   | @reached x i S m y d y' d' hy hz hy' hmz hi hm hcard ih ih' =>
@@ -301,6 +297,14 @@ theorem avail_subset_availIn (hH : H ⊆ U.ids) {ρ : ℕ} (hf : FetchedIn U K H
     exact AnchoredIn.reached i S m y d y' d' i₁ hz i₂ hmz hi hm hcard
       (hf.2 i S m x hi (fun z hzS => ⟨⟨y z, d z, i₁ z hzS, hz z hzS⟩, (hzr z hzS).1,
         fun hpos => ⟨y' z, d' z, i₂ z hzS hpos, hmz z hzS hpos⟩, hm z hzS⟩) hcard)
+
+/-- **A sub-DAG fetched down to round `ρ` is the record's at and above `ρ`.** -/
+theorem avail_subset_availIn (hH : H ⊆ U.ids) {ρ : ℕ} (hf : FetchedIn U K H A ρ) {z : BlockId}
+    (hz : z ∈ Avail U K A) (hρ : ρ ≤ (U.block z).round) : z ∈ AvailIn U K H A := by
+  have hA : A ∈ U.ids := hH (hf.1 self_mem_window)
+  obtain ⟨y, d, hy, hzy⟩ := hz
+  exact ⟨y, d, hy.anchoredIn hH hf (le_trans hρ (round_le_of_mem_historyUpto d (hy.mem hA)
+    (window_subset_historyUpto hzy))), hzy⟩
 
 /-- **Holding what the record's anchor points bring fetches the sub-DAG**,
 down to any round. -/

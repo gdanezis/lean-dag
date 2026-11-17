@@ -1,5 +1,6 @@
 import LeanDagTest.KPartialSparse.Witness
 import LeanDag.KPartialSparse.Reactive.Proof
+import LeanDag.KPartialSparse.Close.Proof
 /-!
 # Sparse K-partial DAG — a timed witness
 
@@ -488,6 +489,22 @@ theorem wTimedLedger : ∃ b, 0 ≤ b ∧ (certRound (Scheme.Params.mysticeti 4 
     (by omega) wFetches (by omega) (fun b i hi => by
       show i + (3 - 1) < b + 3 - 1; omega)
     (fun k => ⟨k, le_rfl, fun _ _ => lead_mem _⟩) 0
+
+/-- **Theorem 7, the channel closes**: with every block declaring the channel
+closed, every correct validator at one time has decided every slot up to its
+last commit, once the run reaches the round of the last certificates. -/
+theorem wCloses : ∃ b, certRound (Scheme.Params.mysticeti 4 1) (wSlots.slotRound (b + 3 - 1)) ≤ 6 →
+    ∃ t, ∀ v ∈ wT, ∃ (g : ℕ → Option ℕ) (n : ℕ),
+      DecidesBelow (S := wSlots) (Scheme.Params.mysticeti 4 1) wU 6 (tTl.held v t) 1 g n ∧
+      ClosesAfter wU 6 (tTl.held v t) 1 (fun _ => True) g n :=
+  Close.closes (Fin 4) ℕ (Finset ℕ) (Scheme.Params.mysticeti 4 1) wU tTl wT 0 1 4 2 0 6 6 1 1 3 0
+    (fun _ => True) wRow.1 (fun h => absurd h (by decide)) (Or.inl ⟨wRow.2, le_rfl⟩) wDisciplined
+    wLive (by omega) wTimed (by omega) (by omega) (by omega) wFetches
+    (fun _ => Finset.mem_singleton.mpr rfl) (by omega)
+    (fun b i hi => by change i + (3 - 1) < b + 3 - 1; omega)
+    (fun k => ⟨k, le_rfl, fun _ _ => lead_mem _⟩)
+    (fun r => ⟨r + 1, by change r < r + 1; omega, by change r + 1 ≤ r + 1; omega, lead_mem _⟩)
+    (fun _ _ _ _ => trivial)
 
 end KPartialSparse
 

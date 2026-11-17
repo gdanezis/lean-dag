@@ -13753,7 +13753,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 451 definitions and structures the report names, in
+The 452 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -19788,6 +19788,19 @@ def Descends : Prop :=
 
 **A committed run decides below it**: a node holding the available sub-DAG below every leader block up to slot `n`, which has committed every slot from `b` to `n`, decides every slot below `b` that `n` may anchor.
 
+#### `DecidesBelow`
+
+*def, `KPartialSparse.Model.Close.lean`*
+
+```lean
+def DecidesBelow (p : Params) (U : SRecord Validator BlockId Payload) (K : ℕ)
+    (H : Finset BlockId) (D : ℕ) (g : ℕ → Option BlockId) (n : ℕ) : Prop :=
+  ∀ i, i < n → NodeDecided p U K H i (g i) ∧
+    ∀ L, g i = some L → FetchedIn U K H L ((U.block L).round - D)
+```
+
+**A node has decided every slot below `n`** at a row on `H`, and fetched each leader it commits down to `D` rounds below it.
+
 #### `LinkedIn`
 
 *def, `KPartialSparse.Model.Node.lean`*
@@ -21469,7 +21482,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 673 theorems the body or Appendix A names, each
+The 674 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -28313,6 +28326,14 @@ theorem held : Held
 #### `holds`
 
 *theorem, `KPartialSparse.Avail.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `KPartialSparse.Close.Proof.lean`*
 
 ```lean
 theorem holds : Statement

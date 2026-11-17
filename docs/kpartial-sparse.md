@@ -7,8 +7,8 @@ claims in its payload the leaders it has seen certified. The Lean
 development is `LeanDag/KPartialSparse`. The available sub-DAG (Theorem 1),
 agreement of the commit rule at the scheme's two-round and three-round rows
 (Theorem 2), what a node reads (Theorem 3), liveness (Theorem 4), nodes in
-time (Theorem 5) and the order (Theorem 6) are proved; §9 lists what is
-open.
+time (Theorem 5), the order (Theorem 6) and closing the channel
+(Theorem 7) are proved; §10 lists what is open.
 `LeanDagTest/KPartialSparse/Witness.lean` is a record on which Theorems 1 to
 4 apply, and `LeanDagTest/KPartialSparse/Timed.lean` a timed run of it for
 Theorem 5.
@@ -475,7 +475,49 @@ payload is proposed again; *Excluded* says when that is safe.
 `LeanDagTest/KPartialSparse/Order.lean` puts a block of the witness record in
 a node's ledger by *Included*.
 
-## 9. Open
+## 9. Closing the channel
+
+The validators end a channel by declaring it closed, as in `docs/kpartial.md`
+§12. A block declares the channel closed through its payload (`closes`). A
+node's ledger is *closed* after slots `0, …, n − 1` when it holds blocks
+declaring closure by a quorum of distinct authors (`ClosedIn`), and the
+channel *closes after `n` slots* when the ledger is closed after `n` slots and
+after no fewer (`ClosesAfter`): slot `n − 1` is the last commit. A node *has
+decided every slot below `n`* when it has, and has fetched each leader it
+commits down to `D` rounds below it (`DecidesBelow`).
+
+**Theorem 7 (closing the channel; `Close.Statement`).**
+
+* *The channel closes* (`Close.Closes`). On a timed run, at `2δ ≤ γ ≤ τ` and
+  `δ < γ`, the depth the sub-DAG needs and `D ≤ K`, on a disciplined record,
+  when nodes of `T` fetch, a two-round row links by `f + c + 1` votes or more,
+  each slot's leader leads its round on the substrate, the schedule offers
+  runs of `c` leaders of `T` spanning eligibility and a slot led by `T` every
+  `D` rounds, and the validators of `T` declare the channel closed from round
+  `r₀` on (`DeclaresFrom`), there is a slot `b` such that, if the run reaches
+  the round of its last certificates, every node of `T` at one time has
+  decided every slot up to its last commit. The blocks of `T` at round
+  `max(r₀, R + 1)` declare closure, leaders of `T` cover them (`Covered`), and
+  they enter the ledger of a node of `T` once it decides the slots up to `D`
+  rounds above them (`Order.Included`), which `Reactive.Ledger` supplies.
+* *Served blocks suffice* (`Close.Serves`). A node holding, among blocks of
+  the record, what a node that has decided every slot up to its last commit
+  holds decides those slots alike and reaches the same last commit. A node's
+  decisions hold on more blocks (`NodeDecided.mono`): the direct tests and the
+  links only gain, and an indirect decision reads a sub-DAG fetched below the
+  slot's certificates, which is the record's.
+* *Nodes agree on the last commit* (`Close.Agrees`). At a row and the depth
+  the sub-DAG needs, on a disciplined schedule and record, two nodes that have
+  each decided every slot up to their last commit have the same last commit
+  and the same ledger after it.
+
+As in `docs/kpartial.md` §12, these argue for a rule for stopping: a validator
+of `T` builds until it has decided the last commit, and keeps and serves what
+it holds after it stops. `LeanDagTest/KPartialSparse/Timed.lean` applies
+`Closes` to the timed witness with every block declaring closure
+(`wCloses`).
+
+## 10. Open
 
 Safety (Theorems 1 to 3) holds at every row of the scheme, at every crash
 bound, on a disciplined schedule and record, whose disciplines (chains,
@@ -483,7 +525,8 @@ checked and truthful claims, leaders leading on the substrate) are what a
 correct node does. Liveness holds on responsive records (Theorem 4), and timed
 nodes produce them after `G`, through crashes and restarts before it
 (Theorem 5). The ledger is agreed, totally ordered and never retracted, and
-includes every block of `T` once leaders of `T` cover `T` (Theorem 6). Open:
+includes every block of `T` once leaders of `T` cover `T` (Theorem 6), and
+the validators of `T` can close the channel (Theorem 7). Open:
 
 * Nodes leaving and rejoining the stable set after `G`, a stable set per
   window (`docs/kpartial.md` §12 leaves it open): rules and results bounded
