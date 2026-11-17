@@ -1,5 +1,7 @@
 import LeanDag.KPartialSparse.Model.Reactive
 import LeanDag.KPartialSparse.Helpers.Live
+import LeanDag.KPartialDag.Helpers.Reactive
+import LeanDag.KPartialSparse.Model.Order
 /-!
 # Sparse K-partial DAG — nodes in time, helpers
 
@@ -390,6 +392,100 @@ theorem exists_disk_of_avail (hT : T ⊆ (Correct : Finset Validator))
     rw [show i + (K - i) = K by omega] at hzm
     exact ⟨_, hcT, _, fun t ht => hK w hwi (hT hcT) t ht (m w) (hm w hw).1 hzm⟩
 
+/-! ## Block shape and chains -/
+
+omit [ClaimFormat BlockId Payload] S [LinearOrder BlockId] in
+/-- **Building above the disk keeps chains**: a correct block referencing a block
+of its own at or above each block its author built before it, by an author
+that builds above its disk, references one at or above each earlier-round
+block of its author. -/
+theorem chains_of_selfRef (hids : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) →
+      ∀ x ∈ U.ids, (U.block x).creator = (U.block b).creator → tl.built x < tl.built b →
+      ∃ s ∈ (U.block b).refs, (U.block s).creator = (U.block b).creator ∧
+        (U.block x).round ≤ (U.block s).round)
+    (hd : KPartialDag.BuildsAboveDisk U.ids U.block tl) : Chains U := by
+  intro y hy hyc x hx hxy hlt
+  refine hids y hy hyc x hx hxy ?_
+  by_contra hge
+  push Not at hge
+  rcases Nat.eq_or_lt_of_le hge with heq | hlt'
+  · have := hd.single y hy x hx hyc hxy.symm heq
+    subst this; omega
+  · have := hd.round_lt hy hx hyc hxy hlt'
+    omega
+
+omit [ClaimFormat BlockId Payload] S [LinearOrder BlockId] in
+/-- **A dense block can be built** from the correct blocks one round below that a
+node holds, when they come from a quorum of distinct authors. -/
+theorem exists_dense_block {H : Finset BlockId} (hH : H ⊆ U.ids) {r : ℕ}
+    (hq : kQuorum Validator ≤ (creatorsOf U.block (H.filter fun x =>
+      (U.block x).creator ∈ (Correct : Finset Validator) ∧ (U.block x).round = r)).card)
+    (v : Validator) (pay : Payload) :
+    ∃ b : Block Validator BlockId Payload, b.creator = v ∧ b.round = r + 1 ∧ b.refs ⊆ H ∧
+      SValid Validator BlockId Payload U.block b := by
+  classical
+  set X := H.filter fun x =>
+    (U.block x).creator ∈ (Correct : Finset Validator) ∧ (U.block x).round = r
+  have hX : ∀ x ∈ X, x ∈ U.ids ∧ (U.block x).creator ∈ (Correct : Finset Validator) ∧
+      (U.block x).round = r := fun x hx => by
+    obtain ⟨hxH, hxc, hxr⟩ := Finset.mem_filter.mp hx
+    exact ⟨hH hxH, hxc, hxr⟩
+  have hdense : Dense (kQuorum Validator) U.block ⟨r + 1, v, X, pay⟩ := by
+    unfold Dense below1
+    have : X.filter (fun i => (U.block i).round + 1 = r + 1) = X :=
+      Finset.filter_true_of_mem fun x hx => by rw [(hX x hx).2.2]
+    simp only at this ⊢
+    rw [this]; exact hq
+  refine ⟨⟨r + 1, v, X, pay⟩, rfl, rfl, Finset.filter_subset _ _, ?_, ?_, ?_, ?_, ?_⟩
+  · intro i hi; have := (hX i hi).2.2; simp only; omega
+  · intro i hi _; have := (hX i hi).2.2; simp only; omega
+  · intro i hi j hj hij
+    exact U.no_equivocation i (hX i hi).1 j (hX j hj).1 (hX i hi).2.1 hij
+      ((hX i hi).2.2.trans (hX j hj).2.2.symm)
+  · exact fun _ => Or.inl hdense
+  · exact fun _ _ => hdense
+
+omit [ClaimFormat BlockId Payload] S in
+/-- **A sparse block can be built** by a correct node that is not a leader of the
+round above, holding its own block one round below and a leader block there
+of a correct leader: it references its own block and the correct leaders'
+blocks it holds. -/
+theorem exists_sparse_block {H : Finset BlockId} (hH : H ⊆ U.ids) {r : ℕ} {v : Validator}
+    (hv : v ∈ (Correct : Finset Validator)) (hvl : v ∉ Ld.leaders (r + 1)) {o : BlockId}
+    (ho : o ∈ H) (hoc : (U.block o).creator = v) (hor : (U.block o).round = r) {L₀ : BlockId}
+    (hL₀ : L₀ ∈ H) (hL₀c : (U.block L₀).creator ∈ (Correct : Finset Validator))
+    (hL₀l : (U.block L₀).creator ∈ Ld.leaders r) (hL₀r : (U.block L₀).round = r)
+    (pay : Payload) :
+    ∃ b : Block Validator BlockId Payload, b.creator = v ∧ b.round = r + 1 ∧ b.refs ⊆ H ∧
+      SValid Validator BlockId Payload U.block b := by
+  classical
+  set X := insert o (H.filter fun x => (U.block x).creator ∈ (Correct : Finset Validator) ∧
+    (U.block x).round = r ∧ (U.block x).creator ∈ Ld.leaders r)
+  have hX : ∀ x ∈ X, x ∈ U.ids ∧ (U.block x).creator ∈ (Correct : Finset Validator) ∧
+      (U.block x).round = r ∧ ((U.block x).creator = v ∨ (U.block x).creator ∈ Ld.leaders r) :=
+    fun x hx => by
+      rcases Finset.mem_insert.mp hx with rfl | hx
+      · exact ⟨hH ho, hoc ▸ hv, hor, Or.inl hoc⟩
+      · obtain ⟨hxH, hxc, hxr, hxl⟩ := Finset.mem_filter.mp hx
+        exact ⟨hH hxH, hxc, hxr, Or.inr hxl⟩
+  have hsub : X ⊆ H := Finset.insert_subset ho (Finset.filter_subset _ _)
+  refine ⟨⟨r + 1, v, X, pay⟩, rfl, rfl, hsub, ?_, ?_, ?_, ?_, ?_⟩
+  · intro i hi; have := (hX i hi).2.2.1; simp only; omega
+  · intro i hi _; have := (hX i hi).2.2.1; simp only; omega
+  · intro i hi j hj hij
+    exact U.no_equivocation i (hX i hi).1 j (hX j hj).1 (hX i hi).2.1 hij
+      ((hX i hi).2.2.1.trans (hX j hj).2.2.1.symm)
+  · intro _
+    right
+    refine ⟨⟨o, Finset.mem_insert_self _ _, hoc, by simp only; omega⟩, fun i hi hic => ?_,
+      ⟨L₀, Finset.mem_insert_of_mem (Finset.mem_filter.mpr ⟨hL₀, hL₀c, hL₀r, hL₀l⟩),
+        by simp only; omega, by simp only; rw [show r + 1 - 1 = r by omega]; exact hL₀l⟩⟩
+    obtain ⟨-, -, hir, hil⟩ := hX i hi
+    refine ⟨by simp only; omega, ?_⟩
+    simp only [show r + 1 - 1 = r by omega]
+    exact hil.resolve_left hic
+  · intro _ hl; exact absurd hl hvl
+
 /-! ## Checked claims -/
 
 omit S in
@@ -702,6 +798,65 @@ theorem nodeDecided_fast {p : Params} (hlive : LiveRow Validator p) (hτ : 2 * �
       obtain rfl : c = c' := U.eq_of_creator_eq hc hc' (h.stable hcT) rfl hcc' (by omega)
       omega
   exact h.mem_held_of_round hc hcT (by omega) hv hct (by omega)
+
+/-- **A node of `T` holds the blocks of `T` of the round below when it builds**,
+at `2δ ≤ γ ≤ τ` and `δ < γ`: a block of `T` of round `r + 1`, `r` from `R + 1`
+to `N`, is built `δ` or more after every block of `T` of round `r`. -/
+theorem mem_held_below (hγ : 2 * δ ≤ γ) (hδ : δ < γ) (hγτ : γ ≤ τ) {r : ℕ} (hr : R + 1 ≤ r)
+    (hrN : r ≤ N) {x : BlockId} (hx : x ∈ U.ids) (hxT : (U.block x).creator ∈ T)
+    (hxr : (U.block x).round = r) {b : BlockId} (hb : b ∈ U.ids)
+    (hbT : (U.block b).creator ∈ T) (hbr : (U.block b).round = r + 1) :
+    x ∈ tl.held (U.block b).creator (tl.built b) := by
+  have hquorum : ∀ b, (U.block b).creator ∈ T → ∀ t, G ≤ t → t + 2 * δ ≤ tl.built b →
+      QuorumIn U (tl.held (U.block b).creator t) r → tl.built x + δ ≤ tl.built b := by
+    intro b hbT t hG ht hQ
+    obtain ⟨y, hy, hyc, hyr, hyt⟩ := h.builtBy_of_reachedBy hδ hγτ hr hrN
+      (h.reachedBy_of_quorumIn (by omega) hrN hG hbT hQ) _ hxT
+    obtain rfl : y = x := U.eq_of_creator_eq hy hx (h.stable hxT) hyc rfl (by omega)
+    omega
+  have key : tl.built x + δ ≤ tl.built b := by
+    refine h.induction_behind (s := r) (by omega) (fun b => tl.built x + δ ≤ tl.built b)
+      (fun b hb hbT hbr hW => ?_) (fun b hb hbT hbr y hyH hyT hyr hy => ?_) hb hbT hbr
+    · have hlb := h.late b hb hbT (by omega)
+      rcases hW with ⟨hγb, hW, -⟩ | ⟨hτb, hQ⟩
+      · exact hquorum b hbT _ (by omega) (by omega) hW.1
+      · exact hquorum b hbT _ (by omega) (by omega) hQ
+    · by_cases hyb : (U.block y).creator = (U.block b).creator
+      · obtain rfl : y = b := U.eq_of_creator_eq (h.held_ids _ _ hyH) hb (h.stable hbT) hyb rfl
+          (hyr.trans hbr.symm)
+        exact hy
+      · have := h.prior _ (h.stable hbT) _ y hyH (h.stable hyT) hyb
+        omega
+  exact h.mem_held_of_round hx hxT (by omega) hbT le_rfl key
+
+/-- **Leaders of `T` cover `T`**, at `2δ ≤ γ ≤ τ` and `δ < γ`, from round `R + 1`
+on, when each slot's leader leads its round on the substrate: a leader block
+of a slot led by `T` references every block of `T` one round below, which its
+author holds when it builds. -/
+theorem coversFrom (hγ : 2 * δ ≤ γ) (hδ : δ < γ) (hγτ : γ ≤ τ)
+    (hsl : ∀ k, S.leader k ∈ Ld.leaders (S.slotRound k)) : CoversFrom U T (R + 1) N := by
+  intro k hk hN hlead L hL y hy hyT hyr
+  have hLc : (U.block L).creator ∈ T := by rw [hL.2.2]; exact hlead
+  refine h.covers L hL.1 (h.stable hLc) (by rw [hL.2.2, hL.2.1]; exact hsl k) y
+    (h.mem_held_below hγ hδ hγτ (r := S.slotRound k - 1) (by omega) (by omega) hy hyT (by omega)
+      hL.1 hLc (by rw [hL.2.1]; omega)) (h.stable hyT) (by rw [hL.2.1]; exact hyr)
+
+/-- **A node of `T` can always build a valid block**, at `2δ ≤ γ ≤ τ` and
+`δ < γ`: when it builds at round `r + 1`, `r` from `R + 1` to `N`, it holds the
+blocks of `T` of round `r`, from which a dense block is valid. -/
+theorem exists_valid_block (hγ : 2 * δ ≤ γ) (hδ : δ < γ) (hγτ : γ ≤ τ) {r : ℕ}
+    (hr : R + 1 ≤ r) (hrN : r ≤ N) {b : BlockId} (hb : b ∈ U.ids) (hbT : (U.block b).creator ∈ T)
+    (hbr : (U.block b).round = r + 1) (pay : Payload) :
+    ∃ b' : Block Validator BlockId Payload, b'.creator = (U.block b).creator ∧ b'.round = r + 1 ∧
+      b'.refs ⊆ tl.held (U.block b).creator (tl.built b) ∧
+      SValid Validator BlockId Payload U.block b' := by
+  classical
+  refine exists_dense_block (h.held_ids _ _) ?_ _ pay
+  refine h.large.trans (Finset.card_le_card fun w hw => ?_)
+  obtain ⟨x, hx, hxw, hxr⟩ := h.populatedOn hδ hγτ hr hrN w hw
+  have hxT : (U.block x).creator ∈ T := hxw ▸ hw
+  exact mem_creatorsOf.mpr ⟨x, Finset.mem_filter.mpr ⟨h.mem_held_below hγ hδ hγτ hr hrN hx hxT hxr
+    hb hbT hbr, h.stable hxT, hxr⟩, hxw⟩
 
 end TimedRun
 

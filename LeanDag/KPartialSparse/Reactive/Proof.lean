@@ -63,9 +63,26 @@ theorem claimable : Claimable := by
     hN hlead hc hcT hcr hL
   exact h.backs_of_leader hτ hδ hγτ ht hk hN hlead hc hcT hcr hL
 
+theorem chained : Chained := by
+  intro Validator BlockId Payload _ _ _ _ _ _ _ _ U tl T G δ τ γ R N h hd
+  exact chains_of_selfRef h.self_ref hd
+
+theorem buildable : Buildable := by
+  intro Validator BlockId Payload _ _ _ _ _ _ _ _ U H r v pay
+  refine ⟨fun hH hq => exists_dense_block hH hq v pay, fun hH hv hvl ho hL => ?_,
+    fun tl T G δ τ γ R N c h hγ hδ hγτ hr hrN hc hcT hcr =>
+      h.exists_valid_block hγ hδ hγτ hr hrN hc hcT hcr pay⟩
+  obtain ⟨o, ho, hoc, hor⟩ := ho
+  obtain ⟨L, hL, hLc, hLl, hLr⟩ := hL
+  exact exists_sparse_block hH hv hvl ho hoc hor hL hLc hLl hLr pay
+
+theorem covered : Covered := by
+  intro Validator BlockId Payload _ _ _ _ _ _ _ _ U tl T G δ τ γ R N h hγ hδ hγτ hsl
+  exact h.coversFrom hγ hδ hγτ hsl
+
 theorem holds : Statement :=
   ⟨built, catchesUp, slow, fast, synchronised, commits, starts, resumes, durable, checked,
-    unblocked, claimable⟩
+    unblocked, claimable, chained, buildable, covered⟩
 
 end Reactive
 

@@ -133,6 +133,19 @@ structure TimedRules (U : SRecord Validator BlockId Payload) (tl : Timeline Vali
     S.leader k ∈ (Correct : Finset Validator) → S.slotRound k + 1 = (U.block b).round →
     (∃ L ∈ tl.held (U.block b).creator (tl.built b), IsLeaderBlock U k L) →
     ∃ L ∈ (U.block b).refs, IsLeaderBlock U k L
+  /-- **Leaders cover**: a correct leader's block references every correct block
+  one round below that its author holds. -/
+  covers : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) →
+    (U.block b).creator ∈ Ld.leaders (U.block b).round →
+    ∀ x ∈ tl.held (U.block b).creator (tl.built b),
+      (U.block x).creator ∈ (Correct : Finset Validator) → (U.block x).round + 1 = (U.block b).round →
+        x ∈ (U.block b).refs
+  /-- **Chains**: a correct block references a block of its own author at or above
+  each block its author built before it. -/
+  self_ref : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) → ∀ x ∈ U.ids,
+    (U.block x).creator = (U.block b).creator → tl.built x < tl.built b →
+    ∃ s ∈ (U.block b).refs, (U.block s).creator = (U.block b).creator ∧
+      (U.block x).round ≤ (U.block s).round
   /-- **Claims**: a correct block claims each leader block two rounds below for
   which its author holds votes from a quorum. -/
   claims : ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) → ∀ k,

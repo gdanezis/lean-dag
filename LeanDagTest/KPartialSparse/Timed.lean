@@ -186,6 +186,12 @@ theorem backed_rule (v : Fin 4) (t : ℕ) (b : ℕ) (hb : b ∈ tHeld v t) (L : 
   · rw [claims_low b hbi (by omega)] at hL
     simp at hL
 
+theorem refs_all : ∀ b : ℕ, b ∈ wIds → (wBlock b).creator = lead (b / 4) →
+    ∀ x : ℕ, x ∈ wIds → x / 4 + 1 = b / 4 → x ∈ (wBlock b).refs := by decide
+
+theorem refs_self : ∀ b : ℕ, b ∈ wIds → 1 ≤ b / 4 →
+    bid (b / 4 - 1) (wBlock b).creator ∈ (wBlock b).refs := by decide
+
 /-- **The timeline is a timed run** from round `0` to round `6`. -/
 theorem wTimed : TimedRun (S := wSlots) wU tTl wT 0 1 4 2 0 6 where
   stable := wT_correct
@@ -262,6 +268,20 @@ theorem wTimed : TimedRun (S := wSlots) wU tTl wT 0 1 4 2 0 6 where
     refine ⟨bid k (lead k), ?_, isLeader_bid k hk6⟩
     have := refs_lead b hb hb1
     rwa [show b / 4 - 1 = k by rw [← hk]; omega] at this
+  covers := fun b hb _ hbl x hx _ hxr => by
+    have hxi := (mem_tHeld.mp hx).1
+    change (wBlock b).creator ∈ ({lead (wBlock b).round} : Finset (Fin 4)) at hbl
+    rw [Finset.mem_singleton, round_wBlock] at hbl
+    change (wBlock x).round + 1 = (wBlock b).round at hxr
+    rw [round_wBlock, round_wBlock] at hxr
+    exact refs_all b hb hbl x hxi hxr
+  self_ref := fun b hb _ x hx hxb hlt => by
+    rw [built_eq, built_eq] at hlt
+    refine ⟨bid (b / 4 - 1) (wBlock b).creator, refs_self b hb (by omega), ?_, ?_⟩
+    · change (wBlock (bid (b / 4 - 1) (wBlock b).creator)).creator = (wBlock b).creator
+      ext; rw [creator_val]; unfold bid; have := (wBlock b).creator.isLt; omega
+    · change (wBlock x).round ≤ (wBlock (bid (b / 4 - 1) (wBlock b).creator)).round
+      rw [round_wBlock, round_wBlock, bid_div]; omega
   claims := fun b hb _ k hk L hL _ => by
     change wSlots.slotRound k + 2 = (wBlock b).round at hk
     rw [round_wBlock] at hk
@@ -416,6 +436,32 @@ theorem wChecked : TimedChecks wU tTl 6 3 where
 disciplines. -/
 theorem wTimedDisciplines : Checks wU 6 3 ∧ Truthful wU 3 :=
   Reactive.checked (Fin 4) ℕ (Finset ℕ) wU tTl 6 3 (fun _ _ => Finset.filter_subset _ _) wChecked
+
+/-- The witness's nodes build above their disks. -/
+theorem wAboveDisk : KPartialDag.BuildsAboveDisk wU.ids wU.block tTl where
+  stores := fun b hb _ t ht => by
+    refine ⟨b, Finset.mem_filter.mpr ⟨hb, rfl, ?_⟩, rfl, le_rfl⟩
+    rw [built_eq] at ht; unfold tBuilt; omega
+  above := fun b hb _ h0 b' hb' hb'c => by
+    obtain ⟨-, -, hb't⟩ := Finset.mem_filter.mp hb'
+    rw [built_eq] at h0
+    change tBuilt b' ≤ tBuilt b - 1 at hb't
+    change (wBlock b').round < (wBlock b).round
+    rw [round_wBlock, round_wBlock]; unfold tBuilt at hb't; omega
+  single := fun b hb c hc hbc hcb ht => by
+    rw [built_eq, built_eq] at ht
+    exact wU.no_equivocation b hb c hc hbc hcb (by
+      change (wBlock b).round = (wBlock c).round; rw [round_wBlock, round_wBlock]; omega)
+
+/-- **Theorem 5, chains**: the timed nodes keep chains. -/
+theorem wTimedChains : Chains wU :=
+  Reactive.chained (Fin 4) ℕ (Finset ℕ) wU tTl wT 0 1 4 2 0 6 wTimed.toTimedRules wAboveDisk
+
+/-- **Theorem 5, covering**: on the timed run, leaders of the correct validators
+cover them from round `1`. -/
+theorem wTimedCovers : CoversFrom (S := wSlots) wU wT 1 6 :=
+  Reactive.covered (Fin 4) ℕ (Finset ℕ) wU tTl wT 0 1 4 2 0 6 wTimed (by omega) (by omega)
+    (by omega) (fun _ => Finset.mem_singleton.mpr rfl)
 
 end KPartialSparse
 

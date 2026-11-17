@@ -342,6 +342,23 @@ round across restarts.
 * *Claimable* (`Reactive.Claimable`). Every claimer of `T` backs its claim for
   a leader of `T`, at a threshold within the quorum: when it builds, it holds
   the leader block and votes for it from a quorum.
+* *Chained* (`Reactive.Chained`). A correct block references a block of its own
+  at or above each block its author built before it (`self_ref`); with
+  building above the disk (`docs/kpartial.md` Theorem 7, *OnDisk*), correct
+  authors keep chains (§1).
+* *Buildable* (`Reactive.Buildable`). A valid block can always be built: a
+  dense block from the correct blocks one round below of a quorum of distinct
+  authors, and a sparse block from a correct node's own block one round below
+  and a correct leader's block there, when it does not lead the round above.
+  On a timed run, at `2δ ≤ γ ≤ τ` and `δ < γ`, a node of `T` holds the blocks
+  of `T` one round below when it builds (`mem_held_below`), so it can build a
+  valid dense block. Validity is a property of the record, so every block of a
+  run is valid; this says the rules never leave a correct node without one.
+* *Covered* (`Reactive.Covered`). A correct leader's block references every
+  correct block one round below its author holds (`covers`). On a timed run,
+  at `2δ ≤ γ ≤ τ` and `δ < γ`, with each slot's leader leading its round on the
+  substrate, leaders of `T` cover `T` (§8, `CoversFrom`), so *Included* holds
+  of timed runs.
 * *Durable* (`Reactive.Durable`). When correct nodes keep histories on disk,
   every block of the available sub-DAG below a block with votes from
   `f + c + 1` distinct authors is on the disk of a node of any quorum `T` of
@@ -425,8 +442,4 @@ includes every block of `T` once leaders of `T` cover `T` (Theorem 6). Open:
   `docs/kpartial.md` §12 leaves open), and a witness with a restart before
   `G`.
 * A bound in rounds on what a node fetches.
-* Leaders of `T` covering `T` (`CoversFrom`) as a rule of timed nodes, from a
-  leader's rule to reference the latest block of every node it holds, when
-  that block is one round below; the dense arc derives synchrony among `T`
-  from a grace period `γ ≥ 2δ` (`docs/kpartial.md` §11, *Synchronised*).
 * The bounds of `docs/kpartial.md` Theorem 6, and adaptive schedules.

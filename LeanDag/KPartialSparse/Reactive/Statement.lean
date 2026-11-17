@@ -1,4 +1,5 @@
 import LeanDag.KPartialSparse.Model.Reactive
+import LeanDag.KPartialSparse.Model.Order
 /-!
 # Sparse K-partial DAG — nodes in time, statement
 
@@ -179,10 +180,59 @@ def Claimable : Prop :=
     c ∈ U.ids → (U.block c).creator ∈ T → (U.block c).round = S.slotRound k + 2 →
     IsLeaderBlock U k L → Backs U t (tl.held (U.block c).creator (tl.built c)) L
 
+/-- **Timed nodes keep chains**: under the rules for nodes, correct authors that
+build above their disk keep chains (§1). -/
+def Chained : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
+    [ClaimFormat BlockId Payload] [Slots Validator] (U : SRecord Validator BlockId Payload)
+    (tl : Timeline Validator BlockId) (T : Finset Validator) (G δ τ γ R N : ℕ),
+    TimedRules U tl T G δ τ γ R N → KPartialDag.BuildsAboveDisk U.ids U.block tl → Chains U
+
+/-- **A valid block can always be built**: from the correct blocks one round
+below of a quorum of distinct authors, a dense block; from a correct node's
+own block one round below and a correct leader's block there, a sparse one,
+when the node does not lead the round above; and on a timed run, at
+`2δ ≤ γ ≤ τ` and `δ < γ`, a node of `T` building above round `r`, from `R + 1`
+to `N`, holds the blocks of a valid one. -/
+def Buildable : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [Crashes Validator] [Ld : Leaders Validator] [LinearOrder BlockId]
+    [ClaimFormat BlockId Payload] [Slots Validator] (U : SRecord Validator BlockId Payload)
+    (H : Finset BlockId) (r : ℕ) (v : Validator) (pay : Payload),
+    (H ⊆ U.ids → kQuorum Validator ≤ (creatorsOf U.block (H.filter fun x =>
+        (U.block x).creator ∈ (Correct : Finset Validator) ∧ (U.block x).round = r)).card →
+      ∃ b : Block Validator BlockId Payload, b.creator = v ∧ b.round = r + 1 ∧ b.refs ⊆ H ∧
+        SValid Validator BlockId Payload U.block b) ∧
+    (H ⊆ U.ids → v ∈ (Correct : Finset Validator) → v ∉ Ld.leaders (r + 1) →
+      (∃ o ∈ H, (U.block o).creator = v ∧ (U.block o).round = r) →
+      (∃ L ∈ H, (U.block L).creator ∈ (Correct : Finset Validator) ∧
+        (U.block L).creator ∈ Ld.leaders r ∧ (U.block L).round = r) →
+      ∃ b : Block Validator BlockId Payload, b.creator = v ∧ b.round = r + 1 ∧ b.refs ⊆ H ∧
+        SValid Validator BlockId Payload U.block b) ∧
+    ∀ (tl : Timeline Validator BlockId) (T : Finset Validator) (G δ τ γ R N : ℕ) (c : BlockId),
+      TimedRun U tl T G δ τ γ R N → 2 * δ ≤ γ → δ < γ → γ ≤ τ → R + 1 ≤ r → r ≤ N →
+      c ∈ U.ids → (U.block c).creator ∈ T → (U.block c).round = r + 1 →
+      ∃ b : Block Validator BlockId Payload, b.creator = (U.block c).creator ∧ b.round = r + 1 ∧
+        b.refs ⊆ tl.held (U.block c).creator (tl.built c) ∧
+        SValid Validator BlockId Payload U.block b
+
+/-- **Leaders of `T` cover `T`**: on a timed run, at `2δ ≤ γ ≤ τ` and `δ < γ`,
+when each slot's leader leads its round on the substrate, a leader block of a
+slot led by `T`, from round `R + 1` on, references every block of `T` one round
+below. -/
+def Covered : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [Crashes Validator] [Ld : Leaders Validator] [LinearOrder BlockId]
+    [ClaimFormat BlockId Payload] [S : Slots Validator] (U : SRecord Validator BlockId Payload)
+    (tl : Timeline Validator BlockId) (T : Finset Validator) (G δ τ γ R N : ℕ),
+    TimedRun U tl T G δ τ γ R N → 2 * δ ≤ γ → δ < γ → γ ≤ τ →
+    (∀ k, S.leader k ∈ Ld.leaders (S.slotRound k)) → CoversFrom U T (R + 1) N
+
 /-- Nodes in time. -/
 def Statement : Prop :=
   Built ∧ CatchesUp ∧ Slow ∧ Fast ∧ Synchronised ∧ Commits ∧ Starts ∧ Resumes ∧ Durable ∧
-    Checked ∧ Unblocked ∧ Claimable
+    Checked ∧ Unblocked ∧ Claimable ∧ Chained ∧ Buildable ∧ Covered
 
 end Reactive
 
