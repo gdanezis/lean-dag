@@ -6,8 +6,9 @@ round below references nothing else but its author's block, and a block
 claims in its payload the leaders it has seen certified. The Lean
 development is `LeanDag/KPartialSparse`. The available sub-DAG (Theorem 1),
 agreement of the commit rule at the scheme's two-round and three-round rows
-(Theorem 2), what a node reads (Theorem 3), liveness (Theorem 4) and nodes in
-time (Theorem 5) are proved; §8 lists what is open.
+(Theorem 2), what a node reads (Theorem 3), liveness (Theorem 4), nodes in
+time (Theorem 5) and the order (Theorem 6) are proved; §9 lists what is
+open.
 `LeanDagTest/KPartialSparse/Witness.lean` is a record on which Theorems 1 to
 4 apply, and `LeanDagTest/KPartialSparse/Timed.lean` a timed run of it for
 Theorem 5.
@@ -348,19 +349,70 @@ of the witness record at `G = 0`, `δ = 1`, `γ = 2`, `τ = 4`, on which every
 correct validator commits slot `2` by time `17`; read with `G = 10`, it meets
 the rules for nodes, and a run resumes above round `0` by time `25`.
 
-## 8. Open
+## 8. The order
+
+The order is that of `docs/kpartial.md` §7. A committed leader `L` outputs the
+blocks of its available sub-DAG at most `D` rounds below it (`Out`); a node
+reads them on what it holds (`OutIn`). Its ledger after slots `0, …, n − 1` is
+what the leaders it committed there output (`LedgerIn`), a block enters at the
+first committed slot whose leader outputs it (`EntersIn`), and within a slot
+blocks are ordered by round, then author, then id (`KeyLt`, `PrecedesIn`).
+
+Inclusion needs more than synchrony on a sparse DAG: a block of `T` is
+referenced by its author's next block and by the leaders that hold it, not by
+every block of `T`. Leaders of `T` *cover* `T` (`CoversFrom`) when a leader
+block of a slot led by `T` references every block of `T` one round below it,
+as a leader referencing the latest block of every node, when it is one round
+below, does under synchrony.
+
+**Theorem 6 (the order; `Order.Statement`).**
+
+* *Local* (`Order.Local`). A node reads a leader's output on what it holds,
+  and all of it once it has fetched the sub-DAG down to `D` rounds below the
+  leader.
+* *Agreement and no retraction* (`Order.Agrees`). At a row and the depth the
+  sub-DAG needs, on a disciplined schedule and record, what a node outputs
+  after `n` slots, every node outputs at the same slot and in the same order
+  after `n' ≥ n` slots, once each has fetched below the leaders it committed.
+* *Total* (`Order.Total`). The ledger order is a strict total order on the
+  ledger, and within a slot a reference precedes the block referencing it.
+* *Settled* (`Order.Settled`, `Order.Excluded`). A block not in a node's ledger
+  once every slot at most `D` rounds above it is decided never enters it, nor
+  any node's ledger.
+* *Outputs* (`Order.Outputs`). With correct chains and `D ≤ K`, a leader of `T`
+  covering `T` outputs every block of `T` at most `D` rounds below it: it
+  references the author's block one round below, and the author's chain leads
+  down to the block, within depth `D`.
+* *Included* (`Order.Included`). After synchrony, with leaders of `T` covering
+  `T` and a slot led by `T` in every `D` rounds, every block of `T` enters the
+  ledger of a node that has decided every slot at most `D` rounds above it and
+  holds the blocks of `T` that certify such a slot: it commits the slot
+  directly, and the slot's leader outputs the block.
+
+Unlike `docs/kpartial.md` §7, *Outputs* needs no run of slots led by `T`
+between the block and the leader, only the author's chain. A block of `T`
+whose author leaves no leader of `T` within `D` rounds is left out, and its
+payload is proposed again; *Excluded* says when that is safe.
+`LeanDagTest/KPartialSparse/Order.lean` puts a block of the witness record in
+a node's ledger by *Included*.
+
+## 9. Open
 
 Safety (Theorems 1 to 3) holds at every row of the scheme, at every crash
 bound, on a disciplined schedule and record, whose disciplines (chains,
 checked and truthful claims, leaders leading on the substrate) are what a
 correct node does. Liveness holds on responsive records (Theorem 4), and timed
 nodes produce them after `G`, through crashes and restarts before it
-(Theorem 5). Open:
+(Theorem 5). The ledger is agreed, totally ordered and never retracted, and
+includes every block of `T` once leaders of `T` cover `T` (Theorem 6). Open:
 
 * Crashes of nodes of `T` after `G` (a stable set per window, as
   `docs/kpartial.md` §12 leaves open), and a witness with a restart before
   `G`.
 * A bound in rounds on what a node fetches, and that a correct node obtains
   the votes behind every claim in the history of what it references.
-* Order, the bounds of `docs/kpartial.md` Theorem 6, and adaptive
-  schedules.
+* Leaders of `T` covering `T` (`CoversFrom`) as a rule of timed nodes, from a
+  leader's rule to reference the latest block of every node it holds, when
+  that block is one round below; the dense arc derives synchrony among `T`
+  from a grace period `γ ≥ 2δ` (`docs/kpartial.md` §11, *Synchronised*).
+* The bounds of `docs/kpartial.md` Theorem 6, and adaptive schedules.

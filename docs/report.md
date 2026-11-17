@@ -13753,7 +13753,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 450 definitions and structures the report names, in
+The 451 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -19847,6 +19847,21 @@ def Local : Prop :=
 
 **The node's tests read only what it holds**: on two records whose blocks agree on `H`, the link and the fetch test read on `H` hold alike.
 
+#### `Local`
+
+*def, `KPartialSparse.Order.Statement.lean`*
+
+```lean
+def Local : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
+    (U : SRecord Validator BlockId Payload) (K D : ℕ) (H : Finset BlockId) (L : BlockId),
+    H ⊆ U.ids → OutIn U K H D L ⊆ Out U K D L ∧
+      (FetchedIn U K H L ((U.block L).round - D) → OutIn U K H D L = Out U K D L)
+```
+
+**A node reads a leader's output on what it holds**, and reads all of it once it has fetched the sub-DAG down to `D` rounds below the leader.
+
 #### `Synchronised`
 
 *def, `KPartialSparse.Reactive.Statement.lean`*
@@ -21452,7 +21467,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 670 theorems the body or Appendix A names, each
+The 672 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -28376,6 +28391,22 @@ theorem holds : Statement
 #### `holds`
 
 *theorem, `KPartialSparse.Node.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `settled`
+
+*theorem, `KPartialSparse.Order.Proof.lean`*
+
+```lean
+theorem settled : Settled
+```
+
+#### `holds`
+
+*theorem, `KPartialSparse.Order.Proof.lean`*
 
 ```lean
 theorem holds : Statement
