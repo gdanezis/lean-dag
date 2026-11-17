@@ -181,7 +181,7 @@ def Claimable : Prop :=
     IsLeaderBlock U k L → Backs U t (tl.held (U.block c).creator (tl.built c)) L
 
 /-- **Timed nodes keep chains**: under the rules for nodes, correct authors that
-build above their disk keep chains (§1). -/
+build above their disk keep chains. -/
 def Chained : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
