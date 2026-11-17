@@ -93,7 +93,7 @@ omit [ClaimFormat BlockId Payload] in
 theorem avail_subset_ids {K : ℕ} {A C : BlockId} (hA : A ∈ U.ids) (hC : C ∈ Avail U K A) :
     C ∈ U.ids := by
   obtain ⟨y, d, hy, hCy⟩ := hC
-  exact historyUpto_subset_ids _ (hy.mem hA) hCy
+  exact window_subset_ids _ (hy.mem hA) hCy
 
 /-- **A link from an anchor names a certified block**: votes in the sub-DAG
 certify it directly, and a claim in the sub-DAG was checked by a correct

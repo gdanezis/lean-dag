@@ -368,7 +368,7 @@ theorem exists_resumed {b : BlockId} (hb : b ∈ U.ids)
 end TimedRules
 
 omit [ClaimFormat BlockId Payload] S in
-/-- **Nothing the sub-DAG holds is lost**: when correct nodes keep histories on
+/-- **Nothing the sub-DAG holds is lost**: when correct nodes keep windows on
 disk, every block of the available sub-DAG below a block with votes from
 `f + c + 1` distinct authors is on the disk of a node of a quorum `T` of
 correct nodes from some time on, through any crash. Its voters, or the
@@ -387,8 +387,8 @@ theorem exists_disk_of_avail (hT : T ⊆ (Correct : Finset Validator))
   | reached i S m yf df yf' df' hyf hzf hyf' hmz hi hm hcard =>
     obtain ⟨c, hc, hcT⟩ := exists_mem_of_card hTq hcard
     obtain ⟨w, hw, rfl⟩ := mem_creatorsOf.mp hc
-    have hwi : w ∈ U.ids := historyUpto_subset_ids _ ((hyf w hw).mem hA) (hzf w hw)
-    have hzm := historyUpto_trans (hm w hw).2 hzy
+    have hwi : w ∈ U.ids := window_subset_ids _ ((hyf w hw).mem hA) (hzf w hw)
+    have hzm := window_trans (hm w hw).2.1 hzy
     rw [show i + (K - i) = K by omega] at hzm
     exact ⟨_, hcT, _, fun t ht => hK w hwi (hT hcT) t ht (m w) (hm w hw).1 hzm⟩
 
@@ -547,23 +547,30 @@ omit S in
 /-- **The wait never blocks a correct block**: a correct node holding a correct
 block holds it referenceable, since it holds the evidence its author held for
 each reference, and backs its own claims. -/
-theorem referenceable_of_held {K t : ℕ} (h : TimedChecks U tl K t) {v : Validator}
+theorem referenceable_of_held {K t : ℕ} (hids : ∀ v s, tl.held v s ⊆ U.ids)
+    (h : TimedChecks U tl K t) {v : Validator}
     (hv : v ∈ (Correct : Finset Validator)) {s : ℕ} {b : BlockId} (hb : b ∈ tl.held v s)
     (hbc : (U.block b).creator ∈ (Correct : Finset Validator)) :
     Referenceable U K t (tl.held v s) b := by
   rcases Nat.eq_zero_or_pos K with rfl | hK
   · refine ⟨fun w hw => ?_, fun X hX L hL => ?_⟩
-    · rw [historyUpto_zero, Finset.mem_singleton] at hw; exact hw ▸ hb
-    · rw [historyUpto_zero, Finset.mem_singleton] at hX; subst hX
+    · rw [mem_window_zero hw]; exact hb
+    · obtain rfl := mem_window_zero hX
       exact h.carries_claims v hv s X hb hbc L hL
   obtain ⟨k, rfl⟩ : ∃ k, K = k + 1 := ⟨K - 1, by omega⟩
+  have hbi : b ∈ U.ids := hids v s hb
+  have hin : ∀ m ∈ (U.block b).refs, ∀ {w : BlockId},
+      w ∈ windowFrom U.block k ((U.block b).round - (k + 1)) m → w ∈ window U (k + 1) m :=
+    fun m hm w hw => by
+      have := (U.valid b hbi).below m hm
+      exact windowFrom_mono (by omega) (by omega) m hw
   refine ⟨fun w hw => ?_, fun X hX L hL => ?_⟩
-  · rcases mem_historyUpto_succ.mp hw with rfl | ⟨m, hm, hwm⟩
+  · rcases mem_windowFrom_succ.mp hw with rfl | ⟨m, hm, -, hwm⟩
     · exact hb
-    · exact (h.carries v hv s b hb hbc m hm).1 (historyUpto_mono (by omega) _ hwm)
-  · rcases mem_historyUpto_succ.mp hX with rfl | ⟨m, hm, hXm⟩
+    · exact (h.carries v hv s b hb hbc m hm).1 (hin m hm hwm)
+  · rcases mem_windowFrom_succ.mp hX with rfl | ⟨m, hm, -, hXm⟩
     · exact h.carries_claims v hv s X hb hbc L hL
-    · exact (h.carries v hv s b hb hbc m hm).2 X (historyUpto_mono (by omega) _ hXm) L hL
+    · exact (h.carries v hv s b hb hbc m hm).2 X (hin m hm hXm) L hL
 
 omit [ClaimFormat BlockId Payload] S in
 /-- **Votes from a quorum back a claim**: holding a block and votes for it from a

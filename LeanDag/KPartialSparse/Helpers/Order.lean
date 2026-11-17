@@ -258,10 +258,10 @@ theorem mem_out_of_covers (hT : T ⊆ (Correct : Finset Validator)) (hch : Chain
   obtain ⟨y, hy, hyc, hyr⟩ := hpop (S.slotRound k - 1) (by omega) (by omega) _ hxc
   have hyL : y ∈ (U.block L).refs :=
     hcov k (by omega) le_rfl hlead L hL y hy (hyc ▸ hxc) (by omega)
-  have hxy : x ∈ historyUpto U ((U.block y).round - (U.block x).round) y :=
-    mem_historyUpto_of_chain hch _ hy hx (hyc ▸ hT hxc) hyc.symm (by omega) le_rfl
-  have hxL' := historyUpto_trans (ref_mem_historyUpto (k := 0) hyL) hxy
-  exact ⟨L, K, Anchored.anchor, historyUpto_mono (by omega) _ hxL'⟩
+  have hxy : x ∈ window U ((U.block y).round - (U.block x).round) y :=
+    mem_window_of_chain hch _ hy hx (hyc ▸ hT hxc) hyc.symm (by omega) le_rfl
+  have hxL' := window_trans (ref_mem_window (k := 0) hyL (by rw [hL.2.1]; omega)) hxy
+  exact ⟨L, K, Anchored.anchor, window_mono (by omega) _ hxL'⟩
 
 /-- **After synchrony with leaders of `T` covering `T`, a block of `T` enters
 the ledger** of a node that has decided every slot at most `D ≤ K` rounds

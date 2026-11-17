@@ -20,26 +20,27 @@ variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Fa
 variable [Cr : Crashes Validator] [Ld : Leaders Validator]
 variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 
-/-- **The anchor points below `A`, read on `H`**: those whose history to the
+/-- **The anchor points below `A`, read on `H`**: those whose window to the
 depth they bring the node holds, anchored as in `Anchored` from blocks read
 on `H`. -/
 inductive AnchoredIn (U : SRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId)
     (A : BlockId) : BlockId → ℕ → Prop
-  | anchor : historyUpto U K A ⊆ H → AnchoredIn U K H A A K
+  | anchor : window U K A ⊆ H → AnchoredIn U K H A A K
   | reached {x : BlockId} (i : ℕ) (S : Finset BlockId) (m : BlockId → BlockId)
       (y : BlockId → BlockId) (d : BlockId → ℕ) (y' : BlockId → BlockId) (d' : BlockId → ℕ)
       (hy : ∀ z ∈ S, AnchoredIn U K H A (y z) (d z))
-      (hz : ∀ z ∈ S, z ∈ historyUpto U (d z) (y z))
+      (hz : ∀ z ∈ S, z ∈ window U (d z) (y z))
       (hy' : ∀ z ∈ S, 0 < i → AnchoredIn U K H A (y' z) (d' z))
-      (hmz : ∀ z ∈ S, 0 < i → historyUpto U (i - 1) (m z) ⊆ historyUpto U (d' z) (y' z))
-      (hi : i ≤ K) (hm : ∀ z ∈ S, m z ∈ (U.block z).refs ∧ x ∈ historyUpto U i (m z))
+      (hmz : ∀ z ∈ S, 0 < i → interior U i (m z) ⊆ window U (d' z) (y' z))
+      (hi : i ≤ K) (hm : ∀ z ∈ S, m z ∈ (U.block z).refs ∧ x ∈ window U i (m z) ∧
+        (U.block (m z)).round + 1 = (U.block z).round)
       (hcard : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card)
-      (hx : historyUpto U (K - i) x ⊆ H) : AnchoredIn U K H A x (K - i)
+      (hx : window U (K - i) x ⊆ H) : AnchoredIn U K H A x (K - i)
 
 /-- **The available sub-DAG below `A`, read on `H`.** -/
 def AvailIn (U : SRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (A : BlockId) :
     Set BlockId :=
-  {z | ∃ y d, AnchoredIn U K H A y d ∧ z ∈ historyUpto U d y}
+  {z | ∃ y d, AnchoredIn U K H A y d ∧ z ∈ window U d y}
 
 variable [ClaimFormat BlockId Payload]
 
@@ -52,16 +53,17 @@ def LinkedIn (p : Params) (U : SRecord Validator BlockId Payload) (K : ℕ) (H :
 
 omit [ClaimFormat BlockId Payload] in
 /-- **The sub-DAG below `A` is fetched into `H` down to round `ρ`**: `H` holds
-the history to depth `K` of `A`, and the history every anchor point brings
-when the blocks of the sub-DAG read on `H` that reach it, through a path in
-the history an anchor point read on `H` brings, lie above `ρ`. -/
+the window to depth `K` of `A`, and the window every anchor point brings
+when the blocks of the sub-DAG read on `H` that reach it, through an interior
+in the window an anchor point read on `H` brings, lie above `ρ`. -/
 def FetchedIn (U : SRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (A : BlockId)
     (ρ : ℕ) : Prop :=
-  historyUpto U K A ⊆ H ∧ ∀ (i : ℕ) (S : Finset BlockId) (m : BlockId → BlockId) (x : BlockId),
+  window U K A ⊆ H ∧ ∀ (i : ℕ) (S : Finset BlockId) (m : BlockId → BlockId) (x : BlockId),
     i ≤ K → (∀ z ∈ S, z ∈ AvailIn U K H A ∧ ρ < (U.block z).round ∧
-      (0 < i → ∃ y d, AnchoredIn U K H A y d ∧ historyUpto U (i - 1) (m z) ⊆ historyUpto U d y) ∧
-      m z ∈ (U.block z).refs ∧ x ∈ historyUpto U i (m z)) →
-    F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card → historyUpto U (K - i) x ⊆ H
+      (0 < i → ∃ y d, AnchoredIn U K H A y d ∧ interior U i (m z) ⊆ window U d y) ∧
+      m z ∈ (U.block z).refs ∧ x ∈ window U i (m z) ∧
+        (U.block (m z)).round + 1 = (U.block z).round) →
+    F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card → window U (K - i) x ⊆ H
 
 /-- **`H` backs a claim for `L`** at threshold `t`: it holds `L`, and votes for
 `L` one round above it from `t` distinct authors. -/
@@ -70,19 +72,17 @@ def Backs (U : SRecord Validator BlockId Payload) (t : ℕ) (H : Finset BlockId)
   L ∈ H ∧ t ≤ (creatorsOf U.block (H.filter fun b =>
     (U.block b).round = (U.block L).round + 1 ∧ L ∈ (U.block b).refs)).card
 
-/-- **`m` is referenceable on `H`** at threshold `t`: `H` holds the history to
-depth `K` of `m` and backs every claim in it. -/
+/-- **`m` is referenceable on `H`** at threshold `t`: `H` holds the window to depth `K` of `m` and backs every claim in it. -/
 abbrev Referenceable (U : SRecord Validator BlockId Payload) (K t : ℕ) (H : Finset BlockId)
     (m : BlockId) : Prop :=
-  historyUpto U K m ⊆ H ∧ ∀ X ∈ historyUpto U K m, ∀ L ∈ claimsOf U X, Backs U t H L
+  window U K m ⊆ H ∧ ∀ X ∈ window U K m, ∀ L ∈ claimsOf U X, Backs U t H L
 
 /-- **Correct authors check what they hold**: each correct block was built by a
-node holding blocks of the record that back its claims, hold the history to
-depth `K` of each of its references, and back every claim there. -/
+node holding blocks of the record that back its claims, hold the window to depth `K` of each of its references, and back every claim there. -/
 def BuildsChecked (U : SRecord Validator BlockId Payload) (K t : ℕ) : Prop :=
   ∀ z ∈ U.ids, (U.block z).creator ∈ (Correct : Finset Validator) → ∃ H ⊆ U.ids,
-    (∀ L ∈ claimsOf U z, Backs U t H L) ∧ ∀ m ∈ (U.block z).refs, historyUpto U K m ⊆ H ∧
-      ∀ X ∈ historyUpto U K m, ∀ L ∈ claimsOf U X, Backs U t H L
+    (∀ L ∈ claimsOf U z, Backs U t H L) ∧ ∀ m ∈ (U.block z).refs, window U K m ⊆ H ∧
+      ∀ X ∈ window U K m, ∀ L ∈ claimsOf U X, Backs U t H L
 
 /-- **The commit rule read on what a node holds**, at a row `p`. The direct
 commit counts the certificates it holds, the direct skip the blamers it

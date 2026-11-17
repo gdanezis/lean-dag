@@ -23,43 +23,93 @@ variable [Cr : Crashes Validator] [Ld : Leaders Validator]
 variable {BlockId : Type*} [LinearOrder BlockId] {Payload : Type*}
 variable {U U' : SRecord Validator BlockId Payload} {K : ℕ} {H : Finset BlockId} {A : BlockId}
 
-/-! ## Reading only what is held -/
+/-! ## Reading only what is held
 
-/-- A held history of a record is read alike on a record agreeing on what is
-held. -/
-theorem historyUpto_eq_of_subset (hb : ∀ i ∈ H, U.block i = U'.block i) {n : ℕ} {y : BlockId}
-    (h : historyUpto U n y ⊆ H) : historyUpto U' n y = historyUpto U n y :=
-  historyUptoFrom_eq_of_subset hb n y h
+Two records agree on `H` when they give the blocks of `H` alike and the
+references of those blocks the same rounds (`hr`): a reference names its round. -/
+
+section WindowFrom
+
+variable {blk blk' : BlockId → Block Validator BlockId Payload}
 
 omit [Fintype Validator] [DecidableEq Validator] Ld in
-/-- One step beyond a held history is read alike. -/
-theorem historyUptoFrom_succ_eq {blk blk' : BlockId → Block Validator BlockId Payload}
-    (hb : ∀ i ∈ H, blk i = blk' i) :
-    ∀ (n : ℕ) (b : BlockId), historyUptoFrom blk n b ⊆ H →
-      historyUptoFrom blk' (n + 1) b = historyUptoFrom blk (n + 1) b
-  | 0, b, h => by
-    have hbH : b ∈ H := h mem_historyUptoFrom_self
-    rw [historyUptoFrom_succ, historyUptoFrom_succ, ← hb b hbH]; rfl
-  | n + 1, b, h => by
-    have hbH : b ∈ H := h mem_historyUptoFrom_self
-    rw [historyUptoFrom_succ (n := n + 1), historyUptoFrom_succ (n := n + 1), ← hb b hbH]
-    refine congrArg (insert b) (Finset.biUnion_congr rfl fun j hj =>
-      historyUptoFrom_succ_eq hb n j fun i hi => h ?_)
-    rw [historyUptoFrom_succ]
-    exact Finset.mem_insert_of_mem (Finset.mem_biUnion.mpr ⟨j, hj, hi⟩)
+/-- One step beyond a held window is read alike. -/
+theorem windowFrom_succ_eq (hb : ∀ i ∈ H, blk i = blk' i)
+    (hr : ∀ i ∈ H, ∀ j ∈ (blk i).refs, (blk' j).round = (blk j).round) :
+    ∀ (n lo : ℕ) (b : BlockId), windowFrom blk n lo b ⊆ H →
+      windowFrom blk' (n + 1) lo b = windowFrom blk (n + 1) lo b := by
+  intro n
+  induction n with
+  | zero =>
+    intro lo b h
+    have hbH : b ∈ H := h mem_windowFrom_self
+    have hf : ((blk' b).refs.filter fun j => lo ≤ (blk' j).round) =
+        (blk b).refs.filter fun j => lo ≤ (blk j).round := by
+      rw [← hb b hbH]; exact Finset.filter_congr fun j hj => by rw [hr b hbH j hj]
+    simp only [windowFrom, hf]
+  | succ n ih =>
+    intro lo b h
+    have hbH : b ∈ H := h mem_windowFrom_self
+    have hf : ((blk' b).refs.filter fun j => lo ≤ (blk' j).round) =
+        (blk b).refs.filter fun j => lo ≤ (blk j).round := by
+      rw [← hb b hbH]; exact Finset.filter_congr fun j hj => by rw [hr b hbH j hj]
+    change insert b (((blk' b).refs.filter fun j => lo ≤ (blk' j).round).biUnion
+      (windowFrom blk' (n + 1) lo)) =
+      insert b (((blk b).refs.filter fun j => lo ≤ (blk j).round).biUnion
+        (windowFrom blk (n + 1) lo))
+    rw [hf]
+    refine congrArg (insert b) (Finset.biUnion_congr rfl fun j hj => ih lo j fun z hz => h ?_)
+    obtain ⟨hj, hjr⟩ := Finset.mem_filter.mp hj
+    exact mem_windowFrom_succ.mpr (Or.inr ⟨j, hj, hjr, hz⟩)
 
-/-- **A block reached through a held path is read alike**: the history to depth
-`i` of a block whose history to depth `i − 1` is held. -/
-theorem historyUpto_eq_of_path (hb : ∀ i ∈ H, U.block i = U'.block i) {i : ℕ} {b : BlockId}
-    (h : 0 < i → historyUpto U (i - 1) b ⊆ H) : historyUpto U' i b = historyUpto U i b := by
+omit [Fintype Validator] [DecidableEq Validator] Ld in
+/-- A held window is read alike. -/
+theorem windowFrom_eq_of_subset (hb : ∀ i ∈ H, blk i = blk' i)
+    (hr : ∀ i ∈ H, ∀ j ∈ (blk i).refs, (blk' j).round = (blk j).round) :
+    ∀ (n lo : ℕ) (b : BlockId), windowFrom blk n lo b ⊆ H →
+      windowFrom blk' n lo b = windowFrom blk n lo b
+  | 0, _, _, _ => rfl
+  | n + 1, lo, b, h => windowFrom_succ_eq hb hr n lo b
+      ((windowFrom_mono (by omega) le_rfl b).trans h)
+
+end WindowFrom
+
+variable (hb : ∀ i ∈ H, U.block i = U'.block i)
+  (hr : ∀ i ∈ H, ∀ j ∈ (U.block i).refs, (U'.block j).round = (U.block j).round)
+
+include hb hr
+
+/-- A held window of a record is read alike on a record agreeing on what is
+held. -/
+theorem window_eq_of_subset {n : ℕ} {y : BlockId} (h : window U n y ⊆ H) :
+    window U' n y = window U n y := by
+  unfold window
+  rw [← hb y (h self_mem_window)]
+  exact windowFrom_eq_of_subset hb hr n _ y h
+
+/-- A held interior is read alike. -/
+theorem interior_eq_of_subset {i : ℕ} {b : BlockId} (hbH : b ∈ H) (h : interior U i b ⊆ H) :
+    interior U' i b = interior U i b := by
+  unfold interior
+  rw [← hb b hbH]
+  exact windowFrom_eq_of_subset hb hr _ _ b h
+
+/-- **A block reached through a held interior is read alike**: the window to
+depth `i` of a block whose interior is held. -/
+theorem window_eq_of_path {i : ℕ} {b : BlockId} (hbH : b ∈ H) (h : 0 < i → interior U i b ⊆ H) :
+    window U' i b = window U i b := by
   rcases Nat.eq_zero_or_pos i with rfl | hpos
   · rfl
   · obtain ⟨n, rfl⟩ : ∃ n, i = n + 1 := ⟨i - 1, by omega⟩
-    exact historyUptoFrom_succ_eq hb n b (h hpos)
+    unfold window
+    rw [← hb b hbH]
+    exact windowFrom_succ_eq hb hr n _ b (h hpos)
 
-/-- An anchor point read on `H` has the history it brings held. -/
+omit hb hr
+
+/-- An anchor point read on `H` has the window it brings held. -/
 theorem AnchoredIn.window {y : BlockId} {d : ℕ} (h : AnchoredIn U K H A y d) :
-    historyUpto U d y ⊆ H := by
+    window U d y ⊆ H := by
   cases h with
   | anchor h => exact h
   | reached _ _ _ _ _ _ _ _ _ _ _ _ _ _ hx => exact hx
@@ -69,64 +119,86 @@ theorem availIn_subset_held {z : BlockId} (hz : z ∈ AvailIn U K H A) : z ∈ H
   obtain ⟨y, d, hy, hzy⟩ := hz
   exact hy.window hzy
 
+include hb hr
+
 /-- **Anchoring read on `H` reads only `H`.** -/
-theorem AnchoredIn.congr (hb : ∀ i ∈ H, U.block i = U'.block i) {x : BlockId} {d : ℕ}
+theorem AnchoredIn.congr {x : BlockId} {d : ℕ}
     (h : AnchoredIn U K H A x d) : AnchoredIn U' K H A x d := by
   induction h with
-  | anchor h => exact AnchoredIn.anchor (by rw [historyUpto_eq_of_subset hb h]; exact h)
+  | anchor h => exact AnchoredIn.anchor (by rw [window_eq_of_subset hb hr h]; exact h)
   | @reached x i S m y d y' d' hy hz hy' hmz hi hm hcard hx ih ih' =>
     have hzH : ∀ z ∈ S, z ∈ H := fun z hzS => (hy z hzS).window (hz z hzS)
-    have hpath : ∀ z ∈ S, 0 < i → historyUpto U (i - 1) (m z) ⊆ H := fun z hzS hpos =>
+    have hpath : ∀ z ∈ S, 0 < i → interior U i (m z) ⊆ H := fun z hzS hpos =>
       (hmz z hzS hpos).trans (hy' z hzS hpos).window
+    have hmH : ∀ z ∈ S, 0 < i → m z ∈ H := fun z hzS hpos => hpath z hzS hpos mem_windowFrom_self
     refine AnchoredIn.reached i S m y d y' d' ih (fun z hzS => ?_) ih' (fun z hzS hpos => ?_) hi
       (fun z hzS => ?_) ?_ ?_
-    · rw [historyUpto_eq_of_subset hb ((hy z hzS).window)]; exact hz z hzS
-    · rw [historyUpto_eq_of_subset hb ((hy' z hzS hpos).window),
-        historyUpto_eq_of_subset hb (hpath z hzS hpos)]
+    · rw [window_eq_of_subset hb hr ((hy z hzS).window)]; exact hz z hzS
+    · rw [window_eq_of_subset hb hr ((hy' z hzS hpos).window),
+        interior_eq_of_subset hb hr (hmH z hzS hpos) (hpath z hzS hpos)]
       exact hmz z hzS hpos
-    · rw [← hb z (hzH z hzS), historyUpto_eq_of_path hb (hpath z hzS)]; exact hm z hzS
+    · have hz' := hb z (hzH z hzS)
+      have hmr := hr z (hzH z hzS) (m z) (hm z hzS).1
+      refine ⟨hz' ▸ (hm z hzS).1, ?_, by rw [hmr, ← hz']; exact (hm z hzS).2.2⟩
+      rcases Nat.eq_zero_or_pos i with rfl | hpos
+      · rw [mem_window_zero (hm z hzS).2.1]; exact self_mem_window
+      · rw [window_eq_of_path hb hr (hmH z hzS hpos) (fun _ => hpath z hzS hpos)]
+        exact (hm z hzS).2.1
     · have : creatorsOf U'.block S = creatorsOf U.block S :=
         Finset.image_congr fun z hzS => by rw [hb z (hzH z hzS)]
       rw [this]; exact hcard
-    · rw [historyUpto_eq_of_subset hb hx]; exact hx
+    · rw [window_eq_of_subset hb hr hx]; exact hx
+
+omit hb hr
 
 /-- The sub-DAG read on `H` is read alike on a record agreeing on `H`. -/
-theorem availIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i) :
+theorem availIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i)
+    (hr : ∀ i ∈ H, ∀ j ∈ (U.block i).refs, (U'.block j).round = (U.block j).round) :
     AvailIn U K H A = AvailIn U' K H A := by
   have hb' : ∀ i ∈ H, U'.block i = U.block i := fun i hi => (hb i hi).symm
+  have hr' : ∀ i ∈ H, ∀ j ∈ (U'.block i).refs, (U.block j).round = (U'.block j).round :=
+    fun i hi j hj => (hr i hi j (hb i hi ▸ hj)).symm
   ext z
   constructor
   · rintro ⟨y, d, hy, hzy⟩
-    exact ⟨y, d, hy.congr hb, by rw [historyUpto_eq_of_subset hb hy.window]; exact hzy⟩
+    exact ⟨y, d, hy.congr hb hr, by rw [window_eq_of_subset hb hr hy.window]; exact hzy⟩
   · rintro ⟨y, d, hy, hzy⟩
-    exact ⟨y, d, hy.congr hb', by rw [historyUpto_eq_of_subset hb' hy.window]; exact hzy⟩
+    exact ⟨y, d, hy.congr hb' hr', by rw [window_eq_of_subset hb' hr' hy.window]; exact hzy⟩
 
 /-- **The fetch test reads only `H`.** -/
-theorem fetchedIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i) {ρ : ℕ}
+theorem fetchedIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i)
+    (hr : ∀ i ∈ H, ∀ j ∈ (U.block i).refs, (U'.block j).round = (U.block j).round) {ρ : ℕ}
     (h : FetchedIn U K H A ρ) : FetchedIn U' K H A ρ := by
   have hb' : ∀ i ∈ H, U'.block i = U.block i := fun i hi => (hb i hi).symm
-  refine ⟨by rw [historyUpto_eq_of_subset hb h.1]; exact h.1, fun i S m x hi hS hcard => ?_⟩
-  have hav := availIn_congr (K := K) (A := A) hb
+  have hr' : ∀ i ∈ H, ∀ j ∈ (U'.block i).refs, (U.block j).round = (U'.block j).round :=
+    fun i hi j hj => (hr i hi j (hb i hi ▸ hj)).symm
+  refine ⟨by rw [window_eq_of_subset hb hr h.1]; exact h.1, fun i S m x hi hS hcard => ?_⟩
+  have hav := availIn_congr (K := K) (A := A) hb hr
   have hzH : ∀ z ∈ S, z ∈ H := fun z hzS => availIn_subset_held (hav ▸ (hS z hzS).1)
   have hcard' : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card := by
     have : creatorsOf U'.block S = creatorsOf U.block S :=
       Finset.image_congr fun z hzS => by rw [hb z (hzH z hzS)]
     rwa [this] at hcard
   have hx := h.2 i S m x hi (fun z hzS => by
-    obtain ⟨h₁, h₂, h₃, h₄, h₅⟩ := hS z hzS
-    have hpath : 0 < i → historyUpto U' (i - 1) (m z) ⊆ H := fun hpos => by
+    obtain ⟨h₁, h₂, h₃, h₄, h₅, h₆⟩ := hS z hzS
+    have hpath : 0 < i → interior U' i (m z) ⊆ H := fun hpos => by
       obtain ⟨y, d, hy, hmy⟩ := h₃ hpos
       exact hmy.trans hy.window
-    have hpath' : 0 < i → historyUpto U (i - 1) (m z) ⊆ H := fun hpos => by
-      rw [historyUpto_eq_of_subset hb' (hpath hpos)]; exact hpath hpos
+    have hmH : 0 < i → m z ∈ H := fun hpos => hpath hpos mem_windowFrom_self
+    have hpath' : 0 < i → interior U i (m z) ⊆ H := fun hpos => by
+      rw [interior_eq_of_subset hb' hr' (hmH hpos) (hpath hpos)]; exact hpath hpos
     refine ⟨hav ▸ h₁, by rw [hb z (hzH z hzS)]; exact h₂, fun hpos => ?_,
       by rw [hb z (hzH z hzS)]; exact h₄, ?_⟩
     · obtain ⟨y, d, hy, hmy⟩ := h₃ hpos
-      refine ⟨y, d, hy.congr hb', ?_⟩
-      rw [historyUpto_eq_of_subset hb' (hpath hpos), historyUpto_eq_of_subset hb' hy.window]
+      refine ⟨y, d, hy.congr hb' hr', ?_⟩
+      rw [interior_eq_of_subset hb' hr' (hmH hpos) (hpath hpos),
+        window_eq_of_subset hb' hr' hy.window]
       exact hmy
-    · rw [← historyUpto_eq_of_path hb hpath']; exact h₅) hcard'
-  rw [historyUpto_eq_of_subset hb hx]; exact hx
+    · refine ⟨?_, by rw [hr' z (hzH z hzS) (m z) h₄, hb z (hzH z hzS)]; exact h₆⟩
+      rcases Nat.eq_zero_or_pos i with rfl | hpos
+      · rw [mem_window_zero h₅]; exact self_mem_window
+      · rw [← window_eq_of_path hb hr (hmH hpos) (fun _ => hpath' hpos)]; exact h₅) hcard'
+  rw [window_eq_of_subset hb hr hx]; exact hx
 
 variable [ClaimFormat BlockId Payload]
 
@@ -138,11 +210,12 @@ theorem certifies_congr {p : Params} {C L : BlockId} {r : ℕ} (hC : U.block C =
   rwa [← hC]
 
 /-- **The link read on `H` reads only `H`.** -/
-theorem linkedIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i) {p : Params} {L : BlockId} {r : ℕ}
-    (h : LinkedIn p U K H A L r) : LinkedIn p U' K H A L r := by
+theorem linkedIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i)
+    (hr : ∀ i ∈ H, ∀ j ∈ (U.block i).refs, (U'.block j).round = (U.block j).round) {p : Params}
+    {L : BlockId} {r : ℕ} (h : LinkedIn p U K H A L r) : LinkedIn p U' K H A L r := by
   obtain ⟨X, hX, hXn⟩ := h
   have hXH : ∀ C ∈ X, C ∈ H := fun C hC => availIn_subset_held (hX C hC).1
-  refine ⟨X, fun C hC => ⟨availIn_congr hb ▸ (hX C hC).1,
+  refine ⟨X, fun C hC => ⟨availIn_congr hb hr ▸ (hX C hC).1,
     certifies_congr (hb C (hXH C hC)) (hX C hC).2⟩, ?_⟩
   have : creatorsOf U'.block X = creatorsOf U.block X :=
     Finset.image_congr fun C hC => by rw [hb C (hXH C hC)]
@@ -183,28 +256,29 @@ theorem round_le_of_avail (hA : A ∈ U.ids) {z : BlockId} (hz : z ∈ Avail U K
     (U.block z).round ≤ (U.block A).round := by
   obtain ⟨y, d, hy, hzy⟩ := hz
   suffices h : (U.block y).round ≤ (U.block A).round from
-    (round_le_of_mem_historyUpto d (hy.mem hA) hzy).trans h
+    (round_le_of_mem_historyUpto d (hy.mem hA) (window_subset_historyUpto hzy)).trans h
   clear hzy
   induction hy with
   | anchor => exact le_rfl
   | @reached x i S m y d y' d' hy hz hy' hmz hi hm hcard ih ih' =>
     obtain ⟨z, hzS⟩ : S.Nonempty := by
       rw [← Finset.card_pos]; exact lt_of_lt_of_le (by omega) (hcard.trans Finset.card_image_le)
-    have hzi := historyUpto_subset_ids _ ((hy z hzS).mem hA) (hz z hzS)
+    have hzi := window_subset_ids _ ((hy z hzS).mem hA) (hz z hzS)
     have hmi := U.complete z hzi _ (hm z hzS).1
     have := (U.valid z hzi).below _ (hm z hzS).1
-    have := round_le_of_mem_historyUpto _ hmi (hm z hzS).2
-    have := round_le_of_mem_historyUpto _ ((hy z hzS).mem hA) (hz z hzS)
+    have := round_le_of_mem_historyUpto _ hmi (window_subset_historyUpto (hm z hzS).2.1)
+    have := round_le_of_mem_historyUpto _ ((hy z hzS).mem hA) (window_subset_historyUpto (hz z hzS))
     have := ih z hzS
     omega
 
 /-- **A sub-DAG fetched down to round `ρ` is the record's at and above `ρ`.** -/
 theorem avail_subset_availIn (hH : H ⊆ U.ids) {ρ : ℕ} (hf : FetchedIn U K H A ρ) {z : BlockId}
     (hz : z ∈ Avail U K A) (hρ : ρ ≤ (U.block z).round) : z ∈ AvailIn U K H A := by
-  have hA : A ∈ U.ids := hH (hf.1 mem_historyUpto_self)
+  have hA : A ∈ U.ids := hH (hf.1 self_mem_window)
   obtain ⟨y, d, hy, hzy⟩ := hz
   suffices h : ρ ≤ (U.block y).round → AnchoredIn U K H A y d from
-    ⟨y, d, h (le_trans hρ (round_le_of_mem_historyUpto d (hy.mem hA) hzy)), hzy⟩
+    ⟨y, d, h (le_trans hρ (round_le_of_mem_historyUpto d (hy.mem hA)
+      (window_subset_historyUpto hzy))), hzy⟩
   clear hzy
   induction hy with
   | anchor => exact fun _ => AnchoredIn.anchor hf.1
@@ -212,17 +286,18 @@ theorem avail_subset_availIn (hH : H ⊆ U.ids) {ρ : ℕ} (hf : FetchedIn U K H
     intro hρx
     have hzr : ∀ z ∈ S, ρ < (U.block z).round ∧ ρ ≤ (U.block (y z)).round ∧
         ρ ≤ (U.block (m z)).round := fun z hzS => by
-      have hzi := historyUpto_subset_ids _ ((hy z hzS).mem hA) (hz z hzS)
+      have hzi := window_subset_ids _ ((hy z hzS).mem hA) (hz z hzS)
       have hmi := U.complete z hzi _ (hm z hzS).1
       have := (U.valid z hzi).below _ (hm z hzS).1
-      have := round_le_of_mem_historyUpto _ hmi (hm z hzS).2
-      have := round_le_of_mem_historyUpto _ ((hy z hzS).mem hA) (hz z hzS)
+      have := round_le_of_mem_historyUpto _ hmi (window_subset_historyUpto (hm z hzS).2.1)
+      have := round_le_of_mem_historyUpto _ ((hy z hzS).mem hA)
+        (window_subset_historyUpto (hz z hzS))
       omega
     have i₁ : ∀ z ∈ S, AnchoredIn U K H A (y z) (d z) := fun z hzS => ih z hzS (hzr z hzS).2.1
     have i₂ : ∀ z ∈ S, 0 < i → AnchoredIn U K H A (y' z) (d' z) := fun z hzS hpos =>
       ih' z hzS hpos (le_trans (hzr z hzS).2.2
         (round_le_of_mem_historyUpto _ ((hy' z hzS hpos).mem hA)
-          (hmz z hzS hpos mem_historyUpto_self)))
+          (window_subset_historyUpto (hmz z hzS hpos mem_windowFrom_self))))
     exact AnchoredIn.reached i S m y d y' d' i₁ hz i₂ hmz hi hm hcard
       (hf.2 i S m x hi (fun z hzS => ⟨⟨y z, d z, i₁ z hzS, hz z hzS⟩, (hzr z hzS).1,
         fun hpos => ⟨y' z, d' z, i₂ z hzS hpos, hmz z hzS hpos⟩, hm z hzS⟩) hcard)
@@ -230,12 +305,12 @@ theorem avail_subset_availIn (hH : H ⊆ U.ids) {ρ : ℕ} (hf : FetchedIn U K H
 /-- **Holding what the record's anchor points bring fetches the sub-DAG**,
 down to any round. -/
 theorem fetchedIn_of_subset {ρ : ℕ}
-    (hsub : ∀ y d, Anchored U K A y d → historyUpto U d y ⊆ H) : FetchedIn U K H A ρ := by
+    (hsub : ∀ y d, Anchored U K A y d → window U d y ⊆ H) : FetchedIn U K H A ρ := by
   classical
   refine ⟨hsub A K Anchored.anchor, fun i S m x hi hS hcard => hsub x (K - i) ?_⟩
   have h₁ : ∀ z ∈ S, z ∈ Avail U K A := fun z hzS => availIn_subset (hS z hzS).1
   have h₂ : ∀ z ∈ S, 0 < i → ∃ y d, Anchored U K A y d ∧
-      historyUpto U (i - 1) (m z) ⊆ historyUpto U d y := fun z hzS hpos => by
+      interior U i (m z) ⊆ window U d y := fun z hzS hpos => by
     obtain ⟨y, d, hy, hmy⟩ := (hS z hzS).2.2.1 hpos
     exact ⟨y, d, hy.toAnchored, hmy⟩
   refine Anchored.reached i S m (fun z => if h : z ∈ S then (h₁ z h).choose else A)
@@ -248,6 +323,31 @@ theorem fetchedIn_of_subset {ρ : ℕ}
   · simp only [dif_pos hz]; exact (h₁ z hz).choose_spec.choose_spec.2
   · simp only [dif_pos (And.intro hz hpos)]; exact (h₂ z hz hpos).choose_spec.choose_spec.1
   · simp only [dif_pos (And.intro hz hpos)]; exact (h₂ z hz hpos).choose_spec.choose_spec.2
+
+/-- **Fetching down to `ρ` reads only the last `K` rounds below `ρ`**: holding
+the record's blocks from round `ρ − K` up to the anchor's round fetches the
+sub-DAG down to `ρ`. -/
+theorem fetchedIn_of_band (hA : A ∈ U.ids) {ρ : ℕ} (hρ : ρ ≤ (U.block A).round)
+    (hH : ∀ b ∈ U.ids, ρ - K ≤ (U.block b).round → (U.block b).round ≤ (U.block A).round →
+      b ∈ H) : FetchedIn U K H A ρ := by
+  refine ⟨fun b hb => ?_, fun i S m x hi hS hcard => fun b hb => ?_⟩
+  · have := round_of_mem_window hb
+    exact hH b (window_subset_ids K hA hb) (by omega)
+      (round_le_of_mem_historyUpto K hA (window_subset_historyUpto hb))
+  · obtain ⟨z, hzS⟩ : S.Nonempty := by
+      rw [← Finset.card_pos]; exact lt_of_lt_of_le (by omega) (hcard.trans Finset.card_image_le)
+    obtain ⟨hzA, hρz, -, hmz, hxm, hmr⟩ := hS z hzS
+    have hzA' := availIn_subset hzA
+    have hzr := round_le_of_avail hA hzA'
+    obtain ⟨y, d, hy, hzy⟩ := hzA'
+    have hzi := window_subset_ids _ (hy.mem hA) hzy
+    have hmi := U.complete z hzi _ hmz
+    have hxi := window_subset_ids _ hmi hxm
+    have h₁ := round_of_mem_window hxm
+    have h₂ := round_le_of_mem_historyUpto _ hmi (window_subset_historyUpto hxm)
+    have h₃ := round_of_mem_window hb
+    have h₄ := round_le_of_mem_historyUpto _ hxi (window_subset_historyUpto hb)
+    exact hH b (window_subset_ids _ hxi hb) (by omega) (by omega)
 
 variable [ClaimFormat BlockId Payload]
 

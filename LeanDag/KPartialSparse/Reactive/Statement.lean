@@ -132,7 +132,7 @@ def Resumes : Prop :=
         (R' ≤ N → TimedRun U tl T G δ τ γ R' N ∧ ReachedBy U tl T R' (G + 3 * δ + 3 * τ))
 
 /-- **Nothing the sub-DAG holds is lost**: when correct nodes keep on disk the
-histories to depth `K` of their blocks' references, every block of the
+windows to depth `K` of their blocks' references, every block of the
 available sub-DAG below a block with votes from `f + c + 1` distinct authors
 is on the disk of a node of any quorum `T` of correct nodes from some time
 on, through any crash. -/
@@ -163,7 +163,7 @@ def Unblocked : Prop :=
     [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
     [ClaimFormat BlockId Payload] (U : SRecord Validator BlockId Payload)
     (tl : Timeline Validator BlockId) (K t : ℕ) (v : Validator) (s : ℕ) (b : BlockId),
-    TimedChecks U tl K t → v ∈ (Correct : Finset Validator) → b ∈ tl.held v s →
+    (∀ v s, tl.held v s ⊆ U.ids) → TimedChecks U tl K t → v ∈ (Correct : Finset Validator) → b ∈ tl.held v s →
     (U.block b).creator ∈ (Correct : Finset Validator) → Referenceable U K t (tl.held v s) b
 
 /-- **Every claimer of `T` backs its claim**: on a timed run, at `τ ≥ 2δ`,

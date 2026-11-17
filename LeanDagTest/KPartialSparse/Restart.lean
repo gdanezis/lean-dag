@@ -27,7 +27,7 @@ theorem rHeld_eq {v : Fin 4} {t : ℕ} (h : ¬ (v = 2 ∧ t = 9)) : rTl.held v t
   if_neg h
 
 theorem rHeld_restart : rTl.held 2 9 = upto 0 ∪ tDisk 2 9 := by
-  show rHeld 2 9 = _
+  change rHeld 2 9 = _
   unfold rHeld; simp
 
 /-- What validator `2` holds after the restart: blocks of rounds `0` and `1`,
@@ -103,7 +103,7 @@ theorem rRules : TimedRules (S := wSlots) wU rTl wT 10 1 4 2 0 6 where
     · obtain ⟨rfl, rfl⟩ := hvt
       rw [rHeld_restart] at hb
       have := (restart_mem hb).2.2.1
-      show tBuilt b ≤ 9; omega
+      change tBuilt b ≤ 9; omega
     · rw [rHeld_eq hvt] at hb; exact (wRules 10).causal v hv t b hb hbc
   prior := by
     intro v hv t b hb hbc hbv
@@ -111,7 +111,7 @@ theorem rRules : TimedRules (S := wSlots) wU rTl wT 10 1 4 2 0 6 where
     · obtain ⟨rfl, rfl⟩ := hvt
       rw [rHeld_restart] at hb
       have := (restart_mem hb).2.2.1
-      show tBuilt b < 9; omega
+      change tBuilt b < 9; omega
     · rw [rHeld_eq hvt] at hb; exact (wRules 10).prior v hv t b hb hbc hbv
   disk_held := by
     intro v hv t
@@ -127,9 +127,9 @@ theorem rRules : TimedRules (S := wSlots) wU rTl wT 10 1 4 2 0 6 where
     rw [round_wBlock] at hbr
     have h6 := round_le_six hb
     have hW := waitsFor_upto r (by omega)
-    refine Or.inl ⟨by show 2 ≤ tBuilt b; unfold tBuilt; omega,
-      waitsFor_mono (upto_subset (by show 4 + 3 * r + 1 ≤ tBuilt b - 2; unfold tBuilt; omega)) hW,
-      waitsFor_mono (upto_subset (by show 4 + 3 * r + 1 ≤ tBuilt b; unfold tBuilt; omega)) hW⟩
+    refine Or.inl ⟨by change 2 ≤ tBuilt b; unfold tBuilt; omega,
+      waitsFor_mono (upto_subset (by change 4 + 3 * r + 1 ≤ tBuilt b - 2; unfold tBuilt; omega)) hW,
+      waitsFor_mono (upto_subset (by change 4 + 3 * r + 1 ≤ tBuilt b; unfold tBuilt; omega)) hW⟩
   prompt := by
     intro v hv r t hr hrN hw
     refine (wRules 10).prompt v hv r t hr hrN ?_
@@ -178,7 +178,7 @@ starts above round `0`, which every correct validator reaches by time `25`. -/
 theorem rResumes : ∃ R', 0 < R' ∧ (R' ≤ 6 → TimedRun (S := wSlots) wU rTl wT 10 1 4 2 R' 6 ∧
     ReachedBy wU rTl wT R' 25) :=
   Reactive.resumes (Fin 4) ℕ (Finset ℕ) wU rTl wT 10 1 4 2 0 6 rRules (bid 2 0)
-    (by decide) (by decide) (by show tBuilt (bid 2 0) ≤ 10; unfold tBuilt; rw [bid_div]) (by
+    (by decide) (by decide) (by change tBuilt (bid 2 0) ≤ 10; unfold tBuilt; rw [bid_div]) (by
       change 0 < (wBlock (bid 2 0)).round
       rw [round_wBlock, bid_div]; omega)
 

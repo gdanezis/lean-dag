@@ -8,7 +8,7 @@ import LeanDag.KPartialDag.Model.Reactive
 for nodes up from `G`, through crashes and restarts before it (`TimedRules`),
 started at a round (`TimedStarted`), and a run after `G + τ` (`TimedRun`),
 claims checked by timed nodes (`TimedChecks`), fetching the available sub-DAG
-(`Fetches`), and histories kept on disk (`KeepsHistory`). Timelines are those of
+(`Fetches`), and windows kept on disk (`KeepsHistory`). Timelines are those of
 `docs/kpartial.md` §11 (`KPartialDag.Timeline`).
 -/
 
@@ -170,7 +170,7 @@ structure TimedRun (U : SRecord Validator BlockId Payload) (tl : Timeline Valida
 omit S in
 /-- **Timed nodes check claims**: a correct node references a block only once it
 is referenceable on what the node holds, and claims only what it backs; and a
-node holding a correct block holds the evidence its author held: the history
+node holding a correct block holds the evidence its author held: the window
 to depth `K` of each reference, with the votes behind every claim there and
 behind the block's own claims. -/
 structure TimedChecks (U : SRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
@@ -200,13 +200,13 @@ def Fetches (U : SRecord Validator BlockId Payload) (tl : Timeline Validator Blo
     ∀ z ∈ Avail U K A, z ∈ tl.held v (t + Δ)
 
 omit [ClaimFormat BlockId Payload] S in
-/-- **Keeping histories on disk**: a correct node keeps on disk, from the time it
-builds a block on, the history to depth `K` of each of the block's
+/-- **Keeping windows on disk**: a correct node keeps on disk, from the time it
+builds a block on, the window to depth `K` of each of the block's
 references. -/
 def KeepsHistory (U : SRecord Validator BlockId Payload) (tl : Timeline Validator BlockId)
     (K : ℕ) : Prop :=
   ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) → ∀ t, tl.built b ≤ t →
-    ∀ y ∈ (U.block b).refs, historyUpto U K y ⊆ tl.disk (U.block b).creator t
+    ∀ y ∈ (U.block b).refs, window U K y ⊆ tl.disk (U.block b).creator t
 
 end KPartialSparse
 

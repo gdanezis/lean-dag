@@ -55,8 +55,8 @@ theorem checked : Checked := by
   exact checks_of_buildsChecked (buildsChecked_of_timed hids h)
 
 theorem unblocked : Unblocked := by
-  intro Validator BlockId Payload _ _ _ _ _ _ _ U tl K t v s b h hv hb hbc
-  exact referenceable_of_held h hv hb hbc
+  intro Validator BlockId Payload _ _ _ _ _ _ _ U tl K t v s b hids h hv hb hbc
+  exact referenceable_of_held hids h hv hb hbc
 
 theorem claimable : Claimable := by
   intro Validator BlockId Payload _ _ _ _ _ _ _ _ U tl T G δ τ γ R N k t c L h hτ hδ hγτ ht hk

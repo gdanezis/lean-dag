@@ -100,7 +100,7 @@ theorem wCertified : ∀ X ∈ wU.ids, ∀ L ∈ claimsOf wU X, Certified wU 3 L
 theorem wChecks : Checks wU 6 3 := by
   intro z hz _ m hm X hX L hL
   have hm' : m ∈ wU.ids := wU.complete z hz m hm
-  have hX' : X ∈ wU.ids := KPartialSparse.historyUpto_subset_ids (U := wU) 6 hm' hX
+  have hX' : X ∈ wU.ids := KPartialSparse.window_subset_ids (U := wU) 6 hm' hX
   exact wCertified X hX' L hL
 
 /-- **Theorem 1, linked**: below the leader block of round `5`, the sub-DAG
@@ -160,6 +160,17 @@ theorem wNodeAgrees (H : Finset ℕ) (hH : H ⊆ wU.ids) (v : Option ℕ)
   (Node.agrees (Fin 4) ℕ (Finset ℕ) (Scheme.Params.mysticeti 4 1) wU 6 H wHeld 2 v _ wRow.1
     (Or.inl ⟨wRow.2, le_rfl⟩) wDisciplined hH (by decide) h wNodeCommits)
 
+/-- **Theorem 3, bounded**: the blocks of rounds `1` to `5` fetch the sub-DAG
+below the leader block of round `5` down to round `3`, at `K = 2`. -/
+theorem wBounded :
+    FetchedIn wU 2 (wIds.filter fun b => 1 ≤ b / 4 ∧ b / 4 ≤ 5) (bid 5 2) 3 :=
+  Node.bounded (Fin 4) ℕ (Finset ℕ) wU 2 _ (bid 5 2) 3 (by decide)
+    (by decide)
+    (fun b hb h₁ h₂ => by
+      change 3 - 2 ≤ b / 4 at h₁
+      change b / 4 ≤ (4 * 5 + 2) / 4 at h₂
+      exact Finset.mem_filter.mpr ⟨hb, by omega, by omega⟩)
+
 /-- Every correct node checks claims on what it holds: holding the whole
 record backs every claim. -/
 theorem wBuildsChecked : BuildsChecked wU 6 3 := by
@@ -168,8 +179,8 @@ theorem wBuildsChecked : BuildsChecked wU 6 3 := by
     unfold Backs; decide
   intro z hz _
   refine ⟨wIds, subset_rfl, (h z hz).1, fun m hm => ⟨?_, fun X hX => ?_⟩⟩
-  · exact KPartialSparse.historyUpto_subset_ids (U := wU) 6 (wU.complete z hz m hm)
-  · exact (h z hz).2 m hm X (KPartialSparse.historyUpto_subset_ids (U := wU) 6
+  · exact KPartialSparse.window_subset_ids (U := wU) 6 (wU.complete z hz m hm)
+  · exact (h z hz).2 m hm X (KPartialSparse.window_subset_ids (U := wU) 6
       (wU.complete z hz m hm) hX)
 
 /-! ## Liveness -/

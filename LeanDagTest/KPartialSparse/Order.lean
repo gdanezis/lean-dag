@@ -59,7 +59,7 @@ theorem wIncluded : bid 1 0 ∈ LedgerIn wU 6 wIds 1 wVerdict 5 := by
   · intro k L hk hL
     have hLi : L ∈ wU.ids := (hL ▸ wVerdict_spec k hk).isLeaderBlock.1
     exact fetchedIn_of_subset fun y d hy =>
-      KPartialSparse.historyUpto_subset_ids _ (hy.mem hLi)
+      KPartialSparse.window_subset_ids _ (hy.mem hLi)
   · intro k hk
     rw [hsr, hround] at hk
     omega

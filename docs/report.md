@@ -19823,14 +19823,15 @@ inductive Anchored (U : SRecord Validator BlockId Payload) (K : ℕ) (A : BlockI
   | reached {x : BlockId} (i : ℕ) (S : Finset BlockId) (m : BlockId → BlockId)
       (y : BlockId → BlockId) (d : BlockId → ℕ) (y' : BlockId → BlockId) (d' : BlockId → ℕ)
       (hy : ∀ z ∈ S, Anchored U K A (y z) (d z))
-      (hz : ∀ z ∈ S, z ∈ historyUpto U (d z) (y z))
+      (hz : ∀ z ∈ S, z ∈ window U (d z) (y z))
       (hy' : ∀ z ∈ S, 0 < i → Anchored U K A (y' z) (d' z))
-      (hmz : ∀ z ∈ S, 0 < i → historyUpto U (i - 1) (m z) ⊆ historyUpto U (d' z) (y' z))
-      (hi : i ≤ K) (hm : ∀ z ∈ S, m z ∈ (U.block z).refs ∧ x ∈ historyUpto U i (m z))
+      (hmz : ∀ z ∈ S, 0 < i → interior U i (m z) ⊆ window U (d' z) (y' z))
+      (hi : i ≤ K) (hm : ∀ z ∈ S, m z ∈ (U.block z).refs ∧ x ∈ window U i (m z) ∧
+        (U.block (m z)).round + 1 = (U.block z).round)
       (hcard : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card) : Anchored U K A x (K - i)
 ```
 
-**The anchor points below `A`, with the depth of history each brings**: `A` to depth `K`; and a block that blocks of the sub-DAG from `f + c + 1` distinct authors reach through one of their references `m z` and `i ≤ K` further steps, to depth `K − i`, the history of `m z` to depth `i − 1`, through which they reach it, lying in the history an anchor point brings.
+**The anchor points below `A`, with the depth of window each brings**: `A` to depth `K`; and a block that blocks of the sub-DAG from `f + c + 1` distinct authors reach within the window to depth `i ≤ K` of one of their references `m z` one round below them, to depth `K − i`, the interior of that window, through which they reach it, lying in the window an anchor point brings.
 
 #### `Local`
 
@@ -19842,10 +19843,11 @@ def Local : Prop :=
     [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
     [ClaimFormat BlockId Payload] (p : Params) (U U' : SRecord Validator BlockId Payload) (K : ℕ)
     (H : Finset BlockId) (A L : BlockId) (r ρ : ℕ), (∀ i ∈ H, U.block i = U'.block i) →
+    (∀ i ∈ H, ∀ j ∈ (U.block i).refs, (U'.block j).round = (U.block j).round) →
     (LinkedIn p U K H A L r ↔ LinkedIn p U' K H A L r) ∧ (FetchedIn U K H A ρ ↔ FetchedIn U' K H A ρ)
 ```
 
-**The node's tests read only what it holds**: on two records whose blocks agree on `H`, the link and the fetch test read on `H` hold alike.
+**The node's tests read only what it holds**: on two records whose blocks agree on `H`, and which give the references of those blocks the same rounds, the link and the fetch test read on `H` hold alike.
 
 #### `Local`
 

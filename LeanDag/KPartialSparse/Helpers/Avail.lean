@@ -10,7 +10,7 @@ sub-DAG recur within four rounds; without the spreading condition, every
 block of a quorum reaches one block in four steps (`exists_core_reached`), and
 dense blocks recur within six rounds (`Recurs`, `exists_recurs`); a quorum's
 claim lies under one of them (`linked`). Every block of the sub-DAG lies in
-the history a correct author holds (`exists_holder`), so it is held
+the window a correct author holds (`exists_holder`), so it is held
 (`avail_correctHeld`) and its claims were checked (`backed`).
 -/
 
@@ -79,6 +79,148 @@ theorem historyUpto_subset_ids : ∀ (n : ℕ) {b : BlockId}, b ∈ U.ids → hi
     · exact hb
     · exact historyUpto_subset_ids n (U.complete b hb j hj) hij
 
+/-! ## Windows -/
+
+section WindowFrom
+
+variable {blk : BlockId → Block Validator BlockId Payload}
+
+omit [Fintype Validator] [DecidableEq Validator] Ld in
+theorem mem_windowFrom_succ {n lo : ℕ} {b z : BlockId} :
+    z ∈ windowFrom blk (n + 1) lo b ↔
+      z = b ∨ ∃ j ∈ (blk b).refs, lo ≤ (blk j).round ∧ z ∈ windowFrom blk n lo j := by
+  simp only [windowFrom, Finset.mem_insert, Finset.mem_biUnion, Finset.mem_filter, and_assoc]
+
+omit [Fintype Validator] [DecidableEq Validator] Ld in
+theorem mem_windowFrom_self {n lo : ℕ} {b : BlockId} : b ∈ windowFrom blk n lo b := by
+  cases n with
+  | zero => simp [windowFrom]
+  | succ n => exact mem_windowFrom_succ.mpr (Or.inl rfl)
+
+omit [Fintype Validator] [DecidableEq Validator] Ld in
+theorem mem_windowFrom_zero {lo : ℕ} {b z : BlockId} (h : z ∈ windowFrom blk 0 lo b) : z = b := by
+  simpa [windowFrom] using h
+
+omit [Fintype Validator] [DecidableEq Validator] Ld in
+/-- Every block of a window but its top is at round `lo` or above. -/
+theorem windowFrom_round : ∀ {n lo : ℕ} {b z : BlockId}, z ∈ windowFrom blk n lo b →
+    z = b ∨ lo ≤ (blk z).round
+  | 0, _, _, _, h => Or.inl (mem_windowFrom_zero h)
+  | n + 1, _, _, _, h => by
+    rcases mem_windowFrom_succ.mp h with rfl | ⟨j, -, hj, hz⟩
+    · exact Or.inl rfl
+    · rcases windowFrom_round hz with rfl | h'
+      · exact Or.inr hj
+      · exact Or.inr h'
+
+omit [Fintype Validator] [DecidableEq Validator] Ld in
+/-- More steps and a lower bound never lose anything. -/
+theorem windowFrom_mono : ∀ {m n lo lo' : ℕ}, m ≤ n → lo' ≤ lo → ∀ b : BlockId,
+    windowFrom blk m lo b ⊆ windowFrom blk n lo' b
+  | 0, _, _, _, _, _, b, z, hz => by rw [mem_windowFrom_zero hz]; exact mem_windowFrom_self
+  | m + 1, n, lo, lo', h, hlo, b, z, hz => by
+    obtain ⟨n, rfl⟩ : ∃ n', n = n' + 1 := ⟨n - 1, by omega⟩
+    rcases mem_windowFrom_succ.mp hz with rfl | ⟨j, hj, hjr, hzj⟩
+    · exact mem_windowFrom_self
+    · exact mem_windowFrom_succ.mpr (Or.inr ⟨j, hj, by omega,
+        windowFrom_mono (by omega) hlo j hzj⟩)
+
+omit [Fintype Validator] [DecidableEq Validator] Ld in
+/-- Windows at one bound compose. -/
+theorem windowFrom_trans : ∀ {a b lo : ℕ} {y x z : BlockId}, x ∈ windowFrom blk a lo y →
+    z ∈ windowFrom blk b lo x → z ∈ windowFrom blk (a + b) lo y
+  | 0, b, lo, y, x, z, hx, hz => by
+    rw [mem_windowFrom_zero hx] at hz; exact windowFrom_mono (by omega) le_rfl _ hz
+  | a + 1, b, lo, y, x, z, hx, hz => by
+    rcases mem_windowFrom_succ.mp hx with rfl | ⟨j, hj, hjr, hxj⟩
+    · exact windowFrom_mono (by omega) le_rfl _ hz
+    · rw [show a + 1 + b = (a + b) + 1 by omega]
+      exact mem_windowFrom_succ.mpr (Or.inr ⟨j, hj, hjr, windowFrom_trans hxj hz⟩)
+
+omit [Fintype Validator] [DecidableEq Validator] Ld in
+theorem windowFrom_subset_history : ∀ {n lo : ℕ} {b : BlockId},
+    windowFrom blk n lo b ⊆ historyUptoFrom blk n b
+  | 0, _, _, z, hz => by rw [mem_windowFrom_zero hz]; exact mem_historyUptoFrom_self
+  | n + 1, _, _, z, hz => by
+    rcases mem_windowFrom_succ.mp hz with rfl | ⟨j, hj, -, hzj⟩
+    · exact mem_historyUptoFrom_self
+    · exact mem_historyUptoFrom_succ.mpr (Or.inr ⟨j, hj, windowFrom_subset_history hzj⟩)
+
+end WindowFrom
+
+theorem self_mem_window {n : ℕ} {y : BlockId} : y ∈ window U n y := mem_windowFrom_self
+
+/-- A block of the window to depth `n` is at most `n` rounds below its top. -/
+theorem round_of_mem_window {n : ℕ} {y z : BlockId} (h : z ∈ window U n y) :
+    (U.block y).round ≤ (U.block z).round + n := by
+  rcases windowFrom_round h with rfl | h'
+  · omega
+  · omega
+
+theorem window_subset_historyUpto {n : ℕ} {y : BlockId} : window U n y ⊆ historyUpto U n y :=
+  windowFrom_subset_history
+
+theorem window_mono {m n : ℕ} (h : m ≤ n) (y : BlockId) : window U m y ⊆ window U n y :=
+  windowFrom_mono h (by omega) y
+
+theorem interior_subset_window {i : ℕ} {b : BlockId} : interior U i b ⊆ window U i b :=
+  windowFrom_mono (by omega) le_rfl b
+
+/-- Windows compose: depth `a` then depth `b` is depth `a + b`. -/
+theorem window_trans {a b : ℕ} {y x z : BlockId} (hx : x ∈ window U a y)
+    (hz : z ∈ window U b x) : z ∈ window U (a + b) y := by
+  have hr := round_of_mem_window hx
+  exact windowFrom_trans (windowFrom_mono le_rfl (by omega) _ hx)
+    (windowFrom_mono le_rfl (by omega) _ hz)
+
+/-- The interior of a window, then a window, lies in a window. -/
+theorem interior_trans {i b : ℕ} {y x z : BlockId} (hx : x ∈ window U i y)
+    (hz : z ∈ interior U b x) : z ∈ window U (i + b) y :=
+  window_trans hx (interior_subset_window hz)
+
+/-- A reference one round below lies in the window to depth one. -/
+theorem ref_mem_window {k : ℕ} {y x : BlockId} (hx : x ∈ (U.block y).refs)
+    (hr : (U.block x).round + 1 = (U.block y).round) : x ∈ window U (k + 1) y :=
+  mem_windowFrom_succ.mpr (Or.inr ⟨x, hx, by omega, mem_windowFrom_self⟩)
+
+theorem mem_window_zero {y z : BlockId} (h : z ∈ window U 0 y) : z = y := mem_windowFrom_zero h
+
+/-- A window of a block of the record lies in the record. -/
+theorem window_subset_ids (n : ℕ) {b : BlockId} (hb : b ∈ U.ids) : window U n b ⊆ U.ids :=
+  window_subset_historyUpto.trans (historyUpto_subset_ids n hb)
+
+/-- **An honest chain lies in the window**: a correct author's earlier block lies
+in the window of its later block, to the depth of their round gap. -/
+theorem mem_windowFrom_of_chain (hch : Chains U) : ∀ (k lo : ℕ) {x y : BlockId}, y ∈ U.ids →
+    x ∈ U.ids → (U.block y).creator ∈ (Correct : Finset Validator) →
+    (U.block x).creator = (U.block y).creator → (U.block x).round ≤ (U.block y).round →
+    (U.block y).round - (U.block x).round ≤ k → lo ≤ (U.block x).round →
+    x ∈ windowFrom U.block k lo y := by
+  intro k lo
+  induction k with
+  | zero =>
+    intro x y hy hx hyc hxy hle hk _
+    have : x = y := U.no_equivocation x hx y hy (hxy ▸ hyc) hxy (by omega)
+    subst this
+    exact mem_windowFrom_self
+  | succ k ih =>
+    intro x y hy hx hyc hxy hle hk hlo
+    rcases Nat.lt_or_ge (U.block x).round (U.block y).round with hlt | hge
+    · obtain ⟨s, hs, hsc, hsr⟩ := hch y hy hyc x hx hxy hlt
+      have hs' : s ∈ U.ids := U.complete y hy s hs
+      have hsy := (U.valid y hy).below s hs
+      exact mem_windowFrom_succ.mpr (Or.inr ⟨s, hs, by omega,
+        ih hs' hx (hsc ▸ hyc) (hxy.trans hsc.symm) hsr (by omega) hlo⟩)
+    · have : x = y := U.no_equivocation x hx y hy (hxy ▸ hyc) hxy (by omega)
+      subst this
+      exact mem_windowFrom_self
+
+theorem mem_window_of_chain (hch : Chains U) (k : ℕ) {x y : BlockId} (hy : y ∈ U.ids)
+    (hx : x ∈ U.ids) (hyc : (U.block y).creator ∈ (Correct : Finset Validator))
+    (hxy : (U.block x).creator = (U.block y).creator) (hle : (U.block x).round ≤ (U.block y).round)
+    (hk : (U.block y).round - (U.block x).round ≤ k) : x ∈ window U k y :=
+  mem_windowFrom_of_chain hch k _ hy hx hyc hxy hle hk (by omega)
+
 /-! ## Anchor points -/
 
 /-- Anchor points below a block of the record lie in the record. -/
@@ -89,8 +231,8 @@ theorem Anchored.mem {K : ℕ} {A : BlockId} (hA : A ∈ U.ids) {x : BlockId} {d
   | reached i S m y d y' d' hy hz hy' hmz hi hm hcard ih ih' =>
     obtain ⟨z, hz'⟩ : S.Nonempty := by
       rw [← Finset.card_pos]; exact lt_of_lt_of_le (by omega) (hcard.trans Finset.card_image_le)
-    have hzi := historyUpto_subset_ids _ (ih z hz') (hz z hz')
-    exact historyUpto_subset_ids _ (U.complete z hzi _ (hm z hz').1) (hm z hz').2
+    have hzi := window_subset_ids _ (ih z hz') (hz z hz')
+    exact window_subset_ids _ (U.complete z hzi _ (hm z hz').1) (hm z hz').2.1
 
 /-- **Anchoring from the sub-DAG in two steps**: a block that blocks of the
 available sub-DAG from `f + c + 1` distinct authors reach through references
@@ -98,6 +240,8 @@ in the sub-DAG is an anchor point bringing `K − 1` rounds. -/
 theorem Anchored.of_avail_two {K : ℕ} (hK : 1 ≤ K) {A x : BlockId} {S : Finset BlockId}
     {m : BlockId → BlockId} (hS : ∀ z ∈ S, z ∈ Avail U K A ∧ m z ∈ Avail U K A)
     (hm : ∀ z ∈ S, m z ∈ (U.block z).refs) (href : ∀ z ∈ S, x ∈ (U.block (m z)).refs)
+    (hround : ∀ z ∈ S, (U.block x).round + 1 = (U.block (m z)).round)
+    (hmround : ∀ z ∈ S, (U.block (m z)).round + 1 = (U.block z).round)
     (hcard : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card) :
     Anchored U K A x (K - 1) := by
   classical
@@ -106,14 +250,14 @@ theorem Anchored.of_avail_two {K : ℕ} (hK : 1 ≤ K) {A x : BlockId} {S : Fins
     (fun z => if h : z ∈ S then (hS z h).2.choose else A)
     (fun z => if h : z ∈ S then (hS z h).2.choose_spec.choose else K)
     (fun z hz => ?_) (fun z hz => ?_) (fun z hz _ => ?_) (fun z hz _ => ?_) hK
-    (fun z hz => ⟨hm z hz, ref_mem_historyUpto (k := 0) (href z hz)⟩) hcard <;>
+    (fun z hz => ⟨hm z hz, ref_mem_window (k := 0) (href z hz) (hround z hz), hmround z hz⟩)
+    hcard <;>
     simp only [dif_pos hz]
   · exact (hS z hz).1.choose_spec.choose_spec.1
   · exact (hS z hz).1.choose_spec.choose_spec.2
   · exact (hS z hz).2.choose_spec.choose_spec.1
   · intro w hw
-    rw [show 1 - 1 = 0 from rfl, historyUpto_zero, Finset.mem_singleton] at hw
-    subst hw
+    obtain rfl := mem_windowFrom_zero hw
     exact (hS z hz).2.choose_spec.choose_spec.2
 
 /-! ## The double count -/
@@ -233,7 +377,7 @@ author's round-`ρ` block from `f + c + 1` of those authors. -/
 theorem exists_reached (hsp : Spread Validator) {K : ℕ} (hK : 1 ≤ K) {A : BlockId}
     {S : Finset BlockId} {ρ : ℕ}
     (hS : ∀ z ∈ S, z ∈ U.ids ∧ (U.block z).round = ρ + 2 ∧ z ∈ Avail U K A ∧
-      ∀ m ∈ (U.block z).refs, m ∈ Avail U K A)
+      ∀ m ∈ (U.block z).refs, (U.block m).round + 1 = (U.block z).round → m ∈ Avail U K A)
     (hq : kQuorum Validator ≤ (creatorsOf U.block S).card) :
     ∃ x ∈ U.ids, (U.block x).round = ρ ∧ (U.block x).creator ∈ (Correct : Finset Validator) ∧
       Anchored U K A x (K - 1) := by
@@ -250,22 +394,28 @@ theorem exists_reached (hsp : Spread Validator) {K : ℕ} (hK : 1 ≤ K) {A : Bl
   have hm₀' : m₀ ∈ U.ids := U.complete z₀ (hS z₀ hz₀S).1 m₀ hm₀
   have hx' : x ∈ U.ids := U.complete m₀ hm₀' x hx
   let m : BlockId → BlockId := fun z => if h : R z w then h.choose else z
-  have hmz : ∀ z ∈ S', m z ∈ (U.block z).refs ∧ x ∈ (U.block (m z)).refs := by
+  have hmz : ∀ z ∈ S', m z ∈ (U.block z).refs ∧ x ∈ (U.block (m z)).refs ∧
+      (U.block (m z)).round = ρ + 1 := by
     intro z hz
     obtain ⟨hzS, hR⟩ := Finset.mem_filter.mp hz
     have hmdef : m z = hR.choose := dif_pos hR
     obtain ⟨hmref, x', hx'm, hx'r, hx'w⟩ := hR.choose_spec
     rw [hmdef]
-    refine ⟨hmref, ?_⟩
     have hmi : hR.choose ∈ U.ids := U.complete z (hS z hzS).1 _ hmref
     have hx'i : x' ∈ U.ids := U.complete _ hmi x' hx'm
-    have : x' = x := U.no_equivocation x' hx'i x hx' (hx'w ▸ hwC) (hx'w.trans hxw.symm)
+    have hxx : x' = x := U.no_equivocation x' hx'i x hx' (hx'w ▸ hwC) (hx'w.trans hxw.symm)
       (hx'r.trans hxr.symm)
-    exact this ▸ hx'm
+    have h1 := (U.valid z (hS z hzS).1).below _ hmref
+    have h2 := (U.valid _ hmi).below x' hx'm
+    have := (hS z hzS).2.1
+    exact ⟨hmref, hxx ▸ hx'm, by omega⟩
   refine ⟨x, hx', hxr, hxw ▸ hwC, Anchored.of_avail_two hK (S := S') (m := m)
-    (fun z hz => ?_) (fun z hz => (hmz z hz).1) (fun z hz => (hmz z hz).2) hcard⟩
+    (fun z hz => ?_) (fun z hz => (hmz z hz).1) (fun z hz => (hmz z hz).2.1)
+    (fun z hz => by rw [(hmz z hz).2.2, hxr])
+    (fun z hz => by rw [(hmz z hz).2.2, (hS z (Finset.mem_filter.mp hz).1).2.1]) hcard⟩
   have hzS := (Finset.mem_filter.mp hz).1
-  exact ⟨(hS z hzS).2.2.1, (hS z hzS).2.2.2 _ (hmz z hz).1⟩
+  exact ⟨(hS z hzS).2.2.1, (hS z hzS).2.2.2 _ (hmz z hz).1
+    (by rw [(hmz z hz).2.2, (hS z hzS).2.1])⟩
 
 /-! ## The core, without the spreading condition -/
 
@@ -288,13 +438,13 @@ theorem core_arith {n f c b Cc m g : ℕ} (hn : 3 * f + 2 * c + 1 ≤ n) (hb : b
   nlinarith
 
 /-- **The core**: blocks of the sub-DAG at round `ρ + 4` from a quorum of
-distinct authors, with their history to depth three in the history an anchor
+distinct authors, with their window to depth four in the window an anchor
 point brings, all reach in four steps one correct author's round-`ρ` block,
 an anchor point bringing `K − 3` rounds; at `n ≥ 3f + 2c + 1`, with no
 spreading condition. -/
 theorem exists_core_reached {K : ℕ} (hK : 3 ≤ K) {A : BlockId} {S : Finset BlockId} {ρ : ℕ}
     (hS : ∀ z ∈ S, z ∈ U.ids ∧ (U.block z).round = ρ + 4 ∧
-      ∃ y d, Anchored U K A y d ∧ historyUpto U 3 z ⊆ historyUpto U d y)
+      ∃ y d, Anchored U K A y d ∧ window U 4 z ⊆ window U d y)
     (hq : kQuorum Validator ≤ (creatorsOf U.block S).card) :
     ∃ x ∈ U.ids, (U.block x).round = ρ ∧ (U.block x).creator ∈ (Correct : Finset Validator) ∧
       Anchored U K A x (K - 3) := by
@@ -346,7 +496,8 @@ theorem exists_core_reached {K : ℕ} (hK : 3 ≤ K) {A : BlockId} {S : Finset B
   have hm₀i : m₀ ∈ U.ids := U.complete b₀ hb₀i m₀ hm₀
   have hx₀i : x₀ ∈ U.ids := U.complete m₀ hm₀i x₀ hx₀
   -- every block of `S` reaches it through an author of `M` that names `x`
-  have hreach : ∀ z ∈ S, ∃ m ∈ (U.block z).refs, x₀ ∈ historyUpto U 3 m := by
+  have hreach : ∀ z ∈ S, ∃ m ∈ (U.block z).refs, (U.block m).round + 1 = (U.block z).round ∧
+      x₀ ∈ window U 3 m := by
     intro z hz
     have hu := Finset.card_union_add_card_inter (Cs.filter (R z)) (M.filter fun w => R' w x)
     have hsub : Cs.filter (R z) ∪ M.filter (fun w => R' w x) ⊆ M :=
@@ -368,34 +519,41 @@ theorem exists_core_reached {K : ℕ} (hK : 3 ≤ K) {A : BlockId} {S : Finset B
     have hcc : c = x₀ := U.no_equivocation c hci x₀ hx₀i (hcx ▸ hxC) (hcx.trans hx₀x.symm)
       (hcr.trans hx₀r.symm)
     subst hcc
-    refine ⟨m, hm, ?_⟩
-    have h1 : b' ∈ historyUpto U 1 m := ref_mem_historyUpto (k := 0) hb
-    have h2 : c ∈ historyUpto U 2 b' :=
-      historyUpto_trans (ref_mem_historyUpto (k := 0) hm') (ref_mem_historyUpto (k := 0) hc)
-    exact historyUpto_trans h1 h2
+    have r1 := (U.valid z (hS z hz).1).below m hm
+    have r2 := (U.valid m hmi).below b' hb
+    have r3 := (U.valid b' hb'i).below m' hm'
+    have r4 := (U.valid m' hm'i).below c hc
+    have hzr := (hS z hz).2.1
+    refine ⟨m, hm, by omega, ?_⟩
+    have h1 : b' ∈ window U 1 m := ref_mem_window (k := 0) hb (by omega)
+    have h2 : c ∈ window U 2 b' :=
+      window_trans (ref_mem_window (k := 0) hm' (by omega)) (ref_mem_window (k := 0) hc (by omega))
+    exact window_trans h1 h2
   let mz : BlockId → BlockId := fun z => if h : z ∈ S then (hreach z h).choose else z
   let yz : BlockId → BlockId := fun z => if h : z ∈ S then (hS z h).2.2.choose else A
   let dz : BlockId → ℕ := fun z => if h : z ∈ S then (hS z h).2.2.choose_spec.choose else K
-  have hyz : ∀ z ∈ S, Anchored U K A (yz z) (dz z) ∧ historyUpto U 3 z ⊆ historyUpto U (dz z) (yz z) :=
+  have hyz : ∀ z ∈ S, Anchored U K A (yz z) (dz z) ∧ window U 4 z ⊆ window U (dz z) (yz z) :=
     fun z hz => by
       simp only [yz, dz, dif_pos hz]
       exact (hS z hz).2.2.choose_spec.choose_spec
-  have hmzs : ∀ z ∈ S, mz z ∈ (U.block z).refs ∧ x₀ ∈ historyUpto U 3 (mz z) := fun z hz => by
+  have hmzs : ∀ z ∈ S, mz z ∈ (U.block z).refs ∧
+      (U.block (mz z)).round + 1 = (U.block z).round ∧ x₀ ∈ window U 3 (mz z) := fun z hz => by
     simp only [mz, dif_pos hz]
     exact (hreach z hz).choose_spec
   have hcard : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card := by omega
   refine ⟨x₀, hx₀i, hx₀r, hx₀x ▸ hxC, Anchored.reached 3 S mz yz dz yz dz
-    (fun z hz => (hyz z hz).1) (fun z hz => (hyz z hz).2 mem_historyUpto_self)
-    (fun z hz _ => (hyz z hz).1) (fun z hz _ => ?_) hK hmzs hcard⟩
+    (fun z hz => (hyz z hz).1) (fun z hz => (hyz z hz).2 self_mem_window)
+    (fun z hz _ => (hyz z hz).1) (fun z hz _ => ?_) hK
+    (fun z hz => ⟨(hmzs z hz).1, (hmzs z hz).2.2, (hmzs z hz).2.1⟩) hcard⟩
   intro w hw
-  exact (hyz z hz).2 (historyUpto_trans (ref_mem_historyUpto (k := 0) (hmzs z hz).1) hw)
+  exact (hyz z hz).2 (interior_trans (ref_mem_window (k := 0) (hmzs z hz).1 (hmzs z hz).2.1) hw)
 
 /-! ## Descent -/
 
 /-- A dense block at round `t` within one step of an anchor point bringing
 `e` rounds or more. -/
 def DenseAt (U : SRecord Validator BlockId Payload) (K : ℕ) (A : BlockId) (e t : ℕ) : Prop :=
-  ∃ y d v, Anchored U K A y d ∧ e ≤ d ∧ v ∈ historyUpto U 1 y ∧ v ∈ U.ids ∧
+  ∃ y d v, Anchored U K A y d ∧ e ≤ d ∧ v ∈ window U 1 y ∧ v ∈ U.ids ∧
     Dense (kQuorum Validator) U.block (U.block v) ∧ (U.block v).round = t
 
 /-- Dense blocks near anchor points bringing `e` rounds recur at most `g`
@@ -408,11 +566,11 @@ theorem denseAt_of_anchored {K e d : ℕ} {A x : BlockId} (hx : x ∈ U.ids)
     (hxr : 2 ≤ (U.block x).round) (hxa : Anchored U K A x d) (hd : e ≤ d) :
     DenseAt U K A e (U.block x).round ∨ DenseAt U K A e ((U.block x).round - 1) := by
   rcases (U.valid x hx).shape (by omega) with hdx | ⟨-, -, ℓ, hℓ, hℓr, hℓL⟩
-  · exact Or.inl ⟨x, d, x, hxa, hd, mem_historyUpto_self, hx, hdx, rfl⟩
+  · exact Or.inl ⟨x, d, x, hxa, hd, self_mem_window, hx, hdx, rfl⟩
   · have hℓ' : ℓ ∈ U.ids := U.complete x hx ℓ hℓ
     have hdl := (U.valid ℓ hℓ').leader (by omega)
       (by rw [show (U.block ℓ).round = (U.block x).round - 1 by omega]; exact hℓL)
-    exact Or.inr ⟨x, d, ℓ, hxa, hd, ref_mem_historyUpto (k := 0) hℓ, hℓ', hdl, by omega⟩
+    exact Or.inr ⟨x, d, ℓ, hxa, hd, ref_mem_window (k := 0) hℓ hℓr, hℓ', hdl, by omega⟩
 
 /-- **Under the spreading condition, dense blocks recur within four rounds**:
 below a dense block near an anchor point, a correct block three rounds down
@@ -425,10 +583,10 @@ theorem recurs_spread (hsp : Spread Validator) {K : ℕ} (hK : 4 ≤ K) {A : Blo
     (S := below1 U.block (U.block v)) (ρ := t - 3)
     (fun z hz => by
       obtain ⟨hz₁, hzr⟩ := Finset.mem_filter.mp hz
-      have hz2 : z ∈ historyUpto U 2 y := historyUpto_trans hvy (ref_mem_historyUpto (k := 0) hz₁)
-      refine ⟨U.complete v hv z hz₁, by omega, ⟨y, d, hy, historyUpto_mono (by omega) _ hz2⟩,
-        fun m hm => ⟨y, d, hy, historyUpto_mono (by omega) _
-          (historyUpto_trans hz2 (ref_mem_historyUpto (k := 0) hm))⟩⟩) hdv
+      have hz2 : z ∈ window U 2 y := window_trans hvy (ref_mem_window (k := 0) hz₁ hzr)
+      refine ⟨U.complete v hv z hz₁, by omega, ⟨y, d, hy, window_mono (by omega) _ hz2⟩,
+        fun m hm hmr => ⟨y, d, hy, window_mono (by omega) _
+          (window_trans hz2 (ref_mem_window (k := 0) hm hmr))⟩⟩) hdv
   rcases denseAt_of_anchored hx (by omega) hxa le_rfl with h' | h'
   · exact ⟨_, by omega, by omega, h'⟩
   · exact ⟨_, by omega, by omega, h'⟩
@@ -436,16 +594,16 @@ theorem recurs_spread (hsp : Spread Validator) {K : ℕ} (hK : 4 ≤ K) {A : Blo
 /-- **At any `n ≥ 3f + 2c + 1`, dense blocks recur within six rounds**: below a
 dense block near an anchor point, the core five rounds down is an anchor
 point, and it or its leader reference is dense. -/
-theorem recurs_core {K : ℕ} (hK : 8 ≤ K) {A : BlockId} : Recurs U K A (K - 3) 6 := by
+theorem recurs_core {K : ℕ} (hK : 9 ≤ K) {A : BlockId} : Recurs U K A (K - 3) 6 := by
   intro t h ht
   obtain ⟨y, d, v, hy, hd, hvy, hv, hdv, hvr⟩ := h
   obtain ⟨x, hx, hxr, -, hxa⟩ := exists_core_reached (by omega) (K := K) (A := A)
     (S := below1 U.block (U.block v)) (ρ := t - 5)
     (fun z hz => by
       obtain ⟨hz₁, hzr⟩ := Finset.mem_filter.mp hz
-      have hz2 : z ∈ historyUpto U 2 y := historyUpto_trans hvy (ref_mem_historyUpto (k := 0) hz₁)
+      have hz2 : z ∈ window U 2 y := window_trans hvy (ref_mem_window (k := 0) hz₁ hzr)
       refine ⟨U.complete v hv z hz₁, by omega, y, d, hy, fun w hw => ?_⟩
-      exact historyUpto_mono (by omega) _ (historyUpto_trans hz2 hw)) hdv
+      exact window_mono (by omega) _ (window_trans hz2 hw)) hdv
   rcases denseAt_of_anchored hx (by omega) hxa le_rfl with h' | h'
   · exact ⟨_, by omega, by omega, h'⟩
   · exact ⟨_, by omega, by omega, h'⟩
@@ -464,7 +622,7 @@ theorem denseAt_window {K e g : ℕ} {A : BlockId} (hrec : Recurs U K A e g) (u 
       exact ih t' ht'₂ h' (by omega)
 
 /-- **At the depth the sub-DAG needs, dense blocks recur** close enough for the
-history an anchor point brings to reach a whole window. -/
+window an anchor point brings to reach a whole span of rounds. -/
 theorem exists_recurs {K : ℕ} (hdeep : Deep Validator K) {A : BlockId} :
     ∃ e g, Recurs U K A e g ∧ g + 1 ≤ e ∧ e ≤ K := by
   rcases hdeep with ⟨hsp, hK⟩ | hK
@@ -503,7 +661,7 @@ theorem linked_count {K : ℕ} (hdeep : Deep Validator K) (hch : Chains U)
   have hdA := (U.valid A hA).leader (by omega) hAl
   obtain ⟨e, g, hrec, hge, heK⟩ := exists_recurs (U := U) hdeep (A := A)
   obtain ⟨t, ht₁, ht₂, y, d, v, hy, hd, hvy, hv, hdv, hvr⟩ :=
-    denseAt_window hrec u _ ⟨A, K, A, Anchored.anchor, heK, mem_historyUpto_self,
+    denseAt_window hrec u _ ⟨A, K, A, Anchored.anchor, heK, self_mem_window,
       hA, hdA, rfl⟩ hAr
   set R := creatorsOf U.block (below1 U.block (U.block v))
   set W := (R ∩ creatorsOf U.block Cl) ∩ (Correct : Finset Validator)
@@ -514,10 +672,10 @@ theorem linked_count {K : ℕ} (hdeep : Deep Validator K) (hch : Chains U)
     obtain ⟨hX₁, hXr⟩ := Finset.mem_filter.mp hX
     obtain ⟨hCi, hCr⟩ := hCl C hCCl
     have hXi : X ∈ U.ids := U.complete v hv X hX₁
-    have hCX : C ∈ historyUpto U ((U.block X).round - (U.block C).round) X :=
-      mem_historyUpto_of_chain hch _ hXi hCi (hXa ▸ hCc) hXa.symm (by omega) le_rfl
-    have hX2 : X ∈ historyUpto U 2 y := historyUpto_trans hvy (ref_mem_historyUpto (k := 0) hX₁)
-    exact ⟨y, d, hy, historyUpto_mono (by omega) _ (historyUpto_trans hX2 hCX)⟩
+    have hCX : C ∈ window U ((U.block X).round - (U.block C).round) X :=
+      mem_window_of_chain hch _ hXi hCi (hXa ▸ hCc) hXa.symm (by omega) le_rfl
+    have hX2 : X ∈ window U 2 y := window_trans hvy (ref_mem_window (k := 0) hX₁ hXr)
+    exact ⟨y, d, hy, window_mono (by omega) _ (window_trans hX2 hCX)⟩
   · have hu : (R ∪ creatorsOf U.block Cl).card + (R ∩ creatorsOf U.block Cl).card =
         R.card + (creatorsOf U.block Cl).card := Finset.card_union_add_card_inter _ _
     have huniv : (R ∪ creatorsOf U.block Cl).card ≤ Fintype.card Validator := Finset.card_le_univ _
@@ -550,13 +708,13 @@ theorem linked {K cm ρ : ℕ} (hdeep : Deep Validator K) (hch : Chains U) {A L 
   exact ⟨C, hXa C hC, (mem_blocksAt.mp hCb).2, hCL⟩
 
 omit [ClaimFormat BlockId Payload] in
-/-- **Every block of the sub-DAG has a correct holder**: it lies in the history
+/-- **Every block of the sub-DAG has a correct holder**: it lies in the window
 to depth `K` of a block a correct author references. -/
 theorem exists_holder {K : ℕ} {A : BlockId}
     (hA : ∃ z ∈ U.ids, (U.block z).creator ∈ (Correct : Finset Validator) ∧ A ∈ (U.block z).refs)
     {X : BlockId} (hX : X ∈ Avail U K A) :
     ∃ z ∈ U.ids, (U.block z).creator ∈ (Correct : Finset Validator) ∧
-      ∃ m ∈ (U.block z).refs, X ∈ historyUpto U K m := by
+      ∃ m ∈ (U.block z).refs, X ∈ window U K m := by
   obtain ⟨y, d, hy, hXy⟩ := hX
   obtain ⟨z₀, hz₀, hz₀c, hAz₀⟩ := hA
   have hAi : A ∈ U.ids := U.complete z₀ hz₀ A hAz₀
@@ -570,8 +728,8 @@ theorem exists_holder {K : ℕ} {A : BlockId}
       rw [← Finset.card_pos]; omega
     obtain ⟨hw₁, hw₂⟩ := Finset.mem_inter.mp hw
     obtain ⟨z, hzS, rfl⟩ := mem_creatorsOf.mp hw₁
-    have hzi : z ∈ U.ids := historyUpto_subset_ids _ ((hy z hzS).mem hAi) (hz z hzS)
-    have hXm := historyUpto_trans (hm z hzS).2 hXy
+    have hzi : z ∈ U.ids := window_subset_ids _ ((hy z hzS).mem hAi) (hz z hzS)
+    have hXm := window_trans (hm z hzS).2.1 hXy
     rw [show i + (K - i) = K by omega] at hXm
     exact ⟨z, hzi, hw₂, m z, (hm z hzS).1, hXm⟩
 
@@ -584,7 +742,7 @@ theorem avail_correctHeld {K : ℕ} {A : BlockId}
   obtain ⟨z, hz, hzc, m, hm, hXm⟩ := exists_holder hA hX
   exact ⟨z, hz, hzc, Or.inr ⟨m, hm, hXm⟩⟩
 
-/-- **Claims of the sub-DAG are backed**: each lies in the history to depth `K`
+/-- **Claims of the sub-DAG are backed**: each lies in the window to depth `K`
 of a block a correct author references, which that author checked. -/
 theorem backed {K t : ℕ} (hck : Checks U K t) {A : BlockId}
     (hA : ∃ z ∈ U.ids, (U.block z).creator ∈ (Correct : Finset Validator) ∧ A ∈ (U.block z).refs)

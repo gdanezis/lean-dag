@@ -3,7 +3,8 @@ import LeanDag.KPartialSparse.Model.Node
 # Sparse K-partial DAG — what a node reads, statement
 
 `docs/kpartial-sparse.md` §5, Theorem 3: a node's tests read only what it
-holds, holding what the anchor points bring fetches the sub-DAG, a node's
+holds, holding what the anchor points bring fetches the sub-DAG, fetching
+down to a round reads at most `K` rounds below it, a node's
 decisions are decisions of the commit rule and agree across nodes, and
 correct nodes that check claims on what they hold meet the rule's claim
 disciplines.
@@ -20,12 +21,14 @@ namespace Node
 open KPartialDag Scheme
 
 /-- **The node's tests read only what it holds**: on two records whose blocks
-agree on `H`, the link and the fetch test read on `H` hold alike. -/
+agree on `H`, and which give the references of those blocks the same rounds,
+the link and the fetch test read on `H` hold alike. -/
 def Local : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
     [ClaimFormat BlockId Payload] (p : Params) (U U' : SRecord Validator BlockId Payload) (K : ℕ)
     (H : Finset BlockId) (A L : BlockId) (r ρ : ℕ), (∀ i ∈ H, U.block i = U'.block i) →
+    (∀ i ∈ H, ∀ j ∈ (U.block i).refs, (U'.block j).round = (U.block j).round) →
     (LinkedIn p U K H A L r ↔ LinkedIn p U' K H A L r) ∧ (FetchedIn U K H A ρ ↔ FetchedIn U' K H A ρ)
 
 /-- **Holding what the anchor points bring fetches the sub-DAG** down to any
@@ -34,7 +37,18 @@ def Fetchable : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
     (U : SRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (A : BlockId) (ρ : ℕ),
-    (∀ y d, Anchored U K A y d → historyUpto U d y ⊆ H) → FetchedIn U K H A ρ
+    (∀ y d, Anchored U K A y d → window U d y ⊆ H) → FetchedIn U K H A ρ
+
+/-- **Fetching reads at most `K` rounds below**: holding the record's blocks
+from round `ρ − K` up to the anchor's round fetches the sub-DAG below the anchor
+down to round `ρ`. -/
+def Bounded : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
+    (U : SRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (A : BlockId) (ρ : ℕ),
+    A ∈ U.ids → ρ ≤ (U.block A).round →
+    (∀ b ∈ U.ids, ρ - K ≤ (U.block b).round → (U.block b).round ≤ (U.block A).round → b ∈ H) →
+    FetchedIn U K H A ρ
 
 /-- **A node's decision is the commit rule's**, on every view holding what the
 node holds. -/
@@ -69,7 +83,7 @@ def Checked : Prop :=
       (BuildsChecked U K t → Checks U K t ∧ Truthful U t)
 
 /-- What a node reads. -/
-def Statement : Prop := Local ∧ Fetchable ∧ Sound ∧ Agrees ∧ Checked
+def Statement : Prop := Local ∧ Fetchable ∧ Bounded ∧ Sound ∧ Agrees ∧ Checked
 
 end Node
 

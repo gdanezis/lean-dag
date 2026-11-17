@@ -39,10 +39,15 @@ earlier blocks (`Chains`).
 
 ## 2. Claims
 
-A payload names the blocks it claims certified (`ClaimFormat`). A block `L`
+A payload names the blocks it claims certified (`ClaimFormat`). The *window
+to depth `n`* below `y` is the set of blocks reached from `y` in at most `n`
+reference steps through blocks at most `n` rounds below `y` (`window`): a
+history cut at as many rounds as steps, since a reference to an author's
+latest block may skip rounds. Its *interior* is its blocks within `n − 1`
+steps, the blocks whose references it reads (`interior`). A block `L`
 is *certified* at threshold `t` when blocks of `t` distinct authors one
 round above reference it (`Certified`). A correct author references a
-block only when every claim in that block's history to depth `K` names a
+block only when every claim in that block's window to depth `K` names a
 certified block (`Checks`). It need not check claims deeper down: the
 commit rule reads claims only in the available sub-DAG, and Theorem 1
 shows that a correct author checked each of those.
@@ -50,17 +55,18 @@ shows that a correct author checked each of those.
 ## 3. The available sub-DAG
 
 Below a block `A`, a block `x` is an *anchor point* when it is `A`, which
-brings its history to depth `K`, or when blocks of the sub-DAG from
-`f + c + 1` distinct authors each reach `x` through one of their references
-`m` and `i ≤ K` further steps; `x` then brings its history to depth `K − i`,
-and the history of `m` to depth `i − 1`, through which the path runs, lies
-in the history some anchor point brings (`Anchored`). At `i = 0` the authors
+brings its window to depth `K`, or when blocks of the sub-DAG from
+`f + c + 1` distinct authors each reach `x` within the window to depth
+`i ≤ K` of one of their references `m`, one round below them; `x` then brings
+its window to depth `K − i`, and the interior of the window of `m`, through
+which the path runs, lies in the window some anchor point brings
+(`Anchored`). At `i = 0` the authors
 reference `x`; at `i = 1` they reach it in two steps, the two cases of
 `docs/kpartial.md` §3, where the second needs crashes and here does not. A
-correct author holds the history to depth `K` of each block it references,
+correct author holds the window to depth `K` of each block it references,
 so one of the `f + c + 1` authors holds what `x` brings and checked its
 claims; a node holding the sub-DAG holds the path (§5). The *available
-sub-DAG* below `A` is the union of the histories the anchor points bring
+sub-DAG* below `A` is the union of the windows the anchor points bring
 (`Avail`).
 
 The sub-DAG needs a depth (`Deep`): `K ≥ 6` under the spreading condition
@@ -117,14 +123,14 @@ The proof of *Linked* has four steps.
    of `q` distinct authors one round below it. Of blocks at round `u` from
    `cm` distinct authors, they share `q + cm − n − f` correct authors or
    more, and each such author's chain leads from its referenced block down
-   to its block at round `u`, within the history the anchor point brings at
+   to its block at round `u`, within the window the anchor point brings at
    the depth the sub-DAG needs. With claims at round `ρ + 2` and
    `n + f < q + cm`, one claim lies in the sub-DAG.
 
 *Backed* and *Held* follow from the definition of anchor points
 (`exists_holder`). Among `f + c + 1` distinct authors one is correct. It
-references a block whose history to depth `K` contains the history the
-anchor point brings, so it holds that history and checked its claims. For `A` itself, the premise supplies the correct author.
+references a block whose window to depth `K` contains the window the
+anchor point brings, so it holds that window and checked its claims. For `A` itself, the premise supplies the correct author.
 
 Together, if a quorum claims `L` directly, an anchor above finds a claim for
 `L` in its sub-DAG; and any claim found there names a certified block. With
@@ -191,12 +197,12 @@ the row makes `linkSize` or more (`certLinked_of_commit`).
 ## 5. What a node reads
 
 A node holds a set `H` of blocks of the record. It reads anchor points on `H`
-when it holds the history each brings and the path through which it is
-reached, which lies in the history an anchor point brings
+when it holds the window each brings and the interior through which it is
+reached, which lies in the window an anchor point brings
 (`AnchoredIn`, `AvailIn`), and links a candidate when it
 holds there a claim for it two rounds above the slot (`LinkedIn`). It has
-*fetched the sub-DAG down to round `ρ`* when it holds the anchor's history to
-depth `K`, and the history every anchor point brings when the blocks of the
+*fetched the sub-DAG down to round `ρ`* when it holds the anchor's window to
+depth `K`, and the window every anchor point brings when the blocks of the
 sub-DAG on `H` that reach it lie above `ρ` (`FetchedIn`). It decides by the
 commit rule read on `H` (`NodeDecided`): the direct tests count the claimers
 and blamers it holds, and the indirect tests need the sub-DAG fetched down
@@ -206,12 +212,16 @@ payload alone, so a node need not hold the claimers' references.
 **Theorem 3 (what a node reads; `Node.Statement`).**
 
 * *Local* (`Node.Local`). The link and the fetch test read only `H`: they
-  are the same on every record whose blocks agree on `H`.
+  are the same on every record whose blocks agree on `H` and which gives the
+  references of those blocks the same rounds. A reference names its round, so
+  a node knows whether a reference falls in a window without fetching it.
 * *Fetchable* (`Node.Fetchable`). A node holding what every anchor point
-  brings has fetched the sub-DAG down to every round. Unlike
-  `docs/kpartial.md` §5, the bound is not a number of rounds: a block's
-  reference to its author's latest block may skip rounds, so a history to
-  depth `K` may span more than `K` rounds.
+  brings has fetched the sub-DAG down to every round.
+* *Bounded* (`Node.Bounded`). Fetching down to `ρ` reads at most `K` rounds
+  below `ρ`: a node holding the record's blocks from round `ρ − K` up to the
+  anchor's round has fetched the sub-DAG down to `ρ`. An anchor point lies at
+  most `i + 1` rounds below blocks above `ρ` that reach it, and brings `K − i`
+  rounds.
 * *Sound* (`Node.Sound`). A decision a node takes on what it holds is a
   decision of the commit rule on every view holding `H`. Fetched down to
   `ρ`, the sub-DAG read on `H` is the record's at and above `ρ`, since an
@@ -221,11 +231,11 @@ payload alone, so a node need not hold the claimers' references.
 * *Checked* (`Node.Checked`). A node *backs* a claim for `L` when it holds `L`
   and votes for it from `t` distinct authors one round above (`Backs`); this
   reads only what it holds. If each correct block was built by a node holding
-  blocks of the record that back its claims and every claim in the history
+  blocks of the record that back its claims and every claim in the window
   to depth `K` of each of its references (`BuildsChecked`), then correct
   authors check and claim truthfully (`Checks`, `Truthful`).
 
-The votes behind a claim lie outside every history, so `BuildsChecked` asks a
+The votes behind a claim lie outside every window, so `BuildsChecked` asks a
 correct node to fetch them; a correct claimer holds them.
 
 ## 6. Liveness
@@ -296,7 +306,7 @@ adds that `T` has reached round `R` (`TimedStarted`) and built there from
 Crashes and restarts are those of `docs/kpartial.md` §11: before `G`, correct
 nodes may crash and restart, holding after a restart only what they keep on
 disk. A correct node keeps on disk every block it has built (`stores`) and
-holds what it keeps there (`disk_held`); it may also keep the histories to
+holds what it keeps there (`disk_held`); it may also keep the windows to
 depth `K` of its blocks' references (`KeepsHistory`). From `G` on, the nodes
 of `T` are up and keep what they hold. Persisting the last round built
 (`Persists`) and building above the disk (`BuildsAboveDisk`) read only the
@@ -335,7 +345,7 @@ round across restarts.
   what they back (`TimedChecks`) meet the record's claim disciplines,
   `Checks` and `Truthful`.
 * *Unblocked* (`Reactive.Unblocked`). The wait never blocks a correct block:
-  when delivery carries what a block's author held, the history to depth `K`
+  when delivery carries what a block's author held, the window to depth `K`
   of each reference with the votes behind every claim there, and the votes
   behind the block's own claims, a correct node holding a correct block holds
   it referenceable. So the votes for a leader of `T`, and the quorum a dense
@@ -370,12 +380,12 @@ round across restarts.
   commits is certified by `f + c + 1` voters (`NodeDecided.certified`), one of
   them in `T`, whose block brings it; and a node decides below a committed run
   holding the sub-DAG below the leaders it commits only (Theorem 4).
-* *Durable* (`Reactive.Durable`). When correct nodes keep histories on disk,
+* *Durable* (`Reactive.Durable`). When correct nodes keep windows on disk,
   every block of the available sub-DAG below a block with votes from
   `f + c + 1` distinct authors is on the disk of a node of any quorum `T` of
   correct nodes from some time on, through any crash: among the voters of the
   anchor, or the `f + c + 1` authors reaching an anchor point, is a node of
-  `T`, which keeps on disk the history to depth `K` of the block it
+  `T`, which keeps on disk the window to depth `K` of the block it
   references.
 
 The proofs follow `docs/kpartial.md` §11. A node of `T` skips no round of a
@@ -460,5 +470,4 @@ includes every block of `T` once leaders of `T` cover `T` (Theorem 6). Open:
 * Nodes leaving and rejoining the stable set after `G`, a stable set per
   window (`docs/kpartial.md` §12 leaves it open): rules and results bounded
   by the end of a window.
-* A bound in rounds on what a node fetches.
 * The bounds of `docs/kpartial.md` Theorem 6, and adaptive schedules.

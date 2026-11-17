@@ -386,10 +386,10 @@ theorem backs_upto {X : ℕ} (hX : X ∈ wIds) {r : ℕ} (hr : X / 4 ≤ r + 1) 
 `r`. -/
 theorem referenceable_upto {m : ℕ} (hm : m ∈ wIds) {r : ℕ} (hr : m / 4 ≤ r) :
     Referenceable wU 6 3 (upto r) m := by
-  have hsub : historyUpto wU 6 m ⊆ upto r := by
+  have hsub : window wU 6 m ⊆ upto r := by
     intro z hz
-    have hzi := KPartialSparse.historyUpto_subset_ids (U := wU) 6 hm hz
-    have hzr := round_le_of_mem_historyUpto (U := wU) 6 hm hz
+    have hzi := KPartialSparse.window_subset_ids (U := wU) 6 hm hz
+    have hzr := round_le_of_mem_historyUpto (U := wU) 6 hm (window_subset_historyUpto hz)
     change (wBlock z).round ≤ (wBlock m).round at hzr
     rw [round_wBlock, round_wBlock] at hzr
     exact Finset.mem_filter.mpr ⟨hzi, by omega⟩

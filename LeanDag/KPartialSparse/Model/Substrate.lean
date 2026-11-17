@@ -7,6 +7,7 @@ payload claims certified (`ClaimFormat`), the two block shapes (`Dense`,
 `Sparse`) and the substrate's validity and record (`SValid`, `SRecord`),
 certification and claims (`Certified`, `claimersOf`), the honest
 disciplines (`Chains`, `Checks`), what correct nodes hold (`CorrectHeld`),
+histories cut at as many rounds as steps (`window`, `interior`),
 and the available sub-DAG with anchor
 points reached through paths in the sub-DAG (`Anchored`, `Avail`).
 -/
@@ -98,6 +99,25 @@ abbrev claimsOf (U : SRecord Validator BlockId Payload) (X : BlockId) : Finset B
 def claimersOf (U : SRecord Validator BlockId Payload) (L : BlockId) (ρ : ℕ) : Finset BlockId :=
   (blocksAt U ρ).filter fun C => L ∈ claimsOf U C
 
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
+/-- The blocks reached from `b` in at most `n` reference steps, following only
+references at round `lo` or above. -/
+def windowFrom [DecidableEq BlockId] (blk : BlockId → Block Validator BlockId Payload) :
+    ℕ → ℕ → BlockId → Finset BlockId
+  | 0, _, b => {b}
+  | n + 1, lo, b =>
+    insert b (((blk b).refs.filter fun j => lo ≤ (blk j).round).biUnion (windowFrom blk n lo))
+
+/-- **The window to depth `n` below `y`**: the blocks reached from `y` in at most
+`n` reference steps through blocks at most `n` rounds below it. -/
+def window (U : SRecord Validator BlockId Payload) (n : ℕ) (y : BlockId) : Finset BlockId :=
+  windowFrom U.block n ((U.block y).round - n) y
+
+/-- **The interior of the window to depth `i` below `b`**: its blocks within
+`i − 1` steps, the blocks whose references it reads. -/
+def interior (U : SRecord Validator BlockId Payload) (i : ℕ) (b : BlockId) : Finset BlockId :=
+  windowFrom U.block (i - 1) ((U.block b).round - i) b
+
 /-- **`L` is certified** at threshold `t`: blocks of `t` distinct authors one
 round above reference it. -/
 def Certified (U : SRecord Validator BlockId Payload) (t : ℕ) (L : BlockId) : Prop :=
@@ -112,38 +132,39 @@ def Chains (U : SRecord Validator BlockId Payload) : Prop :=
         (U.block x).round ≤ (U.block s).round
 
 /-- **Honest checks**: a correct author references a block only when every
-claim in its history to depth `K` names a block certified at threshold `t`. -/
+claim in its window to depth `K` names a block certified at threshold `t`. -/
 def Checks (U : SRecord Validator BlockId Payload) (K t : ℕ) : Prop :=
   ∀ z ∈ U.ids, (U.block z).creator ∈ (Correct : Finset Validator) → ∀ m ∈ (U.block z).refs,
-    ∀ X ∈ historyUpto U K m, ∀ L ∈ claimsOf U X, Certified U t L
+    ∀ X ∈ window U K m, ∀ L ∈ claimsOf U X, Certified U t L
 
 /-- **Held by a correct node**: a block of a correct author, or a block in the
-history to depth `K` of a block that a correct author's block references. -/
+window to depth `K` of a block that a correct author's block references. -/
 def CorrectHeld (U : SRecord Validator BlockId Payload) (K : ℕ) : Set BlockId :=
   {z | ∃ w ∈ U.ids, (U.block w).creator ∈ (Correct : Finset Validator) ∧
-    (z = w ∨ ∃ y ∈ (U.block w).refs, z ∈ historyUpto U K y)}
+    (z = w ∨ ∃ y ∈ (U.block w).refs, z ∈ window U K y)}
 
-/-- **The anchor points below `A`, with the depth of history each brings**: `A`
+/-- **The anchor points below `A`, with the depth of window each brings**: `A`
 to depth `K`; and a block that blocks of the sub-DAG from `f + c + 1` distinct
-authors reach through one of their references `m z` and `i ≤ K` further
-steps, to depth `K − i`, the history of `m z` to depth `i − 1`, through which
-they reach it, lying in the history an anchor point brings. -/
+authors reach within the window to depth `i ≤ K` of one of their references
+`m z` one round below them, to depth `K − i`, the interior of that window,
+through which they reach it, lying in the window an anchor point brings. -/
 inductive Anchored (U : SRecord Validator BlockId Payload) (K : ℕ) (A : BlockId) :
     BlockId → ℕ → Prop
   | anchor : Anchored U K A A K
   | reached {x : BlockId} (i : ℕ) (S : Finset BlockId) (m : BlockId → BlockId)
       (y : BlockId → BlockId) (d : BlockId → ℕ) (y' : BlockId → BlockId) (d' : BlockId → ℕ)
       (hy : ∀ z ∈ S, Anchored U K A (y z) (d z))
-      (hz : ∀ z ∈ S, z ∈ historyUpto U (d z) (y z))
+      (hz : ∀ z ∈ S, z ∈ window U (d z) (y z))
       (hy' : ∀ z ∈ S, 0 < i → Anchored U K A (y' z) (d' z))
-      (hmz : ∀ z ∈ S, 0 < i → historyUpto U (i - 1) (m z) ⊆ historyUpto U (d' z) (y' z))
-      (hi : i ≤ K) (hm : ∀ z ∈ S, m z ∈ (U.block z).refs ∧ x ∈ historyUpto U i (m z))
+      (hmz : ∀ z ∈ S, 0 < i → interior U i (m z) ⊆ window U (d' z) (y' z))
+      (hi : i ≤ K) (hm : ∀ z ∈ S, m z ∈ (U.block z).refs ∧ x ∈ window U i (m z) ∧
+        (U.block (m z)).round + 1 = (U.block z).round)
       (hcard : F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card) : Anchored U K A x (K - i)
 
-/-- **The available sub-DAG below `A`**: the history each anchor point
+/-- **The available sub-DAG below `A`**: the window each anchor point
 brings. -/
 def Avail (U : SRecord Validator BlockId Payload) (K : ℕ) (A : BlockId) : Set BlockId :=
-  {z | ∃ y d, Anchored U K A y d ∧ z ∈ historyUpto U d y}
+  {z | ∃ y d, Anchored U K A y d ∧ z ∈ window U d y}
 
 end KPartialSparse
 
