@@ -27,9 +27,12 @@ theorem rows : Rows := by
   intro Validator _ _ F Cr
   have := F.card_validators
   have := Cr.card_validators
-  refine ⟨fun hc => ⟨⟨rfl, rfl, rfl, ?_, ?_, ?_⟩, spread_arith_zero hc F.card_validators⟩,
-    fun hc => ⟨rfl, rfl, rfl, ?_, ?_, ?_⟩, ⟨rfl, rfl, rfl, ?_, ?_, ?_⟩⟩ <;>
-    simp only [Params.mysticeti, Params.cordialMinersPS, Params.hybridMysticeti] <;> omega
+  refine ⟨fun hc => ⟨Or.inl ⟨rfl, rfl, rfl, ?_, ?_, ?_⟩, spread_arith_zero hc F.card_validators⟩,
+    fun hc => Or.inl ⟨rfl, rfl, rfl, ?_, ?_, ?_⟩,
+    fun hc h5 => Or.inr ⟨rfl, rfl, ?_, ?_, ?_⟩, Or.inl ⟨rfl, rfl, rfl, ?_, ?_, ?_⟩,
+    fun h5 => ⟨Or.inr ⟨rfl, rfl, ?_, ?_, ?_⟩, spread_arith h5⟩⟩ <;>
+    simp only [Params.mysticeti, Params.cordialMinersPS, Params.hybridMysticeti,
+      Params.blueBottlePS, Params.orcaella] <;> omega
 
 theorem holds : Statement := ⟨laws, agrees, rows⟩
 

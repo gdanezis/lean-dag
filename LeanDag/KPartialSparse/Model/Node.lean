@@ -4,8 +4,9 @@ import LeanDag.KPartialSparse.Model.Rule
 
 `docs/kpartial-sparse.md` §5. The available sub-DAG and the link as read on
 the blocks `H` a node holds (`AnchoredIn`, `AvailIn`, `LinkedIn`), the
-sub-DAG fetched into `H` down to a round (`FetchedIn`), and the node's
-decisions at a row (`NodeDecided`).
+sub-DAG fetched into `H` down to a round (`FetchedIn`), a claim backed by
+votes a node holds (`Backs`, `BuildsChecked`), and the node's decisions at a
+row (`NodeDecided`).
 -/
 
 namespace LeanDag
@@ -41,11 +42,12 @@ def AvailIn (U : SRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockI
 
 variable [ClaimFormat BlockId Payload]
 
-/-- **The link, read on `H`**: the sub-DAG below `A` read on `H` holds a claim
-for `L` two rounds above round `r`. -/
-def LinkedIn (U : SRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (A L : BlockId)
-    (r : ℕ) : Prop :=
-  ∃ C ∈ AvailIn U K H A, (U.block C).round = r + 2 ∧ L ∈ claimsOf U C
+/-- **The link, read on `H`**: the sub-DAG below `A` read on `H` holds
+certificates for the round-`r` block `L` from `linkSize` distinct authors. -/
+def LinkedIn (p : Params) (U : SRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId)
+    (A L : BlockId) (r : ℕ) : Prop :=
+  ∃ X : Finset BlockId, (∀ C ∈ X, C ∈ AvailIn U K H A ∧ Certifies p U C L r) ∧
+    p.linkSize ≤ (creatorsOf U.block X).card
 
 omit [ClaimFormat BlockId Payload] in
 /-- **The sub-DAG below `A` is fetched into `H` down to round `ρ`**: `H` holds
@@ -58,32 +60,49 @@ def FetchedIn (U : SRecord Validator BlockId Payload) (K : ℕ) (H : Finset Bloc
       (0 < i → m z ∈ AvailIn U K H A) ∧ m z ∈ (U.block z).refs ∧ x ∈ historyUpto U i (m z)) →
     F.f + Cr.c + 1 ≤ (creatorsOf U.block S).card → historyUpto U (K - i) x ⊆ H
 
+/-- **`H` backs a claim for `L`** at threshold `t`: it holds `L`, and votes for
+`L` one round above it from `t` distinct authors. -/
+def Backs (U : SRecord Validator BlockId Payload) (t : ℕ) (H : Finset BlockId) (L : BlockId) :
+    Prop :=
+  L ∈ H ∧ t ≤ (creatorsOf U.block (H.filter fun b =>
+    (U.block b).round = (U.block L).round + 1 ∧ L ∈ (U.block b).refs)).card
+
+/-- **Correct authors check what they hold**: each correct block was built by a
+node holding blocks of the record that back its claims, hold the history to
+depth `K` of each of its references, and back every claim there. -/
+def BuildsChecked (U : SRecord Validator BlockId Payload) (K t : ℕ) : Prop :=
+  ∀ z ∈ U.ids, (U.block z).creator ∈ (Correct : Finset Validator) → ∃ H ⊆ U.ids,
+    (∀ L ∈ claimsOf U z, Backs U t H L) ∧ ∀ m ∈ (U.block z).refs, historyUpto U K m ⊆ H ∧
+      ∀ X ∈ historyUpto U K m, ∀ L ∈ claimsOf U X, Backs U t H L
+
 /-- **The commit rule read on what a node holds**, at a row `p`. The direct
-commit counts the claimers it holds, the direct skip the blamers it holds;
-the indirect commit links the least linked candidate through `LinkedIn`, and
-the indirect skip finds no candidate linked, both in the sub-DAG fetched down
-to the round of the slot's claims. -/
+commit counts the certificates it holds, the direct skip the blamers it
+holds; the indirect commit links the least linked candidate through
+`LinkedIn`, and the indirect skip finds no candidate linked, both in the
+sub-DAG fetched down to the round of the slot's certificates. -/
 inductive NodeDecided [S : Slots Validator] (p : Params) (U : SRecord Validator BlockId Payload)
     (K : ℕ) (H : Finset BlockId) : ℕ → Option BlockId → Prop
   | directCommit {k : ℕ} {L : BlockId} : IsLeaderBlock U k L →
       p.commitThreshold ≤
-        (creatorsOf U.block ((claimersOf U L (S.slotRound k + 2)).filter (· ∈ H))).card →
+        (creatorsOf U.block ((certsFor p U L (S.slotRound k)).filter (· ∈ H))).card →
       NodeDecided p U K H k (some L)
   | directSkip {k : ℕ} :
       p.skipThreshold ≤ (creatorsOf U.block ((slotBlamers U k).filter (· ∈ H))).card →
       NodeDecided p U K H k none
   | indirectCommit {k j : ℕ} {A L : BlockId} :
-      k < j → EligibleAt (S := S) 2 k j → NodeDecided p U K H j (some A) →
-      (∀ m, k < m → m < j → EligibleAt (S := S) 2 k m → NodeDecided p U K H m none) →
-      FetchedIn U K H A (S.slotRound k + 2) → IsLeaderBlock U k L →
-      LinkedIn U K H A L (S.slotRound k) →
-      (∀ L', IsLeaderBlock U k L' → L' < L → ¬ LinkedIn U K H A L' (S.slotRound k)) →
+      k < j → EligibleAt (S := S) (p.waveLength - 1) k j → NodeDecided p U K H j (some A) →
+      (∀ m, k < m → m < j → EligibleAt (S := S) (p.waveLength - 1) k m →
+        NodeDecided p U K H m none) →
+      FetchedIn U K H A (certRound p (S.slotRound k)) → IsLeaderBlock U k L →
+      LinkedIn p U K H A L (S.slotRound k) →
+      (∀ L', IsLeaderBlock U k L' → L' < L → ¬ LinkedIn p U K H A L' (S.slotRound k)) →
       NodeDecided p U K H k (some L)
   | indirectSkip {k j : ℕ} {A : BlockId} :
-      k < j → EligibleAt (S := S) 2 k j → NodeDecided p U K H j (some A) →
-      (∀ m, k < m → m < j → EligibleAt (S := S) 2 k m → NodeDecided p U K H m none) →
-      FetchedIn U K H A (S.slotRound k + 2) →
-      (∀ L, IsLeaderBlock U k L → ¬ LinkedIn U K H A L (S.slotRound k)) →
+      k < j → EligibleAt (S := S) (p.waveLength - 1) k j → NodeDecided p U K H j (some A) →
+      (∀ m, k < m → m < j → EligibleAt (S := S) (p.waveLength - 1) k m →
+        NodeDecided p U K H m none) →
+      FetchedIn U K H A (certRound p (S.slotRound k)) →
+      (∀ L, IsLeaderBlock U k L → ¬ LinkedIn p U K H A L (S.slotRound k)) →
       NodeDecided p U K H k none
 
 end KPartialSparse

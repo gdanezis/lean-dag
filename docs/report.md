@@ -19758,12 +19758,13 @@ def Laws : Prop :=
 *def, `KPartialSparse.Model.Node.lean`*
 
 ```lean
-def LinkedIn (U : SRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId) (A L : BlockId)
-    (r : ℕ) : Prop :=
-  ∃ C ∈ AvailIn U K H A, (U.block C).round = r + 2 ∧ L ∈ claimsOf U C
+def LinkedIn (p : Params) (U : SRecord Validator BlockId Payload) (K : ℕ) (H : Finset BlockId)
+    (A L : BlockId) (r : ℕ) : Prop :=
+  ∃ X : Finset BlockId, (∀ C ∈ X, C ∈ AvailIn U K H A ∧ Certifies p U C L r) ∧
+    p.linkSize ≤ (creatorsOf U.block X).card
 ```
 
-**The link, read on `H`**: the sub-DAG below `A` read on `H` holds a claim for `L` two rounds above round `r`.
+**The link, read on `H`**: the sub-DAG below `A` read on `H` holds certificates for the round-`r` block `L` from `linkSize` distinct authors.
 
 #### `Disciplined`
 
@@ -19804,9 +19805,9 @@ inductive Anchored (U : SRecord Validator BlockId Payload) (K : ℕ) (A : BlockI
 def Local : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
-    [ClaimFormat BlockId Payload] (U U' : SRecord Validator BlockId Payload) (K : ℕ)
+    [ClaimFormat BlockId Payload] (p : Params) (U U' : SRecord Validator BlockId Payload) (K : ℕ)
     (H : Finset BlockId) (A L : BlockId) (r ρ : ℕ), (∀ i ∈ H, U.block i = U'.block i) →
-    (LinkedIn U K H A L r ↔ LinkedIn U' K H A L r) ∧ (FetchedIn U K H A ρ ↔ FetchedIn U' K H A ρ)
+    (LinkedIn p U K H A L r ↔ LinkedIn p U' K H A L r) ∧ (FetchedIn U K H A ρ ↔ FetchedIn U' K H A ρ)
 ```
 
 **The node's tests read only what it holds**: on two records whose blocks agree on `H`, the link and the fetch test read on `H` hold alike.
@@ -28258,10 +28259,10 @@ theorem NodeDecided.agree {p : Params} (hrow : Row Validator p) (hsp : Spread Va
 *theorem, `KPartialSparse.Helpers.Rule.lean`*
 
 ```lean
-theorem eq_of_certified (hrow : Row Validator p) {L₁ L₂ : BlockId}
-    (hc : (U.block L₁).creator = (U.block L₂).creator)
+theorem eq_of_certified {t₁ t₂ : ℕ} (h : Fintype.card Validator + F.f < t₁ + t₂)
+    {L₁ L₂ : BlockId} (hc : (U.block L₁).creator = (U.block L₂).creator)
     (hr : (U.block L₁).round = (U.block L₂).round)
-    (c₁ : Certified U p.certThreshold L₁) (c₂ : Certified U p.certThreshold L₂) : L₁ = L₂
+    (c₁ : Certified U t₁ L₁) (c₂ : Certified U t₂ L₂) : L₁ = L₂
 ```
 
 **Two certified blocks of one author and round are one**: their voters share a correct author, whose one block there references one block of each author.

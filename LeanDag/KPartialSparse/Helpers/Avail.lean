@@ -291,15 +291,15 @@ theorem denseAt_step (hsp : Spread Validator) {K : ℕ} (hK : 4 ≤ K) {A : Bloc
     exact ⟨t - 4, le_refl _, by omega, x, K - 1, ℓ, hxa, le_refl _,
       ref_mem_historyUpto (k := 0) hℓ, hℓ', hdl, hℓr'⟩
 
-/-- **A dense block of the sub-DAG in every four-round window** from `ρ + 3`
+/-- **A dense block of the sub-DAG in every four-round window** from `u + 1`
 up to a dense block of the sub-DAG. -/
-theorem denseAt_window (hsp : Spread Validator) {K : ℕ} (hK : 4 ≤ K) {A : BlockId} (ρ : ℕ) :
-    ∀ t, DenseAt U K A t → ρ + 3 ≤ t → ∃ t', ρ + 3 ≤ t' ∧ t' ≤ ρ + 6 ∧ DenseAt U K A t' := by
+theorem denseAt_window (hsp : Spread Validator) {K : ℕ} (hK : 4 ≤ K) {A : BlockId} (u : ℕ) :
+    ∀ t, DenseAt U K A t → u + 1 ≤ t → ∃ t', u + 1 ≤ t' ∧ t' ≤ u + 4 ∧ DenseAt U K A t' := by
   intro t
   induction t using Nat.strong_induction_on with
   | _ t ih =>
     intro h ht
-    by_cases hle : t ≤ ρ + 6
+    by_cases hle : t ≤ u + 4
     · exact ⟨t, ht, hle, h⟩
     · obtain ⟨t', ht'₁, ht'₂, h'⟩ := denseAt_step hsp hK h (by omega)
       exact ih t' ht'₂ h' (by omega)
@@ -321,6 +321,49 @@ theorem exists_correct_inter {X Y : Finset Validator} {cm : ℕ} (hX : kQuorum V
     rw [← Finset.card_pos]; omega
   exact ⟨a, (Finset.mem_inter.mp ha).1, (Finset.mem_inter.mp ha).2⟩
 
+omit [ClaimFormat BlockId Payload] in
+/-- **The sub-DAG holds a quorum's overlap**: below a leader block above round
+`u`, of blocks at round `u` from `cm` distinct authors, the sub-DAG holds those
+of `q + cm − n − f` authors or more. -/
+theorem linked_count (hsp : Spread Validator) {K : ℕ} (hK : 6 ≤ K) (hch : Chains U)
+    {A : BlockId} (hA : A ∈ U.ids) (hAl : (U.block A).creator ∈ Ld.leaders (U.block A).round)
+    {u : ℕ} (hAr : u + 1 ≤ (U.block A).round) {Cl : Finset BlockId}
+    (hCl : ∀ C ∈ Cl, C ∈ U.ids ∧ (U.block C).round = u) :
+    ∃ X ⊆ Cl, (∀ C ∈ X, C ∈ Avail U K A) ∧
+      kQuorum Validator + (creatorsOf U.block Cl).card ≤
+        Fintype.card Validator + F.f + (creatorsOf U.block X).card := by
+  classical
+  have hdA := (U.valid A hA).leader (by omega) hAl
+  obtain ⟨t, ht₁, ht₂, y, d, v, hy, hd, hvy, hv, hdv, hvr⟩ :=
+    denseAt_window hsp (by omega) u _ ⟨A, K, A, Anchored.anchor, by omega, mem_historyUpto_self,
+      hA, hdA, rfl⟩ hAr
+  set R := creatorsOf U.block (below1 U.block (U.block v))
+  set W := (R ∩ creatorsOf U.block Cl) ∩ (Correct : Finset Validator)
+  refine ⟨Cl.filter fun C => (U.block C).creator ∈ W, Finset.filter_subset _ _, fun C hC => ?_, ?_⟩
+  · obtain ⟨hCCl, hCW⟩ := Finset.mem_filter.mp hC
+    obtain ⟨hRCl, hCc⟩ := Finset.mem_inter.mp hCW
+    obtain ⟨X, hX, hXa⟩ := mem_creatorsOf.mp (Finset.mem_inter.mp hRCl).1
+    obtain ⟨hX₁, hXr⟩ := Finset.mem_filter.mp hX
+    obtain ⟨hCi, hCr⟩ := hCl C hCCl
+    have hXi : X ∈ U.ids := U.complete v hv X hX₁
+    have hCX : C ∈ historyUpto U ((U.block X).round - (U.block C).round) X :=
+      mem_historyUpto_of_chain hch _ hXi hCi (hXa ▸ hCc) hXa.symm (by omega) le_rfl
+    have hX2 : X ∈ historyUpto U 2 y := historyUpto_trans hvy (ref_mem_historyUpto (k := 0) hX₁)
+    exact ⟨y, d, hy, historyUpto_mono (by omega) _ (historyUpto_trans hX2 hCX)⟩
+  · have hu : (R ∪ creatorsOf U.block Cl).card + (R ∩ creatorsOf U.block Cl).card =
+        R.card + (creatorsOf U.block Cl).card := Finset.card_union_add_card_inter _ _
+    have huniv : (R ∪ creatorsOf U.block Cl).card ≤ Fintype.card Validator := Finset.card_le_univ _
+    have hsplit : (R ∩ creatorsOf U.block Cl).card ≤ W.card + F.byzantine.card :=
+      card_le_card_inter_correct_add_byzantine _
+    have hb := F.card_byzantine
+    have hR : kQuorum Validator ≤ R.card := hdv
+    have hWX : W ⊆ creatorsOf U.block (Cl.filter fun C => (U.block C).creator ∈ W) := by
+      intro a ha
+      obtain ⟨C, hC, rfl⟩ := mem_creatorsOf.mp (Finset.mem_inter.mp (Finset.mem_inter.mp ha).1).2
+      exact mem_creatorsOf.mpr ⟨C, Finset.mem_filter.mpr ⟨hC, ha⟩, rfl⟩
+    have := Finset.card_le_card hWX
+    omega
+
 /-- **A quorum's claim lies in the sub-DAG** below a leader block at round
 `ρ + 3` or above. -/
 theorem linked (hsp : Spread Validator) {K cm ρ : ℕ} (hK : 6 ≤ K) (hch : Chains U) {A L : BlockId}
@@ -329,23 +372,14 @@ theorem linked (hsp : Spread Validator) {K cm ρ : ℕ} (hK : 6 ≤ K) (hch : Ch
     (hcm : Fintype.card Validator + F.f < kQuorum Validator + cm)
     (hcl : cm ≤ (creatorsOf U.block (claimersOf U L (ρ + 2))).card) :
     ∃ C ∈ Avail U K A, (U.block C).round = ρ + 2 ∧ L ∈ claimsOf U C := by
-  have hdA := (U.valid A hA).leader (by omega) hAl
-  obtain ⟨t, ht₁, ht₂, y, d, v, hy, hd, hvy, hv, hdv, hvr⟩ :=
-    denseAt_window hsp (by omega) ρ _ ⟨A, K, A, Anchored.anchor, by omega, mem_historyUpto_self,
-      hA, hdA, rfl⟩ hAr
-  obtain ⟨a, ha, haC⟩ := exists_correct_inter hdv hcl hcm
-  obtain ⟨ha₁, ha₂⟩ := Finset.mem_inter.mp ha
-  obtain ⟨X, hX, hXa⟩ := mem_creatorsOf.mp ha₁
-  obtain ⟨C, hC, hCa⟩ := mem_creatorsOf.mp ha₂
-  obtain ⟨hX₁, hXr⟩ := Finset.mem_filter.mp hX
-  obtain ⟨hCb, hCL⟩ := Finset.mem_filter.mp hC
-  obtain ⟨hCi, hCr⟩ := mem_blocksAt.mp hCb
-  have hXi : X ∈ U.ids := U.complete v hv X hX₁
-  have hCX : C ∈ historyUpto U ((U.block X).round - (U.block C).round) X :=
-    mem_historyUpto_of_chain hch _ hXi hCi (hXa ▸ haC) (hCa.trans hXa.symm) (by omega) le_rfl
-  have hX2 : X ∈ historyUpto U 2 y := historyUpto_trans hvy (ref_mem_historyUpto (k := 0) hX₁)
-  refine ⟨C, ⟨y, d, hy, historyUpto_mono ?_ _ (historyUpto_trans hX2 hCX)⟩, hCr, hCL⟩
-  omega
+  obtain ⟨X, hXs, hXa, hXn⟩ := linked_count hsp hK hch hA hAl (u := ρ + 2) hAr
+    (Cl := claimersOf U L (ρ + 2)) fun C hC => mem_blocksAt.mp (Finset.mem_filter.mp hC).1
+  have hpos : 0 < (creatorsOf U.block X).card := by omega
+  obtain ⟨C, hC⟩ : X.Nonempty := by
+    rw [← Finset.card_pos]
+    exact lt_of_lt_of_le hpos Finset.card_image_le
+  obtain ⟨hCb, hCL⟩ := Finset.mem_filter.mp (hXs hC)
+  exact ⟨C, hXa C hC, (mem_blocksAt.mp hCb).2, hCL⟩
 
 omit [ClaimFormat BlockId Payload] in
 /-- **Every block of the sub-DAG has a correct holder**: it lies in the history

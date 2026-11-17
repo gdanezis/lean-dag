@@ -160,6 +160,18 @@ theorem wNodeAgrees (H : Finset Id) (hH : H ⊆ wU.ids) (v : Option Id)
   (Node.agrees (Fin 4) Id (Finset Id) (Scheme.Params.mysticeti 4 1) wU 6 H wHeld 2 v _ wRow.1
     wRow.2 le_rfl wDisciplined hH (by decide) h wNodeCommits)
 
+/-- Every correct node checks claims on what it holds: holding the whole
+record backs every claim. -/
+theorem wBuildsChecked : BuildsChecked wU 6 3 := by
+  have h : ∀ z ∈ wIds, (∀ L ∈ claimsOf wU z, Backs wU 3 wIds L) ∧
+      ∀ m ∈ (wU.block z).refs, ∀ X ∈ wIds, ∀ L ∈ claimsOf wU X, Backs wU 3 wIds L := by
+    unfold Backs; decide
+  intro z hz _
+  refine ⟨wIds, subset_rfl, (h z hz).1, fun m hm => ⟨?_, fun X hX => ?_⟩⟩
+  · exact KPartialSparse.historyUpto_subset_ids (U := wU) 6 (wU.complete z hz m hm)
+  · exact (h z hz).2 m hm X (KPartialSparse.historyUpto_subset_ids (U := wU) 6
+      (wU.complete z hz m hm) hX)
+
 end KPartialSparse
 
 end LeanDagTest

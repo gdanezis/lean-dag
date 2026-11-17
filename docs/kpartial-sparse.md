@@ -5,8 +5,8 @@ blocks, after Bluestreak [PVM26]: a block that references a leader of the
 round below references nothing else but its author's block, and a block
 claims in its payload the leaders it has seen certified. The Lean
 development is `LeanDag/KPartialSparse`. The available sub-DAG (Theorem 1),
-agreement of the commit rule (Theorem 2) and what a node reads (Theorem 3)
-are proved; §6 lists what is open. `LeanDagTest/KPartialSparse/Witness.lean`
+agreement of the commit rule at the scheme's two-round and three-round rows
+(Theorem 2) and what a node reads (Theorem 3) are proved; §6 lists what is open. `LeanDagTest/KPartialSparse/Witness.lean`
 is a record on which all three apply.
 
 ## 1. The substrate
@@ -112,20 +112,25 @@ Together, if a quorum claims `L` directly, an anchor above finds a claim for
 
 ## 4. The commit rule and agreement
 
-The rule runs the scheme's three-round rows with a claim in place of a
-certificate. A row (`Row`) has a link of one claim and asks that two
-certificate thresholds, a certificate and a skip threshold, and the quorum
-and the commit threshold each exceed `n + f`. The commit rule (`sRule`) is
-an anchored rule of `Common/Anchored.lean`, at wave `2`:
+The rule runs the scheme's rows (`Row`). In a *three-round row* a claim
+stands for a certificate: two certificate thresholds, a certificate and a
+skip threshold, and the quorum and the commit threshold each exceed
+`n + f`, and the link is one claim. In a *two-round row* a vote is its own
+certificate, and the scheme's two-round inequalities hold at the quorum
+`q = n − f − c`; sparse blocks still carry votes, since a vote is a
+reference. The certificates of a round-`r` block are its votes at round
+`r + 1` or its claimers at round `r + 2` (`certsFor`, `Certifies`). The commit
+rule (`sRule`) is an anchored rule of `Common/Anchored.lean`, at the row's
+wave:
 
-* *direct commit*: claims for the candidate from `commitThreshold` distinct
-  authors two rounds above it;
+* *direct commit*: certificates for the candidate from `commitThreshold`
+  distinct authors;
 * *direct skip*: `skipThreshold` authors whose block one round above
   references no candidate of the slot;
-* *link*: a claim for the candidate two rounds above it, in the available
-  sub-DAG below the anchor (`ClaimLinked`); twins are broken by the least
-  identifier;
-* *anchor*: a certified block.
+* *link*: certificates for the candidate from `linkSize` distinct authors in
+  the available sub-DAG below the anchor (`CertLinked`); twins are broken by
+  the least identifier;
+* *anchor*: in a three-round row, a certified block.
 
 The rule asks of the schedule and the record (`Disciplined`) that each
 slot's leader leads its round on the substrate, that correct authors keep
@@ -140,20 +145,27 @@ certified blocks (`Truthful`).
 * *Agreement* (`Agreement.Agrees`). So two views of one record decide each
   slot alike.
 * *Rows* (`Agreement.Rows`). Without crashes, Mysticeti and Cordial Miners
-  are rows and the spreading condition holds; under any crash bound, Hybrid
-  Mysticeti is a row.
+  are rows and the spreading condition holds, and Blue Bottle is a row at
+  `n ≥ 5f + 1`; under any crash bound, Hybrid Mysticeti is a row, and
+  Orcaella is a row at `n ≥ 5f + 3c + 1`, where the spreading condition
+  holds.
 
-Every law reduces to four facts. A direct commit names a certified block,
-since one of its claimers is correct and claims truthfully
-(`certified_of_commit`). A link from a certified anchor names a certified
-block, since a correct voter references the anchor and Theorem 1 *Backed*
-applies (`certified_of_link`). Two certified blocks of one author and round
-are one: their voters share a correct author, whose one block there
-references one block of each author (`eq_of_certified`). A certified block
-is not directly skipped: its voters and the blamers share a correct author
-(`not_certified_skip`). Visibility, a direct commit linked from every
-eligible anchor, is Theorem 1 *Linked*, since an eligible anchor is a leader
-block three rounds or more above the slot.
+A direct commit certifies its block at the row's *commit strength*: its
+votes in a two-round row, and the certificate threshold in a three-round
+row, since one of its claimers is correct and claims truthfully
+(`certified_of_commit`). A link certifies its block at the *link strength*:
+its votes, or the certificate threshold, since a correct voter references
+the certified anchor and Theorem 1 *Backed* applies (`certified_of_link`).
+The row makes each pair among two commits, a commit and a skip, a commit and
+a link, and a link and a skip exceed `n + f` (`row_arith`). Two certified
+blocks of one author and round whose strengths exceed `n + f` are one: their
+voters share a correct author, whose one block there references one block of
+each author (`eq_of_certified`). A certified block and a skip whose strengths
+exceed `n + f` exclude each other the same way (`not_certified_skip`).
+Visibility generalises Theorem 1 *Linked* to a count (`linked_count`): below
+a leader block above round `u`, of blocks at round `u` from `cm` distinct
+authors, the sub-DAG holds those of `q + cm − n − f` authors or more, which
+the row makes `linkSize` or more (`certLinked_of_commit`).
 
 ## 5. What a node reads
 
@@ -185,17 +197,20 @@ payload alone, so a node need not hold the claimers' references.
 * *Agreement* (`Node.Agrees`). At a row, under the spreading condition, at
   `K ≥ 6`, on a disciplined schedule and record, two nodes decide each slot
   alike.
+* *Checked* (`Node.Checked`). A node *backs* a claim for `L` when it holds `L`
+  and votes for it from `t` distinct authors one round above (`Backs`); this
+  reads only what it holds. If each correct block was built by a node holding
+  blocks of the record that back its claims and every claim in the history
+  to depth `K` of each of its references (`BuildsChecked`), then correct
+  authors check and claim truthfully (`Checks`, `Truthful`).
 
-Checking claims (§2) needs the votes behind each claim, which lie outside
-every history; `Checks` remains a premise on the record, and the fetch
-obligation it implies is open (§6).
+The votes behind a claim lie outside every history, so `BuildsChecked` asks a
+correct node to fetch them; a correct claimer holds them.
 
 ## 6. Open
 
-* Two-round rows: votes are references, so no claims are needed, but
-  *Linked* must be restated for votes one round above the slot.
-* The votes behind a claim as a fetch obligation of correct nodes, and a
-  bound in rounds on what a node fetches.
+* A bound in rounds on what a node fetches, and that a correct node can
+  obtain the votes behind a claim (a liveness question).
 * The crash case beyond `c ≤ 1` at `n = 3f + 2c + 1`, where the spreading
   condition fails; anchor points reached in more steps may give the core
   argument there, if nodes fetch the paths to them.

@@ -13,7 +13,7 @@ namespace KPartialSparse
 namespace Node
 
 theorem local_ : Local := by
-  intro Validator BlockId Payload _ _ _ _ _ _ _ U U' K H A L r ρ hb
+  intro Validator BlockId Payload _ _ _ _ _ _ _ p U U' K H A L r ρ hb
   have hb' : ∀ i ∈ H, U'.block i = U.block i := fun i hi => (hb i hi).symm
   exact ⟨⟨linkedIn_congr hb, linkedIn_congr hb'⟩, ⟨fetchedIn_congr hb, fetchedIn_congr hb'⟩⟩
 
@@ -29,7 +29,12 @@ theorem agrees : Agrees := by
   intro Validator BlockId Payload _ _ _ _ _ _ _ _ p U K H₁ H₂ k v₁ v₂ hrow hsp hK hI hH₁ hH₂ h₁ h₂
   exact h₁.agree hrow hsp hK hI hH₁ hH₂ h₂
 
-theorem holds : Statement := ⟨local_, fetchable, sound, agrees⟩
+theorem checked : Checked := by
+  intro Validator BlockId Payload _ _ _ _ _ _ _ U U' K t H L
+  exact ⟨fun hb => ⟨backs_congr hb, backs_congr fun i hi => (hb i hi).symm⟩,
+    checks_of_buildsChecked⟩
+
+theorem holds : Statement := ⟨local_, fetchable, sound, agrees, checked⟩
 
 end Node
 

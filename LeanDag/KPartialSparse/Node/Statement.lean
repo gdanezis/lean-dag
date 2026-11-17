@@ -3,8 +3,10 @@ import LeanDag.KPartialSparse.Model.Node
 # Sparse K-partial DAG — what a node reads, statement
 
 `docs/kpartial-sparse.md` §5, Theorem 3: a node's tests read only what it
-holds, holding what the anchor points bring fetches the sub-DAG, and a
-node's decisions are decisions of the commit rule and agree across nodes.
+holds, holding what the anchor points bring fetches the sub-DAG, a node's
+decisions are decisions of the commit rule and agree across nodes, and
+correct nodes that check claims on what they hold meet the rule's claim
+disciplines.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -22,9 +24,9 @@ agree on `H`, the link and the fetch test read on `H` hold alike. -/
 def Local : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
-    [ClaimFormat BlockId Payload] (U U' : SRecord Validator BlockId Payload) (K : ℕ)
+    [ClaimFormat BlockId Payload] (p : Params) (U U' : SRecord Validator BlockId Payload) (K : ℕ)
     (H : Finset BlockId) (A L : BlockId) (r ρ : ℕ), (∀ i ∈ H, U.block i = U'.block i) →
-    (LinkedIn U K H A L r ↔ LinkedIn U' K H A L r) ∧ (FetchedIn U K H A ρ ↔ FetchedIn U' K H A ρ)
+    (LinkedIn p U K H A L r ↔ LinkedIn p U' K H A L r) ∧ (FetchedIn U K H A ρ ↔ FetchedIn U' K H A ρ)
 
 /-- **Holding what the anchor points bring fetches the sub-DAG** down to any
 round. -/
@@ -55,8 +57,19 @@ def Agrees : Prop :=
     Disciplined K p.certThreshold S U → H₁ ⊆ U.ids → H₂ ⊆ U.ids →
     NodeDecided p U K H₁ k v₁ → NodeDecided p U K H₂ k v₂ → v₁ = v₂
 
+/-- **Claims are checked on what a node holds**: backing reads only what is
+held, and correct authors that check claims on what they hold check and claim
+truthfully on the record. -/
+def Checked : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [Crashes Validator] [Leaders Validator] [LinearOrder BlockId]
+    [ClaimFormat BlockId Payload] (U U' : SRecord Validator BlockId Payload) (K t : ℕ)
+    (H : Finset BlockId) (L : BlockId),
+    ((∀ i ∈ H, U.block i = U'.block i) → (Backs U t H L ↔ Backs U' t H L)) ∧
+      (BuildsChecked U K t → Checks U K t ∧ Truthful U t)
+
 /-- What a node reads. -/
-def Statement : Prop := Local ∧ Fetchable ∧ Sound ∧ Agrees
+def Statement : Prop := Local ∧ Fetchable ∧ Sound ∧ Agrees ∧ Checked
 
 end Node
 

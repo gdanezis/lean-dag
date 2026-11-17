@@ -107,15 +107,23 @@ theorem fetchedIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i) {ρ : ℕ}
 
 variable [ClaimFormat BlockId Payload]
 
+omit [LinearOrder BlockId] in
+/-- Certifying reads only the certificate's block. -/
+theorem certifies_congr {p : Params} {C L : BlockId} {r : ℕ} (hC : U.block C = U'.block C)
+    (h : Certifies p U C L r) : Certifies p U' C L r := by
+  unfold Certifies claimsOf at *
+  rwa [← hC]
+
 /-- **The link read on `H` reads only `H`.** -/
-theorem linkedIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i) {L : BlockId} {r : ℕ}
-    (h : LinkedIn U K H A L r) : LinkedIn U' K H A L r := by
-  obtain ⟨C, hC, hCr, hCL⟩ := h
-  have hCH := availIn_subset_held hC
-  refine ⟨C, availIn_congr hb ▸ hC, ?_, ?_⟩
-  · rw [← hb C hCH]; exact hCr
-  · show L ∈ ClaimFormat.claims (U'.block C).payload
-    rw [← hb C hCH]; exact hCL
+theorem linkedIn_congr (hb : ∀ i ∈ H, U.block i = U'.block i) {p : Params} {L : BlockId} {r : ℕ}
+    (h : LinkedIn p U K H A L r) : LinkedIn p U' K H A L r := by
+  obtain ⟨X, hX, hXn⟩ := h
+  have hXH : ∀ C ∈ X, C ∈ H := fun C hC => availIn_subset_held (hX C hC).1
+  refine ⟨X, fun C hC => ⟨availIn_congr hb ▸ (hX C hC).1,
+    certifies_congr (hb C (hXH C hC)) (hX C hC).2⟩, ?_⟩
+  have : creatorsOf U'.block X = creatorsOf U.block X :=
+    Finset.image_congr fun C hC => by rw [hb C (hXH C hC)]
+  rw [this]; exact hXn
 
 omit [ClaimFormat BlockId Payload]
 
@@ -197,18 +205,63 @@ theorem fetchedIn_of_subset {ρ : ℕ}
 
 variable [ClaimFormat BlockId Payload]
 
-/-- A link read on `H` is the record's. -/
-theorem linkedIn_claimLinked {L : BlockId} {r : ℕ} (h : LinkedIn U K H A L r) :
-    ClaimLinked U K A L r := by
-  obtain ⟨C, hC, hCr, hCL⟩ := h
-  exact ⟨C, availIn_subset hC, hCr, hCL⟩
+omit [LinearOrder BlockId] in
+/-- A certificate lies at its certificate round. -/
+theorem round_of_certifies {p : Params} {C L : BlockId} {r : ℕ} (h : Certifies p U C L r) :
+    (U.block C).round = certRound p r := by
+  unfold Certifies at h
+  unfold certRound
+  split_ifs at h ⊢ <;> exact h.1
 
-/-- **Fetched down to the round of the claims, the record's link is read on
-`H`.** -/
-theorem claimLinked_linkedIn (hH : H ⊆ U.ids) {L : BlockId} {r : ℕ}
-    (hf : FetchedIn U K H A (r + 2)) (h : ClaimLinked U K A L r) : LinkedIn U K H A L r := by
-  obtain ⟨C, hC, hCr, hCL⟩ := h
-  exact ⟨C, avail_subset_availIn hH hf hC (by omega), hCr, hCL⟩
+/-- A link read on `H` is the record's. -/
+theorem linkedIn_certLinked (hH : H ⊆ U.ids) {p : Params} {L : BlockId} {r : ℕ}
+    (h : LinkedIn p U K H A L r) : CertLinked p U K A L r := by
+  obtain ⟨X, hX, hXn⟩ := h
+  exact ⟨X, fun C hC => ⟨hH (availIn_subset_held (hX C hC).1), availIn_subset (hX C hC).1,
+    (hX C hC).2⟩, hXn⟩
+
+/-- **Fetched down to the round of the certificates, the record's link is read
+on `H`.** -/
+theorem certLinked_linkedIn (hH : H ⊆ U.ids) {p : Params} {L : BlockId} {r : ℕ}
+    (hf : FetchedIn U K H A (certRound p r)) (h : CertLinked p U K A L r) :
+    LinkedIn p U K H A L r := by
+  obtain ⟨X, hX, hXn⟩ := h
+  exact ⟨X, fun C hC => ⟨avail_subset_availIn hH hf (hX C hC).2.1
+    (round_of_certifies (hX C hC).2.2).ge, (hX C hC).2.2⟩, hXn⟩
+
+/-! ## Checks -/
+
+/-- Backing reads only what is held. -/
+theorem backs_congr (hb : ∀ i ∈ H, U.block i = U'.block i) {t : ℕ} {L : BlockId}
+    (h : Backs U t H L) : Backs U' t H L := by
+  obtain ⟨hL, hn⟩ := h
+  refine ⟨hL, ?_⟩
+  have hf : (H.filter fun b => (U'.block b).round = (U'.block L).round + 1 ∧
+      L ∈ (U'.block b).refs) = H.filter fun b =>
+        (U.block b).round = (U.block L).round + 1 ∧ L ∈ (U.block b).refs :=
+    Finset.filter_congr fun b hbH => by rw [hb b hbH, hb L hL]
+  have hc : creatorsOf U'.block (H.filter fun b => (U.block b).round = (U.block L).round + 1 ∧
+      L ∈ (U.block b).refs) = creatorsOf U.block (H.filter fun b =>
+        (U.block b).round = (U.block L).round + 1 ∧ L ∈ (U.block b).refs) :=
+    Finset.image_congr fun b hbH => by rw [hb b (Finset.mem_filter.mp hbH).1]
+  rw [hf, hc]; exact hn
+
+/-- **A backed claim names a certified block**: the votes held are votes of the
+record. -/
+theorem certified_of_backs (hH : H ⊆ U.ids) {t : ℕ} {L : BlockId} (h : Backs U t H L) :
+    Certified U t L := by
+  refine h.2.trans (Finset.card_le_card (Finset.image_subset_image fun b hb => ?_))
+  obtain ⟨hbH, hbr, hLb⟩ := Finset.mem_filter.mp hb
+  exact mem_votesFor.mpr ⟨hH hbH, hbr, hLb⟩
+
+/-- **Checking what they hold, correct authors check and claim truthfully.** -/
+theorem checks_of_buildsChecked {t : ℕ} (h : BuildsChecked U K t) :
+    Checks U K t ∧ Truthful U t := by
+  refine ⟨fun z hz hzc m hm X hX L hL => ?_, fun C hC hCc L hL => ?_⟩
+  · obtain ⟨H, hH, -, hrefs⟩ := h z hz hzc
+    exact certified_of_backs hH ((hrefs m hm).2 X hX L hL)
+  · obtain ⟨H, hH, hcl, -⟩ := h C hC hCc
+    exact certified_of_backs hH (hcl L hL)
 
 /-! ## Decisions -/
 
@@ -231,11 +284,11 @@ theorem NodeDecided.decided {p : Params} (hH : H ⊆ U.ids) {V : U.View} (hHV : 
   | directSkip hs => exact AnchoredRule.Decided.directSkip (holdsAtLeast_of_held hHV hs)
   | indirectCommit hkj helig _ _ hf hL hlink hleast ihj ihm =>
     exact AnchoredRule.Decided.indirectCommit (i := 0) hkj helig ihj ihm Nat.one_pos
-      (fun i' hi' => absurd hi' (Nat.not_lt_zero _)) hL (linkedIn_claimLinked hlink)
-      fun L' hL' hl' hlt => hleast L' hL' hlt (claimLinked_linkedIn hH hf hl')
+      (fun i' hi' => absurd hi' (Nat.not_lt_zero _)) hL (linkedIn_certLinked hH hlink)
+      fun L' hL' hl' hlt => hleast L' hL' hlt (certLinked_linkedIn hH hf hl')
   | indirectSkip hkj helig _ _ hf hnone ihj ihm =>
     exact AnchoredRule.Decided.indirectSkip_single rfl hkj helig ihj ihm
-      (fun L hL hlink => hnone L hL (claimLinked_linkedIn hH hf hlink))
+      (fun L hL hlink => hnone L hL (certLinked_linkedIn hH hf hlink))
 
 /-- **Two nodes decide each slot alike**, at a row, under the spreading
 condition, at `K ≥ 6`, on a disciplined schedule and record. -/
