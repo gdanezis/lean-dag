@@ -116,8 +116,8 @@ theorem ohyb4_sync : SynchronisedOn Uhyb4 {0, 1, 2} 0 := by
   have hn2 : n ≤ 2 := by have := h3 b; omega
   interval_cases n <;> revert b a <;> decide
 
-theorem ohyb4_good :
-    (orcaellaLive (Validator := Fin 4) (BlockId := Fin 13) (Payload := Unit) 2).Good
+theorem ohyb4_good (S₀ : Slots (Fin 4)) :
+    (orcaellaLive (Validator := Fin 4) (BlockId := Fin 13) (Payload := Unit) 2).Good S₀
       Ohyb4 0 3 :=
   ⟨{0, 1, 2}, ⟨by decide, by decide⟩, ohyb4_sync, fun r h1 h2 => by interval_cases r <;> decide⟩
 
@@ -131,8 +131,8 @@ theorem ohyb4_commit :
       ∃ L, bnOrc.Decided orcC4.sched (bnOrc.full Ohyb4) κ (some L) := by
   obtain ⟨T, hcard, hT0⟩ :=
     (LeanDag.Barnacle.Orcaella.holds.2.1 (Fin 4) (Fin 13) Unit 2 (by decide)).goodLeaders
-      Ohyb4 0 3 ohyb4_good
-  have hT := fun (S : Slots (Fin 4)) κ => hT0 S (bnOrc.full Ohyb4) κ
+      orcC4.sched Ohyb4 0 3 (ohyb4_good _)
+  have hT := fun κ => hT0 (bnOrc.full Ohyb4) κ
     (coversUpto_full (LeanDag.Barnacle.Orcaella.holds.1 (Fin 4) (Fin 13) Unit 2 (by decide)).full_ids
       Ohyb4 3)
   have h3 : 3 ≤ T.card := by
@@ -150,9 +150,9 @@ theorem ohyb4_commit :
     omega
   obtain ⟨v, hv, hv3⟩ := hmeet
   fin_cases v
-  · exact ⟨7, by decide, hT _ 7 (by omega) (by decide) hv⟩
-  · exact ⟨4, by decide, hT _ 4 (by omega) (by decide) hv⟩
-  · exact ⟨5, by decide, hT _ 5 (by omega) (by decide) hv⟩
+  · exact ⟨7, by decide, hT 7 (by omega) (by decide) hv⟩
+  · exact ⟨4, by decide, hT 4 (by omega) (by decide) hv⟩
+  · exact ⟨5, by decide, hT 5 (by omega) (by decide) hv⟩
   · exact absurd rfl hv3
 
 /-! ## The laws, on `Ohyb4` -/
@@ -168,8 +168,8 @@ example : ∀ (V : bnOrc.View Ohyb4) (v : Option (Fin 13)),
 
 -- `Good` fails one round past the universe: the only reliable set is
 -- `{0, 1, 2}`, and it populates no round `4`.
-example :
-    ¬ (orcaellaLive (Validator := Fin 4) (BlockId := Fin 13) (Payload := Unit) 2).Good
+example (S₀ : Slots (Fin 4)) :
+    ¬ (orcaellaLive (Validator := Fin 4) (BlockId := Fin 13) (Payload := Unit) 2).Good S₀
       Ohyb4 0 4 := by
   rintro ⟨T, ⟨hsub, hcard⟩, hsync, hpop⟩
   have hne : T.Nonempty := Finset.card_pos.mp (by change 3 ≤ T.card at hcard; omega)
@@ -188,10 +188,11 @@ reliable set, and its round-`1` slot commits for nobody. -/
 theorem not_descent_zero :
     ¬ (orcaellaLive (Validator := Fin 4) (BlockId := Fin 13) (Payload := Unit) 2).Descent 0 := by
   intro hD
-  obtain ⟨T, hcard, hT⟩ := hD.goodLeaders Ohyb4 0 3 ohyb4_good
+  obtain ⟨T, hcard, hT⟩ := hD.goodLeaders (Sched orcLeader4 orcWin4 4 (by decide) (by decide))
+    Ohyb4 0 3 (ohyb4_good _)
   have hTuniv : T = Finset.univ :=
     Finset.eq_univ_of_card T (le_antisymm (Finset.card_le_univ T) (by simpa using hcard))
-  obtain ⟨L, hL⟩ := hT (Sched orcLeader4 orcWin4 4 (by decide) (by decide)) (bnOrc.full Ohyb4) 6
+  obtain ⟨L, hL⟩ := hT (bnOrc.full Ohyb4) 6
     (coversUpto_full (LeanDag.Barnacle.Orcaella.holds.1 (Fin 4) (Fin 13) Unit 2 (by decide)).full_ids
       Ohyb4 3)
     (by omega) (by decide) (by rw [hTuniv]; exact Finset.mem_univ _)

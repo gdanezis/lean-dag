@@ -525,8 +525,11 @@ The paper's A4 liveness is "after GST, honest validators commit new
 leaders infinitely often". In this development liveness is structural —
 a condition on the DAG, no clock — and every statement carries a
 horizon, because a universe is finite (§5). The interface adds one
-field (D10): `LiveRule extends BaseRule` with `Good : Universe → ℕ → ℕ →
-Prop`, the rule's own notion of a DAG good from a round to a horizon —
+field (D10): `LiveRule extends BaseRule` with `Good : Slots Validator →
+Universe → ℕ → ℕ → Prop`, the rule's own notion of a DAG good under a
+schedule from a round to a horizon. The schedule is an argument because a
+responsive validator waits only for the leaders its schedule names
+(`mechanisms.md` M5a); the timed rules ignore it. For those rules it is
 for the rules of this development, synchronised over a reliable quorum
 and populated (`∃ T ⊆ Correct, quorumCard ≤ T.card ∧ SynchronisedOn U T
 Rnd ∧ ∀ r, Rnd ≤ r → r ≤ N → PopulatedOn U T r`), defined at each
@@ -538,7 +541,7 @@ inspects it. A4 is then a clause on a schedule, with a commit gap `c`
 ```lean
 def LiveRule.LiveOn (R : LiveRule Validator BlockId Payload) (S : Slots Validator) (c : ℕ) :
     Prop :=
-  ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ), R.Good U Rnd N →
+  ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ), R.Good S U Rnd N →
       R.toBaseRule.CoversUpto U V N →
     (∀ κ, Rnd ≤ S.slotRound κ → S.slotRound κ + c + R.waveLength ≤ N →
       ∃ v, R.Decided S V κ v) ∧
@@ -572,7 +575,7 @@ extends by one configuration:
     R.toBaseRule.CoversUpto U V N →
     ∀ (Rn : PartialRun R.toBaseRule P upd C₀ U V K),
     R.LiveOn (Rn.cfg K).sched c →
-    R.Good U Rnd N → Rnd ≤ Rn.start K + 1 →
+    R.Good (Rn.cfg K).sched U Rnd N → Rnd ≤ Rn.start K + 1 →
     Rn.start K + P.maxInterval + 1 + 2 * c + R.waveLength ≤ N →
     Nonempty (PartialRun R.toBaseRule P upd C₀ U V (K + 1))
 ```
@@ -632,9 +635,9 @@ as a second law structure so that `Laws` stays as frozen
 
 ```lean
 structure LiveRule.Descent (R : LiveRule Validator BlockId Payload) (slack : ℕ) : Prop where
-  goodLeaders : ∀ (U : R.Universe) (Rnd N : ℕ), R.Good U Rnd N →
+  goodLeaders : ∀ (S : Slots Validator) (U : R.Universe) (Rnd N : ℕ), R.Good S U Rnd N →
     ∃ T : Finset Validator, Fintype.card Validator ≤ T.card + slack ∧
-      ∀ (S : Slots Validator) (V : R.View U) (κ : ℕ), R.toBaseRule.CoversUpto U V N →
+      ∀ (V : R.View U) (κ : ℕ), R.toBaseRule.CoversUpto U V N →
         Rnd ≤ S.slotRound κ → S.slotRound κ + R.waveLength ≤ N →
         S.leader κ ∈ T → ∃ L, R.Decided S V κ (some L)
   indirect : ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U) (i j : ℕ) (A : BlockId),
@@ -644,6 +647,8 @@ structure LiveRule.Descent (R : LiveRule Validator BlockId Payload) (slack : ℕ
     ∃ v, R.Decided S V i v
 ```
 
+A rule whose goodness ignores the schedule gets these laws from the
+shared `Properties.Descent` (`LiveRule.Descent.ofProperties`).
 `goodLeaders` is the paper's A4 — after GST an honest leader's slot is
 decided directly — with the good set `T` missing at most `slack`
 validators; `indirect` is A3's indirect rule. For Mysticeti the first

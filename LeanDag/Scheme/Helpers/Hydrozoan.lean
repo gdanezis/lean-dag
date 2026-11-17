@@ -67,7 +67,7 @@ variable [S : Slots Replica]
 theorem readAlike_hydrozoanSlow
     (σ : VoteSel Replica BlockId Unit Hydrozoan.ValidWrt Hydrozoan.NonByzantine)
     (U : Hydrozoan.BlockUniverse Replica BlockId) :
-    ReadAlike (schemeAnchored (Params.hybridMysticeti (Fintype.card Replica) F.f F.c) σ)
+    AnchoredRule.ReadAlike (schemeAnchored (Params.hybridMysticeti (Fintype.card Replica) F.f F.c) σ)
       (hydrozoanSlowAnchored Replica BlockId) U where
   waveAt := fun _ => rfl
   rungs := rfl
@@ -104,7 +104,7 @@ theorem hydrozoanSlow_eq
     (σ : VoteSel Replica BlockId Unit Hydrozoan.ValidWrt Hydrozoan.NonByzantine) :
     (schemeAnchored (Params.hybridMysticeti (Fintype.card Replica) F.f F.c) σ).toDagRule =
       (hydrozoanSlowAnchored Replica BlockId).toDagRule :=
-  toDagRule_eq fun S U _ _ _ => (readAlike_hydrozoanSlow (S := S) σ U).decided_iff
+  AnchoredRule.toDagRule_eq fun S U _ _ _ => (readAlike_hydrozoanSlow (S := S) σ U).decided_iff
 
 end Slow
 

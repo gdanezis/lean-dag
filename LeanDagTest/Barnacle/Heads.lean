@@ -110,8 +110,8 @@ theorem usun_sync : SynchronisedOn Usun {1, 2, 3} 1 := by
   have hn6 : n ≤ 6 := by have := h7 b; omega
   interval_cases n <;> revert b a <;> decide
 
-theorem usun_good :
-    (mysticetiLive (Validator := Fin 4) (BlockId := Fin 32) (Payload := Unit)).Good Usun 1 7 :=
+theorem usun_good (S₀ : Slots (Fin 4)) :
+    (mysticetiLive (Validator := Fin 4) (BlockId := Fin 32) (Payload := Unit)).Good S₀ Usun 1 7 :=
   ⟨{1, 2, 3}, ⟨by decide, by decide⟩, usun_sync, fun r h1 h2 => by
     interval_cases r <;> decide⟩
 
@@ -125,8 +125,9 @@ The conclusion is as weak as an existential `T` allows. -/
 example : ∃ κ, 1 ≤ κ ∧ κ ≤ 4 ∧
     ∃ L, bnRule32.Decided sched1 (View.full Usun) κ (some L) := by
   obtain ⟨T, hcard, hT0⟩ :=
-    (MysticetiLive.holds.1 (Fin 4) (Fin 32) Unit).goodLeaders Usun 1 7 usun_good
-  have hT := fun S κ => hT0 S (View.full Usun) κ
+    (MysticetiLive.holds.1 (Fin 4) (Fin 32) Unit).goodLeaders sched1 Usun 1 7
+    (usun_good _)
+  have hT := fun κ => hT0 (View.full Usun) κ
     (coversUpto_full (Mysticeti.holds (Fin 4) (Fin 32) Unit).full_ids Usun 7)
   have h3 : 3 ≤ T.card := by
     have h4 : Fintype.card (Fin 4) = 4 := Fintype.card_fin 4
@@ -135,10 +136,10 @@ example : ∃ κ, 1 ≤ κ ∧ κ ≤ 4 ∧
     omega
   obtain ⟨v, hv⟩ := Finset.card_pos.mp (show 0 < T.card by omega)
   fin_cases v
-  · exact ⟨4, by omega, by omega, hT sched1 4 (by decide) (by decide) hv⟩
-  · exact ⟨1, by omega, by omega, hT sched1 1 (by decide) (by decide) hv⟩
-  · exact ⟨2, by omega, by omega, hT sched1 2 (by decide) (by decide) hv⟩
-  · exact ⟨3, by omega, by omega, hT sched1 3 (by decide) (by decide) hv⟩
+  · exact ⟨4, by omega, by omega, hT 4 (by decide) (by decide) hv⟩
+  · exact ⟨1, by omega, by omega, hT 1 (by decide) (by decide) hv⟩
+  · exact ⟨2, by omega, by omega, hT 2 (by decide) (by decide) hv⟩
+  · exact ⟨3, by omega, by omega, hT 3 (by decide) (by decide) hv⟩
 
 /-! ## The paper's A4 for Mysticeti, at `n = 4` -/
 
@@ -169,8 +170,8 @@ example : ¬ SynchronisedOn Usk {0, 1, 2, 3} 1 := fun h =>
 
 /-- Real Mysticeti never calls `Usk` good from round `1`: a correct
 quorum is `{1, 2, 3}` itself, and it is not synchronised. -/
-theorem usk_not_good (N : ℕ) :
-    ¬ (mysticetiLive (Validator := Fin 4) (BlockId := Fin 32) (Payload := Unit)).Good Usk 1 N := by
+theorem usk_not_good (N : ℕ) (S₀ : Slots (Fin 4)) :
+    ¬ (mysticetiLive (Validator := Fin 4) (BlockId := Fin 32) (Payload := Unit)).Good S₀ Usk 1 N := by
   rintro ⟨T, ⟨hsub, hcard⟩, hsync, -⟩
   change T ⊆ Correct at hsub
   rw [bnCorrect] at hsub
@@ -205,8 +206,8 @@ theorem usk_goodT : ∀ (S : Slots (Fin 4)) (κ : ℕ),
 /-- The descent laws for the `Usk` test rule, at slack `1`. -/
 theorem bnLiveSk_descent : bnLiveSk.Descent 1 where
   goodLeaders := by
-    rintro U Rnd N ⟨rfl, rfl, rfl⟩
-    refine ⟨{0, 1, 3}, by decide, fun S V κ hcov h1 h2 h3 => ?_⟩
+    rintro S U Rnd N ⟨rfl, rfl, rfl⟩
+    refine ⟨{0, 1, 3}, by decide, fun V κ hcov h1 h2 h3 => ?_⟩
     obtain ⟨L, hL⟩ := usk_goodT S κ h1 h2 h3
     -- every block of `Usk` lies at a round the view covers
     have hround : ∀ b ∈ Usk.ids, (Usk.block b).round ≤ 8 := by decide
@@ -230,7 +231,7 @@ example : ∃ v₀ v₁ v₂ L,
   obtain ⟨hdec, L, hL⟩ :=
     (Heads.holds.1 (Fin 4) (Fin 32) Unit bnLiveSk 1 bnC1 0).2.1
     bnLiveSk_descent (Nat.succ_pos 2) Usk (bnLiveSk.full Usk) 1 8 {0, 1, 3}
-    (fun S κ h1 h2 h3 => usk_goodT S κ h1 h2 h3) bnC1 3 (by decide)
+    bnC1 (fun κ h1 h2 h3 => usk_goodT _ κ h1 h2 h3) 3 (by decide)
     (by decide) (by decide)
   obtain ⟨v₀, h0⟩ := hdec 0 (by decide) (by decide)
   obtain ⟨v₁, h1⟩ := hdec 1 (by decide) (by decide)
@@ -312,8 +313,8 @@ theorem u44_sync : SynchronisedOn U44 {1, 2, 3} 1 := by
   have : n ≤ 9 := by have := h10 b; omega
   interval_cases n <;> revert b a <;> decide
 
-theorem u44_good :
-    (mysticetiLive (Validator := Fin 4) (BlockId := Fin 44) (Payload := Unit)).Good U44 1 10 :=
+theorem u44_good (S₀ : Slots (Fin 4)) :
+    (mysticetiLive (Validator := Fin 4) (BlockId := Fin 44) (Payload := Unit)).Good S₀ U44 1 10 :=
   ⟨{1, 2, 3}, ⟨by decide, by decide⟩, u44_sync, fun r h1 h2 => by
     interval_cases r <;> decide⟩
 
@@ -328,14 +329,14 @@ some slot at a round in `[1, 7]` of `U44` is committed. -/
 example : ∃ κ, 1 ≤ sched2_44.slotRound κ ∧ sched2_44.slotRound κ ≤ 1 + 6 ∧
     ∃ L, rule44.Decided sched2_44 (View.full U44) κ (some L) :=
   ((MysticetiLive.holds.2 4 (by omega) (Fin 44) Unit cfg2_44 cfg2_44_head)
-    U44 (View.full U44) 1 10 u44_good
+    U44 (View.full U44) 1 10 (u44_good _)
     (coversUpto_full (Mysticeti.holds (Fin 4) (Fin 44) Unit).full_ids U44 10)).2 1 (by omega)
     (by decide)
 
 -- And clause 1: slot 2 (round 1, head) is decided by the theorem.
 example : ∃ v, rule44.Decided sched2_44 (View.full U44) 2 v :=
   ((MysticetiLive.holds.2 4 (by omega) (Fin 44) Unit cfg2_44 cfg2_44_head)
-    U44 (View.full U44) 1 10 u44_good
+    U44 (View.full U44) 1 10 (u44_good _)
     (coversUpto_full (Mysticeti.holds (Fin 4) (Fin 44) Unit).full_ids U44 10)).1 2 (by decide)
     (by decide)
 

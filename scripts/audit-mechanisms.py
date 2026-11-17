@@ -76,7 +76,7 @@ MECHANISMS = [
       "LeanDag.Properties.DagRule.OnRecord.decided_agree_addGenesis"],
      ["Banded", "Agree"]),
     ("adaptive leaders", {},
-     ["LeanDag.Barnacle.descent_of_support"],
+     ["LeanDag.Timed.descent_of_support"],
      ["Support", "Indirect"]),
     ("prompt skip", {},
      ["LeanDag.Properties.Arcs.decided_none_of_novel"],
@@ -105,6 +105,7 @@ LIVE_RULES = {
     "Hybrid / Orcaella": ["Barnacle.orcaellaLive"],
     "Mahi-Mahi": ["Barnacle.mahiMahiLive"],
     "FinWhale": ["Barnacle.finWhaleLive"],
+    "Scheme family": ["Scheme.schemeLive"],
 }
 
 

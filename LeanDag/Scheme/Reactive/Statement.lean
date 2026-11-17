@@ -54,7 +54,7 @@ def Certifies : Prop :=
     p.CertFits q →
     T ⊆ honest → q ≤ T.card → rs.gst ≤ R →
     (∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) →
-    R ≤ S.slotRound k → S.slotRound k + (p.waveLength - 1) ≤ N → S.leader k ∈ T →
+    R ≤ S.slotRound k → S.slotRound k + (p.waveLength - 1) ≤ rs.waits → S.leader k ∈ T →
     IsLeaderBlock U k L →
     ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
       (U.block c).round = S.slotRound k + (p.waveLength - 1) → IsCert p σ U c L

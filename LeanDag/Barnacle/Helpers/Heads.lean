@@ -39,6 +39,16 @@ theorem Config_lt_head_of_slotRound_lt {κ ρ : ℕ} (h : C.sched.slotRound κ <
     κ < C.cum ρ := by
   rw [Config.sched_slotRound] at h; exact C.lt_cum_iff_roundOf_lt.2 h
 
+/-- **The first slot of a round is its head.** -/
+theorem eq_cum_of_first {κ ρ : ℕ} (hκ : C.sched.slotRound κ = ρ)
+    (hfirst : ∀ κ', κ' < κ → C.sched.slotRound κ' < ρ) : κ = C.cum ρ := by
+  apply le_antisymm
+  · by_contra h
+    have := hfirst (C.cum ρ) (by omega)
+    rw [Config_slotRound_head] at this
+    omega
+  · rw [C.cum_le_iff_le_roundOf, ← Config.sched_slotRound, hκ]
+
 end HeadArith
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
@@ -77,12 +87,23 @@ theorem headsRun_perm_of_all {Validator : Type} [Fintype Validator] [DecidableEq
       HeadsRun (fun ρ => σ (head ρ)) T g c₀ :=
   fun T hT => headsRun_perm σ (h _ (by simpa using hT))
 
+/-- **The shared descent laws are Barnacle's**, at a goodness that does not
+read the schedule. -/
+theorem LiveRule.Descent.ofProperties {R : LiveRule Validator BlockId Payload} {slack : ℕ}
+    {G : R.Universe → ℕ → ℕ → Prop} (hG : ∀ S, R.Good S = G)
+    (h : Properties.Descent R.toBaseRule.toDagRule G R.waveLength slack) : R.Descent slack where
+  goodLeaders S U Rnd N hg := by
+    rw [hG S] at hg
+    obtain ⟨T, hT, hc⟩ := h.goodLeaders U Rnd N hg
+    exact ⟨T, hT, fun V κ => hc S V κ⟩
+  indirect := h.indirect
+
 section Heads
 
 variable {R : LiveRule Validator BlockId Payload} {slack : ℕ}
 
 /-- **BN9a, the stretch descent.** -/
-theorem stretchDescent (hD : R.Descent slack) (S : Slots Validator) {U : R.Universe}
+theorem stretchDescent (hD : R.Indirect) (S : Slots Validator) {U : R.Universe}
     (V : R.View U) {b top : ℕ}
     (hspan : ∀ i, i < b → S.slotRound i + R.waveLength ≤ S.slotRound top)
     (hdec : ∀ j, b ≤ j → j ≤ top → ∃ v, R.Decided S V j v)
@@ -111,7 +132,7 @@ theorem stretchDescent (hD : R.Descent slack) (S : Slots Validator) {U : R.Unive
         cases v with
         | none => exact hv
         | some C => exact absurd ⟨C, hv⟩ hnc
-      exact hD.indirect S V i (Nat.find hex) B hgap hB hmid
+      exact hD S V i (Nat.find hex) B hgap hB hmid
   intro i hi
   exact key (b - i) i hi (le_refl _)
 
@@ -119,13 +140,13 @@ variable (C : Config Validator)
 
 /-- A slot is decided once the head a wave above it is committed: the intermediates are
 vacuous. From `indirect` alone. -/
-theorem decided_of_head_committed (hD : R.Descent slack)
+theorem decided_of_head_committed (hD : R.Indirect)
     {U : R.Universe} (V : R.View U) (κ : ℕ)
     (hhead : ∃ L, R.Decided C.sched V
       (C.cum (C.sched.slotRound κ + R.waveLength)) (some L)) :
     ∃ v, R.Decided C.sched V κ v := by
   obtain ⟨L, hL⟩ := hhead
-  refine hD.indirect _ V κ _ L ?_ hL ?_
+  refine hD _ V κ _ L ?_ hL ?_
   · rw [Config_slotRound_head]
   · intro i' _ hi' hle
     have := Config_slotRound_lt_of_lt_head C hi'
@@ -136,8 +157,8 @@ and their waves under `N`: every slot at rounds `[ρ, ρ + w)` is decided and th
 is committed, on the view `V` the caller supplies. -/
 theorem headsDecide (hD : R.Descent slack) (hw : 0 < R.waveLength)
     {U : R.Universe} (V : R.View U) {Rnd N : ℕ} {T : Finset Validator}
-    (hT : ∀ (S : Slots Validator) (κ : ℕ), Rnd ≤ S.slotRound κ → S.slotRound κ + R.waveLength ≤ N →
-      S.leader κ ∈ T → ∃ L, R.Decided S V κ (some L))
+    (hT : ∀ κ : ℕ, Rnd ≤ C.sched.slotRound κ → C.sched.slotRound κ + R.waveLength ≤ N →
+      C.sched.leader κ ∈ T → ∃ L, R.Decided C.sched V κ (some L))
     (ρ : ℕ) (hRnd : Rnd ≤ ρ + R.waveLength)
     (hN : ρ + R.waveLength + R.waveLength + R.waveLength ≤ N + 1)
     (hheads : ∀ i, i < R.waveLength → C.head (ρ + R.waveLength + i) ∈ T) :
@@ -148,13 +169,13 @@ theorem headsDecide (hD : R.Descent slack) (hw : 0 < R.waveLength)
   have hhead : ∀ i, i < R.waveLength →
       ∃ L, R.Decided C.sched V (C.cum (ρ + R.waveLength + i)) (some L) := by
     intro i hi
-    refine hT _ _ ?_ ?_ ?_
+    refine hT _ ?_ ?_ ?_
     · rw [Config_slotRound_head]; omega
     · rw [Config_slotRound_head]; omega
     · rw [Config_leader_head]; exact hheads i hi
   refine ⟨?_, by simpa using hhead 0 hw⟩
   intro κ hlo hhi
-  apply decided_of_head_committed C hD
+  apply decided_of_head_committed C hD.indirect
   have := hhead (C.sched.slotRound κ - ρ) (by omega)
   rwa [show ρ + R.waveLength + (C.sched.slotRound κ - ρ)
     = C.sched.slotRound κ + R.waveLength by omega] at this
@@ -164,8 +185,8 @@ theorem headsDecide (hD : R.Descent slack) (hw : 0 < R.waveLength)
 every slot at a round `r` with `r < ρ ≤ r + w` is decided, and the head of `ρ` is committed. -/
 theorem headsDecide_at (hD : R.Descent slack) (hw : 0 < R.waveLength)
     {U : R.Universe} (V : R.View U) {Rnd N : ℕ} {T : Finset Validator}
-    (hT : ∀ (S : Slots Validator) (κ : ℕ), Rnd ≤ S.slotRound κ → S.slotRound κ + R.waveLength ≤ N →
-      S.leader κ ∈ T → ∃ L, R.Decided S V κ (some L))
+    (hT : ∀ κ : ℕ, Rnd ≤ C.sched.slotRound κ → C.sched.slotRound κ + R.waveLength ≤ N →
+      C.sched.leader κ ∈ T → ∃ L, R.Decided C.sched V κ (some L))
     (ρ : ℕ) (hRnd : Rnd ≤ ρ) (hN : ρ + R.waveLength + R.waveLength ≤ N + 1)
     (hheads : ∀ i, i < R.waveLength → C.head (ρ + i) ∈ T) :
     (∀ κ, C.sched.slotRound κ < ρ → ρ ≤ C.sched.slotRound κ + R.waveLength →
@@ -174,13 +195,13 @@ theorem headsDecide_at (hD : R.Descent slack) (hw : 0 < R.waveLength)
   have hhead : ∀ i, i < R.waveLength →
       ∃ L, R.Decided C.sched V (C.cum (ρ + i)) (some L) := by
     intro i hi
-    refine hT _ _ ?_ ?_ ?_
+    refine hT _ ?_ ?_ ?_
     · rw [Config_slotRound_head]; omega
     · rw [Config_slotRound_head]; omega
     · rw [Config_leader_head]; exact hheads i hi
   refine ⟨?_, by simpa using hhead 0 hw⟩
   intro κ hlo hhi
-  apply decided_of_head_committed C hD
+  apply decided_of_head_committed C hD.indirect
   have := hhead (C.sched.slotRound κ + R.waveLength - ρ) (by omega)
   rwa [show ρ + (C.sched.slotRound κ + R.waveLength - ρ)
     = C.sched.slotRound κ + R.waveLength by omega] at this
@@ -191,11 +212,11 @@ theorem liveOn_of_headsRun (hD : R.Descent slack) (hw : 0 < R.waveLength)
       HeadsRun C.head T R.waveLength c₀) :
     R.LiveOn C.sched c₀ := by
   intro U V Rnd N hgood hcov
-  obtain ⟨T, hcardT, hT0⟩ := hD.goodLeaders U Rnd N hgood
-  have hT : ∀ (S : Slots Validator) (κ : ℕ), Rnd ≤ S.slotRound κ →
-      S.slotRound κ + R.waveLength ≤ N → S.leader κ ∈ T →
-      ∃ L, R.Decided S V κ (some L) :=
-    fun S κ h1 h2 h3 => hT0 S V κ hcov h1 h2 h3
+  obtain ⟨T, hcardT, hT0⟩ := hD.goodLeaders C.sched U Rnd N hgood
+  have hT : ∀ κ : ℕ, Rnd ≤ C.sched.slotRound κ →
+      C.sched.slotRound κ + R.waveLength ≤ N → C.sched.leader κ ∈ T →
+      ∃ L, R.Decided C.sched V κ (some L) :=
+    fun κ h1 h2 h3 => hT0 V κ hcov h1 h2 h3
   have hrun := hheads T hcardT
   refine ⟨?_, ?_⟩
   · intro κ hRnd hN
@@ -203,7 +224,7 @@ theorem liveOn_of_headsRun (hD : R.Descent slack) (hw : 0 < R.waveLength)
     obtain ⟨hdec, htop⟩ := headsDecide_at C hD hw V hT ρ' (by omega) (by omega) hled
     by_cases hcase : ρ' ≤ C.sched.slotRound κ + R.waveLength
     · exact hdec κ (by omega) hcase
-    · refine stretchDescent hD C.sched V (b := C.cum (ρ' - R.waveLength))
+    · refine stretchDescent hD.indirect C.sched V (b := C.cum (ρ' - R.waveLength))
         (top := C.cum ρ') ?_ ?_ htop κ ?_
       · intro i hi
         have := Config_slotRound_lt_of_lt_head C hi
@@ -222,10 +243,106 @@ theorem liveOn_of_headsRun (hD : R.Descent slack) (hw : 0 < R.waveLength)
     refine ⟨C.cum ρ', ?_, ?_, ?_⟩
     · rw [Config_slotRound_head]; exact hρ'lo
     · rw [Config_slotRound_head]; omega
-    · refine hT _ _ ?_ ?_ ?_
+    · refine hT _ ?_ ?_ ?_
       · rw [Config_slotRound_head]; omega
       · rw [Config_slotRound_head]; omega
       · rw [Config_leader_head]; simpa using hled 0 hw
+
+/-- **Slots below the good start settle, from a run of heads**: a run of
+good heads past the good start commits a head a wave above every slot
+below it, and the stretch descent decides them. -/
+theorem settlesBelow_of_headsRun (hD : R.Descent slack) (hw : 0 < R.waveLength)
+    (hheads : ∀ T : Finset Validator, Fintype.card Validator ≤ T.card + slack →
+      HeadsRun C.head T R.waveLength c₀) :
+    R.SettlesBelow C.sched c₀ := by
+  intro U V Rnd N hgood hcov κ hκ hN
+  obtain ⟨T, hcardT, hT0⟩ := hD.goodLeaders C.sched U Rnd N hgood
+  have hT : ∀ κ : ℕ, Rnd ≤ C.sched.slotRound κ →
+      C.sched.slotRound κ + R.waveLength ≤ N → C.sched.leader κ ∈ T →
+      ∃ L, R.Decided C.sched V κ (some L) :=
+    fun κ h1 h2 h3 => hT0 V κ hcov h1 h2 h3
+  obtain ⟨ρ', hρ'lo, hρ'hi, hled⟩ := hheads T hcardT Rnd
+  obtain ⟨hdec, htop⟩ := headsDecide_at C hD hw V hT ρ' hρ'lo (by omega) hled
+  by_cases hcase : ρ' ≤ C.sched.slotRound κ + R.waveLength
+  · exact hdec κ (by omega) hcase
+  · refine stretchDescent hD.indirect C.sched V (b := C.cum (ρ' - R.waveLength))
+      (top := C.cum ρ') ?_ ?_ htop κ ?_
+    · intro i hi
+      have := Config_slotRound_lt_of_lt_head C hi
+      rw [Config_slotRound_head]
+      omega
+    · intro j hlo hhi
+      rcases Nat.lt_or_eq_of_le hhi with hlt | heq
+      · refine hdec j (Config_slotRound_lt_of_lt_head C hlt) ?_
+        have : ρ' - R.waveLength ≤ C.sched.slotRound j := by
+          rw [Config.sched_slotRound]; exact (C.cum_le_iff_le_roundOf).1 hlo
+        omega
+      · subst heq; obtain ⟨L, hL⟩ := htop; exact ⟨some L, hL⟩
+    · exact Config_lt_head_of_slotRound_lt C (by omega)
+
+/-- **Committed heads decide**: `waveLength` consecutive committed heads
+from round `ρ` decide every slot at a round below `ρ` and at most a wave
+below it, from the indirect rule alone. -/
+theorem headsCommitted_decide (hind : R.Indirect) (hw : 0 < R.waveLength)
+    {U : R.Universe} (V : R.View U) (ρ : ℕ)
+    (hhead : ∀ i, i < R.waveLength → ∃ L, R.Decided C.sched V (C.cum (ρ + i)) (some L)) :
+    (∀ κ, C.sched.slotRound κ < ρ → ρ ≤ C.sched.slotRound κ + R.waveLength →
+      ∃ v, R.Decided C.sched V κ v) ∧
+    ∃ L, R.Decided C.sched V (C.cum ρ) (some L) := by
+  refine ⟨?_, by simpa using hhead 0 hw⟩
+  intro κ hlo hhi
+  apply decided_of_head_committed C hind
+  have := hhead (C.sched.slotRound κ + R.waveLength - ρ) (by omega)
+  rwa [show ρ + (C.sched.slotRound κ + R.waveLength - ρ)
+    = C.sched.slotRound κ + R.waveLength by omega] at this
+
+/-- **Runs of committing heads give the liveness clauses**, on one view: if
+every head of a round from `Rnd` satisfying `Gd` commits, and from every
+round a run of a wave of `Gd` rounds lies within `c₀`, then every slot from
+`Rnd` is decided, every window of `c₀` rounds has a committed slot, and the
+slots below `Rnd` are decided. -/
+theorem clauses_of_committingHeads (hind : R.Indirect) (hw : 0 < R.waveLength)
+    {U : R.Universe} (V : R.View U) {Rnd N c₀ : ℕ} (Gd : ℕ → Prop)
+    (hcommit : ∀ ρ, Rnd ≤ ρ → ρ + R.waveLength ≤ N → Gd ρ →
+      ∃ L, R.Decided C.sched V (C.cum ρ) (some L))
+    (hrun : ∀ r, Rnd ≤ r → r + c₀ + R.waveLength ≤ N + 1 →
+      ∃ ρ, r ≤ ρ ∧ ρ + R.waveLength ≤ r + c₀ ∧ ∀ i, i < R.waveLength → Gd (ρ + i)) :
+    (∀ κ, Rnd ≤ C.sched.slotRound κ → C.sched.slotRound κ + c₀ + R.waveLength ≤ N →
+      ∃ v, R.Decided C.sched V κ v) ∧
+    (∀ r, Rnd ≤ r → r + c₀ + R.waveLength ≤ N →
+      ∃ κ, r ≤ C.sched.slotRound κ ∧ C.sched.slotRound κ ≤ r + c₀ ∧
+        ∃ L, R.Decided C.sched V κ (some L)) ∧
+    (∀ κ, C.sched.slotRound κ < Rnd → Rnd + c₀ + R.waveLength ≤ N →
+      ∃ v, R.Decided C.sched V κ v) := by
+  -- a run of heads from `r` decides the slots below it and commits its first head
+  have key : ∀ r, Rnd ≤ r → r + c₀ + R.waveLength ≤ N + 1 → ∀ κ, C.sched.slotRound κ < r →
+      ∃ v, R.Decided C.sched V κ v := by
+    intro r hr hrN κ hκ
+    obtain ⟨ρ', hρ'lo, hρ'hi, hled⟩ := hrun r hr hrN
+    obtain ⟨hdec, htop⟩ := headsCommitted_decide C hind hw V ρ' fun i hi =>
+      hcommit _ (by omega) (by omega) (hled i hi)
+    by_cases hcase : ρ' ≤ C.sched.slotRound κ + R.waveLength
+    · exact hdec κ (by omega) hcase
+    · refine stretchDescent hind C.sched V (b := C.cum (ρ' - R.waveLength))
+        (top := C.cum ρ') ?_ ?_ htop κ ?_
+      · intro i hi
+        have := Config_slotRound_lt_of_lt_head C hi
+        rw [Config_slotRound_head]
+        omega
+      · intro j hlo hhi
+        rcases Nat.lt_or_eq_of_le hhi with hlt | heq
+        · refine hdec j (Config_slotRound_lt_of_lt_head C hlt) ?_
+          have : ρ' - R.waveLength ≤ C.sched.slotRound j := by
+            rw [Config.sched_slotRound]; exact (C.cum_le_iff_le_roundOf).1 hlo
+          omega
+        · subst heq; obtain ⟨L, hL⟩ := htop; exact ⟨some L, hL⟩
+      · exact Config_lt_head_of_slotRound_lt C (by omega)
+  refine ⟨fun κ hRnd hN => key (C.sched.slotRound κ + 1) (by omega) (by omega) κ (by omega),
+    fun r hRnd hN => ?_, fun κ hκ hN => key Rnd le_rfl (by omega) κ hκ⟩
+  obtain ⟨ρ', hρ'lo, hρ'hi, hled⟩ := hrun r hRnd (by omega)
+  refine ⟨C.cum ρ', ?_, ?_, hcommit _ (by omega) (by omega) (hled 0 hw)⟩
+  · rw [Config_slotRound_head]; exact hρ'lo
+  · rw [Config_slotRound_head]; omega
 
 /-- **A permuted schedule is live at the same gap.** A mechanism that
 reassigns who leads emits a family of head functions; where each is a
@@ -240,6 +357,15 @@ theorem liveOn_of_permuted_heads (hD : R.Descent slack) (hw : 0 < R.waveLength)
     (σ : Equiv.Perm Validator) (hC : C.head = fun ρ => σ (head ρ)) :
     R.LiveOn C.sched c₀ :=
   liveOn_of_headsRun C hD hw (by rw [hC]; exact headsRun_perm_of_all σ hheads)
+
+/-- **And its slots below the good start settle**, at the same gap. -/
+theorem settlesBelow_of_permuted_heads (hD : R.Descent slack) (hw : 0 < R.waveLength)
+    {head : ℕ → Validator}
+    (hheads : ∀ T : Finset Validator, Fintype.card Validator ≤ T.card + slack →
+      HeadsRun head T R.waveLength c₀)
+    (σ : Equiv.Perm Validator) (hC : C.head = fun ρ => σ (head ρ)) :
+    R.SettlesBelow C.sched c₀ :=
+  settlesBelow_of_headsRun C hD hw (by rw [hC]; exact headsRun_perm_of_all σ hheads)
 
 #print axioms liveOn_of_headsRun
 

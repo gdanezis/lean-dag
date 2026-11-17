@@ -384,6 +384,44 @@ theorem decided_below_of_run
       have := hrun (j - b) (by omega)
       rwa [Nat.add_sub_cancel' h1] at this)
 
+/-- **The descent below a decided window**: when every slot from `b` to `n`
+is decided and `n` is committed and eligible from every slot below `b`,
+every slot below `b` is decided. -/
+theorem decided_below_of_window
+    (hleast : ∀ {A : BlockId} {i k : ℕ}, i < R.rungs →
+      (∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k) →
+      ∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k ∧
+        R.Least (S := S) U A i k L)
+    {V : U.View} {b n : ℕ} (hbn : b ≤ n)
+    (hspan : ∀ i, i < b → R.Eligible (S := S) i n)
+    (htop : ∃ L, R.Decided (S := S) U V n (some L))
+    (hrun : ∀ j, b ≤ j → j ≤ n → ∃ v, R.Decided (S := S) U V j v) :
+    ∀ i, i < b → ∃ v, R.Decided (S := S) U V i v := by
+  classical
+  have key : ∀ d i, i < b → b - i ≤ d → ∃ v, R.Decided (S := S) U V i v := by
+    intro d
+    induction d with
+    | zero => intro i hi hd; omega
+    | succ d ih =>
+      intro i hi hd
+      have hex : ∃ j, R.Eligible (S := S) i j ∧ ∃ A, R.Decided (S := S) U V j (some A) :=
+        ⟨n, hspan i hi, htop⟩
+      have hj := Nat.find_spec hex
+      obtain ⟨helig, A, hA⟩ := hj
+      have hjn : Nat.find hex ≤ n := Nat.find_min' hex ⟨hspan i hi, htop⟩
+      have hij : i < Nat.find hex := R.lt_of_eligible helig
+      refine exists_decided_of_anchor hleast helig hA fun m him hmj hem => ?_
+      have hnot : ¬ ∃ A, R.Decided (S := S) U V m (some A) :=
+        fun hc => Nat.find_min hex hmj ⟨hem, hc⟩
+      obtain ⟨v, hv⟩ : ∃ v, R.Decided (S := S) U V m v := by
+        by_cases hmb : b ≤ m
+        · exact hrun m hmb (by omega)
+        · exact ih m (by omega) (by omega)
+      cases v with
+      | none => exact hv
+      | some A' => exact absurd ⟨A', hv⟩ hnot
+  exact fun i hi => key (b - i) i hi le_rfl
+
 /-- Totality, from a choice at every nonempty rung. -/
 theorem total_of_least
     (hleast : ∀ {A : BlockId} {i k : ℕ}, i < R.rungs →

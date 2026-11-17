@@ -42,16 +42,23 @@ def Run.zero (R : BaseRule Validator BlockId Payload) (P : Params)
   update := fun _ h => absurd h (Nat.not_lt_zero _)
 
 open Classical in
-/-- **Configuration progress, with the bound on the new start.** -/
+/-- **Configuration progress, with the bound on the new start.** The
+current configuration's schedule is good from `Rnd`; the slots of its range
+below `Rnd` are decided by `hbelow`, which a range starting at `Rnd` or
+later has for nothing and `LiveRule.SettlesBelow` gives otherwise. The
+anchor is looked for from the later of the threshold and `Rnd`. -/
 theorem progress_exists (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBounded P upd)
     (hupdh : UpdKeeps upd Q) {c K Rnd N : ℕ}
     {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
     (Rn : Run R.toBaseRule P B upd C₀ U V K)
     (hlive : R.LiveOn (Rn.cfg K).sched c) (hQK : Q (Rn.cfg K))
-    (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ Rn.start K + 1)
-    (hN : Rn.start K + P.maxInterval + 1 + 2 * c + R.waveLength ≤ N) :
+    (hgood : R.Good (Rn.cfg K).sched U Rnd N)
+    (hbelow : ∀ κ, Rn.start K < (Rn.cfg K).roundOf κ → (Rn.cfg K).roundOf κ < Rnd →
+      ∃ v, R.Decided (Rn.sched K) V κ v)
+    (hN : max (Rn.start K + P.maxInterval + 1) Rnd + 2 * c + R.waveLength ≤ N) :
     ∃ Rn' : Run R.toBaseRule P B upd C₀ U V (K + 1),
-      Rn'.start (K + 1) ≤ Rn.start K + P.maxInterval + 1 + c ∧ Q (Rn'.cfg (K + 1)) := by
+      Rn'.start (K + 1) ≤ max (Rn.start K + P.maxInterval + 1) Rnd + c ∧
+        Q (Rn'.cfg (K + 1)) := by
   obtain ⟨h1, h2⟩ := hlive U V Rnd N hgood hcov
   have hIle := (Rn.bounds K).2.2
   -- Clause 1 with the rounds read off the configuration.
@@ -59,20 +66,32 @@ theorem progress_exists (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : U
       (Rn.cfg K).roundOf κ + c + R.waveLength ≤ N → ∃ v, R.Decided (Rn.sched K) V κ v := by
     intro κ a b
     exact h1 κ (by simpa using a) (by simpa using b)
-  -- The verdicts of the new range, chosen from clause 1; `none` off the good rounds.
+  -- The verdicts of the new range: from clause 1 on the good rounds, from
+  -- `hbelow` on the range's rounds below them; `none` elsewhere.
   let v : ℕ → Option BlockId := fun κ =>
     if h : Rnd ≤ (Rn.cfg K).roundOf κ ∧
         (Rn.cfg K).roundOf κ + c + R.waveLength ≤ N then
-      Classical.choose (h1' κ h.1 h.2) else none
+      Classical.choose (h1' κ h.1 h.2)
+    else if h' : Rn.start K < (Rn.cfg K).roundOf κ ∧ (Rn.cfg K).roundOf κ < Rnd then
+      Classical.choose (hbelow κ h'.1 h'.2)
+    else none
   have hv : ∀ κ, Rnd ≤ (Rn.cfg K).roundOf κ →
       (Rn.cfg K).roundOf κ + c + R.waveLength ≤ N →
       R.Decided (Rn.sched K) V κ (v κ) := by
     intro κ a b
     simp only [v, dif_pos (And.intro a b)]
     exact Classical.choose_spec (h1' κ a b)
-  -- Clause 2 at the threshold round: a committed slot within `c`.
+  have hvb : ∀ κ, Rn.start K < (Rn.cfg K).roundOf κ → (Rn.cfg K).roundOf κ < Rnd →
+      R.Decided (Rn.sched K) V κ (v κ) := by
+    intro κ a b
+    have hn : ¬ (Rnd ≤ (Rn.cfg K).roundOf κ ∧ (Rn.cfg K).roundOf κ + c + R.waveLength ≤ N) :=
+      fun h => absurd h.1 (by omega)
+    simp only [v, dif_neg hn, dif_pos (And.intro a b)]
+    exact Classical.choose_spec (hbelow κ a b)
+  -- Clause 2 from the later of the threshold round and `Rnd`: a committed
+  -- slot within `c`.
   obtain ⟨κ₀, hκ₀, hκ₀', L₀, hL₀⟩ :=
-    h2 (Rn.start K + (Rn.cfg K).interval + 1) (by omega) (by omega)
+    h2 (max (Rn.start K + (Rn.cfg K).interval + 1) Rnd) (by omega) (by omega)
   simp only [Config.sched_slotRound] at hκ₀ hκ₀'
   -- Its chosen verdict is that commit, by agreement.
   have hvκ₀ : v κ₀ = some L₀ :=
@@ -87,7 +106,7 @@ theorem progress_exists (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : U
       a ≤ κ₀ :=
     ⟨Nat.find hex, Nat.find_spec hex, fun κ hκ => Nat.find_min hex hκ,
       Nat.find_min' hex ⟨by omega, L₀, hvκ₀⟩⟩
-  have ha_round : (Rn.cfg K).roundOf a ≤ Rn.start K + P.maxInterval + 1 + c := by
+  have ha_round : (Rn.cfg K).roundOf a ≤ max (Rn.start K + P.maxInterval + 1) Rnd + c := by
     have := le_trans ((Rn.cfg K).roundOf_mono ha_le) hκ₀'
     omega
   -- The next configuration, by the rule at the anchor block.
@@ -125,9 +144,10 @@ theorem progress_exists (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : U
     · subst hkK
       have hk1 : ¬ (k + 1 ≤ k) := by omega
       simp only [le_refl, if_true, hk1, if_false] at hlo hhi ⊢
-      have hround : Rnd ≤ (Rn.cfg k).roundOf κ := by omega
       have hround' : (Rn.cfg k).roundOf κ + c + R.waveLength ≤ N := by omega
-      exact hv κ hround hround'
+      by_cases hround : Rnd ≤ (Rn.cfg k).roundOf κ
+      · exact hv κ hround hround'
+      · exact hvb κ hlo (by omega)
     · have hkK' : k ≤ K := by omega
       have hk1 : k + 1 ≤ K := by omega
       simp only [hkK', hk1, hkK, if_true, if_false] at hlo hhi ⊢
@@ -190,11 +210,11 @@ theorem progress (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBound
     {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
     (Rn : Run R.toBaseRule P B upd C₀ U V K)
     (hlive : R.LiveOn (Rn.cfg K).sched c)
-    (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ Rn.start K + 1)
+    (hgood : R.Good (Rn.cfg K).sched U Rnd N) (hRnd : Rnd ≤ Rn.start K + 1)
     (hN : Rn.start K + P.maxInterval + 1 + 2 * c + R.waveLength ≤ N) :
     Nonempty (Run R.toBaseRule P B upd C₀ U V (K + 1)) :=
   let ⟨Rn', _⟩ := progress_exists (Q := fun _ => True) hR hupd (fun _ _ _ _ _ _ _ => trivial)
-    hcov Rn hlive trivial hgood hRnd hN
+    hcov Rn hlive trivial hgood (fun _ h1 h2 => absurd h2 (by omega)) (by omega)
   ⟨Rn'⟩
 
 /-- (D) -/
@@ -203,7 +223,8 @@ theorem everyHeight_bound (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd :
     (hlive : ∀ C : Config Validator, C.InBounds P → Q C → R.LiveOn C.sched c)
     (h₀ : C₀.InBounds P) (hQ₀ : Q C₀)
     {Rnd N : ℕ} {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
-    (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ 1) :
+    (hgood : ∀ C : Config Validator, C.InBounds P → Q C → R.Good C.sched U Rnd N)
+    (hRnd : Rnd ≤ 1) :
     ∀ K, horizon P R c K ≤ N →
       ∃ Rn : Run R.toBaseRule P B upd C₀ U V K,
         Rn.start K ≤ K * (P.maxInterval + 1 + c) ∧ Q (Rn.cfg K)
@@ -216,7 +237,7 @@ theorem everyHeight_bound (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd :
       everyHeight_bound hR hupd hupdh hlive h₀ hQ₀ hcov hgood hRnd K hhor
     obtain ⟨Rn', hstart', hhead'⟩ := progress_exists hR hupd hupdh hcov Rn
       (hlive (Rn.cfg K) (Rn.bounds K) hhead) hhead
-      hgood (by omega) (by omega)
+      (hgood (Rn.cfg K) (Rn.bounds K) hhead) (fun _ h1 h2 => absurd h2 (by omega)) (by omega)
     exact ⟨Rn', by rw [Nat.succ_mul]; omega, hhead'⟩
 
 theorem everyHeight (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBounded P upd)
@@ -224,11 +245,128 @@ theorem everyHeight (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBo
     (hlive : ∀ C : Config Validator, C.InBounds P → Q C → R.LiveOn C.sched c)
     (h₀ : C₀.InBounds P) (hQ₀ : Q C₀)
     {Rnd N : ℕ} {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
-    (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ 1) (K : ℕ)
+    (hgood : ∀ C : Config Validator, C.InBounds P → Q C → R.Good C.sched U Rnd N)
+    (hRnd : Rnd ≤ 1) (K : ℕ)
     (hK : horizon P R c K ≤ N) :
     Nonempty (Run R.toBaseRule P B upd C₀ U V K) :=
   let ⟨Rn, _⟩ := everyHeight_bound hR hupd hupdh hlive h₀ hQ₀ hcov hgood hRnd K hK
   ⟨Rn⟩
+
+/-- **Every height, each configuration's schedule good from `δ` past its
+start**, up to the round its step needs, unless the run has already moved
+past it. -/
+theorem everyHeight_from (hR : Properties.Agree R.toBaseRule.toDagRule)
+    (hupd : UpdBounded P upd) (hupdh : UpdKeeps upd Q) {c δ : ℕ}
+    (hlive : ∀ C : Config Validator, C.InBounds P → Q C → R.LiveOn C.sched c)
+    (hset : ∀ C : Config Validator, C.InBounds P → Q C → R.SettlesBelow C.sched c)
+    (h₀ : C₀.InBounds P) (hQ₀ : Q C₀)
+    {N : ℕ} {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
+    (hgood : ∀ K (Rn : Run R.toBaseRule P B upd C₀ U V K), Q (Rn.cfg K) →
+      R.Good (Rn.cfg K).sched U (Rn.start K + δ)
+          (Rn.start K + max (P.maxInterval + 1) δ + 2 * c + R.waveLength) ∨
+        ∃ Rn' : Run R.toBaseRule P B upd C₀ U V (K + 1),
+          Rn'.start (K + 1) ≤ Rn.start K + max (P.maxInterval + 1) δ + c ∧
+            Q (Rn'.cfg (K + 1))) :
+    ∀ K, horizonFrom P R c δ K ≤ N →
+      ∃ Rn : Run R.toBaseRule P B upd C₀ U V K,
+        Rn.start K ≤ K * (max (P.maxInterval + 1) δ + c) ∧ Q (Rn.cfg K)
+  | 0, _ => ⟨Run.zero _ P B upd C₀ h₀ U V, Nat.zero_le _, hQ₀⟩
+  | K + 1, hN => by
+    have hN' : (K + 1) * (max (P.maxInterval + 1) δ + c) + c + R.waveLength ≤ N := hN
+    rw [Nat.succ_mul] at hN'
+    have hhor : horizonFrom P R c δ K ≤ N := by unfold horizonFrom; omega
+    obtain ⟨Rn, hstart, hhead⟩ :=
+      everyHeight_from hR hupd hupdh hlive hset h₀ hQ₀ hcov hgood K hhor
+    rcases hgood K Rn hhead with hg | ⟨Rn', hstart', hhead'⟩
+    · -- the step's own horizon, under `N`
+      have hcovK : R.toBaseRule.CoversUpto U V
+          (Rn.start K + max (P.maxInterval + 1) δ + 2 * c + R.waveLength) :=
+        fun b hb hr => hcov b hb (by omega)
+      obtain ⟨Rn', hstart', hhead'⟩ := progress_exists hR hupd hupdh hcovK Rn
+        (hlive (Rn.cfg K) (Rn.bounds K) hhead) hhead hg
+        (fun κ h1 h2 => hset (Rn.cfg K) (Rn.bounds K) hhead U V _ _ hg hcovK κ
+          (by simpa using h2) (by omega))
+        (by omega)
+      exact ⟨Rn', by rw [Nat.succ_mul]; omega, hhead'⟩
+    · exact ⟨Rn', by rw [Nat.succ_mul]; omega, hhead'⟩
+
+/-- **A good window puts a commit in the ledger**: if configuration `k`'s
+schedule is good from `δ` past its start through the commit gap and a wave,
+and its interval holds `δ` and the gap, then the run's ledger holds a
+leader committed at a slot of range `k` at round `start k + δ` or later, at
+either boundary. -/
+theorem ledger_commit_of_window (hR : Properties.Agree R.toBaseRule.toDagRule) {c δ K k M : ℕ}
+    {V : R.View U} (Rn : Run R.toBaseRule P B upd C₀ U V K) (hk : k < K)
+    (hlive : R.LiveOn (Rn.cfg k).sched c)
+    (hgood : R.Good (Rn.cfg k).sched U (Rn.start k + δ) M)
+    (hcov : R.toBaseRule.CoversUpto U V M) (hδ : 1 ≤ δ) (hint : δ + c ≤ (Rn.cfg k).interval)
+    (hM : Rn.start k + δ + c + R.waveLength ≤ M) :
+    ∃ κ L, Rn.start k + δ ≤ (Rn.cfg k).roundOf κ ∧ R.Decided (Rn.cfg k).sched V κ (some L) ∧
+      L ∈ Rn.ledgerUpto K := by
+  obtain ⟨-, h2⟩ := hlive U V _ M hgood hcov
+  obtain ⟨κ, hκlo, hκhi, L, hL⟩ := h2 (Rn.start k + δ) le_rfl hM
+  simp only [Config.sched_slotRound] at hκlo hκhi
+  have hthr := (Rn.anchor_commits k hk).2
+  have hge := B.ge_threshold (Rn.cfg k) (Rn.start k) (Rn.anchor k) hthr
+  have hle := B.le_anchor (Rn.cfg k) (Rn.start k) (Rn.anchor k) hthr
+  have hs := Rn.start_succ k hk
+  have hcl := Rn.closed k hk κ (by omega) (by omega)
+  have hv : Rn.vdct k κ = some L := hR _ _ _ κ _ _ hcl hL
+  refine ⟨κ, L, hκlo, hL, List.mem_flatMap.mpr ⟨k, List.mem_range.mpr hk, ?_⟩⟩
+  unfold Run.rangeLedger ledgerOf
+  have h1 : (Rn.cfg k).cum (Rn.start k + 1) ≤ κ :=
+    (Rn.cfg k).cum_le_iff_le_roundOf.mpr (by omega)
+  have h2 : κ < (Rn.cfg k).cum (Rn.start (k + 1) + 1) :=
+    (Rn.cfg k).lt_cum_iff_roundOf_lt.mpr (by omega)
+  exact List.mem_filterMap.mpr ⟨κ, List.mem_range'_1.mpr ⟨h1, by omega⟩, hv⟩
+
+/-- **Configurations start a round apart or more**: configuration `k` of a
+run starts at round `k` or later. -/
+theorem le_start {V : R.View U} {K : ℕ} (Rn : Run R.toBaseRule P B upd C₀ U V K) :
+    ∀ k, k ≤ K → k ≤ Rn.start k := by
+  intro k
+  induction k with
+  | zero => intro _; omega
+  | succ k ih =>
+    intro hk
+    have hs := Rn.start_succ k (by omega)
+    have hthr := (Rn.anchor_commits k (by omega)).2
+    have hge := B.ge_threshold (Rn.cfg k) (Rn.start k) (Rn.anchor k) hthr
+    have hpos := (Rn.bounds k).2.1
+    have := ih (by omega)
+    omega
+
+/-- **A rule that keeps the interval keeps it along a run.** -/
+theorem interval_eq {V : R.View U} {K : ℕ} (Rn : Run R.toBaseRule P B upd C₀ U V K)
+    (hkeep : ∀ C b U' V' v A, (upd C b U' V' v A).1.interval = C.interval) :
+    ∀ k, k ≤ K → (Rn.cfg k).interval = C₀.interval := by
+  intro k
+  induction k with
+  | zero => intro _; rw [Rn.init.2.1]
+  | succ k ih =>
+    intro hk
+    obtain ⟨⟨A, hA⟩, -⟩ := Rn.anchor_commits k (by omega)
+    have hu := Rn.update k (by omega) A hA
+    have := congrArg (fun x => x.1.interval) hu
+    simp only at this
+    rw [this, hkeep, ih (by omega)]
+
+/-- **What the update rule preserves holds of every configuration** of a
+run from a genesis that has it. -/
+theorem cfg_keeps {Q : Config Validator → Prop} {V : R.View U} {K : ℕ}
+    (Rn : Run R.toBaseRule P B upd C₀ U V K) (hkeep : UpdKeeps upd Q) (h₀ : Q C₀) :
+    ∀ k, k ≤ K → Q (Rn.cfg k) := by
+  intro k
+  induction k with
+  | zero => intro _; rw [Rn.init.2.1]; exact h₀
+  | succ k ih =>
+    intro hk
+    obtain ⟨⟨A, hA⟩, -⟩ := Rn.anchor_commits k (by omega)
+    have hu := Rn.update k (by omega) A hA
+    have := congrArg Prod.fst hu
+    simp only at this
+    rw [this]
+    exact hkeep _ _ _ _ _ _ (ih (by omega))
 
 end Progress
 

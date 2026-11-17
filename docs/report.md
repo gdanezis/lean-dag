@@ -1833,7 +1833,10 @@ theorem exists_common_correct_ancestor {r : ℕ} {c₀ : BlockId}
 
 The sole premise is that some round-`(r+2)` block exists — a fact about the DAG
 in hand rather than an assumption that any party makes progress. The proof rests
-on a double-counting argument (T3a, `exists_correct_common_support`).
+on a double-counting argument (T3a, `exists_correct_common_support`). Both are
+the common core at a general quorum `q` (`exists_honest_common_support`,
+`exists_commonCore`) at the core's quorum `q = n − f`, where the condition
+`2q ≥ n + f + 1` is `n ≥ 3f + 1` (`card_add_f_lt_two_mul_quorum`).
 
 The counting: with `b ≤ f` the number of Byzantine validators, each correct
 round-`(r+1)` block names at least `n−f−b` correct round-`r` authors, and
@@ -6037,8 +6040,7 @@ the decision round — and nothing else.
 
 The common core is the core's own T3c: if any round-`(r+2)` block
 exists, a correct round-`r` block lies in the cone of every block at
-every round `≥ r + 2` (`MahiMahi.exists_commonCore`, which is
-`exists_common_correct_ancestor` carried upward). The paper's Lemma C.12 is the core's T3c. From it, **MM2**
+every round `≥ r + 2` (`exists_commonCore` at the core's quorum). The paper's Lemma C.12 is the core's T3c. From it, **MM2**
 (`MahiMahi.Counting.holds`): at every `w ≥ 4` some correct validator's
 round-`r` block is directly committed — every voting-round block
 reaches the common core, so every decision-round block certifies it
@@ -11675,12 +11677,12 @@ rows of §27.5 are read at it.
 
 ### 27.3 Two rules that read alike decide alike
 
-`Scheme.ReadAlike` collects what `Decided` reads of a rule: its wave and
+`AnchoredRule.ReadAlike` collects what `Decided` reads of a rule: its wave and
 rungs, its direct commit at a candidate of the slot, its direct skip, its
 rung at a candidate and an anchor of an eligible slot, and its
 tie-break's choice among linked candidates. `ReadAlike.decided_iff`
 (SC2) proves by induction on the relation that two rules agreeing on
-these decide every slot alike, and `Scheme.toDagRule_eq` that their
+these decide every slot alike, and `AnchoredRule.toDagRule_eq` that their
 carriers are then equal. Every property, mechanism and headline stated
 over a carrier therefore holds at one rule exactly when it holds at the
 other.
@@ -11760,6 +11762,13 @@ and `n` blames never occur at any wave: Cordial Miners Async is
 Mahi-Mahi's rule with no direct skip, which has Mahi-Mahi's laws
 (`Scheme.cordialAsyncLaws`).
 
+SC31: the vote matters only at an equivocating leader. On a record in
+which no validator equivocates, every vote-selection rule selects the
+slot's one block (`Scheme.sel_eq_of_noEquiv`), so any two give one carrier
+on those records (`Scheme.Equiv.voteFree`, by `Scheme.readAlike_noEquiv`),
+and the three rows above are their rules at every vote there
+(`Scheme.Equiv.bufferedRowsNoEquiv`).
+
 ### 27.6 The rows with buffer rounds at the scheme's own vote
 
 The scheme's vote, *VotedBlock*, searches a block's parents depth first
@@ -11807,7 +11816,7 @@ non-equivocating set by `Scheme.withHonest`, with the same blocks.
   commit with a direct skip. The third inequality is also visibility:
   a block `d + 1` rounds above `c` authors' decision-round blocks holds
   at least `c + q − n − f` of their authors in its history
-  (`Scheme.card_inHistory_ge`), so every anchor holds `link` votes for a
+  (`card_inHistory_ge`), so every anchor holds `link` votes for a
   directly committed candidate.
 * **Three rounds.** A row that certifies votes one round later, with a
   wave of at least three, a link of one certificate and
@@ -12025,8 +12034,8 @@ SC24: the asynchronous rows are live under the coin, at every row and
 vote, on any record whose blocks reference `q` distinct authors and
 whose validators outside `honest`, at most `f`, may equivocate. The count
 needs no network hypothesis. At `2q ≥ n + f + 1` a common core exists
-(`Scheme.exists_commonCore`): the core's double count (T3a, T3c) at a
-general quorum, a condition every asynchronous row meets at
+(`exists_commonCore`): the common core at a general quorum, of which the
+core's T3a and T3c are the case `q = n − f`, a condition every asynchronous row meets at
 `q = n − f − c`, Mahi-Mahi, Cordial Miners Async, Async Nemo-Nemo and
 Hybrid Mahi-Mahi at equality. One buffer round gives a safe validator
 (`Scheme.safeAt_nonempty`) and the double count
@@ -12053,6 +12062,23 @@ outside the starved set never reaches a starved block
 asynchronous pacing by validators referencing every block of the round
 below they hold, the starved blocks arriving a round late
 (`Scheme.Starve.starvePace`, `Scheme.Starve.refs_starve_eq_held`).
+
+SC29: one buffer round gives a constant fraction of safe validators at the
+five-`f` committees and not at the three-`f` ones. Against an honest
+population of the buffer round at least `q` strong, the double count reads
+`q·(q − f) ≤ G·(2q − n) + |honest|·(n − q)`
+(`Scheme.card_safeAt_oneBuffer`); at `n ≥ 5f + 3c + 1` and
+`q = n − f − c` this gives `n ≤ 3G` (`Scheme.card_safeAt_third`), and a
+uniform coin names a safe leader with probability at least `1/3`
+(`Scheme.third_le_coin`, `Scheme.Async.coinThird`). At every `b ≤ k` with
+`k ≥ 2`, on `n = b + 2k + 1` validators with `q = b + k + 1` and `b`
+Byzantine, an execution under eventual delivery has exactly two safe
+validators at one buffer round (`Scheme.TwoSafe.card_safeAt_twoSafe`,
+`Scheme.Async.twoSafe`): Byzantine validators send one round-`1` block per
+honest label, and the honest validator labelled `x + 1` builds its round-`2`
+block on round-`1` blocks none of which references label `x`. These are the
+committees of Mahi-Mahi at wave four, Hybrid Mahi-Mahi at wave four and
+Async Nemo-Nemo; there the coin finds a safe leader with probability `2/n`.
 
 ### 27.12 Every row, safe and live
 
@@ -12152,7 +12178,229 @@ commits with probability at least `1/2`. The hybrid
 three-replica run of SC26, its clock forgotten, commits every slot on
 each live replica's own view.
 
-### 27.15 What the arc does not contain
+SC30: across waves, with the record and its pacing fixed before the coins
+are drawn. Slot `s` of `Scheme.coinSlots S₀ h coin` is led by `coin s`, on
+the strictly increasing rounds of `S₀`, and the coins of `M` blocks of `d`
+consecutive slots from slot `s₀` are uniform and independent. When every
+`d` consecutive slots span eligibility and the safe set of every block
+slot holds at least `c` validators, the draws under which some slot below
+`s₀` is not decided on every reliable validator's own view from some time
+on (`Scheme.AsyncPace.UndecidedBelow`) have probability at most
+`((n^d − c^d)/n^d)^M` (`Scheme.undecided_le`, `Scheme.AsyncLive.tail`),
+which vanishes at `c ≥ 1` (`Scheme.AsyncLive.vanishes`): a block of `d`
+safe coins is a run of committed slots
+(`Scheme.eventually_decided_of_good_block`), and a draw with no such block
+is counted by `Steelhead.no_good_block_prob_le`. At a row ready for the
+count the floor is `1` at one buffer round, `q − f` at two, and `⌈n/3⌉` at
+one buffer round where `n ≥ 5f + 3c + 1` and `q = n − f − c`
+(`Scheme.floors`, `Scheme.AsyncLive.live`). With one slot per wave `d = 1`.
+
+### 27.15 The family under Barnacle and HammerHead schedules
+
+SC28: the decider read as a Barnacle live rule, `Scheme.schemeLive p σ rel`
+(`Barnacle.liveOfAnchored` at `schemeAnchored p σ`), meets what Barnacle
+and HammerHead ask. At every row with `p.Tolerates honest f q`, two runs
+under any update rule agree on the configurations and verdicts, and under
+an update rule that does not read the view the ledger is agreed, grows by
+appending and holds no block twice (`Scheme.Schedules.safe`). When
+`rel.correct ⊆ honest` and `n − rel.slack` meets the certificate and
+commit thresholds the decider has the descent laws at slack `rel.slack`
+(`Scheme.Schedules.descends`), so every height is reached under a
+schedule whose heads come in runs of a wave (`Scheme.Schedules.runsExist`).
+At a row meeting `Scheme.Params.Scheduled n rel.slack`, which adds
+`waveLength · rel.slack + 1 ≤ n`, Barnacle's AIMD rule on a round-robin
+first leader and every HammerHead score whose heads are a permutation of
+round-robin reach every height with gap `n + waveLength − 1`
+(`Scheme.Schedules.aimd`, `Scheme.Schedules.hammerHead`). Mysticeti,
+Cordial Miners PS, Blue Bottle PS, Orcaella and Nemo-Nemo meet
+`Scheduled` at their committees, Hybrid Mysticeti from `3f + 3c + 1`
+(`Scheme.Schedules.rowsScheduled`). Barnacle's liveness is partially
+synchronous (`Timed.Good`), so the asynchronous rows get the safety half.
+
+The last bound is the heads argument's, not the protocol's. When the
+crashed validators author no block from the good round on
+(`Timed.SilentGood`), a crashed leader's slot is skipped directly at a vote
+round one above the proposal, so `Scheme.schemeLiveSilent` decides every
+slot a synchronised or silent validator leads
+(`Scheme.Schedules.silentDescends`, `Barnacle.LiveRule.Decisive`). A slot is
+decided below `w − 1` rounds of decided slots and a committed head
+(`Barnacle.liveOn_of_skipRun`), and on one slot per round a permutation of
+round-robin has such runs at `(w − 1)·fb + slack + 1 ≤ n`
+(`Barnacle.skipRun_perm_roundRobin`). Update rules that keep this shape,
+HammerHead's scores among them, reach every height
+(`Scheme.Schedules.silentLive`, `Scheme.Schedules.hammerHeadSilent`) at
+`Scheme.Params.SkipScheduled`, which Mysticeti, Blue Bottle PS, Orcaella
+and Hybrid Mysticeti meet at their committees
+(`Scheme.Schedules.rowsSkipScheduled`).
+
+### 27.16 Byzantine atomic broadcast
+
+SC32: the family against the definitions of Byzantine atomic broadcast of
+Sailfish (IEEE S&P 2025, Definition 1, after Bullshark) and of Sui and Duan
+(IEEE S&P 2025, Definition 2.1). A delivered message `a_deliver(m, r, P_k)`
+is a block, carrying its round and author. A validator's delivered
+sequence `Scheme.deliverSeq p σ U V N` is the loop's output from slot `0`
+on its view: each committed leader's causal history in order of round and
+block id (`Scheme.flush`), keeping the first block of each round and author
+(`keepFirst`). Keeping one block per round and author is what Sailfish's
+integrity asks of an uncertified DAG, where a Byzantine author's two
+blocks of one round can both lie in a committed leader's history.
+
+Delivered sequences only grow, as the view grows and the scan reaches
+further and along a reliable validator's run
+(`Scheme.AtomicBroadcast.grows`, `Scheme.AtomicBroadcast.runGrows`), so
+the order of a sequence is the order of output. A validator delivers at
+most one block of each round and author (`Scheme.AtomicBroadcast.integrity`,
+Sailfish), and each block at most once and only blocks of the record
+(`Scheme.AtomicBroadcast.integritySD`, Sui and Duan). At every row with
+`p.Tolerates honest f q`, if one validator delivers `x` before `y`, no
+validator delivers `y` before `x` (`Scheme.AtomicBroadcast.totalOrder`,
+Sailfish), and a validator delivering `y` has delivered `x` before it
+(`Scheme.AtomicBroadcast.totalOrderSD`, Sui and Duan). If a reliable
+validator of a run delivers `b`, every reliable validator delivers `b`
+from some time on (`Scheme.AtomicBroadcast.agreement`, both), in an
+asynchronous run and in a reactive one with its clock forgotten.
+
+Validity and Sui and Duan's liveness are stated on records whose blocks
+reference their author's previous block. A validator eventually delivers
+`m` (`Scheme.AsyncPace.Delivers`) when, scanning far enough, `m` is in its
+delivered sequence from some time on. Partially synchronously, in a
+reactive run past GST whose reliable set meets the certificate and commit
+thresholds, a block `m` of a reliable validator is eventually
+delivered by every reliable validator when its author leads a slot `k` past GST
+at or above `m`'s round and `d` reliably-led slots follow `k` within the
+horizon, `d` spanning eligibility (`Scheme.AtomicBroadcast.validityPS`,
+Sailfish; `Scheme.AtomicBroadcast.livenessPS`, Sui and Duan). Every reliable
+decision-round block certifies `k`'s leader block, which commits on
+the author's own view; the run decides every slot below it; the leader block
+reaches `m` by self-reference (`Scheme.reaches_own`); and agreement carries
+the delivery to every reliable validator. Under round-robin on one slot per
+round (`Scheme.roundRobinSlots`) the premise holds of itself: when
+`waveLength · (n − |T|) < n`, a reliable block is eventually delivered by
+every reliable validator once `n · (max R r + 2) + 2 · waveLength` lies
+below the horizon, `R` past GST and `r` the block's round
+(`Scheme.AtomicBroadcast.validityRoundRobin`); every rotation holds a run of
+`waveLength` reliably-led slots (`Scheme.AtomicBroadcast.roundRobin_run_within`).
+At Hybrid Mysticeti's committee `n = 3f + 2c + 1` that premise fails once
+`c ≥ 1`. When the validators of a set `Z` author no block from round `R`
+on, at most `fb` validators lie outside `T ∪ Z`, `(waveLength − 1) · fb <
+|T|`, the vote round is one above the proposal and `T` meets the skip
+threshold, the same conclusion holds at the same horizon
+(`Scheme.AtomicBroadcast.validityRoundRobinSilent`). A slot a member of `Z`
+leads is skipped directly (`Scheme.skipsUnsupported`); every rotation holds
+`waveLength` slots led from `T ∪ Z`, the last from `T`
+(`Barnacle.exists_run_perm_roundRobin`); and a window of decided slots
+ending at a committed one decides every slot below it
+(`AnchoredRule.decided_below_of_window`). Hybrid Mysticeti meets these
+premises for every `f` and `c` with `Z` the crashed validators and
+`fb = f`.
+Asynchronously, against an
+adversary that does not see the coin, when the author's block of a round `r` at
+or above `m`'s is referenced by every reliable block of round `r + 1`,
+`m` fails to be eventually delivered with probability at most
+`badBlockBoundAt c d ^ M` over `M` blocks of `d` coins from round `r + 2`
+on (`Scheme.AtomicBroadcast.validityAsync`,
+`Scheme.AtomicBroadcast.livenessAsync`), which vanishes as `M` grows
+(`Scheme.badBlockBound_tendsto_zero`). A block of safe coins commits a slot
+from round `r + 2` and decides every slot below it
+(`Scheme.eventually_committed_of_good_block`), and when the quorum and the
+reliable set together exceed `n` every block from round `r + 2` on reaches
+the on-time block (`Scheme.reaches_of_onTime`). Without such a round the
+claim fails: references reach one round down, so a reliable validator
+kept late at every round builds blocks no later block references.
+
+### 27.17 Responsive liveness at every partially synchronous row
+
+M1 (`mechanisms.md`). The partially synchronous rows at their committees
+are `Params.PSRow`: Mysticeti and Cordial Miners from `3f + 1`, Blue
+Bottle from `5f + 1`, without crash faults; Orcaella from `5f + 3c + 1`;
+Hybrid Mysticeti from `3f + 2c + 1`; Nemo-Nemo from `2c + 1` with `f = 0`;
+each at parent quorum `n − f − c`. At each, a responsive run exists
+(`Scheme.Responsive.inhabited`): the full record on `n` validators, every
+block referencing the whole round below (`Scheme.Full.record`, valid at
+every quorum `q ≤ n` with distinct authors and self-reference), run in
+lockstep with no delay, no processing time and a timeout of `1`, is a
+`SchemeReactive` over all validators at every vote rule and every schedule
+(`Scheme.Full.run`): every block reaches every block of a lower round
+(`Scheme.Full.reaches_of_lt`), so both wait clauses hold by their first
+disjunct. Validity holds at each row (`Scheme.Responsive.rowsValidity`):
+`AtomicBroadcast.validityPS` at the row's coverage (`Table.rowsCovered`),
+its certificate fitting and its commit threshold within `n − f − c`
+(`Scheme.Responsive.psRow_fits`). Nemo-Nemo is among the rows: its
+coverage is the crash-only one, and Validity asks only that blocks
+reference their author's previous block, which the family's row adds.
+
+### 27.18 Crash recovery, partially synchronous
+
+M2 (`mechanisms.md`). A crash run (`Scheme.CrashRun`) is a responsive run
+in which validators may stop and start again, any number of times and all
+at once, until a time `tr`, after which the reliable validators stay up.
+`up v t` says that `v` runs at `t`. What a crash leaves intact holds
+throughout: a validator keeps on disk what it holds and builds
+(`holds_mono`, `holds_own`), builds only while up (`up_built`), rebuilds
+every round it missed on restart (`built_of_le_top`), and sets its timers
+again, so the wait clauses hold of every block. What needs it running holds
+only while it runs: delivery to a validator up throughout the delay, which
+covers what was sent while it was down (`converges`), catch-up (`catchup`)
+and the timeout ceiling (`deadline`).
+
+Read past `max gst tr`, a crash run is a responsive run
+(`Scheme.CrashRun.toReactive`, `Scheme.Crash.toReactive`): from then on
+every reliable validator is up. For this the ceiling of the reactive
+timing (`ReactiveCore.deadline`) and the wait clauses of `SchemeReactive`
+are asked only past GST, which is all the proofs ever read of them. The
+crash precondition `Scheme.crashLive` is then the reactive one
+(`Scheme.Crash.live`), a reliably led slot commits past `max gst tr`
+(`Scheme.Crash.commits`), and Validity holds at every partially
+synchronous row (`Scheme.Crash.rowsValidity`). Every validator may crash at
+once (`Scheme.Crash.inhabited`): on the full record, all build round `0`,
+all are down from time `1` to `D`, and all rebuild on restart, round `r`
+at time `r + D` (`Scheme.Full.crashRun`). Safety asks nothing of the crash
+run: a validator that keeps its blocks builds no round twice, so the blocks
+form a `BlockRecord`.
+
+### 27.19 Crash recovery, asynchronous
+
+M3 (`mechanisms.md`). An asynchronous crash run (`Scheme.AsyncCrashRun`)
+has no clock to lose: a validator keeps what it holds on disk, rebuilds
+every round it missed, and what a running reliable validator holds reaches
+every reliable validator that runs from some time on. From `tr` the
+reliable validators run, so the run is an asynchronous one
+(`Scheme.AsyncCrashRun.toAsyncPace`, `Scheme.Crash.asyncToPace`), and
+Agreement (`Scheme.Crash.asyncAgreement`) and Validity with probability 1
+against a coin-blind adversary (`Scheme.Crash.asyncValidity`) hold of it.
+A timed crash run forgets its clock into one (`Scheme.CrashRun.toAsync`),
+and the run in which every validator is down from `1` to `D` inhabits it at
+every quorum (`Scheme.Crash.asyncInhabited`).
+
+### 27.20 Checkpoints over responsive and crash runs
+
+M5b (`mechanisms.md`). The checkpoint bridge needs the wave of a slot
+populated and its candidates certified by the validators following the
+signing rule. The responsive precondition gives both
+(`live_of_reactiveLive`), so a slot a signer leads reaches second-tier
+finality when the signers run the family responsively past GST
+(`Scheme.Compose.checkpointsResponsive`), and, through `Scheme.Crash.live`,
+when they run it with crashes and restarts past `max gst tr`
+(`Scheme.Compose.checkpointsCrash`).
+
+### 27.21 The mechanisms composed broadcast atomically
+
+Theorem 2 of the paper (`scheme.md` §27). Responsive liveness, crash
+recovery, an adaptive leader schedule and checkpoints, composed, give runs
+of every height on every signer's view whose delivered sequences satisfy
+Integrity, Total order, Agreement and Validity (`Compose.Broadcasts`), and
+in which every slot a closed configuration commits reaches second-tier
+finality: with certainty under partial synchrony
+(`Scheme.Compose.hammerHeadBroadcast`, `aimdBroadcast`), and outside a
+coin event of bounded probability under asynchrony
+(`asyncBroadcast`, `asyncHammerHeadBroadcast`). Validity asks the
+weak-reference rule as a premise, and the interval to hold the learning
+delay and the commit gap: a configuration then commits a leader inside its
+own range (`Barnacle.ledger_commit_of_window`), so its range in the ledger
+holds a leader late enough to reach the block.
+
+### 27.22 What the arc does not contain
 
 The properties of Mahi-Mahi and Async BlueBottle that are proved of
 those rules alone reach the rows of §27.5 at the least vote only; the
@@ -12161,9 +12409,9 @@ properties of §27.9 hold of the family at every vote. The commit loop *TryDecid
 loop is sound, its restart on one view holds (SC19), and its order
 and ledger reading hold (SC20, SC21); its completeness, its resumption
 on a larger view and the nesting of ledgers are not stated. The
-asynchronous rows' liveness (SC24, SC27) leaves out the safe set's
-measurability and the hypergeometric
-probability for `K` leaders. The family's `Lives` is stated on the core's universes, and
+asynchronous rows' liveness (SC24, SC27, SC30) is stated against an
+adversary that does not see the coin, and leaves out the probability for
+`K` leaders per round. The family's `Lives` is stated on the core's universes, and
 Hybrid Mysticeti's, at its committee `3f + 2c + 1`, at Hydrozoan's fault
 model (SC23), as is every covered row's with self-reference (SC25). Stake weights and the coin's
 construction are not formalised. `scheme.md` §9
@@ -12310,7 +12558,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 
 | Module | Contents |
 |:---|:---|
-| `Common/Counting.lean` | the one counting fact: two sets whose sizes sum past `n + m` meet outside any set of at most `m` (`exists_mem_inter_notMem`), and its contrapositive |
+| `Common/Counting.lean` | the one counting fact: two sets whose sizes sum past `n + m` meet outside any set of at most `m` (`exists_mem_inter_notMem`), and its contrapositive; the threshold form of the double count (`card_mul_le_of_bipartite_filter`) |
 | `Common/Validators.lean` | the fault model (`n ≥ 3f+1`); T0 |
 | `Common/Slots.lean` | the slot schedule every rule runs on; its constructors (`uniform`, `uniformSingle`, `identity`, `waveRobin`) |
 | `Common/Schedule.lean` | conservativity of the pipelined schedule |
@@ -12323,11 +12571,12 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Common/Support.lean` | counting vocabulary at any block record, in the record and in a view (`supportersIn`, `blamesIn`); what a view holds (`heldAuthors`, `HoldsAtLeast`); the certificate stack over a vote relation (`carriedVotes`, `CarriesVotes`, `certificatesAt`); the hitting lemma, propagation and coverage at any quorate record; the counting bounds under non-equivocation |
 | `Common/Participation.lean` | `PopulatedOn` and `SynchronisedOn`, at raw block data and at any block record |
 | `Common/Ledger.lean` | the ledger at any block record: `commitSeq`, `ledgerSet`, `OutputAt`; monotonicity, uniqueness, and agreement of agreeing assignments |
-| `Common/History.lean` | causal history as a `Finset`, at any block record; a block of a set in an anchor's cone (`LinkedVia`) and the votes in the cone (`coneSupporters`) |
+| `Common/History.lean` | causal history as a `Finset`, at any block record; a block of a set in an anchor's cone (`LinkedVia`) and the votes in the cone (`coneSupporters`); visibility at a quorum (`card_inHistory_ge`) |
 | `Common/Persistence.lean` | T3 |
-| `Common/CommonCore.lean` | T3a, T3c |
+| `Common/CommonCore.lean` | the common core at any quorum `q` with `2q ≥ n + f + 1` (`exists_commonCore`); T3a, T3c at `q = n − f` |
 | `Common/Anchored.lean` | the anchored decision relation every rule is an instance of: `AnchoredRule` (wave, direct commit and skip on a view, graded rungs, ties, what an anchor is), `EligibleAt`, `Decided`, what a rule owes (`Laws`), every committed block an anchor (`anchor_of_decided`), and agreement, monotonicity and the ledger once |
 | `Common/Anchored/Band.lean` | the carrier of a rule (`toDagRule`, `toDagRuleOn`), the four properties at it, the band laws and the band induction once, the indirect property |
+| `Common/Anchored/ReadAlike.lean` | two rules that read alike decide alike and have one carrier (`ReadAlike`, `toDagRule_eq`) |
 | `Common/Anchored/Bounded.lean` | the bounded relation, its congruence across schedules, totality at an anchor and the descent below a committed run |
 
 **The core, `Mysticeti/`.** The pipelined rule and its route, as one instance of the common layer.
@@ -12455,7 +12704,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Quality/Inclusion.lean` | post-`R` inclusion (CQ5, CQ6) |
 | `Quality/Capstone.lean` | the windowed bounds and `chain_quality` (CQ7) |
 | `LeanDagTest/` | the models of §28 and the witness files of every arc |
-| `Scheme/Model/` | the unified decider's parameters and rows, its rule `schemeAnchored` over a vote-selection rule, the least vote `leastSel`, the scheme's vote `votedBlock`, the local vote `VoteSel.Local`, the carrier `schemeRule` and its support `familySupport`, the commit loop, and the three rule variants its rows name |
+| `Scheme/Model/` | the unified decider's parameters and rows, its rule `schemeAnchored` over a vote-selection rule, the least vote `leastSel`, the scheme's vote `votedBlock`, the local vote `VoteSel.Local`, the carrier `schemeRule` and its support `familySupport`, the commit loop, the three rule variants its rows name, and the decider as a Barnacle live rule `schemeLive` |
 | `Scheme/Table/` | the table's inequalities and the claims of its reading paragraph, SC1 |
 | `Scheme/Helpers/` | two rules that read alike decide alike (SC2); votes one round up (SC3); votes further up (SC8); the rows' readings and the variants' laws; the scheme's search (SC10); the laws from the inequalities (SC12); the loop's soundness and completeness; local votes, band laws and the support's laws (SC16–SC18) |
 | `Scheme/Equiv/` | eight rows as carriers, SC4–SC6 and SC9 |
@@ -12463,6 +12712,8 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Scheme/Sufficiency/` | the table's inequalities give agreement at every vote, and the derived rows agree, SC12 |
 | `Scheme/Properties.lean`, `Scheme/Record.lean` | the family as a carrier: every property the mechanisms read, its support, its record instance, SC16–SC18 |
 | `Scheme/Loop/` | the commit loop outputs exactly the derivable verdicts, and two validators' outputs are prefix-comparable, SC13–SC15 |
+| `Scheme/Schedules/` | the decider under Barnacle's and HammerHead's schedules: safety under every update rule, the descent laws, every height under round-robin and its permutations, SC28 |
+| `Scheme/AtomicBroadcast/` | the delivered sequence against Sailfish's and Sui and Duan's definitions of Byzantine atomic broadcast: integrity, total order, agreement, validity and liveness, SC32 |
 
 **The support graph, extracted.** The dependency structure of the
 development is not documented by hand: `scripts/DepGraph.lean` walks
@@ -12783,10 +13034,30 @@ per-validator histories and messages are execution inputs, and from
 them it machine-checks same-epoch checkpoint uniqueness, prefix
 consistency, resilient finality, and highest-checkpoint recovery under
 alive-but-corrupt signing faults. It does not derive an AbC-induced
-fork from OrcDAG or compose checkpoint safety with the DAG proofs. It
-treats `BaseSpec.lean` and `RecoverySpec.lean` as the human-reviewed
-trust boundary, with derivations isolated in the two `*Proofs.lean`
-modules. It
+fork from OrcDAG: the forks are inputs. It composes with the DAG proofs
+through a bridge that reads two properties of a rule
+(`Checkpoint/CommitSpec.lean`). From agreement, a commit settled on
+every rule-following validator's view has a finality certificate
+(`commitFinalized`) and one slot has one checkpoint content
+(`commitCheckpointUnique`). From the support's commit law, a slot led
+by a rule-following validator reaches finality with no commit assumed
+(`liveCommitFinalized`). Alive-but-corrupt validators are live for the
+rule, so they count in every hypothesis of both, and Hybrid discharges
+the two quorums with them present (`quorum_alive`, `isQuorum_alive`).
+The bridge is instantiated at the unified decider for every tolerated
+row (`Integration/SchemeCheckpoint.lean`): with the fault model a
+parameter, at the three fault classes on plain sets
+(`Integration/FaultClasses.lean`, `3f + 2c + f_a < n` at quorum
+`n − f − c`, inhabited at every committee of the table), and over
+leader-scheduling runs. Proposals can ride in blocks
+(`Checkpoint/CarrySpec.lean`, `CarryProofs.lean`): emission is block
+authorship, and the witness phase reads storage under a
+global-visibility contract rather than a second block round. The
+bridge assumes agreement, so it says nothing of a validator whose
+blocks fork the DAG; that regime has the safety theorems only. The arc
+treats `BaseSpec.lean`, `RecoverySpec.lean`, `CommitSpec.lean` and
+`CarrySpec.lean` as the human-reviewed trust boundary, with derivations
+isolated in the `*Proofs.lean` modules. It
 treats authenticated Byzantine broadcast through its agreement,
 integrity, and correct-input delivery contract; the Dolev--Strong
 implementation and executable cryptographic parsing remain outside the
@@ -13176,7 +13447,7 @@ reused.
 | MM1b | two certified candidates of one author and round coincide | `MahiMahi.eq_of_certificates_nonempty` *(MahiMahi/Helpers/Rules)* |
 | MM1c | two views agree on every slot | `MahiMahi.mahiMahiLaws` *(MahiMahi/Helpers/Decision)*, `MahiMahi.Safety.holds` *(MahiMahi/Safety/Proof)* |
 | MM1d | at `w = 3` every derivation is the core's | `MahiMahi.core_decided_of_decided` *(MahiMahi/Helpers/Decision)* |
-| MM2 | the counting lemma: the common core; some correct block commits at `w ≥ 4`; `n − f − |byzantine|` of them at `w ≥ 5` | `MahiMahi.Counting.holds`, `MahiMahi.exists_commonCore`, `MahiMahi.goodNonempty`, `MahiMahi.goodCard` *(MahiMahi/Helpers/Counting)* |
+| MM2 | the counting lemma: the common core; some correct block commits at `w ≥ 4`; `n − f − |byzantine|` of them at `w ≥ 5` | `MahiMahi.Counting.holds`, `MahiMahi.goodNonempty`, `MahiMahi.goodCard` *(MahiMahi/Helpers/Counting)*, `exists_commonCore` *(Common/CommonCore)* |
 | MM2b | `2f + 1` distinct leaders at a round include a good one | `MahiMahi.multiLeader` *(MahiMahi/Helpers/Counting)* |
 | MM2′ | `good` depends only on the rounds up to the decision round | `MahiMahi.AgreeUpto.goodAt_eq` *(MahiMahi/Helpers/Liveness)* |
 | MM3 | liveness under the clause: a good leader commits; commits within every window; every slot below a run decided; local liveness | `MahiMahi.Liveness.holds`, `MahiMahi.decided_of_mem_good`, `MahiMahi.allDecidedBelow`, `MahiMahi.localCommit` *(MahiMahi/Helpers/Liveness)* |
@@ -13377,7 +13648,7 @@ reused.
 | Label | Statement | Lean *(module)* |
 |:---|:---|:---|
 | SC1 | every row meets its family's inequalities and the liveness bound (Cordial Miners but its skip); the inequalities force `n ≥ 5f + 3c + 1` and `n ≥ 3f + 2c + 1` and, there, Orcaella's and Hybrid Mysticeti's thresholds; Nemo-Nemo's row fails the second two-round inequality | `Scheme.Table.holds` *(Scheme/Table)* |
-| SC2 | two anchored rules that read alike decide alike, and have one carrier | `Scheme.ReadAlike.decided_iff`, `Scheme.toDagRule_eq` *(Scheme/Helpers/Transfer)* |
+| SC2 | two anchored rules that read alike decide alike, and have one carrier | `AnchoredRule.ReadAlike.decided_iff`, `AnchoredRule.toDagRule_eq` *(Common/Anchored/ReadAlike)* |
 | SC3 | one round up, a vote is a reference and a blame is a reference to no candidate | `Scheme.votes_iff`, `Scheme.blamersAt_eq` *(Scheme/Helpers/Votes)* |
 | SC4 | the Mysticeti, Blue Bottle PS and Orcaella rows are the core's, Odontoceti's and Hybrid's carriers, Orcaella at `n = 5f + 3c + 1` | `Scheme.Equiv.mysticetiRow`, `Scheme.Equiv.blueBottlePSRow`, `Scheme.Equiv.orcaellaRow` *(Scheme/Equiv)* |
 | SC5 | Cordial Miners PS is the core with no direct skip, with the core's laws | `Scheme.cordialLaws`, `Scheme.Equiv.cordialMinersPSRow` *(Scheme/Equiv)* |
@@ -13399,10 +13670,15 @@ reused.
 | SC21 | the output from slot `0` is `commitSeq` and `ledgerSet` of the loop's assignment, every slot below its length decided with that verdict; at the rows of SC12 two validators' ledgers are nested | `Scheme.tryDecide_eq_map`, `Scheme.ledger_read`, `Scheme.ledger_agree`, `Scheme.Loop.ledger`, `Scheme.Loop.ledgerAgree` *(Scheme/Loop, Scheme/Helpers/Ledger)* |
 | SC22 | where nobody equivocates, the two-round inequalities without `n + f + 1 ≤ commit + link` and the three-round ones without `n + f + 1 ≤ 2·cert` give agreement at every vote; Nemo-Nemo and Async Nemo-Nemo meet them at `n = 2c + 1` and agree; with `q = n − c` they need `n ≥ 2c + 1`, and `3c + 1` for a two-round row with a direct skip within the liveness bound | `Scheme.eq_of_noEquiv_all`, `Scheme.twoRoundCrashLaws`, `Scheme.threeRoundCrashLaws`, `Scheme.Table.crashWeaker`, `Scheme.Table.crashRows`, `Scheme.Table.crashBound`, `Scheme.Sufficiency.coveredAgree` *(Scheme/Helpers/Sufficiency, Scheme/Table, Scheme/Sufficiency)* |
 | SC23 | on Hydrozoan's universe the Hybrid Mysticeti row decides as Hydrozoan without its fast path, at every vote; it meets its inequalities at every `n ≥ 3f + 2c + 1`, and its carrier is safe and progresses under Hydrozoan's fault model, and with self-reference lives | `Scheme.readAlike_hydrozoanSlow`, `Scheme.hydrozoanSlow_eq`, `Scheme.Table.hybridAnyCommittee`, `Scheme.HybridRow.slowRow`, `Scheme.HybridRow.onHydrozoan`, `Scheme.HybridRow.withSelfParent` *(Scheme/Helpers/Hydrozoan, Scheme/HybridRow)* |
-| SC24 | the asynchronous rows are live under the coin: at `2q ≥ n + f + 1` a common core; one buffer round gives a safe validator and the double count, two give `q − f`; leaders outnumbering the rest include a safe one; buffer rounds past two add nothing; a uniform coin names a safe leader with probability bounded below, and its misses vanish | `Scheme.exists_commonCore`, `Scheme.isCert_of_safe`, `Scheme.safeAt_nonempty`, `Scheme.card_safeAt_count`, `Scheme.le_card_safeAt`, `Scheme.exists_safe_leader`, `Scheme.Starve.not_starved_of_reaches`, `Scheme.Starve.card_safeAt_starve`, `Scheme.Starve.starvePace`, `Scheme.Async.coinCommit`, `Scheme.Async.coinTail`, `Scheme.Async.holds` *(Scheme/Helpers/Async, Scheme/Helpers/AsyncCoin, Scheme/Helpers/Starve, Scheme/Async)* |
+| SC24 | the asynchronous rows are live under the coin: at `2q ≥ n + f + 1` a common core; one buffer round gives a safe validator and the double count, two give `q − f`; leaders outnumbering the rest include a safe one; buffer rounds past two add nothing; a uniform coin names a safe leader with probability bounded below, and its misses vanish | `exists_commonCore`, `Scheme.isCert_of_safe`, `Scheme.safeAt_nonempty`, `Scheme.card_safeAt_count`, `Scheme.le_card_safeAt`, `Scheme.exists_safe_leader`, `Scheme.Starve.not_starved_of_reaches`, `Scheme.Starve.card_safeAt_starve`, `Scheme.Starve.starvePace`, `Scheme.Async.coinCommit`, `Scheme.Async.coinTail`, `Scheme.Async.holds` *(Common/CommonCore, Scheme/Helpers/Async, Scheme/Helpers/AsyncCoin, Scheme/Helpers/Starve, Scheme/Async)* |
 | SC25 | every row safe and live: Cordial Miners on the core's universes; Orcaella, Async Orcaella, Hybrid Mysticeti, Hybrid Mahi-Mahi, Nemo-Nemo and Async Nemo-Nemo under the hybrid fault model with self-reference; the asynchronous rows ready for the count | `Scheme.HybridRow.onHydrozoan`, `Scheme.HybridRow.withSelfParent`, `Scheme.Rows.coreRows`, `Scheme.Rows.hybridRows`, `Scheme.Rows.asyncRows`, `Scheme.Rows.holds` *(Scheme/HybridRow, Scheme/Rows)* |
 | SC26 | the family run reactively, pacing at a quorum `q`: a reliable block reaches the leader block round by round, votes and certifies; that is the family support's precondition at any reliability, so a reliably-led slot commits, at the hybrid committees too; with self-reference no reliable block is censored; Reactive Mysticeti is an instance | `Scheme.SchemeReactive.toAsyncPace`, `Scheme.SchemeReactive.driftOn`, `Scheme.SchemeReactive.arrives`, `Scheme.SchemeReactive.reaches`, `Scheme.SchemeReactive.votes`, `Scheme.SchemeReactive.certifies`, `Scheme.live_of_reactiveLive`, `Scheme.leaderCommits_reactive`, `Scheme.includes_reactive`, `Scheme.ofReactiveM`, `Scheme.ReactiveRun.holds` *(Scheme/Helpers/Reactive, Scheme/Helpers/ReactiveMysticeti, Scheme/Reactive)* |
 | SC27 | the asynchronous rows on a validator's own view, under eventual delivery with no time bound: a uniform coin names a leader whose slot commits on every reliable validator's own view with probability at least `1/n` at one buffer round and `(q − f)/n` at two; every reliable block is held by every reliable validator from some time on, rounds are populated, and a safe leader's slot commits on every reliable validator's own view; windows commit and slots below a run are decided there; every timed run is an asynchronous one | `Scheme.AsyncPace.coin_eventuallyCommits`, `Scheme.AsyncPace.exists_time`, `Scheme.AsyncPace.delivered`, `Scheme.AsyncPace.reached`, `Scheme.AsyncPace.populated`, `Scheme.decided_of_safe_of_holds`, `Scheme.AsyncPace.decided_of_safe`, `Scheme.AsyncPace.commitsWithin`, `Scheme.AsyncPace.allDecidedBelow`, `Scheme.AsyncPace.ofPaceCore`, `Scheme.AsyncLocal.holds` *(Scheme/Helpers/AsyncPace, Scheme/AsyncLocal)* |
+| SC28 | the decider under Barnacle and HammerHead: safe under every update rule at every tolerated row; descent laws at slack `rel.slack`; every height under a schedule whose heads come in runs, under Barnacle's AIMD rule on round-robin and under every HammerHead score permuting round-robin; the partially synchronous rows meet `Params.Scheduled`; with silent crashes, on one slot per round, every row with a direct skip at its committee | `Scheme.Schedules.safe`, `Scheme.Schedules.descends`, `Scheme.Schedules.runsExist`, `Scheme.Schedules.aimd`, `Scheme.Schedules.hammerHead`, `Scheme.Schedules.rowsScheduled`, `Scheme.Schedules.silentDescends`, `Scheme.Schedules.silentLive`, `Scheme.Schedules.hammerHeadSilent`, `Scheme.Schedules.rowsSkipScheduled`, `Barnacle.liveOn_of_skipRun`, `Barnacle.skipRun_perm_roundRobin`, `Scheme.Schedules.holds` *(Scheme/Schedules, Barnacle/Helpers/Skips, Timed/Silent)* |
+| SC29 | one buffer round: against a population at least `q` strong `q·(q − f) ≤ G·(2q − n) + |honest|·(n − q)`; a third of the validators safe at `n ≥ 5f + 3c + 1`, `q = n − f − c`, and a coin probability of `1/3`; exactly two safe validators in an execution at `n = b + 2k + 1`, `q = b + k + 1` | `Scheme.card_safeAt_oneBuffer`, `Scheme.card_safeAt_third`, `Scheme.third_le_coin`, `Scheme.TwoSafe.card_safeAt_twoSafe`, `Scheme.TwoSafe.twoPace`, `Scheme.TwoSafe.refs_eq_held`, `Scheme.Async.safeOneBuffer`, `Scheme.Async.safeThird`, `Scheme.Async.twoSafe`, `Scheme.Async.coinThird` *(Scheme/Helpers/OneBuffer, Scheme/Helpers/TwoSafe, Scheme/Async)* |
+| SC30 | across waves, against an adversary that does not see the coin: the slots below `M` blocks of `d` coins stay undecided with probability at most `((n^d − c^d)/n^d)^M`, which vanishes; floors `1`, `q − f` and `⌈n/3⌉` at the rows ready for the count | `Scheme.eventually_decided_of_good_block`, `Scheme.undecided_le`, `Scheme.floors`, `Scheme.badBlockBound_tendsto_zero`, `Scheme.AsyncLive.tail`, `Scheme.AsyncLive.vanishes`, `Scheme.AsyncLive.live`, `Scheme.AsyncLive.holds` *(Scheme/Helpers/AsyncLive, Scheme/AsyncLive)* |
+| SC31 | where no validator equivocates, every vote-selection rule selects alike, any two give one carrier, and the three rows with buffer rounds are their rules at every vote | `Scheme.sel_eq_of_noEquiv`, `Scheme.readAlike_noEquiv`, `Scheme.Equiv.voteFree`, `Scheme.Equiv.bufferedRowsNoEquiv` *(Scheme/Helpers/VoteFree, Scheme/Equiv)* |
+| SC32 | the delivered sequence keeps one block per round and author, grows, and meets Sailfish's integrity, total order, agreement and validity and Sui and Duan's integrity, total order, agreement and liveness at every tolerated row; validity partially synchronously when the author leads a slot past GST followed by a reliably-led run, which round-robin supplies at `waveLength · (n − |T|) < n`, and asynchronously, against a coin-blind adversary, with vanishing failure probability once the author's block is on time at one round | `Scheme.deliverSeq`, `Scheme.deliverOf_prefix`, `Scheme.mem_deliverOf_of`, `Scheme.reaches_own`, `Scheme.reaches_of_onTime`, `Scheme.mem_deliverSeq_of_decided`, `Scheme.eventually_committed_of_good_block`, `Scheme.AtomicBroadcast.grows`, `Scheme.AtomicBroadcast.runGrows`, `Scheme.AtomicBroadcast.integrity`, `Scheme.AtomicBroadcast.integritySD`, `Scheme.AtomicBroadcast.totalOrder`, `Scheme.AtomicBroadcast.totalOrderSD`, `Scheme.AtomicBroadcast.agreement`, `Scheme.AtomicBroadcast.validityPS`, `Scheme.AtomicBroadcast.livenessPS`, `Scheme.AtomicBroadcast.validityRoundRobin`, `Scheme.AtomicBroadcast.validityAsync`, `Scheme.AtomicBroadcast.livenessAsync`, `Scheme.AtomicBroadcast.holds` *(Scheme/Model/Deliver, Scheme/Helpers/Deliver, Scheme/Helpers/Validity, Scheme/AtomicBroadcast)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
@@ -13477,7 +13753,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 426 definitions and structures the report names, in
+The 441 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -14435,9 +14711,9 @@ structure ReactiveCore (U : BlockRecord Validator BlockId Payload P honest)
   /-- Time advances with rounds — the only lower bound a reactive
   schedule keeps, over the rounds `v` reached. -/
   built_lt : ∀ v ∈ T, ∀ n < top v, built v n < built v (n + 1)
-  /-- **The reactive ceiling.** A validator never waits past the
+  /-- **The reactive ceiling.** Past GST a validator never waits past the
   timeout; it may build any time before it. -/
-  deadline : ∀ v ∈ T, ∀ n < top v, built v (n + 1) ≤ built v n + timeout n
+  deadline : ∀ v ∈ T, ∀ n < top v, gst ≤ built v n → built v (n + 1) ≤ built v n + timeout n
 ```
 
 **The reactive timing**, at any record: `PaceCore` with the ceiling and the round-advance clause in place of `ViewPace`'s full-timeout floor. What a reactive discipline's wait clauses are stated over.
@@ -16593,8 +16869,9 @@ The committed blocks of the slots `[lo, hi)`, in slot order.
 ```lean
 def LiveRule.LiveOn (R : LiveRule Validator BlockId Payload) (S : Slots Validator) (c : ℕ) :
     Prop :=
-  -- On every DAG good from `Rnd` to `N` …
-  ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ), R.Good U Rnd N → R.toBaseRule.CoversUpto U V N →
+  -- On every DAG good under `S` from `Rnd` to `N` …
+  ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ), R.Good S U Rnd N →
+    R.toBaseRule.CoversUpto U V N →
     -- … every slot at a round from `Rnd`, with `c` rounds and a wave still
     -- under the horizon, is decided on any view caught up to `N` …
     (∀ κ, Rnd ≤ S.slotRound κ → S.slotRound κ + c + R.waveLength ≤ N →
@@ -16617,7 +16894,7 @@ def LiveRule.LiveOn (R : LiveRule Validator BlockId Payload) (S : Slots Validato
 structure LiveRule.Delivers (R : LiveRule Validator BlockId Payload) (slack : ℕ) : Prop where
   /-- A good author's block is in the history of every block two rounds
   above it. -/
-  reaches : ∀ (U : R.Universe) (Rnd N : ℕ), R.Good U Rnd N →
+  reaches : ∀ (S : Slots Validator) (U : R.Universe) (Rnd N : ℕ), R.Good S U Rnd N →
     ∃ T : Finset Validator, Fintype.card Validator ≤ T.card + slack ∧
       ∀ b ∈ R.ids U, (R.block U b).creator ∈ T → Rnd ≤ (R.block U b).round →
         (R.block U b).round + 1 ≤ N →
@@ -16626,6 +16903,21 @@ structure LiveRule.Delivers (R : LiveRule Validator BlockId Payload) (slack : �
 ```
 
 **What a good DAG delivers**: a `slack`-missing set of validators whose blocks, from `Rnd`, are reached by everything two rounds above them — the base protocol's coverage read as delivery, the second law a live rule carries beside `Descent`.
+
+#### `LiveRule.Indirect`
+
+*abbrev, `Barnacle.Model.Heads.lean`*
+
+```lean
+abbrev LiveRule.Indirect (R : LiveRule Validator BlockId Payload) : Prop :=
+  ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U) (i j : ℕ) (A : BlockId),
+    S.slotRound i + R.waveLength ≤ S.slotRound j → R.Decided S V j (some A) →
+    (∀ i', i < i' → i' < j → S.slotRound i + R.waveLength ≤ S.slotRound i' →
+      R.Decided S V i' none) →
+    ∃ v, R.Decided S V i v
+```
+
+**A3, the indirect rule**, at the rule's wave: a committed slot a wave above `i`, with every slot a wave above `i` between them skipped, decides `i`.
 
 #### `ofAnchored`
 
@@ -18205,6 +18497,27 @@ inductive DecidedWithin (U : BlockRecord Validator BlockId Payload P honest) (V 
 
 **The bounded relation**: `Decided`, with every slot the derivation mentions strictly below `B`.
 
+#### `ReadAlike`
+
+*structure, `Common.Anchored.ReadAlike.lean`*
+
+```lean
+structure ReadAlike (R₁ R₂ : AnchoredRule Validator BlockId Payload P honest)
+    (U : BlockRecord Validator BlockId Payload P honest) : Prop where
+  waveAt : ∀ κ, R₁.waveAt κ = R₂.waveAt κ
+  rungs : R₁.rungs = R₂.rungs
+  commit : ∀ (V : U.View) {k : ℕ} {L : BlockId}, IsLeaderBlock U k L →
+    (R₁.Commit U V L (S.slotRound k) (S.kind k) ↔ R₂.Commit U V L (S.slotRound k) (S.kind k))
+  skip : ∀ (V : U.View) (k : ℕ), R₁.Skip U V S k ↔ R₂.Skip U V S k
+  link : ∀ {i k j : ℕ} {A L : BlockId}, i < R₁.rungs → IsLeaderBlock U k L →
+    IsLeaderBlock U j A → R₁.Eligible k j → (R₁.Link i U A L S k ↔ R₂.Link i U A L S k)
+  least : ∀ {i k j : ℕ} {A L : BlockId}, i < R₁.rungs → IsLeaderBlock U k L →
+    IsLeaderBlock U j A → R₁.Eligible k j → R₁.Link i U A L S k →
+    (R₁.Least U A i k L ↔ R₂.Least U A i k L)
+```
+
+**What `Decided` reads, agreeing**, at one record.
+
 #### `EligibleAt`
 
 *def, `Common.Anchored.lean`*
@@ -18387,6 +18700,30 @@ structure Laws (I : Slots Validator → BlockRecord Validator BlockId Payload P 
 ```
 
 **The laws of an anchored rule** — what the direct predicates and the rungs must satisfy for agreement, on the records satisfying an invariant `I` (every record, by default). Every rule proves each of them under its own name.
+
+#### `BlockRecord`
+
+*structure, `Common.BlockRecord.lean`*
+
+```lean
+structure BlockRecord (Validator BlockId Payload : Type*)
+    (P : Validity Validator BlockId Payload) (honest : Finset Validator) where
+  /-- Which blocks exist. -/
+  ids : Finset BlockId
+  /-- What each id denotes. -/
+  block : BlockId → Block Validator BlockId Payload
+  /-- Every referenced block is present. -/
+  complete : ∀ i ∈ ids, ∀ j ∈ (block i).refs, j ∈ ids
+  /-- Every block present is valid. -/
+  valid : ∀ i ∈ ids, P block (block i)
+  /-- An honest author has at most one block per round. -/
+  no_equivocation : ∀ i ∈ ids, ∀ j ∈ ids,
+    (block i).creator ∈ honest →
+    (block i).creator = (block j).creator →
+    (block i).round = (block j).round → i = j
+```
+
+**The block record**: every universe type in the development, at a validity predicate `P` and an honest set. `block` is total, with junk outside `ids`; every clause quantifies over `i ∈ ids`, so the junk is never observed.
 
 #### `View`
 
@@ -20325,6 +20662,37 @@ def fillBlock (k : ℕ) : Block Validator BlockId Payload where
 
 The filled block at gap round `k`: `v2`'s references at that round, plus the added self reference.
 
+#### `Live`
+
+*def, `Scheme.AsyncLive.Statement.lean`*
+
+```lean
+def Live : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [P.Mechanised] (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f b : ℕ) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest)
+    (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N : ℕ)
+    (ap : AsyncPace q U T N) (S₀ : Slots Validator) (hS : StrictMono S₀.slotRound)
+    (dflt : Validator) (s₀ d M : ℕ),
+    honestᶜ.card ≤ f → p.AsyncReady (Fintype.card Validator) f q b → q ≤ T.card → 0 < d →
+    (schemeAnchored p σ).SpansEligible (S := S₀) d →
+    S₀.slotRound (s₀ + M * d) + (p.waveLength - 1) ≤ N →
+    (1 ≤ b → (PMF.uniformOfFintype (Fin M → Fin d → Validator)).toOuterMeasure
+        (ap.UndecidedBelow p σ S₀ hS dflt s₀ M d) ≤
+      Steelhead.Coin.badBlockBoundAt Validator 1 d ^ M) ∧
+    (2 ≤ b → (PMF.uniformOfFintype (Fin M → Fin d → Validator)).toOuterMeasure
+        (ap.UndecidedBelow p σ S₀ hS dflt s₀ M d) ≤
+      Steelhead.Coin.badBlockBoundAt Validator (q - f) d ^ M) ∧
+    (1 ≤ b → T ⊆ honest → ∀ c, 5 * f + 3 * c + 1 ≤ Fintype.card Validator →
+      q + f + c = Fintype.card Validator →
+      (PMF.uniformOfFintype (Fin M → Fin d → Validator)).toOuterMeasure
+          (ap.UndecidedBelow p σ S₀ hS dflt s₀ M d) ≤
+        Steelhead.Coin.badBlockBoundAt Validator ((Fintype.card Validator + 2) / 3) d ^ M)
+```
+
+**The rows ready for the count are live across waves**, under pacing at `q` with the reliable set at least `q` strong: the tail at floor `1` at one buffer round, `q − f` at two, and `⌈n/3⌉` at one buffer round where `n ≥ 5f + 3c + 1`, `q = n − f − c` and the reliable validators are honest.
+
 #### `Populated`
 
 *def, `Scheme.AsyncLocal.Statement.lean`*
@@ -20339,6 +20707,42 @@ def Populated : Prop :=
 
 **Production**: every round below the horizon has a block by every reliable validator, when the reliable set is `qp` strong.
 
+#### `Live`
+
+*def, `Scheme.Crash.Statement.lean`*
+
+```lean
+def Live : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [P.Mechanised] (honest : Finset Validator) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest)
+    (rel : Reliability Validator) (S : Slots Validator) (U : (schemeRule p σ).Universe)
+    (V : (schemeRule p σ).View U) (T : Finset Validator) (lo K : ℕ),
+    crashLive p σ rel S V T lo K → reactiveLive p σ rel S V T lo K
+```
+
+**The crash precondition is the reactive one**, at every reliability.
+
+#### `Commits`
+
+*def, `Scheme.Crash.Statement.lean`*
+
+```lean
+def Commits : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [P.Mechanised] (honest : Finset Validator) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest)
+    (rel : Reliability Validator),
+    p.CertFits (Fintype.card Validator - rel.slack) →
+    p.commitThreshold ≤ Fintype.card Validator - rel.slack →
+    LeaderCommits (schemeRule p σ)
+      (fun S {U} V T lo K => crashLive p σ rel S (U := U) V T lo K)
+```
+
+**With crashes, a reliably led slot commits**, at every reliability whose quorum meets the commit and certificate thresholds.
+
 #### `held`
 
 *def, `Scheme.Helpers.Starve.lean`*
@@ -20352,6 +20756,30 @@ def held (N : ℕ) (v : Fin n) (t : ℕ) : Finset (Lex (ℕ × Fin n)) :=
 
 What `v` holds at time `t`: every block below round `t − 1`, and of round `t − 1` the blocks outside the starved set, or all of them if `v` is starved. Round `r` is built at time `r`.
 
+#### `ids`
+
+*def, `Scheme.Helpers.TwoSafe.lean`*
+
+```lean
+def ids : Finset (Id b k) :=
+  ((Finset.range 3 ×ˢ (Finset.univ : Finset (Fin (b + 2 * k + 1))) ×ˢ Finset.range (2 * k)).image
+    fun t => mk b k t.1 t.2.1 t.2.2).filter (IsId b k)
+```
+
+The identifiers, as a finite set.
+
+#### `held`
+
+*def, `Scheme.Helpers.TwoSafe.lean`*
+
+```lean
+def held (v : Fin (b + 2 * k + 1)) (t : ℕ) : Finset (Id b k) :=
+  (ids b k).filter fun x =>
+    (rd b k x) + 1 < t ∨ (rd b k x + 1 = t ∧ x ∈ refsOf b k (mk b k t v (0)))
+```
+
+What `v` holds at time `t`: every block below round `t − 1`, and of round `t − 1` the references of `v`'s round-`t` block. Round `r` is built at time `r`.
+
 #### `viewAt`
 
 *def, `Scheme.Model.AsyncPace.lean`*
@@ -20364,6 +20792,31 @@ def viewAt (ap : AsyncPace q U T N) {v : Validator} (hv : v ∈ T) (t : ℕ) : U
 ```
 
 **A reliable validator's view at time `t`**: its holdings.
+
+#### `keepFirst`
+
+*def, `Scheme.Model.Deliver.lean`*
+
+```lean
+def keepFirst {α β : Type*} [DecidableEq β] (key : α → β) : List β → List α → List α
+  | _, [] => []
+  | seen, a :: l =>
+    if key a ∈ seen then keepFirst key seen l else a :: keepFirst key (key a :: seen) l
+```
+
+**The first element of each key**: the elements of `l` in order, each kept unless `seen` or an earlier kept element has its key.
+
+#### `deliverSeq`
+
+*def, `Scheme.Model.Deliver.lean`*
+
+```lean
+noncomputable def deliverSeq (U : BlockRecord Validator BlockId Payload P honest)
+    (wk : BlockId → Finset BlockId) (V : U.View) (N : ℕ) : List BlockId :=
+  deliverOf U wk (tryDecide p σ U V 0 N)
+```
+
+**The delivered sequence** on the view `V`, the loop scanning from slot `0` to slot `N`.
 
 #### `hydrozoanSlowAnchored`
 
@@ -20491,6 +20944,55 @@ def Live (p : Params) (n f c : ℕ) : Prop :=
 
 **Liveness**: every threshold is reachable by the correct validators.
 
+#### `SchemeReactive`
+
+*structure, `Scheme.Model.Reactive.lean`*
+
+```lean
+structure SchemeReactive [S : Slots Validator] (q : ℕ) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest)
+    (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N : ℕ)
+    extends ReactiveCore U T N where
+  /-- **The progress rule at `q`.** A reliable validator holding `q`
+  distinct round-`n` authors gets past round `n`. -/
+  advancesAt : ∀ v ∈ T, ∀ n < N, ∀ t, q ≤ (authorsIn U (holds v t) n).card → n < top v
+  /-- The last round up to which the validators wait for this schedule's
+  leaders: the horizon under a fixed schedule, the round its range closes
+  under an adaptive one. -/
+  waits : ℕ
+  waits_le : waits ≤ N
+  /-- **Reach or wait.** At a slot past GST, at each round from the one
+  above the proposal to the vote round, a reliable block reaches the leader
+  block, or its builder waited the timeout and references the leader's
+  block of the round below if it holds it. -/
+  reach_or_wait : ∀ v ∈ T, ∀ k : ℕ, gst ≤ S.slotRound k →
+    S.slotRound k + p.voteOffset ≤ waits → S.leader k ∈ T →
+    ∀ L, IsLeaderBlock U k L → ∀ m, m < p.voteOffset →
+    ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + m + 1 →
+    Reaches U c L ∨
+      (built v (S.slotRound k + m) + timeout (S.slotRound k + m)
+          ≤ built v (S.slotRound k + m + 1) ∧
+        ∀ b ∈ U.ids, (U.block b).creator = S.leader k → (U.block b).round = S.slotRound k + m →
+          b ∈ holds v (built v (S.slotRound k + m + 1)) → b ∈ (U.block c).refs)
+  /-- **Certify or wait.** Where votes are certified a round later, at a
+  slot past GST, a reliable decision-round block certifies the leader
+  block, or its builder waited the timeout and references every reliable
+  vote for it that it holds. -/
+  cert_or_wait : p.voteIsCert = false → ∀ v ∈ T, ∀ k : ℕ, gst ≤ S.slotRound k →
+    S.slotRound k + p.voteOffset + 1 ≤ waits → S.leader k ∈ T →
+    ∀ L, IsLeaderBlock U k L →
+    ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + p.voteOffset + 1 →
+    IsCert p σ U c L ∨
+      (built v (S.slotRound k + p.voteOffset) + timeout (S.slotRound k + p.voteOffset)
+          ≤ built v (S.slotRound k + p.voteOffset + 1) ∧
+        ∀ b ∈ U.ids, (U.block b).creator ∈ T →
+          (U.block b).round = S.slotRound k + p.voteOffset →
+          b ∈ holds v (built v (S.slotRound k + p.voteOffset + 1)) → σ.Votes U b L →
+          b ∈ (U.block c).refs)
+```
+
+**The family, run reactively**, at quorum `q`: the reactive timing, the pacemaker's progress rule at `q`, and the wait clauses of a wave.
+
 #### `IsCert`
 
 *def, `Scheme.Model.Rule.lean`*
@@ -20519,6 +21021,29 @@ def schemeAnchored : AnchoredRule Validator BlockId Payload P honest where
 ```
 
 **The decider as an anchored rule** (Algorithm 2): the supported-leader test is the direct commit, the skipped-leader test the direct skip, the certified-link test the single rung, and the least identifier breaks ties.
+
+#### `schemeLive`
+
+*def, `Scheme.Model.Schedules.lean`*
+
+```lean
+def schemeLive (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
+    (rel : Reliability Validator) : Barnacle.LiveRule Validator BlockId Payload :=
+  Barnacle.liveOfAnchored (schemeAnchored p σ) (fun _ => rfl) rel
+```
+
+**The decider as a live rule**, at reliability `rel`.
+
+#### `Params.Scheduled`
+
+*def, `Scheme.Model.Schedules.lean`*
+
+```lean
+def Params.Scheduled (p : Params) (n slack : ℕ) : Prop :=
+  p.certThreshold ≤ n - slack ∧ p.commitThreshold ≤ n - slack ∧ p.waveLength * slack + 1 ≤ n
+```
+
+**The row fits round-robin scheduling** on `n` validators, at most `slack` unreliable: `n − slack` meets the certificate and commit thresholds, and `waveLength · slack + 1 ≤ n`.
 
 #### `tryDirect`
 
@@ -20679,6 +21204,46 @@ def onRecord (p : Params) (σ : VoteSel Validator BlockId Payload P honest) :
 
 **The family's carrier, read as block records.**
 
+#### `Safe`
+
+*def, `Scheme.Schedules.Statement.lean`*
+
+```lean
+def Safe : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised] (q : ℕ)
+    [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) (rel : Reliability Validator),
+    p.Tolerates honest f q →
+    ∀ (B : Barnacle.Params) (Bd : Boundary Validator)
+      (upd : UpdateRule (schemeLive p σ rel).toBaseRule) (C₀ : Config Validator),
+      Barnacle.Agreement.RunAgreement (schemeLive p σ rel).toBaseRule B Bd upd C₀ ∧
+      (Barnacle.Anchored (schemeLive p σ rel).toBaseRule upd →
+        Barnacle.Ledger.LedgerAgreement (schemeLive p σ rel).toBaseRule B Bd upd C₀ ∧
+        Barnacle.Ledger.LedgerPrefix (schemeLive p σ rel).toBaseRule B Bd upd C₀ ∧
+        Barnacle.Ledger.LedgerNodup (schemeLive p σ rel).toBaseRule B Bd upd C₀)
+```
+
+**The decider is safe under every update rule.**
+
+#### `Descends`
+
+*def, `Scheme.Schedules.Statement.lean`*
+
+```lean
+def Descends : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
+    (honest : Finset Validator) (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
+    (rel : Reliability Validator),
+    rel.correct ⊆ honest → 2 ≤ p.waveLength → (p.voteIsCert = false → 3 ≤ p.waveLength) →
+    p.certThreshold ≤ Fintype.card Validator - rel.slack →
+    p.commitThreshold ≤ Fintype.card Validator - rel.slack →
+    (schemeLive p σ rel).Descent rel.slack
+```
+
+**The decider has the descent laws at slack `rel.slack`**, when the reliable validators are honest and `n − rel.slack` meets the certificate and commit thresholds.
+
 #### `SynchronisedOn`
 
 *def, `Timed.Coverage.lean`*
@@ -20741,7 +21306,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 628 theorems the body or Appendix A names, each
+The 656 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -20760,6 +21325,21 @@ theorem exists_mem_inter_notMem {A B Bad : Finset α} {m : ℕ}
 ```
 
 **The intersection lemma.** Two sets whose sizes sum past `n + m` share a member outside any set of at most `m`.
+
+#### `card_mul_le_of_bipartite_filter`
+
+*theorem, `Common.Counting.lean`*
+
+```lean
+theorem card_mul_le_of_bipartite_filter {α β : Type*} (s : Finset α) (t : Finset β)
+    (rel : α → β → Prop) [∀ a b, Decidable (rel a b)] {m d : ℕ}
+    (hm : ∀ a ∈ s, m ≤ (t.bipartiteAbove rel a).card) :
+    s.card * m ≤
+      (t.filter (fun b => d < (s.bipartiteBelow rel b).card)).card * s.card +
+        (t.filter (fun b => ¬ d < (s.bipartiteBelow rel b).card)).card * d
+```
+
+**Double counting, threshold form.** If every `a ∈ s` relates to at least `m` members of `t`, then `|s|·m` is at most `|s|` times the number of `b ∈ t` related to more than `d` members of `s`, plus `d` times the number of the others.
 
 #### `reliable_eq_correct`
 
@@ -20904,6 +21484,21 @@ theorem View.exists_reaches_iff {U : BlockRecord Validator BlockId Payload P hon
 
 **T6a, in the form the commit rules consume.** Asking whether a `P`-block lies in `c`'s history gives the same answer confined to the view or not — what makes a view-relative certificate check well defined.
 
+#### `card_inHistory_ge`
+
+*theorem, `Common.History.lean`*
+
+```lean
+theorem card_inHistory_ge (hne : U.NoEquivOn Hon) (hHon : Honᶜ.card ≤ f)
+    {X : Finset BlockId} {D : ℕ} (hX : ∀ b ∈ X, b ∈ U.ids ∧ (U.block b).round = D) :
+    ∀ d A, A ∈ U.ids → (U.block A).round = D + 1 + d →
+      (creatorsOf U.block X).card + q ≤
+        Fintype.card Validator + f +
+          (creatorsOf U.block (X.filter (fun C => C ∈ history U A))).card
+```
+
+**Visibility.** A block `d + 1` rounds above a set `X` of round-`D` blocks holds in its history the blocks of `X` of at least `|authors X| + q − n − f` authors.
+
 #### `authorsAt_eq_authorsIn`
 
 *theorem, `Common.Support.lean`*
@@ -21013,6 +21608,45 @@ theorem BlockUniverse.exists_common_mem_of_quorums {s t : Finset BlockId} {n : �
 
 **Two quorum-backed sets of round-`n` blocks share a block**: a correct author common to both has one round-`n` block.
 
+#### `exists_honest_common_support`
+
+*theorem, `Common.CommonCore.lean`*
+
+```lean
+theorem exists_honest_common_support {f r : ℕ} (hf : honestᶜ.card ≤ f)
+    (hq2 : Fintype.card Validator + f + 1 ≤ 2 * q)
+    (hp : q ≤ (authorsAt U (r + 1)).card) :
+    ∃ bw ∈ U.ids, (U.block bw).round = r ∧ (U.block bw).creator ∈ honest ∧
+      (authorsAt U (r + 1)).card + 1 ≤ (supporters U bw (r + 1) ∩ honest).card + q
+```
+
+**The common core's count**: at `2q ≥ n + f + 1`, given a round-`(r+1)` author pool of at least `q`, some honest round-`r` block has so many honest supporters at round `r + 1` that with `q` they exceed the pool.
+
+#### `exists_commonCore`
+
+*theorem, `Common.CommonCore.lean`*
+
+```lean
+theorem exists_commonCore {f r : ℕ} (hf : honestᶜ.card ≤ f)
+    (hq2 : Fintype.card Validator + f + 1 ≤ 2 * q) {c₀ : BlockId}
+    (hc₀ : c₀ ∈ U.ids) (hc₀r : (U.block c₀).round = r + 2) :
+    ∃ b ∈ U.ids, (U.block b).round = r ∧ (U.block b).creator ∈ honest ∧
+      ∀ c ∈ U.ids, r + 2 ≤ (U.block c).round → Reaches U c b
+```
+
+**The common core**: at `2q ≥ n + f + 1`, if a block exists at round `r + 2`, some honest round-`r` block lies in the history of every block from round `r + 2` up.
+
+#### `card_add_f_lt_two_mul_quorum`
+
+*theorem, `Common.CommonCore.lean`*
+
+```lean
+theorem card_add_f_lt_two_mul_quorum :
+    Fintype.card Validator + F.f + 1 ≤ 2 * (quorumCard Validator)
+```
+
+The core's quorum meets the general count's condition.
+
 #### `exists_correct_common_support`
 
 *theorem, `Common.CommonCore.lean`*
@@ -21026,9 +21660,7 @@ theorem exists_correct_common_support {r : ℕ}
         ≤ (correctSupporters U bw (r + 1)).card + Fintype.card Validator
 ```
 
-**T3a (Correct-support counting).** Some correct validator's round-`r` block is backed by enough correct round-`(r+1)` validators to satisfy the `p - 2f` coverage threshold.
-
-Double counting: each correct round-`(r+1)` block names at least `(n-f) - b` correct round-`r` authors, and there are `l` such blocks spread over `c = n - b` correct validators, so some author `w` collects at least `l(n-f-b)/c`. The arithmetic obligation reduces to `c² ≤ f(l+c)`, which `l ≤ c` turns into `c ≤ 2f` — impossible, since `b ≤ f` and `n ≥ 3f+1` force `c ≥ 2f+1`. The same contradiction as at `n = 3f+1`, verbatim.
+**T3a (Correct-support counting).** Some correct validator's round-`r` block is backed by enough correct round-`(r+1)` validators to satisfy the `p - 2f` coverage threshold: the general count at the core's quorum.
 
 #### `exists_common_correct_ancestor`
 
@@ -21042,11 +21674,7 @@ theorem exists_common_correct_ancestor {r : ℕ} {c₀ : BlockId}
       ∀ c ∈ U.ids, (U.block c).round = r + 2 → Reaches U c bw
 ```
 
-**T3c (Common correct ancestor).** If any block exists at round `r+2`, some correct validator's round-`r` block lies in the causal history of *every* round-`(r+2)` block.
-
-The only premise is that a round-`(r+2)` block exists — a fact about the DAG in hand, not an assumption that anyone makes progress. Its own reference quorum supplies the `2f+1` author bound T3a needs.
-
-Note the statement mentions no `Finset BlockId` operation, so unlike T3a it does **not** require decidable equality on ids; the proof supplies that classically.
+**T3c (Common correct ancestor).** If any block exists at round `r+2`, some correct validator's round-`r` block lies in the causal history of *every* round-`(r+2)` block: the general common core at the core's quorum.
 
 #### `mem_ids_and_round_of_quorum_support`
 
@@ -25151,7 +25779,7 @@ theorem progress (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBound
     {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
     (Rn : Run R.toBaseRule P B upd C₀ U V K)
     (hlive : R.LiveOn (Rn.cfg K).sched c)
-    (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ Rn.start K + 1)
+    (hgood : R.Good (Rn.cfg K).sched U Rnd N) (hRnd : Rnd ≤ Rn.start K + 1)
     (hN : Rn.start K + P.maxInterval + 1 + 2 * c + R.waveLength ≤ N) :
     Nonempty (Run R.toBaseRule P B upd C₀ U V (K + 1))
 ```
@@ -26382,6 +27010,54 @@ theorem bluestreakLaws :
 
 **Bluestreak's laws**, under `Disciplined`: every case by certification.
 
+#### `commitFinalized`
+
+*theorem, `Checkpoint.CarryProofs.lean`*
+
+```lean
+theorem commitFinalized (ha : Agree R) {V : R.View U} {slot : ℕ} {block : BlockId}
+    (commit : R.Decided S V slot (some block))
+    (hall : ∀ v ∈ M.alive,
+      ∃ b, R.Decided S (C.view v) slot (some b)) :
+    Nonempty (SigningFaults.Execution.FinalityQC M C.execution
+      (vm.checkpointAfterCommit slot block))
+```
+
+**A carried run finalizes every settled commit**: the commit bridge at the derived execution and rule.
+
+#### `commitFinalized`
+
+*theorem, `Checkpoint.CommitProofs.lean`*
+
+```lean
+theorem commitFinalized : CommitFinalized M E R vm
+```
+
+Proof of `CommitFinalized`.
+
+#### `liveCommitFinalized`
+
+*theorem, `Checkpoint.CommitProofs.lean`*
+
+```lean
+theorem liveCommitFinalized (sp : Support R) (rel : Reliability Validator) :
+    LiveCommitFinalized M E R sp rel vm
+```
+
+Proof of `LiveCommitFinalized`: `Commits` on the leader's own view supplies the commit, and on each rule-following validator's view supplies the settled-everywhere hypothesis.
+
+#### `commitCheckpointUnique`
+
+*theorem, `Checkpoint.CommitProofs.lean`*
+
+```lean
+theorem commitCheckpointUnique
+    (vm : DeterministicVM (BlockId := BlockId) (Value := Value)) :
+    CommitCheckpointUnique R vm
+```
+
+Proof of `CommitCheckpointUnique`: rewrite with agreement.
+
 #### `agree`
 
 *theorem, `Common.Anchored.Band.lean`*
@@ -26496,6 +27172,29 @@ theorem decidedBelowRun_of_least
 ```
 
 The descent below a committed run, from a choice at every nonempty rung.
+
+#### `decided`
+
+*theorem, `Common.Anchored.ReadAlike.lean`*
+
+```lean
+theorem decided (h : ReadAlike R₁ R₂ U) {V : U.View} {k : ℕ} {v : Option BlockId}
+    (hd : R₁.Decided U V k v) : R₂.Decided U V k v
+```
+
+#### `toDagRule_eq`
+
+*theorem, `Common.Anchored.ReadAlike.lean`*
+
+```lean
+theorem toDagRule_eq
+    (h : ∀ (S : Slots Validator) (U : BlockRecord Validator BlockId Payload P honest)
+      (V : U.View) (k : ℕ) (v : Option BlockId),
+      R₁.Decided (S := S) U V k v ↔ R₂.Decided (S := S) U V k v) :
+    R₁.toDagRule = R₂.toDagRule
+```
+
+**Rules that decide alike have one carrier.**
 
 #### `eligibleAt_of_lt_of_spacing`
 
@@ -27347,6 +28046,47 @@ theorem progress : LeanDag.Properties.Support.Progresses
 ```lean
 theorem holds : Statement
 ```
+
+#### `quorum_alive`
+
+*theorem, `Integration.FaultClasses.lean`*
+
+```lean
+theorem quorum_alive : F.signing.q ≤ F.signing.alive.card
+```
+
+The rule-following validators form the signing quorum, AbC validators included.
+
+#### `isQuorum_alive`
+
+*theorem, `Integration.FaultClasses.lean`*
+
+```lean
+theorem isQuorum_alive : F.reliability.IsQuorum F.signing.alive
+```
+
+The rule-following validators are a quorum of the reliability, AbC validators included.
+
+#### `quorum_alive`
+
+*theorem, `Integration.HybridCheckpoint.lean`*
+
+```lean
+theorem quorum_alive : M.signing.q ≤ M.signing.alive.card
+```
+
+The rule-following validators form the signing quorum. AbC validators count: this is the bridge's `quorum` with AbC present.
+
+#### `isQuorum_alive`
+
+*theorem, `Integration.HybridCheckpoint.lean`*
+
+```lean
+theorem isQuorum_alive :
+    (coreReliability Validator).IsQuorum M.signing.alive
+```
+
+The rule-following validators are a quorum of the core reliability, whatever the AbC population: the liveness bridge's DAG premise with AbC present.
 
 #### `not_synchronisedOn_copyFill_hz`
 
@@ -28509,9 +29249,89 @@ theorem committed_of_correct_block
 theorem holds : Statement
 ```
 
+#### `live`
+
+*theorem, `Scheme.AsyncLive.Proof.lean`*
+
+```lean
+theorem live : Live
+```
+
+#### `holds`
+
+*theorem, `Scheme.AsyncLive.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
 #### `holds`
 
 *theorem, `Scheme.AsyncLocal.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `Scheme.AtomicBroadcast.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `aimdBroadcast`
+
+*theorem, `Scheme.Compose.Proof.lean`*
+
+```lean
+theorem aimdBroadcast : AimdBroadcast
+```
+
+#### `asyncBroadcast`
+
+*theorem, `Scheme.Compose.Proof.lean`*
+
+```lean
+theorem asyncBroadcast : AsyncBroadcast
+```
+
+#### `asyncHammerHeadBroadcast`
+
+*theorem, `Scheme.Compose.Proof.lean`*
+
+```lean
+theorem asyncHammerHeadBroadcast : AsyncHammerHeadBroadcast
+```
+
+#### `holds`
+
+*theorem, `Scheme.Compose.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `live`
+
+*theorem, `Scheme.Crash.Proof.lean`*
+
+```lean
+theorem live : Live
+```
+
+#### `commits`
+
+*theorem, `Scheme.Crash.Proof.lean`*
+
+```lean
+theorem commits : Commits
+```
+
+#### `holds`
+
+*theorem, `Scheme.Crash.Proof.lean`*
 
 ```lean
 theorem holds : Statement
@@ -28555,13 +29375,29 @@ A vote, across a band.
 ```lean
 theorem votes (hw : 2 ≤ p.waveLength) (hTh : T ⊆ honest) (hq : q ≤ T.card)
     (hgst : rs.gst ≤ R) (hto : ∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) {k : ℕ}
-    {L : BlockId} (hR : R ≤ S.slotRound k) (hN : S.slotRound k + p.voteOffset ≤ N)
+    {L : BlockId} (hR : R ≤ S.slotRound k) (hN : S.slotRound k + p.voteOffset ≤ rs.waits)
     (hlead : S.leader k ∈ T) (hL : IsLeaderBlock U k L) :
     ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
       (U.block c).round = S.slotRound k + p.voteOffset → σ.Votes U c L
 ```
 
 **Every reliable vote-round block votes for the leader block.**
+
+#### `live_of_reactiveLive`
+
+*theorem, `Scheme.Helpers.Reactive.lean`*
+
+```lean
+theorem live_of_reactiveLive {rel : Reliability Validator}
+    (hw : 2 ≤ p.waveLength)
+    (hcv : p.voteIsCert = false →
+      3 ≤ p.waveLength ∧ p.certThreshold ≤ Fintype.card Validator - rel.slack)
+    {S : Slots Validator} {U : (schemeRule p σ).Universe} {V : (schemeRule p σ).View U}
+    {T : Finset Validator} {lo K : ℕ} (h : reactiveLive p σ rel S V T lo K) :
+    (familySupport p σ).live rel S V T lo K
+```
+
+**The reactive discipline reaches the family support's liveness precondition**, at any reliability: a reactive execution past GST is a quorum populating every round of each reliably-led slot's wave and certifying its candidates.
 
 #### `tryDecide_restart`
 
@@ -28574,15 +29410,6 @@ theorem tryDecide_restart {lo lo' N : ℕ} (hlo : lo ≤ lo')
 ```
 
 **Restarting inside the output repeats its tail.**
-
-#### `decided`
-
-*theorem, `Scheme.Helpers.Transfer.lean`*
-
-```lean
-theorem decided (h : ReadAlike R₁ R₂ U) {V : U.View} {k : ℕ} {v : Option BlockId}
-    (hd : R₁.Decided U V k v) : R₂.Decided U V k v
-```
 
 #### `holds`
 
@@ -28735,6 +29562,14 @@ theorem decided_none_of_novel {p : Params} {σ : VoteSel Validator BlockId Paylo
 
 #### `holds`
 
+*theorem, `Scheme.Responsive.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
 *theorem, `Scheme.Rows.Proof.lean`*
 
 ```lean
@@ -28744,6 +29579,14 @@ theorem holds : Statement
 #### `holds`
 
 *theorem, `Scheme.Safety.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `Scheme.Schedules.Proof.lean`*
 
 ```lean
 theorem holds : Statement
@@ -28830,5 +29673,15 @@ theorem synchronisedOn_of_extends {U U' : R.Universe} (he : Extends R U U')
 ```
 
 **An extension preserves coverage** for a set holding no author of a novel block: every block the clause reaches is old, and old blocks are unchanged.
+
+#### `SilentGood.good`
+
+*theorem, `Timed.Silent.lean`*
+
+```lean
+theorem SilentGood.good {R : Properties.DagRule Validator BlockId Payload}
+    {rel : Reliability Validator} {fb : ℕ} {U : R.Universe} {Rnd N : ℕ}
+    (h : SilentGood R rel fb U Rnd N) : Good R rel U Rnd N
+```
 
 <!-- END GENERATED REFERENCE -->

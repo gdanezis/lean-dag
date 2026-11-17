@@ -131,6 +131,18 @@ def CertFits (p : Params) (q : ℕ) : Prop :=
 def Live (p : Params) (n f c : ℕ) : Prop :=
   p.commitThreshold ≤ n - f - c ∧ p.skipThreshold ≤ n - f - c ∧ p.certThreshold ≤ n - f - c
 
+/-- **The partially synchronous rows at their committees**: Mysticeti and
+Cordial Miners from `3f + 1`, Blue Bottle from `5f + 1`, without crash
+faults; Orcaella from `5f + 3c + 1`; Hybrid Mysticeti from `3f + 2c + 1`;
+and Nemo-Nemo from `2c + 1`, where nobody equivocates. Each runs at the
+parent quorum `n − f − c`. -/
+def PSRow (p : Params) (n f c : ℕ) : Prop :=
+  (c = 0 ∧ 3 * f + 1 ≤ n ∧ (p = mysticeti n f ∨ p = cordialMinersPS n f)) ∨
+  (c = 0 ∧ 5 * f + 1 ≤ n ∧ p = blueBottlePS n f) ∨
+  (5 * f + 3 * c + 1 ≤ n ∧ p = orcaella n f c) ∨
+  (3 * f + 2 * c + 1 ≤ n ∧ p = hybridMysticeti n f c) ∨
+  (f = 0 ∧ 2 * c + 1 ≤ n ∧ p = nemoNemo n c)
+
 end Params
 
 end Scheme

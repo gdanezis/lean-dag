@@ -50,8 +50,8 @@ example : LeanDagTest.Hydrozoan.fourReplicas.f
 
 /-- `U7` is good from round `0` to round `2`: the fully-correct class
 is quorum-sized, synchronised from `0`, and populates every round. -/
-theorem good_U7 : (LeanDag.Barnacle.hydrozoanLive
-    (Replica := Fin 4) (BlockId := Fin 9)).Good LeanDagTest.Hydrozoan.U7 0 2 :=
+theorem good_U7 (S₀ : Slots (Fin 4)) : (LeanDag.Barnacle.hydrozoanLive
+    (Replica := Fin 4) (BlockId := Fin 9)).Good S₀ LeanDagTest.Hydrozoan.U7 0 2 :=
   ⟨(LeanDag.Hydrozoan.Correct : Finset (Fin 4)), ⟨Finset.Subset.refl _, by decide⟩,
     LeanDagTest.Hydrozoan.u7_synchronised, by
       intro r _ hr
@@ -69,7 +69,8 @@ example : ∃ T : Finset (Fin 4),
       + (LeanDagTest.Hydrozoan.fourReplicas.f + LeanDagTest.Hydrozoan.fourReplicas.c) := by
   obtain ⟨T, hT, _⟩ :=
     (LeanDag.Barnacle.HydrozoanLive.descent (Fin 4) (Fin 9)).goodLeaders
-      LeanDagTest.Hydrozoan.U7 0 2 good_U7
+      (Slots.uniformSingle 1 Nat.one_pos fun _ => (0 : Fin 4)) LeanDagTest.Hydrozoan.U7 0 2
+      (good_U7 _)
   exact ⟨T, hT⟩
 
 /-! ## The committee condition is a real restriction

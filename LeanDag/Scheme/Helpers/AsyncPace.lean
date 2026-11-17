@@ -113,6 +113,21 @@ theorem decided_of_safe_of_holds {k : ℕ} (hw : 2 ≤ p.waveLength)
     (commit_of_certified hcm hpop fun C hC hCT hCr =>
       ⟨isCert_of_safe σ hw hcv hL hLr (hLc ▸ hLh) hsafe hC hCr, hV C hC hCT⟩)⟩
 
+/-- **A safe leader's slot commits on a view holding the decision-round
+blocks**, when the reliable validators populating that round meet the
+commit threshold. -/
+theorem decided_of_safe_of_round {k : ℕ} (hw : 2 ≤ p.waveLength)
+    (hcv : p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q)
+    (hcm : p.commitThreshold ≤ T.card)
+    (hpop : PopulatedOn U T (S.slotRound k + (p.waveLength - 1)))
+    (hk : S.leader k ∈ safe p U k) {V : U.View}
+    (hV : ∀ b ∈ U.ids, (U.block b).round = S.slotRound k + (p.waveLength - 1) → b ∈ V.ids) :
+    ∃ L, IsLeaderBlock U k L ∧ (schemeAnchored p σ).Decided U V k (some L) := by
+  obtain ⟨hLh, L, hL, hLr, hLc, hsafe⟩ := mem_safeAt.mp hk
+  exact ⟨L, ⟨hL, hLr, hLc⟩, AnchoredRule.Decided.directCommit ⟨hL, hLr, hLc⟩
+    (commit_of_certified hcm hpop fun C hC _ hCr =>
+      ⟨isCert_of_safe σ hw hcv hL hLr (hLc ▸ hLh) hsafe hC hCr, hV C hC hCr⟩)⟩
+
 namespace AsyncPace
 
 variable (ap : AsyncPace qp U T N)

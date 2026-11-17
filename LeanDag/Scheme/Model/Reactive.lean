@@ -53,11 +53,17 @@ structure SchemeReactive [S : Slots Validator] (q : ℕ) (p : Params)
   /-- **The progress rule at `q`.** A reliable validator holding `q`
   distinct round-`n` authors gets past round `n`. -/
   advancesAt : ∀ v ∈ T, ∀ n < N, ∀ t, q ≤ (authorsIn U (holds v t) n).card → n < top v
-  /-- **Reach or wait.** At each round from the one above the proposal to
-  the vote round, a reliable block reaches the leader block, or its builder
-  waited the timeout and references the leader's block of the round below
-  if it holds it. -/
-  reach_or_wait : ∀ v ∈ T, ∀ k : ℕ, S.slotRound k + p.voteOffset ≤ N → S.leader k ∈ T →
+  /-- The last round up to which the validators wait for this schedule's
+  leaders: the horizon under a fixed schedule, the round its range closes
+  under an adaptive one. -/
+  waits : ℕ
+  waits_le : waits ≤ N
+  /-- **Reach or wait.** At a slot past GST, at each round from the one
+  above the proposal to the vote round, a reliable block reaches the leader
+  block, or its builder waited the timeout and references the leader's
+  block of the round below if it holds it. -/
+  reach_or_wait : ∀ v ∈ T, ∀ k : ℕ, gst ≤ S.slotRound k →
+    S.slotRound k + p.voteOffset ≤ waits → S.leader k ∈ T →
     ∀ L, IsLeaderBlock U k L → ∀ m, m < p.voteOffset →
     ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + m + 1 →
     Reaches U c L ∨
@@ -65,12 +71,12 @@ structure SchemeReactive [S : Slots Validator] (q : ℕ) (p : Params)
           ≤ built v (S.slotRound k + m + 1) ∧
         ∀ b ∈ U.ids, (U.block b).creator = S.leader k → (U.block b).round = S.slotRound k + m →
           b ∈ holds v (built v (S.slotRound k + m + 1)) → b ∈ (U.block c).refs)
-  /-- **Certify or wait.** Where votes are certified a round later, a
-  reliable decision-round block certifies the leader block, or its builder
-  waited the timeout and references every reliable vote for it that it
-  holds. -/
-  cert_or_wait : p.voteIsCert = false → ∀ v ∈ T, ∀ k : ℕ,
-    S.slotRound k + p.voteOffset + 1 ≤ N → S.leader k ∈ T →
+  /-- **Certify or wait.** Where votes are certified a round later, at a
+  slot past GST, a reliable decision-round block certifies the leader
+  block, or its builder waited the timeout and references every reliable
+  vote for it that it holds. -/
+  cert_or_wait : p.voteIsCert = false → ∀ v ∈ T, ∀ k : ℕ, gst ≤ S.slotRound k →
+    S.slotRound k + p.voteOffset + 1 ≤ waits → S.leader k ∈ T →
     ∀ L, IsLeaderBlock U k L →
     ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + p.voteOffset + 1 →
     IsCert p σ U c L ∨
@@ -92,7 +98,7 @@ def SchemeReactive.toAsyncPace [S : Slots Validator] {q : ℕ} {p : Params}
 slot window: a quorum `T` of `rel` of honest validators running a
 reactive execution at `n − rel.slack` past GST, with the timeout clearing
 `2Δ + proc`, the view caught up to the horizon, and every slot of the
-window a wave under it. -/
+window a wave under the round up to which the run waits for its leaders. -/
 def reactiveLive (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
     (rel : Reliability Validator) (S : Slots Validator)
     {U : (schemeRule p σ).Universe} (V : (schemeRule p σ).View U) (T : Finset Validator)
@@ -101,7 +107,7 @@ def reactiveLive (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
     ∃ (N R₀ : ℕ) (rs : SchemeReactive (S := S) (Fintype.card Validator - rel.slack) p σ U T N),
       rs.gst ≤ R₀ ∧ (∀ n, R₀ ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) ∧
       R₀ ≤ S.slotRound lo ∧ Properties.CoversUpto (schemeRule p σ) V N ∧
-      ∀ k, k < K → S.slotRound k + (p.waveLength - 1) ≤ N
+      ∀ k, k < K → S.slotRound k + (p.waveLength - 1) ≤ rs.waits
 
 end Scheme
 

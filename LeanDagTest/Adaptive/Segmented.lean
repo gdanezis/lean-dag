@@ -113,7 +113,8 @@ example (ha : Properties.Agree RL.toBaseRule.toDagRule) (hD : RL.Descent slack)
     (hperm : ∀ (U : RL.Universe) (V : RL.View U) (v : ℕ → Option BlockId)
       (C : Config Validator), Permuted head C → Permuted head (score U V v C))
     (C₀ : Config Validator) (h₀ : C₀.InBounds P) (hQ₀ : Permuted head C₀)
-    (U : RL.Universe) (V : RL.View U) (Rnd N : ℕ) (hgood : RL.Good U Rnd N)
+    (U : RL.Universe) (V : RL.View U) (Rnd N : ℕ)
+    (hgood : ∀ C : Config Validator, C.InBounds P → Permuted head C → RL.Good C.sched U Rnd N)
     (hcov : RL.toBaseRule.CoversUpto U V N) (hRnd : Rnd ≤ 1)
     (K : ℕ) (hK : horizon P RL c₀ K ≤ N) :
     Nonempty (SegRun RL.toBaseRule P (rule score) C₀ U V K) :=

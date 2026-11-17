@@ -17,7 +17,7 @@ namespace Orcaella
 
 theorem descent : Descent := by
   intro Validator BlockId Payload _ _ H _ k _
-  exact HybridProperties.descent k
+  exact LiveRule.Descent.ofProperties (fun _ => rfl) (HybridProperties.descent k)
 
 theorem holds : Statement := by
   refine ⟨?_, descent, ?_⟩

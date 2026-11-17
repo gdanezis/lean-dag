@@ -1,3 +1,4 @@
+import LeanDag.Common.Anchored.ReadAlike
 import LeanDag.Scheme.Async.Proof
 import LeanDagTest.MahiMahi.Model
 /-!
@@ -90,3 +91,7 @@ end Scheme
 end LeanDagTest
 
 #print axioms LeanDag.Scheme.Async.holds
+#print axioms LeanDag.exists_commonCore
+#print axioms LeanDag.card_inHistory_ge
+#print axioms LeanDag.card_mul_le_of_bipartite_filter
+#print axioms LeanDag.AnchoredRule.ReadAlike.decided_iff

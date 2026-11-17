@@ -48,7 +48,9 @@ def ofReactiveM (σ : VoteSel Validator BlockId Payload ValidWrt Correct)
     { rc with
       advances := fun v hv n hn t h => hadv v hv n hn t (le_trans (Nat.sub_le _ _) h) }
   advancesAt := rm.advances
-  reach_or_wait := fun v hv k hN hlead L hL m hm c hc hcc hcr => by
+  waits := N
+  waits_le := le_refl N
+  reach_or_wait := fun v hv k _ hN hlead L hL m hm c hc hcc hcr => by
     have hvo : (Params.mysticeti (Fintype.card Validator) F.f).voteOffset = 1 := by
       simp [Params.voteOffset, Params.mysticeti]
     have hm0 : m = 0 := by omega
@@ -59,7 +61,7 @@ def ofReactiveM (σ : VoteSel Validator BlockId Payload ValidWrt Correct)
     · refine Or.inr ⟨by simpa using hw, fun b hb hbc hbr hbh => ?_⟩
       rw [U.eq_of_creator_eq hb hL.1 (hT hlead) hbc hL.2.2 (by rw [hbr, hL.2.1]; rfl)] at hbh ⊢
       exact hh (by simpa using hbh)
-  cert_or_wait := fun _ v hv k hN hlead L hL c hc hcc hcr => by
+  cert_or_wait := fun _ v hv k _ hN hlead L hL c hc hcc hcr => by
     have hvo : (Params.mysticeti (Fintype.card Validator) F.f).voteOffset = 1 := by
       simp [Params.voteOffset, Params.mysticeti]
     rw [hvo] at hN hcr ⊢

@@ -40,9 +40,9 @@ structure ReactiveCore (U : BlockRecord Validator BlockId Payload P honest)
   /-- Time advances with rounds — the only lower bound a reactive
   schedule keeps, over the rounds `v` reached. -/
   built_lt : ∀ v ∈ T, ∀ n < top v, built v n < built v (n + 1)
-  /-- **The reactive ceiling.** A validator never waits past the
+  /-- **The reactive ceiling.** Past GST a validator never waits past the
   timeout; it may build any time before it. -/
-  deadline : ∀ v ∈ T, ∀ n < top v, built v (n + 1) ≤ built v n + timeout n
+  deadline : ∀ v ∈ T, ∀ n < top v, gst ≤ built v n → built v (n + 1) ≤ built v n + timeout n
 
 namespace ReactiveCore
 

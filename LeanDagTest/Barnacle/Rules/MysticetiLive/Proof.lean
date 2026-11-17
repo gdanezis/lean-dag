@@ -16,7 +16,7 @@ namespace MysticetiLive
 
 theorem descent : Descent := by
   intro Validator BlockId Payload _ _ F _
-  exact MysticetiProperties.coreDescent
+  exact LiveRule.Descent.ofProperties (fun _ => rfl) (MysticetiProperties.coreDescent)
 
 theorem holds : Statement := by
   refine ⟨descent, ?_⟩

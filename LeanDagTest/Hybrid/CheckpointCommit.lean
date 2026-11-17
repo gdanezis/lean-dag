@@ -11,13 +11,16 @@ slot `0` that nonetheless commits directly. Its execution follows the
 signing rule by definition, the Byzantine validator emits a conflicting
 checkpoint, and the concrete commit produces one checkpoint, a
 first-phase quorum certificate, and a second-phase finality certificate.
-The conflicting checkpoint has no certificate.
+The conflicting checkpoint has no certificate. A second fault instance
+over the same universe makes validator `7` alive-but-corrupt: it
+completes the quorum and equivocates, and the commit still finalizes.
 
 `Usync9` is a synchronised three-round universe with a correct leader at
 slot `1`. It discharges every hypothesis of `LiveCommitFinalized` at
-`voteSupport` and the core reliability, so the finalized checkpoint
-there is derived from production and certification without any commit
-being supplied.
+`voteSupport` and the core reliability, with validator `7`
+alive-but-corrupt and equivocating, so the finalized checkpoint there is
+derived from production and certification without any commit being
+supplied and with an AbC validator in the reliability quorum.
 
 Both run the generic bridge at Hybrid's carrier `hybridRule 4`, with
 `HybridProperties.agree`, `commitsCandidate` and `voteSupport_commits`
@@ -152,7 +155,7 @@ def hybExecution : bridgeSigning.Execution ℕ where
   genesis := fun _ => []
   localHistory := fun _ _ height => List.replicate height 0
   emitted := fun message =>
-    (message.sender ∈ bridgeSigning.recoveryCorrect ∧
+    (message.sender ∈ bridgeSigning.alive ∧
       ∃ slot block,
         Hybrid.Decided 4 Uhyb9 (hybView message.sender) slot (some block) ∧
         message.checkpoint = (natVM 18).checkpointAfterCommit slot block) ∨
@@ -182,11 +185,11 @@ def hybExecution : bridgeSigning.Execution ℕ where
     · rw [h0] at reliable
       exact absurd reliable (by decide)
 
-/-- Every proposal from an online correct validator is the committed
+/-- Every proposal from a rule-following validator is the committed
 checkpoint. -/
 theorem hybExecution_emitted {message : ChkProp (Fin 9) ℕ}
     (h : hybExecution.emitted message)
-    (hv : message.sender ∈ bridgeSigning.recoveryCorrect) :
+    (hv : message.sender ∈ bridgeSigning.alive) :
     message.checkpoint = committedCheckpoint := by
   rcases h with ⟨_, slot, block, hdec, hc⟩ | ⟨h0, _⟩
   · obtain ⟨rfl, rfl⟩ := uhyb9_decided_eq hdec
@@ -230,7 +233,7 @@ online correct proposal is the committed checkpoint. -/
 def hybRule :
     SigningFaults.Execution.SigningRule bridgeSigning hybExecution
       hybRule18 hyb9Slots uhyb9 (natVM 18) where
-  quorum := bridgeFaults.quorum_of_noAbC rfl
+  quorum := bridgeFaults.quorum_alive
   view := hybView
   proposes := by
     intro v hv slot block hdec
@@ -246,9 +249,9 @@ def hybRule :
 /-- The crash fault remains present and is not required to sign. -/
 example : (8 : Fin 9) ∉ bridgeSigning.recoveryCorrect := by decide
 
-/-- Every online correct validator settled slot `0` on its own view. -/
+/-- Every rule-following validator settled slot `0` on its own view. -/
 theorem hyb_all_decided :
-    ∀ v ∈ bridgeSigning.recoveryCorrect,
+    ∀ v ∈ bridgeSigning.alive,
       ∃ b, Hybrid.Decided 4 Uhyb9 (hybView v) 0 (some b) := by
   intro v _
   by_cases hv : v = 7
@@ -281,13 +284,139 @@ theorem slot0_checkpoint_unique {V : View (Fin 9) (Fin 18) Unit Uhyb9}
 example : (natVM 18).checkpointAfterCommit 0 0 = committedCheckpoint :=
   slot0_checkpoint_unique uhyb9_slot0_partial
 
+/-! ## `Uhyb9` with an AbC validator present
+
+Validator `7` is alive-but-corrupt: it follows the signing rule (its
+proposal is counted in both quorums) and also proposes the fork. The
+quorum is still `7`, now reached by `1`–`7` with `7` unreliable; the
+recovery-correct set shrinks to `1`–`6`. The commit finalizes, and the
+fork, proposed by `0` and `7` only, has no certificate. -/
+
+/-- One AbC validator, `7`, beside the Byzantine `0` and the crashed `8`. -/
+def abcFaults : FlexibleFaults (Fin 9) where
+  fabc := 1
+  abc := {7}
+  disjoint_byzantine := by decide
+  disjoint_crash := by decide
+  card_abc := by decide
+  resilient := by decide
+
+def abcSigning : SigningFaults (Fin 9) := abcFaults.signing
+
+example : abcSigning.alive = {1, 2, 3, 4, 5, 6, 7} := by decide
+example : abcSigning.recoveryCorrect = {1, 2, 3, 4, 5, 6} := by decide
+example : (7 : Fin 9) ∈ abcSigning.alive ∧ (7 : Fin 9) ∉ abcSigning.reliableSigner := by
+  decide
+
+/-- As `hybExecution`, with validator `7` also proposing the fork. -/
+def abcExecution : abcSigning.Execution ℕ where
+  genesis := fun _ => []
+  localHistory := fun _ _ height => List.replicate height 0
+  emitted := fun message =>
+    (message.sender ∈ abcSigning.alive ∧
+      ∃ slot block,
+        Hybrid.Decided 4 Uhyb9 (hybView message.sender) slot (some block) ∧
+        message.checkpoint = (natVM 18).checkpointAfterCommit slot block) ∨
+    ((message.sender = 0 ∨ message.sender = 7) ∧ message.checkpoint = forkedCheckpoint)
+  recorded := fun validator checkpoint =>
+    validator ∈ abcSigning.recoveryCorrect ∧
+      checkpoint = committedCheckpoint
+  genesis_prefix := by
+    intro message _ _
+    simp
+  local_extension := by
+    intro validator epoch h₁ h₂ _ le
+    rw [List.prefix_iff_eq_take]
+    simp [List.take_replicate, Nat.min_eq_left le]
+  emitted_from_state := by
+    intro message hm reliable
+    rcases hm with ⟨_, slot, block, hdec, hc⟩ | ⟨h07, _⟩
+    · obtain ⟨rfl, rfl⟩ := uhyb9_decided_eq hdec
+      simp [hc, natVM]
+    · rcases h07 with h | h <;> rw [h] at reliable <;> exact absurd reliable (by decide)
+  local_height := by
+    intro message hm reliable
+    rcases hm with ⟨_, slot, block, hdec, hc⟩ | ⟨h07, _⟩
+    · obtain ⟨rfl, rfl⟩ := uhyb9_decided_eq hdec
+      simp [hc, natVM]
+    · rcases h07 with h | h <;> rw [h] at reliable <;> exact absurd reliable (by decide)
+
+/-- The AbC validator equivocates: it proposes both checkpoints. -/
+example : abcExecution.emitted ⟨7, committedCheckpoint⟩ :=
+  Or.inl ⟨by decide, 0, 0, uhyb9_slot0_partial, rfl⟩
+example : abcExecution.emitted ⟨7, forkedCheckpoint⟩ :=
+  Or.inr ⟨Or.inr rfl, rfl⟩
+
+/-- A recovery-correct validator's proposal is the committed checkpoint. -/
+theorem abcExecution_emitted {message : ChkProp (Fin 9) ℕ}
+    (h : abcExecution.emitted message)
+    (hv : message.sender ∈ abcSigning.recoveryCorrect) :
+    message.checkpoint = committedCheckpoint := by
+  rcases h with ⟨_, slot, block, hdec, hc⟩ | ⟨h07, _⟩
+  · obtain ⟨rfl, rfl⟩ := uhyb9_decided_eq hdec
+    exact hc
+  · rcases h07 with h | h <;> rw [h] at hv <;> exact absurd hv (by decide)
+
+/-- The signing rule with AbC present: `quorum` is `quorum_alive`, no
+`abc = ∅` hypothesis. -/
+def abcRule :
+    SigningFaults.Execution.SigningRule abcSigning abcExecution
+      hybRule18 hyb9Slots uhyb9 (natVM 18) where
+  quorum := abcFaults.quorum_alive
+  view := hybView
+  proposes := by
+    intro v hv slot block hdec
+    exact Or.inl ⟨hv, slot, block, hdec, rfl⟩
+  witnesses := by
+    intro v _ checkpoint he Q
+    exact
+      ⟨{ sender := v
+         certificate := Q
+         recorded := fun hv' => ⟨hv', abcExecution_emitted he hv'⟩ },
+       rfl⟩
+
+/-- Every rule-following validator, `7` included, settled slot `0`. -/
+theorem abc_all_decided :
+    ∀ v ∈ abcSigning.alive,
+      ∃ b, Hybrid.Decided 4 Uhyb9 (hybView v) 0 (some b) := by
+  intro v _
+  by_cases hv : v = 7
+  · exact ⟨0, by rw [hybView, if_pos hv]; exact uhyb9_slot0_partial⟩
+  · exact ⟨0, by rw [hybView, if_neg hv]; exact uhyb9_slot0⟩
+
+/-- **The commit finalizes with an AbC validator in the quorum.** -/
+def abcFinality :
+    SigningFaults.Execution.FinalityQC abcSigning abcExecution committedCheckpoint :=
+  SigningFaults.Execution.finalityQCOfDecided abcSigning abcExecution (natVM 18)
+    (HybridProperties.agree (by decide)) abcRule uhyb9_slot0 abc_all_decided
+
+/-- The fork, proposed by `0` and `7`, is five signers short. -/
+example :
+    IsEmpty (SigningFaults.Execution.CheckpointQC abcSigning
+      abcExecution forkedCheckpoint) := by
+  refine ⟨fun Q => ?_⟩
+  have hsub : Q.signers ⊆ {0, 7} := by
+    intro v hv
+    rcases Q.messages v hv with ⟨_, slot, block, hdec, hc⟩ | ⟨h07, _⟩
+    · obtain ⟨rfl, rfl⟩ := uhyb9_decided_eq hdec
+      simp [forkedCheckpoint, natVM] at hc
+    · simp only [Finset.mem_insert, Finset.mem_singleton]
+      exact h07
+  have hcard := Finset.card_le_card hsub
+  have hq := Q.quorum
+  have h7 : abcSigning.q = 7 := by decide
+  have h2 : ({0, 7} : Finset (Fin 9)).card = 2 := by decide
+  omega
+
 /-! ## `Usync9`: a correct-led slot finalized from liveness alone
 
-Rounds `0`, `1`, `2`, authored by the online correct validators `1`–`7`
+Rounds `0`, `1`, `2`, authored by the rule-following validators `1`–`7`
 only. Every non-genesis block references all seven blocks of the round
-below, so every candidate of slot `1` is certified by the whole
-recovery-correct set a round up. The Byzantine validator is silent
-here; the fork attempt above already covers adversarial emission. -/
+below, so every candidate of slot `1` is certified by all seven a round
+up. The fault model is `abcSigning`: validator `7` is alive-but-corrupt,
+so it produces and certifies with the others, is one of the seven the
+reliability quorum counts, and also proposes a fork. The Byzantine
+validator is silent. -/
 
 /-- Ids `7k`–`7k+6` are round `k`, creators `1`–`7`, referencing the
 whole previous round. -/
@@ -317,7 +446,7 @@ def usync9 : hybRule21.Universe := ⟨Usync9, by decide⟩
 /-- Slot `1`: leader `1`, a correct validator; its block is id `7`. -/
 example : (hyb9Slots.leader 1 : Fin 9) = 1 := by decide
 example : hybRule21.IsCandidate hyb9Slots usync9 1 7 := by decide
-example : (1 : Fin 9) ∈ bridgeSigning.recoveryCorrect := by decide
+example : (1 : Fin 9) ∈ abcSigning.alive := by decide
 
 /-- Deterministic application state after the `Usync9` commit of block `7`. -/
 def syncCheckpoint : CheckpointData ℕ where
@@ -368,18 +497,20 @@ theorem usync9_decided_eq {V : View (Fin 9) (Fin 21) Unit Usync9}
       simp at hA
       omega
 
-/-- Proposals follow the signing rule on the full view; records store
-the committed checkpoint. -/
-def syncExecution : bridgeSigning.Execution ℕ where
+/-- Proposals follow the signing rule on the full view, and the AbC
+validator `7` also proposes the fork; records store the committed
+checkpoint. -/
+def syncExecution : abcSigning.Execution ℕ where
   genesis := fun _ => []
   localHistory := fun _ _ height => List.replicate height 7
   emitted := fun message =>
-    message.sender ∈ bridgeSigning.recoveryCorrect ∧
+    (message.sender ∈ abcSigning.alive ∧
       ∃ slot block,
         Hybrid.Decided 4 Usync9 (View.full Usync9) slot (some block) ∧
-        message.checkpoint = (natVM 21).checkpointAfterCommit slot block
+        message.checkpoint = (natVM 21).checkpointAfterCommit slot block) ∨
+    (message.sender = 7 ∧ message.checkpoint = forkedCheckpoint)
   recorded := fun validator checkpoint =>
-    validator ∈ bridgeSigning.recoveryCorrect ∧ checkpoint = syncCheckpoint
+    validator ∈ abcSigning.recoveryCorrect ∧ checkpoint = syncCheckpoint
   genesis_prefix := by
     intro message _ _
     simp
@@ -388,74 +519,92 @@ def syncExecution : bridgeSigning.Execution ℕ where
     rw [List.prefix_iff_eq_take]
     simp [List.take_replicate, Nat.min_eq_left le]
   emitted_from_state := by
-    intro message ⟨_, slot, block, hdec, hc⟩ _
-    obtain ⟨rfl, rfl⟩ := usync9_decided_eq hdec
-    simp [hc, natVM]
+    intro message hm reliable
+    rcases hm with ⟨_, slot, block, hdec, hc⟩ | ⟨h7, _⟩
+    · obtain ⟨rfl, rfl⟩ := usync9_decided_eq hdec
+      simp [hc, natVM]
+    · rw [h7] at reliable
+      exact absurd reliable (by decide)
   local_height := by
-    intro message ⟨_, slot, block, hdec, hc⟩ _
-    obtain ⟨rfl, rfl⟩ := usync9_decided_eq hdec
-    simp [hc, natVM]
+    intro message hm reliable
+    rcases hm with ⟨_, slot, block, hdec, hc⟩ | ⟨h7, _⟩
+    · obtain ⟨rfl, rfl⟩ := usync9_decided_eq hdec
+      simp [hc, natVM]
+    · rw [h7] at reliable
+      exact absurd reliable (by decide)
 
-/-- Every proposal in the synchronised execution names the sole
-checkpoint reachable from its block-valued decisions. -/
+/-- The AbC validator equivocates here too. -/
+example : syncExecution.emitted ⟨7, syncCheckpoint⟩ :=
+  Or.inl ⟨by decide, 1, 7, usync9_slot1, rfl⟩
+example : syncExecution.emitted ⟨7, forkedCheckpoint⟩ :=
+  Or.inr ⟨rfl, rfl⟩
+
+/-- A recovery-correct validator's proposal in the synchronised
+execution names the sole checkpoint reachable from its block-valued
+decisions. -/
 theorem syncExecution_emitted {message : ChkProp (Fin 9) ℕ}
-    (h : syncExecution.emitted message) :
+    (h : syncExecution.emitted message)
+    (hv : message.sender ∈ abcSigning.recoveryCorrect) :
     message.checkpoint = syncCheckpoint := by
-  obtain ⟨_, slot, block, hdec, hc⟩ := h
-  obtain ⟨rfl, rfl⟩ := usync9_decided_eq hdec
-  exact hc
+  rcases h with ⟨_, slot, block, hdec, hc⟩ | ⟨h7, _⟩
+  · obtain ⟨rfl, rfl⟩ := usync9_decided_eq hdec
+    exact hc
+  · rw [h7] at hv
+    exact absurd hv (by decide)
 
 /-- The synchronised execution follows both checkpoint-signing phases
 on each validator's full view. -/
 def syncRule :
-    SigningFaults.Execution.SigningRule bridgeSigning syncExecution
+    SigningFaults.Execution.SigningRule abcSigning syncExecution
       hybRule21 hyb9Slots usync9 (natVM 21) where
-  quorum := bridgeFaults.quorum_of_noAbC rfl
+  quorum := abcFaults.quorum_alive
   view := fun _ => View.full Usync9
   proposes := by
     intro v hv slot block hdec
-    exact ⟨hv, slot, block, hdec, rfl⟩
+    exact Or.inl ⟨hv, slot, block, hdec, rfl⟩
   witnesses := by
-    intro v hv checkpoint he Q
+    intro v _ checkpoint he Q
     exact
       ⟨{ sender := v
          certificate := Q
-         recorded := fun hv' => ⟨hv', syncExecution_emitted he⟩ },
+         recorded := fun hv' => ⟨hv', syncExecution_emitted he hv'⟩ },
        rfl⟩
 
-/-- Production by the online correct validators across the wave of
-slot `1`. -/
+/-- Production by the rule-following validators, the AbC one included,
+across the wave of slot `1`. -/
 theorem usync9_populated :
     ∀ n, hyb9Slots.slotRound 1 ≤ n → n ≤ hyb9Slots.slotRound 1 + 1 →
-      Properties.PopulatedOn hybRule21 usync9 bridgeSigning.recoveryCorrect n := by
+      Properties.PopulatedOn hybRule21 usync9 abcSigning.alive n := by
   decide
 
-/-- Every candidate of slot `1` is certified by the whole recovery-correct
-set a round up: every round-2 block references every round-1 block. -/
+/-- Every candidate of slot `1` is certified by every rule-following
+validator a round up: every round-2 block references every round-1 block. -/
 theorem usync9_certified :
     ∀ L, hybRule21.IsCandidate hyb9Slots usync9 1 L →
-      (voteSupport hybRule21).certifiesAt usync9 bridgeSigning.recoveryCorrect
+      (voteSupport hybRule21).certifiesAt usync9 abcSigning.alive
         (hyb9Slots.slotRound 1) (hyb9Slots.kind 1) L := by
   decide
 
-/-- **Liveness delivers the checkpoint.** No commit is supplied: the
-hypotheses are the quorum, production across the wave, certification of
-every candidate, caught-up views, and a correct leader. -/
+/-- **Liveness delivers the checkpoint, with an AbC validator present.**
+No commit is supplied: the hypotheses are the quorum
+(`isQuorum_alive`, no `abc = ∅`), production across the wave,
+certification of every candidate, caught-up views, and a correct
+leader. -/
 theorem usync9_live :
     ∃ L, hybRule21.IsCandidate hyb9Slots usync9 1 L ∧
-      Nonempty (SigningFaults.Execution.FinalityQC bridgeSigning
+      Nonempty (SigningFaults.Execution.FinalityQC abcSigning
         syncExecution ((natVM 21).checkpointAfterCommit 1 L)) :=
-  SigningFaults.Execution.liveCommitFinalized bridgeSigning syncExecution (natVM 21)
+  SigningFaults.Execution.liveCommitFinalized abcSigning syncExecution (natVM 21)
     (voteSupport hybRule21) (coreReliability (Fin 9))
     (HybridProperties.agree (by decide)) (HybridProperties.commitsCandidate 4)
     (HybridProperties.voteSupport_commits 4) hyb9Slots syncRule
-    (bridgeFaults.isQuorum_of_noAbC rfl) usync9_populated usync9_certified
+    abcFaults.isQuorum_alive usync9_populated usync9_certified
     (fun _ _ => View.coversUpto_full _ _) (by decide)
 
 /-- The block liveness finds is the leader block, so the finalized
 checkpoint is the committed one. -/
 theorem usync9_live_committed :
-    Nonempty (SigningFaults.Execution.FinalityQC bridgeSigning
+    Nonempty (SigningFaults.Execution.FinalityQC abcSigning
       syncExecution syncCheckpoint) := by
   obtain ⟨L, hL, hF⟩ := usync9_live
   have hall : ∀ L, hybRule21.IsCandidate hyb9Slots usync9 1 L → L = 7 := by decide
@@ -465,6 +614,7 @@ theorem usync9_live_committed :
 #print axioms slot0_checkpoint_unique
 #print axioms committedCheckpointQC
 #print axioms committedCheckpointFinality
+#print axioms abcFinality
 #print axioms usync9_live_committed
 #print axioms SigningFaults.Execution.commitCertified
 #print axioms SigningFaults.Execution.commitFinalized

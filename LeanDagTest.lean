@@ -159,9 +159,16 @@ import LeanDagTest.RedSnapper.Termination
 import LeanDagTest.Scheme.LeastSel
 import LeanDagTest.Scheme.VotedBlock
 import LeanDagTest.Scheme.TryDecide
+import LeanDagTest.Scheme.Checkpoint
+import LeanDagTest.Scheme.CheckpointAbC
+import LeanDagTest.Scheme.CheckpointBarnacle
 import LeanDagTest.Scheme.HybridRow
 import LeanDagTest.Scheme.Async
 import LeanDagTest.Scheme.Reactive
 import LeanDagTest.Scheme.ReactiveHybrid
+import LeanDagTest.Scheme.Responsive
+import LeanDagTest.Scheme.Crash
+import LeanDagTest.Scheme.CoinTable
 import LeanDagTest.Scheme.AsyncLocal
 import LeanDagTest.KPartialDag.Reactive
+import LeanDagTest.Scheme.AtomicBroadcast

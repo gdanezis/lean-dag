@@ -53,7 +53,7 @@ theorem delivers_core [F : Faults Validator]
     (hw : ∀ κ, R.waveAt κ = R.waveAt 0) :
     (liveOfAnchored R hw (coreReliability Validator)).Delivers F.f where
   reaches := by
-    rintro U Rnd N ⟨T, ⟨-, hcard⟩, hsync, hpop⟩
+    rintro - U Rnd N ⟨T, ⟨-, hcard⟩, hsync, hpop⟩
     change Fintype.card Validator - F.f ≤ T.card at hcard
     refine ⟨T, by omega, ?_⟩
     intro b hb hbT hRnd hN c hc hcr

@@ -69,7 +69,7 @@ def ugrowReactiveS (N : ℕ) (w : ℕ → ℕ) (waits : ℕ → Prop) :
     ReactiveS (Ugrow N) {1, 2, 3} N w waits :=
   { (ugrowReactive N).toPaceCore with
     built_lt := (ugrowReactive N).built_lt
-    deadline := (ugrowReactive N).deadline
+    deadline := fun v hv n hn => (ugrowReactive N).deadline v hv n hn (Nat.zero_le _)
     vote_or_wait := fun v hv k _ hN hlead L hL c hc hcc hcr =>
       (ugrowReactive N).vote_or_wait v hv k hN hlead L hL c hc hcc hcr
     cert_or_wait := fun _ _ _ _ _ _ _ L hL c hc _ hcr =>

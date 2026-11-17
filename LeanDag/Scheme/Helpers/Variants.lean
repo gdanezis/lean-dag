@@ -75,7 +75,7 @@ theorem cordialLaws : (cordialAnchored Validator BlockId Payload).Laws :=
 threshold `n` is never met on the core's universe. -/
 theorem readAlike_cordial (σ : VoteSel Validator BlockId Payload ValidWrt Correct)
     (U : BlockUniverse Validator BlockId Payload) :
-    ReadAlike (schemeAnchored (Params.cordialMinersPS (Fintype.card Validator) F.f) σ)
+    AnchoredRule.ReadAlike (schemeAnchored (Params.cordialMinersPS (Fintype.card Validator) F.f) σ)
       (cordialAnchored Validator BlockId Payload) U where
   waveAt := fun _ => rfl
   rungs := rfl
@@ -174,7 +174,7 @@ where its commit threshold `n − c` is Nemo's majority. -/
 theorem readAlike_nemo (σ : VoteSel Validator BlockId Payload Nemo.ValidWrt Finset.univ)
     (U : Nemo.Universe Validator BlockId Payload) {c : ℕ}
     (hn : Fintype.card Validator = 2 * c + 1) :
-    ReadAlike (schemeAnchored (Params.nemoNemo (Fintype.card Validator) c) σ)
+    AnchoredRule.ReadAlike (schemeAnchored (Params.nemoNemo (Fintype.card Validator) c) σ)
       (nemoBlameAnchored Validator BlockId Payload) U where
   waveAt := fun _ => rfl
   rungs := rfl
