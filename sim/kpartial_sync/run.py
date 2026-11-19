@@ -33,6 +33,8 @@ GROUPS = {
     "trigger": "Coded: when symbols are sent",
     "density": "Coded: density of a symbol (p = 1%)",
     "scale": "Coded: number of validators (p = 1%)",
+    "payload": "Payload size (p = 1%)",
+    "outage": "One validator receives nothing for a while (p = 0.1%)",
 }
 
 SCENARIOS = []
@@ -44,11 +46,11 @@ for name, v in VARIANTS.items():
                       dict(loss=0.001, jitter=0.03, **v)))
     SCENARIOS.append(("badlinks", "5% of links at 20%, p = 0.1%", name,
                       dict(loss=0.001, bad_links=0.05, bad_loss=0.2, **v)))
-for s in [2, 5, 10, 20, 33, 60]:
+for s in [5, 10, 20, 40, 60, 100]:
     SCENARIOS.append(("symbols", "p = 1%", f"s = {s}",
                       dict(loss=0.01, strategy="coded", symbols=s)))
 for loss in [0.01, 0.05]:
-    for span in [1, 2]:
+    for span in [1, 2, 4, 6]:
         SCENARIOS.append(("span", f"p = {loss:.0%}", f"span {span}",
                           dict(loss=loss, strategy="coded", span=span)))
     for trig in ["build", "quorum"]:
@@ -61,6 +63,18 @@ for n in [25, 50, 100, 150]:
     for name in ["pull 500 ms", "coded + pull 500 ms"]:
         SCENARIOS.append(("scale", f"n = {n}", name,
                           dict(loss=0.01, n=n, **VARIANTS[name])))
+for pay in [0, 1_000, 10_000, 100_000]:
+    for name, kw in [("pull 500 ms", VARIANTS["pull 500 ms"]),
+                     ("coded, one class", VARIANTS["coded + pull 500 ms"]),
+                     ("coded, 256 B classes", dict(size_class=256, **VARIANTS["coded + pull 500 ms"]))]:
+        SCENARIOS.append(("payload", f"payload {pay // 1000} KB" if pay else "no payload", name,
+                          dict(loss=0.01, payload=pay, **kw)))
+for dur in [0.2, 0.5]:
+    for name, kw in [("pull 500 ms", VARIANTS["pull 500 ms"]),
+                     ("coded span 2", dict(strategy="coded", span=2)),
+                     ("coded span 6", dict(strategy="coded", span=6))]:
+        SCENARIOS.append(("outage", f"outage {dur * 1000:.0f} ms", name,
+                          dict(loss=0.001, rounds=60, outage=(7, 2.0, dur), **kw)))
 
 
 def one(job):
@@ -110,9 +124,23 @@ if __name__ == "__main__":
            "directly, or decided by a later direct commit). *direct*: fraction of "
            "leaders committed directly. *extra*: symbol and pull bytes per validator "
            "per round, and as a share of push bytes. *pulls*, *decoded*, *dup*: per "
-           "validator per round (requests, fragments decoded, duplicate fragments).\n"]
+           "validator per round (requests, fragments decoded, duplicate fragments). "
+           "*catch-up*: from the end of the outage to the validator's first block at "
+           "or above the median round of the others.\n"]
     for g, title in GROUPS.items():
         out.append(f"\n## {title}\n")
+        if g == "outage":
+            out.append("| setting | variant | s | catch-up per seed (ms) | mean |")
+            out.append("|---|---|---|---|---|")
+            for i, (group, setting, name, kw) in enumerate(SCENARIOS):
+                if group != g:
+                    continue
+                cs = [r["caught_up"] for r in runs[i]]
+                ok = [c for c in cs if c == c]
+                out.append(f"| {setting} | {name} | {runs[i][0]['symbols']:.1f} | "
+                           + ", ".join(ms(c) if c == c else "—" for c in cs)
+                           + f" | {ms(statistics.mean(ok)) if ok else '—'} |")
+            continue
         out.append("| setting | variant | s | deliver p50 / p99 / p99.9 | decide p50 / p99 / max "
                    "| round | direct | push KB | extra KB (%) | pulls | decoded | dup |")
         out.append("|---|---|---|---|---|---|---|---|---|---|---|---|")
@@ -121,7 +149,7 @@ if __name__ == "__main__":
                 continue
             extra = r["sym_kb"] + r["pull_kb"]
             out.append(
-                f"| {r['setting']} | {r['variant']} | {r['symbols']:.0f} "
+                f"| {r['setting']} | {r['variant']} | {r['symbols']:.1f} "
                 f"| {ms(r['deliver_p50'])} / {ms(r['deliver_p99'])} / {ms(r['deliver_p999'])} "
                 f"| {ms(r['commit_p50'])} / {ms(r['commit_p99'])} / {ms(r['commit_max'])} "
                 f"| {ms(r['round_time'])} | {r['direct']:.2f} | {r['push_kb']:.0f} "

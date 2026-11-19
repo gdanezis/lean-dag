@@ -7,7 +7,9 @@ packets) and the sender's uplink queue, and drops each packet independently.
 Consensus follows rules R2--R4 of the paper, simplified to the honest case:
 
 * a block is admitted once all its fragments are held, its references are
-  admitted and a quorum of the round below is admitted (R2);
+  admitted, a quorum of the round below is admitted, and for each leader block
+  it claims, that block and votes for it from t_v = q authors are admitted
+  (R2);
 * a validator at highest quorum round r builds at r + 1 once it holds the
   leader block of r and votes from a quorum for the leader block of r - 1,
   after a grace period; or after a timeout from the quorum; or at once when
@@ -20,7 +22,11 @@ Consensus follows rules R2--R4 of the paper, simplified to the honest case:
 
 Synchroniser strategies (all push every block, fragmented, to every peer):
 
-* ``pull``  : request missing fragments after ``pull_timer`` and retry;
+* ``pull``  : when a validator holds a block whose references it lacks, or part
+  of a block, it waits ``pull_timer`` (no wait when it holds blocks from f + 1
+  authors two rounds above its quorum round) and asks that block's author for every
+  block of the block's window that the requester lacks, in one request, and
+  retries (R2);
 * ``coded`` : as ``pull``, and each receiver gets ``symbols`` coded symbols per
   round, each the XOR of a random subset of the sender's fragments of the last
   ``span`` rounds, decoded by Gaussian elimination over GF(2). A validator sends
@@ -68,11 +74,17 @@ class Config:
     symbols: int | None = None  # per receiver per round; None = auto
     density: int = 1  # each fragment in a symbol with probability 2^-density
     span: int = 2  # rounds below the new block that symbols cover
+    size_class: int = 0  # a symbol XORs fragments of one size class, rounded up to this (0: one class, F)
     early: float | None = None  # also send symbols over the current round this long after building
     trigger: str = "quorum"  # send symbols on a new quorum round, or on building (rounds below)
     trigger_delay: float = 0.0  # with trigger = quorum, wait this long after the quorum
     grace: float = 0.0
     round_timeout: float = 1.0
+    K: int = 6  # window depth
+    window_pull: bool = True  # a pull asks for the whole window to depth K, not one block
+    behind_pull: bool = True  # pull at once when f + 1 others are two rounds ahead
+    check_claims: bool = True  # R2: admit a block only when holding the votes behind its claims
+    outage: tuple | None = None  # (validator, start, duration): it receives nothing meanwhile
     seed: int = 1
 
     @property
@@ -134,8 +146,11 @@ class Node:
     leader_at: dict = field(default_factory=dict)  # round -> admitted leader bid
     committed: set = field(default_factory=set)
     next_undecided: int = 1
-    ref_by: dict = field(default_factory=dict)  # bid -> author referencing it
     pulling: set = field(default_factory=set)
+    newest: int = 0  # highest round of a block seen
+    held_by_round: dict = field(default_factory=dict)  # round -> authors of complete blocks
+    ahead: int = 0  # highest round with complete blocks from f + 1 authors
+    asked: dict = field(default_factory=dict)  # bid -> time an outstanding request covering it expires
     qround: int = 0
     latest: int = 0
     own: int | None = None
@@ -165,6 +180,9 @@ class Sim:
         self.blocks: list[Block] = []
         self.owner: list[int] = []  # fragment index -> bid
         self.round_mask: dict[int, int] = {}
+        self.windows: dict[int, list[int]] = {}
+        self.fsize: list[int] = []  # fragment index -> data bytes
+        self.class_mask: dict[int, dict[int, int]] = {}  # round -> size class -> fragments
         self.leader_bid: dict[int, int] = {}
         self.q: list = []
         self.seq = 0
@@ -178,6 +196,8 @@ class Sim:
         self.deliver: list[float] = []
         self.commit: list[float] = []  # decision latency of each leader at each node
         self.direct = 0
+        self.symbols_sent = 0
+        self.caught_up: float | None = None
         self.round_start: dict[int, list[float]] = {}
 
     # ------------------------------------------------------------ events
@@ -203,25 +223,47 @@ class Sim:
         self.up_free[src] = done
         if self.rng.random() < self.lossp[src][dst]:
             return None
+        o = self.cfg.outage
+        if o is not None and dst == o[0] and o[1] <= self.now < o[1] + o[2]:
+            return None
         return done + self.lat[src][dst] + self.rng.expovariate(1 / self.cfg.jitter)
 
     def send_frags(self, src: int, dst: int, blk: Block, mask: int, kind: str) -> None:
-        """Send the fragments of blk in mask, one packet each; deliver together
-        at the last arrival (a block is usable only when complete)."""
-        got, last = 0, None
-        for j in range(blk.nfrag):
-            bit = 1 << (blk.base + j)
-            if not mask & bit:
-                continue
-            data = min(self.cfg.frag, blk.size - j * self.cfg.frag)  # last one shorter
-            size = FRAG_HEADER + data
-            self.bytes[kind] += size + WIRE
-            t = self.transmit(src, dst, size)
-            if t is not None:
-                got |= bit
-                last = t if last is None else max(last, t)
-        if got:
-            self.at(last, "frags", dst, got)
+        """Send the fragments of blk in mask, one packet each, back to back on
+        src's uplink; deliver the ones not lost together at the last arrival (a
+        block is usable only when complete). Drawn at once: the lost fragments
+        by geometric gaps, the last arrival as the uplink finishing time plus the
+        latency plus the largest of the jitters."""
+        cfg = self.cfg
+        js = [j for j in range(blk.nfrag) if mask >> (blk.base + j) & 1]
+        if not js:
+            return
+        sizes = sum(FRAG_HEADER + min(cfg.frag, blk.size - j * cfg.frag) + WIRE for j in js)
+        self.bytes[kind] += sizes
+        start = max(self.now, self.up_free[src])
+        done = start + sizes * 8 / cfg.uplink_bps
+        self.up_free[src] = done
+        o = cfg.outage
+        if o is not None and dst == o[0] and o[1] <= self.now < o[1] + o[2]:
+            return
+        p = self.lossp[src][dst]
+        lost = set()
+        if p > 0:
+            i = -1
+            lg = math.log(1 - p)
+            while True:
+                i += int(math.log(1 - self.rng.random()) / lg) + 1
+                if i >= len(js):
+                    break
+                lost.add(i)
+        got = 0
+        for i, j in enumerate(js):
+            if i not in lost:
+                got |= 1 << (blk.base + j)
+        k = len(js) - len(lost)
+        if k:
+            jit = -cfg.jitter * math.log(1 - self.rng.random() ** (1 / k))
+            self.at(done + self.lat[src][dst] + jit, "frags", dst, got, blk.bid)
 
     # ------------------------------------------------------------ building
     def build(self, u: Node, R: int) -> None:
@@ -244,7 +286,7 @@ class Sim:
         if Lp is not None and u.votes.get(Lp, 0) >= cfg.q:
             claims = [Lp]
         pay = cfg.payload
-        if cfg.payload_sigma > 0:
+        if cfg.payload_sigma > 0 and cfg.payload > 0:
             mu = math.log(cfg.payload) - cfg.payload_sigma ** 2 / 2
             pay = int(self.rng.lognormvariate(mu, cfg.payload_sigma))
         size = cfg.header + len(refs) * cfg.ref_bytes + pay
@@ -254,9 +296,21 @@ class Sim:
         self.blocks.append(blk)
         self.owner.extend([blk.bid] * nfrag)
         self.round_mask[R] = self.round_mask.get(R, 0) | blk.mask
+        for j in range(nfrag):
+            data = min(cfg.frag, size - j * cfg.frag)
+            self.fsize.append(data)
+            cm = self.class_mask.setdefault(R, {})
+            c = self.size_class(data)
+            cm[c] = cm.get(c, 0) | 1 << (blk.base + j)
         if is_leader:
             self.leader_bid[R] = blk.bid
         self.round_start.setdefault(R, []).append(self.now)
+        o = cfg.outage
+        if (o is not None and u.vid == o[0] and self.caught_up is None
+                and self.now > o[1] + o[2]):
+            others = sorted(w.latest for w in self.nodes if w.vid != u.vid)
+            if R >= others[len(others) // 2]:
+                self.caught_up = self.now - (o[1] + o[2])
         u.latest = R
         u.own = blk.bid
         u.frags |= blk.mask
@@ -283,38 +337,53 @@ class Sim:
     def on_early(self, v: int, R: int) -> None:
         self.send_symbols(self.nodes[v], R + 1, [R], salt=1)
 
+    def size_class(self, data: int) -> int:
+        c = self.cfg.size_class
+        return self.cfg.frag if c <= 0 else min(self.cfg.frag, -(-data // c) * c)
+
     def send_symbols(self, u: Node, R: int, rounds, salt: int = 0) -> None:
+        """Coded symbols over ``rounds``. Each size class of fragments is its own
+        code: a symbol XORs a random subset of the sender's fragments of one
+        class and is as long as the class. A class with m held fragments gets
+        d at its 99.9th percentile plus 3 symbols per receiver on average, d
+        Poisson with mean p * m; a fixed ``symbols`` is shared by fragment count.
+        Distinct receivers when the count is below n."""
         cfg = self.cfg
-        rng_mask = 0
+        held: dict[int, int] = {}
         for k in rounds:
-            rng_mask |= self.round_mask.get(k, 0)
-        held = u.frags & rng_mask
+            for c, m in self.class_mask.get(k, {}).items():
+                if u.frags & m:
+                    held[c] = held.get(c, 0) | (u.frags & m)
         if not held:
             return
-        lo = (held & -held).bit_length() - 1
-        width = held.bit_length() - lo
-        bits = None
-        if cfg.strategy == "relay":
-            bits = []
-            x = held
-            while x:
-                low = x & -x
-                bits.append(low)
-                x ^= low
-        s = min(self.s, cfg.n - 1)
-        off = 1 + ((R + salt * 7) % (cfg.n - s)) if cfg.n - s > 0 else 1
-        for i in range(s):
-            w = (u.vid + off + i) % cfg.n
-            if cfg.strategy == "relay":
-                mask = self.rng.choice(bits)
+        p = cfg.loss * (1 - cfg.bad_links) + cfg.bad_loss * cfg.bad_links
+        total = sum(h.bit_count() for h in held.values())
+        plan = []
+        for c, h in held.items():
+            if cfg.symbols is None:
+                k = poisson_quantile(p * h.bit_count(), 0.999) + 3
             else:
-                rnd = self.rng.getrandbits(width)
+                k = round(cfg.symbols * h.bit_count() / total)
+            plan += [c] * k
+        off = R + salt * 7
+        for i, c in enumerate(plan):
+            w = (u.vid + 1 + (off + i) % (cfg.n - 1)) % cfg.n
+            h = held[c]
+            if cfg.strategy == "relay":
+                x = h
+                for _ in range(self.rng.randrange(h.bit_count())):
+                    x &= x - 1
+                mask = x & -x
+            else:
+                lo = (h & -h).bit_length() - 1
+                rnd = self.rng.getrandbits(h.bit_length() - lo)
                 for _ in range(cfg.density - 1):
-                    rnd &= self.rng.getrandbits(width)
-                mask = held & (rnd << lo)
+                    rnd &= self.rng.getrandbits(h.bit_length() - lo)
+                mask = h & (rnd << lo)
                 if not mask:
                     continue
-            size = SYM_HEADER + cfg.frag
+            size = SYM_HEADER + c
+            self.symbols_sent += 1
             self.bytes["sym"] += size + WIRE
             t = self.transmit(u.vid, w, size)
             if t is not None:
@@ -382,6 +451,10 @@ class Sim:
     def admissible(self, u: Node, blk: Block) -> bool:
         if any(ref not in u.admitted for ref in blk.refs):
             return False
+        # R2: hold each claimed leader block with votes from t_v = q authors
+        if self.cfg.check_claims and any(
+                L not in u.admitted or u.votes.get(L, 0) < self.cfg.q for L in blk.claims):
+            return False
         return blk.rnd <= 1 or len(u.by_round.get(blk.rnd - 1, ())) >= self.cfg.q
 
     def after_change(self, u: Node) -> None:
@@ -398,19 +471,24 @@ class Sim:
         self.check_build(u)
 
     # ------------------------------------------------------------ receiving
-    def learn(self, u: Node, bits: int) -> None:
+    def learn(self, u: Node, bits: int, bid: int | None = None) -> None:
+        """Add fragments; bid names their block when they all come from one."""
         new = bits & ~u.frags
         self.dup_frags += (bits & u.frags).bit_count()
         while new:
             u.frags |= new
-            touched = set()
-            x = new
-            while x:
-                low = x & -x
-                touched.add(self.owner[low.bit_length() - 1])
-                x ^= low
-            for bid in touched:
-                self.notice(u, bid)
+            if bid is not None:
+                touched = {bid}
+                bid = None
+            else:
+                touched = set()
+                x = new
+                while x:
+                    low = x & -x
+                    touched.add(self.owner[low.bit_length() - 1])
+                    x ^= low
+            for b in touched:
+                self.notice(u, b)
             if u.rows and new & u.rowunion:
                 dec = self.solve(u)
                 self.decoded += dec.bit_count()
@@ -419,30 +497,38 @@ class Sim:
                 new = 0
         self.after_change(u)
 
-    def notice(self, u: Node, bid: int) -> None:
+    def notice(self, u: Node, bid: int, via_ref: bool = False) -> None:
         blk = self.blocks[bid]
         u.known.add(bid)
+        u.newest = max(u.newest, blk.rnd)
         if bid in u.complete:
             return
         if u.frags & blk.mask == blk.mask:
             u.complete.add(bid)
             u.pending.add(bid)
+            hb = u.held_by_round.setdefault(blk.rnd, set())
+            hb.add(blk.author)
+            if len(hb) >= self.cfg.f + 1:
+                u.ahead = max(u.ahead, blk.rnd)
+            gap = False
             for ref in blk.refs:
-                u.ref_by.setdefault(ref, blk.author)
                 if ref not in u.complete:
-                    self.notice(u, ref)
-        else:
+                    gap = True
+                    self.notice(u, ref, via_ref=True)
+            if gap:  # pull the window of this block from its author
+                self.start_pull(u, bid)
+        elif not via_ref:  # part of the block arrived: pull it from its author
             self.start_pull(u, bid)
 
-    def on_frags(self, v: int, bits: int) -> None:
-        self.learn(self.nodes[v], bits)
+    def on_frags(self, v: int, bits: int, bid: int) -> None:
+        self.learn(self.nodes[v], bits, bid)
 
     def on_sym(self, v: int, R: int, mask: int) -> None:
         u = self.nodes[v]
         row = mask & ~u.frags
         if not row:
             return
-        u.rows = [(t, m) for t, m in u.rows if t >= u.latest - 3]
+        u.rows = [(t, m) for t, m in u.rows if t >= u.latest - self.cfg.span - 1]
         u.rows.append((R, row))
         u.rowunion |= row
         bits = self.solve(u)
@@ -482,29 +568,66 @@ class Sim:
         if bid in u.pulling:
             return
         u.pulling.add(bid)
-        self.at(self.now + self.cfg.pull_timer, "pull_timer", u.vid, bid)
+        # a validator holding blocks from f + 1 authors two rounds above its
+        # quorum round is behind: what it lacks is not in flight
+        late = self.cfg.behind_pull and u.qround + 2 <= u.ahead
+        self.at(self.now + (0.0 if late else self.cfg.pull_timer), "pull_timer", u.vid, bid)
 
-    def on_pull_timer(self, v: int, bid: int) -> None:
+    def window(self, bid: int) -> list[int]:
+        """The block and what admitting it needs: the windows to depth K of its
+        references, so blocks at most K + 1 rounds below it. Blocks never
+        change, so windows are cached."""
+        w = self.windows.get(bid)
+        if w is None:
+            w = self.windows[bid] = self.compute_window(bid)
+        return w
+
+    def compute_window(self, bid: int) -> list[int]:
+        lo = self.blocks[bid].rnd - self.cfg.K - 1
+        seen, stack = {bid}, [bid]
+        while stack:
+            for r in self.blocks[stack.pop()].refs:
+                if r not in seen and self.blocks[r].rnd >= lo:
+                    seen.add(r)
+                    stack.append(r)
+        return list(seen)
+
+    def on_pull_timer(self, v: int, root: int) -> None:
+        """Ask root's author for every block of root's window the requester lacks,
+        in one request; the author sends them all at once."""
+        cfg = self.cfg
         u = self.nodes[v]
-        blk = self.blocks[bid]
-        missing = blk.mask & ~u.frags
+        blk = self.blocks[root]
+        want = self.window(root) if cfg.window_pull else [root]
+        missing = [b for b in want if b not in u.complete]
         if not missing:
             return
-        holder = u.ref_by.get(bid, blk.author)
-        if holder == u.vid:
-            holder = blk.author
-        if self.cfg.warmup <= blk.rnd <= self.cfg.rounds:
+        fresh = [b for b in missing if u.asked.get(b, 0) <= self.now]
+        if not fresh:  # outstanding requests cover them all
+            self.at(min(u.asked[b] for b in missing), "pull_timer", v, root)
+            return
+        if cfg.warmup <= blk.rnd <= cfg.rounds:
             self.pulls += 1
-        self.bytes["pullreq"] += REQ_BYTES + WIRE
-        t = self.transmit(v, holder, REQ_BYTES)
+        # the request's bitmap marks the slots held or already asked for, so the
+        # author sends only the fresh blocks
+        size = REQ_BYTES + (cfg.n * (cfg.K + 2) // 8 if cfg.window_pull else 0)
+        for b in fresh:
+            u.asked[b] = self.now + cfg.retry_timer
+        self.bytes["pullreq"] += size + WIRE
+        t = self.transmit(v, blk.author, size)
         if t is not None:
-            self.at(t, "pull_req", holder, v, bid, missing)
-        self.at(self.now + self.cfg.retry_timer, "pull_timer", v, bid)
+            self.at(t, "pull_req", blk.author, v, fresh)
+        self.at(self.now + cfg.retry_timer, "pull_timer", v, root)
 
-    def on_pull_req(self, h: int, v: int, bid: int, missing: int) -> None:
-        held = missing & self.nodes[h].frags
-        if held:
-            self.send_frags(h, v, self.blocks[bid], held, "pullresp")
+    def on_pull_req(self, h: int, v: int, fresh: list[int]) -> None:
+        hold, want = self.nodes[h], self.nodes[v]
+        for b in fresh:
+            if b not in hold.complete or b in want.complete:
+                continue
+            blk = self.blocks[b]
+            missing = blk.mask & ~want.frags
+            if missing:
+                self.send_frags(h, v, blk, missing, "pullresp")
 
     # ------------------------------------------------------------ report
     def report(self) -> dict:
@@ -527,7 +650,7 @@ class Sim:
         return {
             "strategy": cfg.strategy,
             "loss": cfg.loss,
-            "symbols": self.s if cfg.strategy != "pull" else 0,
+            "symbols": self.symbols_sent / max(1, cfg.n * max(self.round_start, default=1)),
             "deliver_p50": pct(self.deliver, 0.5),
             "deliver_p99": pct(self.deliver, 0.99),
             "deliver_p999": pct(self.deliver, 0.999),
@@ -546,6 +669,7 @@ class Sim:
             "pulls": self.pulls / (cfg.n * (cfg.rounds - cfg.warmup + 1)),
             "decoded": self.decoded / per_node_round,
             "dup": self.dup_frags / per_node_round,
+            "caught_up": self.caught_up if self.caught_up is not None else float("nan"),
         }
 
 
