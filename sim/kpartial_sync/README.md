@@ -4,12 +4,13 @@ A discrete-event simulator of the honest case: every validator is correct and
 none equivocates. It compares ways of repairing lost or late fragments.
 
 ```
-python3 run.py [n]     # all sweeps, about 3 minutes at n = 100 on 10 cores
+python3 run.py [n]     # all sweeps, about 7 minutes at n = 100 on 12 cores
 ```
 
 `run.py` writes `results.md` (tables) and `results.csv`. `sim.py` holds the
 model; `simulate(**kw)` runs one setting, with the fields of `Config` as
-keyword arguments. Pure Python, no dependencies.
+keyword arguments. Pure Python, no dependencies. For profiling and debugging,
+use small settings (n = 20–30, a few rounds) that run in seconds.
 
 ## Model
 
@@ -21,110 +22,146 @@ keyword arguments. Pure Python, no dependencies.
 - Each packet waits on its sender's 1 Gb/s uplink.
 - Each packet is dropped with probability `loss`; a fraction `bad_links` of
   directed links drop with `bad_loss` instead.
+- `outage = (v, t, d)` drops every packet sent to v during [t, t + d).
 - Every packet pays 80 B of IPv6, UDP and encryption framing.
 
 **Blocks.**
 
-- A block has a 150 B header, 44 B per reference and a lognormal payload with
-  mean 10 KB.
-- It is cut into fragments of F = 1380 B, each sent as one packet with a 19 B
-  header.
+- A block has a 150 B header and 44 B per reference (digest and length).
+  - A sparse block has 2 references (about 240 B without payload).
+  - A dense block references a block of every author it holds one round below
+    (about 4.5 KB at n = 100).
+- Every block carries a lognormal payload, mean `payload` (10 KB by default).
+- A block is cut into fragments of F = 1380 B. Each fragment is one packet
+  with a 19 B header.
+- The fragments of one block sent to one peer leave back to back on the
+  sender's uplink. Those not lost arrive together, at the last arrival.
 
 **Consensus.** Rules R2–R4 of the paper, in the honest case, with one leader
-per round in rotation:
+per round in rotation.
 
-- **Admission (R2):** a block is admitted once all its fragments are held, its
-  references are admitted and a quorum of the round below is admitted.
-- **Building (R3):** a validator at highest quorum round r builds at r + 1
+- **Admission (R2).** A block is admitted once:
+  - all its fragments are held;
+  - its references are admitted;
+  - a quorum of the round below is admitted;
+  - for each leader block it claims, that block and votes for it from a
+    quorum are admitted.
+- **Building (R3).** A validator at highest quorum round r builds at r + 1
   when it holds the leader block of r and votes from a quorum for the leader
   block of r − 1. It also builds after 1 s from the quorum, or at once when
-  f + 1 others hold blocks of r + 1.
-- **Shape (R4):** leader blocks are dense; the other blocks are sparse.
-- **Commit:** a leader block commits directly once a quorum of round r + 2
+  f + 1 others hold blocks of r + 1. The grace period is γ = 0.
+- **Shape (R4).** A leader's block, or a validator's first block after a gap,
+  or a block built without the leader block, is dense. Every other block is
+  sparse.
+- **Commit.** A leader block commits directly once a quorum of round r + 2
   blocks claim it. A leader that does not commit directly is counted as
   decided at the next direct commit after it.
 
 **Strategies.** All push every block, as fragments, to every peer.
 
-- **pull τ.** When a validator notices a missing fragment (a fragment of the
-  block arrived, or a reference names the block), it starts a timer τ. When
-  the timer fires it asks the author of a block that references the missing
-  block (or its own author) for the missing fragments, and retries every τ.
+- **pull τ.**
+  - **When:** a validator holds a block B whose references it lacks, or holds
+    part of a block B.
+  - **Whom:** it asks B's author, who held B's window when building B.
+  - **What:** every block of B's window that it lacks, in one request. The
+    window is the blocks reached from B at most K + 1 = 7 rounds below. The
+    request carries a bitmap of the slots the requester holds or has already
+    asked for, so the author sends every block missing in the window at
+    once.
+  - **Timing:** the request goes out after τ, and is retried every τ. There
+    is no wait when the validator is behind: it holds blocks from f + 1
+    authors two rounds above its quorum round, so nothing it lacks is in
+    flight.
 - **coded.**
-  - A pull with a 500 ms timer stays as the fallback.
-  - When a validator first holds a quorum of round r, it sends coded symbols.
-    Each symbol is the XOR of a random half of the fragments it holds of
-    rounds r − 1 and r. The validators to send to are chosen so that each
-    receives `s` symbols per round from distinct senders.
+  - A pull with τ = 500 ms stays as the fallback.
+  - When a validator first holds a quorum of round r, it sends coded symbols
+    over rounds r − 1 and r. Each symbol is the XOR of a random half of the
+    fragments it holds of those rounds. Receivers are chosen so that each
+    gets s symbols per round on average, from distinct senders when s < n.
   - Receivers decode by Gaussian elimination over GF(2), after removing the
-    fragments they hold.
-  - By default `s` is d_f at its 99.9th percentile plus 3, where d_f is the
-    number of fragments lost over the two rounds, a Poisson variable.
-- **relay.** As coded, with the same number of symbols, but each symbol is
-  one random fragment, uncoded.
+    fragments they hold. One linear system holds the symbols of every sender
+    over every block.
+  - By default s is d at its 99.9th percentile plus 3, where d is Poisson
+    with mean p times the fragments the sender holds over the span.
+  - `size_class = 256` instead codes each 256 B class of fragment sizes
+    separately, each class with its own budget.
+- **relay.** As coded, with the same number of symbols, but each symbol is one
+  random fragment, uncoded.
 
 **What is simplified.**
 
 - No crashes, no Byzantine behaviour, no equivocation.
-- The receiver knows each block's fragment count (in the protocol it comes
-  from the length in the reference).
-- The fragments of one pushed block are delivered to a receiver together, at
-  the arrival of the last fragment that is not lost.
-- Admission reads references one round down, which in the honest case gives
-  the windows.
+- Receivers know each block's fragment count; in the protocol it comes from
+  the length in the reference.
+- The responder of a pull sees the requester's holdings exactly, as the
+  request's bitmap would report them.
 - Computation (coding, elimination, signatures) takes no time.
 
 ## Findings (n = 100, three seeds; `results.md`)
 
 Without loss, a block is admitted at another validator in 64 ms at the
-median and 132 ms at the 99.9th percentile. A leader block is decided in
-245 ms at the median.
+median, and a leader block is decided in 248 ms.
 
-1. **A pull with a long timer collapses under rare loss.** At p = 0.1% the
-   median decision triples (245 → 821 ms) and so does the round time
-   (85 → 273 ms). At p = 1% the median decision is 1.46 s. Admitting a
-   dense leader block needs every block it references, about n·T fragments
-   of the round below, so most rounds some validator lacks one fragment and
+1. **A pull with a long timer collapses under rare loss.** A dense leader
+   block references about n blocks. Admitting it needs every fragment of
+   all of them, so in most rounds some validator lacks one fragment and
    waits for the timer.
-2. **Coded symbols remove that cost.**
 
-   | Loss | Median decision | Pulls | Extra bandwidth (of push bytes) |
+   Median decision:
+
+   | Loss | pull 500 ms | pull 100 ms | coded | extra bandwidth for coding |
+   |---|---|---|---|---|
+   | 0.1% | 815 ms | 352 ms | 248 ms | 1.2% |
+   | 1% | 1.45 s | 604 ms | 274 ms | 3.8% |
+   | 5% | 2.22 s | 854 ms | 536 ms | 14.5% |
+   | 5% of links at 20%, 0.1% elsewhere | 1.98 s | 630 ms | 266 ms | 4.1% |
+
+   Coded symbols keep latency close to the loss-free run up to 1% loss, and
+   with a few bad links, with no pulls.
+
+2. **Coding is what helps.** An uncoded relay with the same number of
+   symbols is no better than pull alone. A random fragment is the missing
+   one with probability about d over the number of fragments.
+3. **A short pull timer (100 ms) recovers about half the gap.** It doubles
+   or triples the decision latency of coding, and under reordering it
+   duplicates fragments.
+4. **The coding choices hold up:**
+   - **Span.** Covering two rounds beats covering one: when a sender first
+     holds a quorum, it does not yet hold the late blocks of the round.
+   - **Trigger.** Sending on a quorum beats sending on build at 5% loss
+     (536 ms against 1.25 s). Building waits on the leader block, so the
+     repair of a lost leader block waits with it.
+   - **Density.** ½ is best; ¼ is close; ⅛ needs more symbols.
+   - **Budget.** At p = 1% the knee is about s = 20, and below about 10 the
+     pulls return. The automatic budget (29) is enough.
+5. **The extra bandwidth falls as n grows** at p = 1%: 7.4% of push bytes at
+   n = 25, 3.3% at n = 150. The symbol count grows about as 2p·n·T plus a
+   tail, and the push bytes as n·T.
+6. **Coding more rounds speeds up catch-up and costs bandwidth.**
+
+   | | span 2 | span 6 | pull only |
    |---|---|---|---|
-   | 0.1% | 248 ms | none | 1.3% |
-   | 1% | 267 ms | none | 4.3% |
-   | 5% | 574 ms (pull: 2.15 s) | few | 13% |
+   | Catch-up after a 200 ms outage | 571 ms | 282 ms | 439 ms |
+   | Catch-up after a 500 ms outage | 758 ms | 315 ms | 895 ms |
+   | Extra bandwidth at p = 1% | 3.8% | 8.4% | — |
 
-   At 0.1% and 1% loss, latency stays within a few percent of the loss-free
-   run. With 5% of links at 20% loss, the median decision is 262 ms against
-   1.35 s with pull.
-3. **Coding is what helps.** An uncoded relay with the same number of
-   symbols changes nothing: a random fragment is the missing one with
-   probability about d/(n·T).
-4. **A short pull timer (100 ms) recovers only part of the latency.** At
-   p = 1% the median decision is 494 ms. Under reordering it duplicates
-   fragments. At p = 5% it duplicates about 18 fragments per validator per
-   round.
-5. **The coding choices hold up:**
-   - **Span:** covering two rounds beats covering one. At build time a
-     sender does not yet hold the late blocks of the round below.
-   - **Trigger:** sending on a quorum beats sending on build. Building waits
-     on the leader block, so when the leader block is lost the repair waits
-     with it. At 5% loss: 574 ms against 1.64 s.
-   - **Density:** ½ is best.
-   - **Budget:** s needs about d_f at its tail. Below about 20 symbols at
-     p = 1%, the pulls return.
-6. **The extra bandwidth falls as n grows** at p = 1%: 7.7% of push bytes at
-   n = 25, 3.7% at n = 150. The symbol count s is about λ + 3√λ + 3, with
-   λ = 2p·n·T. The push grows with n·T, so the share tends to 2p, which is
-   2% at p = 1%.
+   At p = 1%, six rounds also widen the tail of steady-state latency, since
+   every symbol mixes the unknowns of six rounds. At p = 5%, four rounds are
+   the best span (433 ms median decision, against 536 ms for two).
+7. **Losses erode the sparse savings without coding.** A validator that
+   lacks the leader block builds a dense block. With no payload, pull-only
+   runs push 132 KB per validator per round, against 68 KB with coding.
 
 **Limits.**
 
-- Decision percentiles above the median vary between settings even without
-  loss. Grace γ = 0 and the catch-up rule let fast validators move on
-  without a slow leader's block, so the fraction of leaders committed
-  directly changes from run to run.
-- At p = 5%, a lost fragment of the leader block itself still costs about a
-  round. With symbols sent on build, a second batch over the current round,
-  sent 50 ms after building (`early = 0.05`), brings the median decision to 270 ms, at about
-  twice the symbol bytes.
+- **Small blocks are costly to protect.** With no payload, coding costs
+  22.5% of push bytes: a symbol is a full fragment (1.4 KB), while sparse
+  blocks are about 240 B. Coding each size class separately costs more, not
+  less (27.6%), because every class needs its own margin of symbols.
+- **Large payloads are limited by bandwidth.** At 100 KB, a validator pushes
+  about 10 MB per round on a 1 Gb/s uplink. Both strategies decide in about
+  2.1 s; the uplink, not the synchroniser, sets the pace.
+- **The decision tails are noisy.** With γ = 0, the catch-up rule lets fast
+  validators move on without a slow leader's block. The fraction of leaders
+  committed directly therefore varies between runs, and decision percentiles
+  above the median vary between settings even without loss.
