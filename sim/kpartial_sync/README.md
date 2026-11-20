@@ -92,7 +92,11 @@ per round in rotation.
     fragments held. The responder sends what the request reports missing;
     blocks that arrived meanwhile come twice, and count as duplicates.
     While a request is outstanding, its blocks are not asked for again.
-  - **Timing:** the request goes out after τ, and is retried every τ. There
+  - **Timing:** the request goes out after τ, and is retried every τ; after
+    three requests in a row with no packet from the author, the interval
+    doubles each time, up to 2 s (the author may be down). A pull stops once
+    its block is more than K + 1 rounds below the validator's quorum round,
+    and a crashed validator stops pulling. There
     is no wait when the validator is behind: it holds blocks from f + 1
     authors two rounds above its quorum round, so nothing it lacks is in
     flight. Requests waiting for τ go out at once when the validator finds
@@ -140,8 +144,10 @@ per round in rotation.
     whole shows no fragment; each block references its author's previous
     block, so when no fragment of that block has arrived one round time
     later, all its fragments count as lost. It keeps two decayed estimates,
-    with time constants 0.1 s and 2 s, and a Beta prior of weight 20 at 1%,
-    and uses the larger.
+    with time constants 0.1 s and 2 s, each with a Beta prior of weight 20 at
+    1%. It uses the slow one, unless the fast one exceeds it by more than two
+    standard errors of the fast one (`est_gate`): taking the larger of the
+    two would bias the estimate upwards, as the fast one is noisy.
   - **Report.** It puts its estimate p̂ and its margin m in each block,
     symbol and pull request it sends (2 B), and keeps the newest report of
     each peer.
@@ -150,7 +156,9 @@ per round in rotation.
     the 99.9th percentile of a Poisson variable with mean p̂ times the
     fragments covered. Each of the n − 1 senders sends its share, rounded so
     that w receives the total. Repair symbols on pull responses use the
-    requester's p̂ the same way.
+    requester's p̂ the same way. Budgets plan for at most 25% loss
+    (`loss_cap`): a validator in an outage counts every push as lost, but
+    more symbols do not repair an outage.
   - **Margin.** A partial block that symbols have not repaired by its repair
     deadline is a miss. When symbols covering its missing fragments did
     arrive, too few to decode, the margin doubles at the next quorum round;
@@ -286,65 +294,68 @@ leader and votes, and every leader commits directly.
    correct validator is needed for a quorum, so each lost fragment stalls
    it until repaired.
 
-**Adaptive control** (`python3 adapt_eval.py`, about 5 minutes on 14 cores;
+**Adaptive control** (`python3 adapt_eval.py`, about 12 minutes on 14 cores;
 `adapt_results.md`). Each scenario runs with three budgets: fixed at the
 scenario's loss averaged over links and time (a well-informed operator),
-fixed at 1%, and adaptive. Decision p99 in ms, and repair bytes as a share of
-push bytes; n = 100 unless stated, 3 seeds.
+fixed at 1%, and adaptive. Decision p99 in ms with a 95% bootstrap interval,
+and repair bytes as a share of push bytes; n = 100 unless stated, 8 seeds.
+The interval resamples leader rounds, not single decisions: the decisions of
+one leader at every validator move together, so a run of 30 rounds gives
+about 26 independent samples, and each seed's p99 rests on its worst one or
+two leaders. With 3 seeds, p99 differences under about 50 ms were noise.
 
 | scenario | fixed, mean loss | fixed, 1% | adaptive |
 |---|---|---|---|
-| p = 0.1% | 291 (1.1%) | 283 (3.3%) | 293 (1.3%) |
-| p = 1% | 336 (3.4%) | 336 (3.4%) | 292 (3.7%) |
-| p = 2% | 339 (5.5%) | 417 (3.7%) | 369 (6.1%) |
-| p = 5% | 361 (12.0%) | 1745 (13.9%) | 351 (13.8%) |
-| step up: 0.1% → 5% (1.5–3 s) → 0.1% | 819 (4.9%) | 1038 (4.2%) | 430 (6.0%) |
-| step down: 5% → 0.1% at 1.5 s | 620 (5.1%) | 678 (4.1%) | 335 (7.2%) |
-| ramp: 0.1% → 5% over 1–2.5 s | 666 (8.3%) | 1503 (8.4%) | 355 (7.4%) |
-| bursts: 5% for 0.2 s each second | 567 (3.7%) | 508 (4.0%) | 388 (4.7%) |
-| 5% of links at 20% | 315 (3.6%) | 362 (3.5%) | 328 (4.4%) |
-| 10% of validators receive at 10% | 503 (6.6%) | 504 (6.3%) | 301 (5.8%) |
-| 10% of validators send at 10% | 358 (3.6%) | 302 (3.4%) | 347 (4.0%) |
-| jitter 30 ms | 758 (1.1%) | 539 (3.3%) | 574 (1.7%) |
-| jitter 5 → 30 ms (1.5–3 s) → 5 ms | 583 (1.2%) | 529 (3.5%) | 534 (1.5%) |
-| routing stretch σ = 0.4, p = 1% | 462 (3.5%) | 462 (3.5%) | 445 (4.4%) |
-| outage 500 ms | 302 (1.2%) | 287 (3.5%) | 293 (1.5%) |
-| f crashed at 0.5 s, p = 1% | 3921 (5.8%) | 3921 (5.8%) | 2068 (10.5%) |
-| n = 50, p = 1% | 326 (4.7%) | 326 (4.7%) | 320 (5.2%) |
-| n = 150, p = 1% | 337 (2.9%) | 337 (2.9%) | 359 (3.2%) |
-| no payload, p = 1% | 260 (29.4%) | 260 (29.4%) | 267 (30.7%) |
-| payload 100 KB, p = 1% | 955 (2.2%) | 955 (2.2%) | 806 (2.5%) |
-| p = 1%, jitter 20 ms, stretch 0.3, 5% of links at 20% | 633 (5.5%) | 1547 (4.4%) | 570 (7.7%) |
+| p = 0.1% | 293 [287–301] (1.1%) | 282 [278–286] (3.3%) | 294 [286–304] (1.2%) |
+| p = 1% | 321 [303–335] (3.4%) | 321 [303–335] (3.4%) | 353 [330–368] (3.6%) |
+| p = 2% | 362 [333–371] (5.5%) | 471 [426–796] (3.8%) | 334 [316–353] (5.8%) |
+| p = 5% | 370 [366–375] (12.0%) | 1760 [1563–1816] (14.0%) | 363 [357–369] (13.3%) |
+| step up: 0.1% → 5% (1.5–3 s) → 0.1% | 836 [799–862] (4.9%) | 1026 [959–1098] (4.1%) | 421 [402–432] (5.9%) |
+| step down: 5% → 0.1% at 1.5 s | 609 [563–645] (5.1%) | 672 [305–763] (4.2%) | 347 [339–359] (7.2%) |
+| ramp: 0.1% → 5% over 1–2.5 s | 680 [601–754] (8.1%) | 1486 [1446–1551] (8.4%) | 367 [361–374] (7.3%) |
+| bursts: 5% for 0.2 s each second, else 0.1% | 583 [572–590] (3.8%) | 523 [508–534] (4.0%) | 400 [390–424] (5.1%) |
+| 5% of links at 20%, p = 0.1% | 329 [310–339] (3.6%) | 354 [313–364] (3.5%) | 309 [297–348] (4.2%) |
+| 10% of validators receive at 10%, p = 0.1% | 497 [473–523] (6.6%) | 496 [472–522] (6.4%) | 302 [298–307] (5.6%) |
+| 10% of validators send at 10%, p = 0.1% | 363 [329–372] (3.6%) | 376 [350–385] (3.4%) | 359 [325–369] (3.8%) |
+| jitter 30 ms, p = 0.1% | 616 [593–761] (1.1%) | 577 [544–640] (3.4%) | 586 [572–595] (1.5%) |
+| jitter 5 → 30 ms (1.5–3 s) → 5 ms, p = 0.1% | 573 [538–598] (1.2%) | 540 [519–555] (3.5%) | 541 [530–548] (1.4%) |
+| routing stretch σ = 0.4, p = 1% | 497 [467–517] (3.5%) | 497 [467–517] (3.5%) | 460 [446–468] (4.3%) |
+| outage 500 ms, p = 0.1% | 306 [296–313] (1.2%) | 290 [285–301] (3.5%) | 316 [299–385] (1.4%) |
+| f crashed at 0.5 s, p = 1% | 3962 [3830–3999] (5.5%) | 3962 [3833–3994] (5.5%) | 2158 [2124–2171] (8.9%) |
+| n = 50, p = 1% | 313 [302–329] (4.6%) | 313 [301–327] (4.6%) | 320 [304–331] (4.8%) |
+| n = 150, p = 1% | 347 [321–360] (2.9%) | 347 [321–360] (2.9%) | 349 [324–359] (3.1%) |
+| no payload, p = 1% | 269 [255–297] (29.3%) | 269 [255–297] (29.3%) | 273 [256–450] (27.6%) |
+| payload 100 KB, p = 1% | 912 [797–958] (2.2%) | 912 [797–958] (2.2%) | 722 [714–728] (2.3%) |
+| p = 1%, jitter 20 ms, stretch 0.3, 5% of links at 20% | 648 [612–675] (5.5%) | 1319 [1166–1550] (4.4%) | 633 [601–647] (7.4%) |
 
-- **Steady loss.** The adaptive validator is within the noise of the budget
-  that knows the loss (p99 differences of up to 45 ms either way, of the
-  order of the variation between seeds), for 0.2–1.8 points more bytes. Its estimates are close: 0.0018,
-  0.0104, 0.0203 and 0.0507 at 0.1%, 1%, 2% and 5%. A budget that assumes too
-  little loss collapses: at 5%, the 1% budget stretches rounds from 109 ms to
-  426 ms.
-- **Changing loss.** No fixed budget fits a schedule. The mean-loss budget is
-  too small while loss is high and wasted while it is low; the adaptive
-  validator cuts the p99 by a third (bursts) to a half (steps, ramp), for
-  at most 2.1 more points of bytes.
+- **Steady loss: a tie.** The intervals of the adaptive and the mean-loss
+  budget overlap at every rate (at 1% only just: 353 [330–368] against
+  321 [303–335]; an earlier 3-seed run had the order reversed). The adaptive
+  validator spends 0.1–1.3 points more bytes, and its estimates are exact
+  (0.0010, 0.0100, 0.0200, 0.0500). A budget that assumes too little loss
+  collapses: at 5%, the 1% budget stretches rounds from 111 ms to 427 ms.
+- **Changing loss: a clear win.** No fixed budget fits a schedule. The
+  adaptive validator cuts the p99 by a third (bursts) to about a half
+  (steps, ramp), with intervals far apart, for at most 2.1 more points of bytes.
 - **Uneven loss.** When a tenth of the validators receive at 10%, their
-  reports raise only their own budgets: p99 301 ms against 503 ms, for fewer
-  bytes than either fixed budget. When a tenth send at 10%, every receiver
-  sees 1.1% on average, but the losses fall on a tenth of the blocks; the
-  adaptive budget is no better than a fixed one there.
+  reports raise only their own budgets: p99 302 ms against 497 ms, for fewer
+  bytes. When a tenth send at 10%, all three budgets tie: every symbol mixes
+  the fragments of all blocks of its rounds, so a receiver needs as many
+  symbols as it lost fragments, whichever authors they came from.
 - **Timing.** The margin rises after late blocks miss their repair deadline
-  (to about 3 under 30 ms jitter, 5 under routing stretch). Under jitter
-  this helps about as much as a fixed 1% budget, at half its bytes.
+  (to about 3 under 30 ms jitter, 6 under routing stretch); the adaptive
+  validator matches a fixed 1% budget under jitter at less than half its
+  bytes, and is slightly ahead under routing stretch (460 [446–468] against
+  497 [467–517] ms, intervals just touching).
 - **Crashes.** With f crashed, rounds wait for the 1 s timeout, and blocks
   that arrive after their round's symbols waited about 1.5 s for the next
-  batch. The cap on the idle interval covers them within 250 ms, which
-  halves the median and p99 decision (1.4 s and 2.1 s against 2.8 s and 3.9
-  s), for 4.7 more points of bytes.
-- **Large payloads.** At 100 KB, the margin rises to about 2, and the p99
-  falls from 955 ms to 806 ms.
+  batch. The cap on the idle interval covers them within 250 ms: p99 2.2 s
+  against 4.0 s, median 1.4 s against 2.8 s, for 3.4 more points of bytes.
+- **Large payloads.** At 100 KB the p99 falls from 912 ms to 722 ms.
 - **Reports alone are not enough.** Without the floor of the sender's own
   estimate, a step up in loss stalls rounds, few blocks or symbols carry the
-  new reports, and senders keep sizing for the old loss (an earlier run: p99
-  623 ms against 400 ms with the floor).
+  new reports, and senders keep sizing for the old loss (p99 623 ms against
+  400 ms with the floor, 3 seeds).
 
 **Limits.**
 

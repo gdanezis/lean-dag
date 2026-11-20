@@ -105,8 +105,12 @@ class Config:
     lossy_in: tuple | None = None  # (fraction, loss): every link into this fraction of validators drops with loss
     lossy_out: tuple | None = None  # (fraction, loss): every link out of this fraction of validators drops with loss
     jitter_steps: tuple = ()  # ((time, jitter), ...): the mean jitter changes then
-    est_tau: tuple = (0.1, 2.0)  # adapt: time constants of a fast and a slow loss estimate (the larger is used), s
+    est_tau: tuple = (0.1, 2.0)  # adapt: time constants of a fast and a slow loss estimate, s
+    est_gate: float | None = 2.0  # adapt: use the fast estimate when it exceeds the slow one by this many
+    # standard errors of the fast one, else the slow one (None: always the larger)
     est_prior: tuple = (0.2, 19.8)  # adapt: Beta prior (lost, received) of the loss estimate
+    adapt_timers: bool = True  # adapt: timers follow measured round time and delays (else the fixed ones)
+    loss_cap: float = 0.25  # adapt: budgets plan for at most this loss (an outage is not repairable loss)
     own_floor: bool = True  # adapt: a sender plans for at least its own loss estimate at every receiver
     margin_ctl: tuple = (2.0, 0.05, 1.0, 30.0)  # adapt: margin times this after a round with a miss, minus this after one without, min, max
     crash: tuple | None = None  # (validators, time): from then on they build and send nothing
@@ -123,6 +127,9 @@ class Config:
 
 
 def poisson_quantile(lam: float, prob: float) -> int:
+    if lam > 700:  # exp(-lam) underflows; the normal approximation is exact enough here
+        assert prob == 0.999
+        return math.ceil(lam + 3.0902 * math.sqrt(lam) + 0.5)
     k, term = 0, math.exp(-lam)
     cdf = term
     while cdf < prob:
@@ -212,6 +219,8 @@ class Node:
     missed: bool = False  # adapt: a repair deadline passed since the quorum round last advanced
     reports: dict = field(default_factory=dict)  # adapt: peer -> (time, loss, margin), the newest it sent
     owd: dict = field(default_factory=dict)  # adapt: author -> [mean, deviation] of its blocks' delay
+    tries: dict = field(default_factory=dict)  # root -> (time of the last request, requests unanswered)
+    heard: dict = field(default_factory=dict)  # peer -> when a packet from it last arrived
     counted: set = field(default_factory=set)  # adapt: blocks whose push the loss estimate has counted
 
 
@@ -251,6 +260,7 @@ class Sim:
                             else:
                                 self.lossp[v][w] = spec[1]
         self.jitter = cfg.jitter
+        self.timed = cfg.adapt and cfg.adapt_timers
         self.bad = {(i, j) for i in range(n) for j in range(n) if self.lossp[i][j] != cfg.loss}
         self.nodes = [Node(v, margin=float(cfg.margin[0])) for v in range(n)]
         self.misses = 0
@@ -277,6 +287,7 @@ class Sim:
         self.pulls = 0
         self.deliver: list[float] = []
         self.commit: list[float] = []  # decision latency of each leader at each node
+        self.commit_round: list[int] = []  # the leader's round, for each entry of commit
         self.direct = 0
         self.symbols_sent = 0
         self.caught_up: float | None = None
@@ -322,7 +333,12 @@ class Sim:
     # otherwise. Timers follow the measured round time and block delays.
     def p_hat(self, u: Node) -> float:
         a, b = self.cfg.est_prior
-        return max((u.est_lost[i] + a) / (u.est_sent[i] + a + b) for i in range(2))
+        fast, slow = ((u.est_lost[i] + a) / (u.est_sent[i] + a + b) for i in range(2))
+        g = self.cfg.est_gate
+        if g is None:
+            return max(fast, slow)
+        se = math.sqrt(slow * (1 - slow) / (u.est_sent[0] + a + b))
+        return fast if fast > slow + g * se else slow
 
     def observe(self, u: Node, sent: int, lost: int) -> None:
         for i, tau in enumerate(self.cfg.est_tau):
@@ -347,26 +363,26 @@ class Sim:
             a, b = self.cfg.est_prior
             r = (0.0, a / (a + b), float(self.cfg.margin[0]))
         p = max(r[1], self.p_hat(u)) if self.cfg.own_floor else r[1]
-        return p, r[2]
+        return min(p, self.cfg.loss_cap), r[2]
 
     def loss_for(self, u: Node, w: int) -> float:
         return self.report_of(u, w)[0] if self.cfg.adapt else assumed(self.cfg)
 
     def repair_delay(self, u: Node) -> float:
         """How long a partial block waits for symbols before it is pulled."""
-        if not self.cfg.adapt:
+        if not self.timed:
             return self.cfg.pull_timer
         return min(self.cfg.pull_timer, max(0.05, 2 * u.round_avg))
 
     def retry_delay(self, u: Node, w: int) -> float:
         """When a pull to w is retried: twice the delay of w's blocks plus four deviations."""
-        if not self.cfg.adapt or w not in u.owd:
+        if not self.timed or w not in u.owd:
             return self.cfg.retry_timer
         m, d = u.owd[w]
         return min(self.cfg.retry_timer, max(0.03, 2 * m + 4 * d))
 
     def recent_window(self, u: Node) -> float:
-        return u.round_avg if self.cfg.adapt and self.cfg.recent > 0 else self.cfg.recent
+        return u.round_avg if self.timed and self.cfg.recent > 0 else self.cfg.recent
 
     # ------------------------------------------------------------ network
     def crashed(self, v: int) -> bool:
@@ -518,9 +534,9 @@ class Sim:
         """Arm the idle timer; it doubles after each idle batch."""
         u.sym_seq += 1
         if self.cfg.idle > 0:
-            floor = 0.03 if self.cfg.adapt else self.cfg.idle
+            floor = 0.03 if self.timed else self.cfg.idle
             d = max(floor, 1.5 * u.round_avg) if delay is None else delay
-            if self.cfg.adapt:  # when rounds are slow, late arrivals are still covered before
+            if self.timed:  # when rounds are slow, late arrivals are still covered before
                 d = min(d, self.cfg.pull_timer / 2)  # the longest repair deadline
             self.at(self.now + d, "sym_idle", u.vid, u.sym_seq, d)
 
@@ -706,6 +722,7 @@ class Sim:
                 for rho in range(u.next_undecided, lb.rnd + 1):
                     if cfg.warmup <= rho <= cfg.rounds and rho in self.leader_bid:
                         self.commit.append(self.now - self.blocks[self.leader_bid[rho]].built)
+                        self.commit_round.append(rho)
                 u.next_undecided = max(u.next_undecided, lb.rnd + 1)
         if not own and cfg.warmup <= blk.rnd <= cfg.rounds:
             self.deliver.append(self.now - blk.built)
@@ -797,6 +814,7 @@ class Sim:
     def on_frags(self, v: int, bits: int, bid: int, lost: int = 0, sent: int = 0,
                  kind: str | None = None) -> None:
         u = self.nodes[v]
+        u.heard[self.blocks[bid].author] = self.now  # pushes and pull responses come from the author
         if self.cfg.adapt:
             self.observe(u, sent, lost)
             blk = self.blocks[bid]
@@ -827,6 +845,7 @@ class Sim:
     def on_sym(self, v: int, R: int, mask: int, src: int = -1, rep: tuple = ()) -> None:
         u = self.nodes[v]
         self.hear(u, src, rep)
+        u.heard[src] = self.now
         row = mask ^ (mask & u.frags)
         if not row:
             return
@@ -998,9 +1017,12 @@ class Sim:
         u = self.nodes[v]
         if u.pulling.get(root) != token:  # superseded by a promoted timer
             return
+        blk = self.blocks[root]
+        if self.crashed(v) or blk.rnd + cfg.K + 1 < u.qround:  # crashed, or below every window it needs
+            u.deferred.discard(root)
+            return
         was_deferred = root in u.deferred
         u.deferred.discard(root)
-        blk = self.blocks[root]
         want = self.wanted(u, root)
         missing = [b for b in want if b not in u.complete]
         if not missing:
@@ -1022,7 +1044,11 @@ class Sim:
         # the request's bitmap marks the slots held or already asked for, so the
         # author sends only the fresh blocks
         size = self.request_bytes(u, fresh) + (2 if cfg.adapt else 0)
-        retry = self.retry_delay(u, blk.author)
+        # back off after three requests in a row with nothing from the author: it may be down
+        last = u.tries.get(root)
+        tries = 0 if last is None or u.heard.get(blk.author, -1.0) >= last[0] else last[1] + 1
+        u.tries[root] = (self.now, tries)
+        retry = min(2.0, self.retry_delay(u, blk.author) * 2 ** max(0, tries - 2))
         for b in fresh:
             u.asked[b] = self.now + retry
         if cfg.pull_mode != "oracle":  # the request carries what the requester holds of each
@@ -1130,4 +1156,5 @@ def simulate(**kw) -> dict:
     out = sim.report()
     out["_deliver"] = sim.deliver
     out["_commit"] = sim.commit
+    out["_commit_round"] = sim.commit_round
     return out

@@ -9,6 +9,7 @@ percentiles pool the seeds; the other columns average them.
 from __future__ import annotations
 
 import os
+import random
 import statistics
 import sys
 from multiprocessing import Pool
@@ -17,7 +18,8 @@ from run import guard, pct
 from sim import simulate
 
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 100
-SEEDS = [1, 2, 3]
+SEEDS = [1, 2, 3, 4, 5, 6, 7, 8]
+BOOT = 400  # bootstrap resamples for the interval of p99
 BASE = dict(n=N, rounds=30, warmup=5)
 ROUND = 0.095  # rough round time, to average a loss schedule over a run
 
@@ -83,6 +85,25 @@ def cost(job) -> float:
     return kw["n"] ** 2 * kw["rounds"] * (1 + kw.get("payload", 10_000) / 10_000)
 
 
+def p99_interval(rs: list) -> tuple:
+    """A 95% bootstrap interval for the pooled p99, resampling leader rounds: the
+    decisions of one leader at every validator move together, so a leader round,
+    not a single decision, is the unit of sampling."""
+    groups = []
+    for r in rs:
+        by = {}
+        for x, rho in zip(r["_commit"], r["_commit_round"]):
+            by.setdefault(rho, []).append(x)
+        groups += list(by.values())
+    rng = random.Random(0)
+    qs = []
+    for _ in range(BOOT):
+        xs = [x for _ in groups for x in rng.choice(groups)]
+        qs.append(pct(xs, 0.99))
+    qs.sort()
+    return qs[int(0.025 * BOOT)], qs[int(0.975 * BOOT)]
+
+
 def one(job):
     (si, ci), seed = job
     return (si, ci), simulate(**{**settings(si, ci), "seed": seed})
@@ -102,7 +123,8 @@ if __name__ == "__main__":
         mean = lambda k: statistics.mean(r[k] for r in rs)
         extra = mean("sym_kb") + mean("pull_kb")
         cu = [r["caught_up"] for r in rs if r["caught_up"] == r["caught_up"]]
-        return dict(p50=pct(cm, 0.5), p99=pct(cm, 0.99), mx=max(cm, default=float("nan")),
+        lo, hi = p99_interval(rs)
+        return dict(p50=pct(cm, 0.5), p99=pct(cm, 0.99), lo=lo, hi=hi, mx=max(cm, default=float("nan")),
                     round=mean("round_time"), extra=extra, share=100 * extra / mean("push_kb"),
                     misses=mean("misses"), est=mean("p_hat"), margin=mean("margin_end"),
                     timeouts=mean("timeouts"), cu=statistics.mean(cu) if cu else float("nan"))
@@ -112,14 +134,14 @@ if __name__ == "__main__":
            "*fixed, mean loss*: the symbol budget assumes the loss averaged over links and over "
            "the run. *fixed, 1%*: it assumes 1%. *adaptive*: `adapt = True`. Latencies in ms, "
            "pooled over seeds. *extra*: symbol and pull bytes as a share of push bytes.\n",
-           "## Summary: decide p99 in ms (extra)\n",
+           "## Summary: decide p99 in ms [95% interval, resampling leader rounds] (extra)\n",
            "| group | scenario | mean loss | " + " | ".join(c[0] for c in CONFIGS) + " |",
            "|---|---|---|" + "---|" * len(CONFIGS)]
     for si, (g, name, kw) in enumerate(SCENARIOS):
         cells = []
         for ci in range(len(CONFIGS)):
             s = S[(si, ci)]
-            cells.append(f"{ms(s['p99'])} ({s['share']:.1f}%)")
+            cells.append(f"{ms(s['p99'])} [{ms(s['lo'])}–{ms(s['hi'])}] ({s['share']:.1f}%)")
         out.append(f"| {g} | {name} | {100 * mean_loss(kw):.2f}% | " + " | ".join(cells) + " |")
     out += ["\n## Detail\n",
             "*misses*: partial blocks not repaired by symbols before the repair deadline (fixed: "
