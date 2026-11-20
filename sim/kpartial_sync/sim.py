@@ -67,6 +67,7 @@ class Config:
     uplink_bps: float = 1e9
     lat_min: float = 0.005  # one-way base latency range, seconds
     lat_max: float = 0.120
+    stretch: float = 0.0  # sigma of a per-link routing stretch exp(|N(0, sigma)|) >= 1; > 0 breaks the triangle inequality
     jitter: float = 0.005  # mean of exponential per-packet jitter
     loss: float = 0.01  # per-packet drop probability
     bad_links: float = 0.0  # fraction of directed links with loss bad_loss
@@ -194,11 +195,17 @@ class Sim:
         pts = [(self.rng.random(), self.rng.random()) for _ in range(n)]
         self.lat = [[0.0] * n for _ in range(n)]
         self.lossp = [[cfg.loss] * n for _ in range(n)]
+        srng = random.Random(cfg.seed * 7919 + 1)  # its own stream, so stretch = 0 changes nothing
+        stretch = [[1.0] * n for _ in range(n)]
+        if cfg.stretch > 0:
+            for i in range(n):
+                for j in range(i + 1, n):
+                    stretch[i][j] = stretch[j][i] = math.exp(abs(srng.gauss(0, cfg.stretch)))
         for i in range(n):
             for j in range(n):
                 if i != j:
                     d = math.dist(pts[i], pts[j]) / math.sqrt(2)
-                    self.lat[i][j] = cfg.lat_min + (cfg.lat_max - cfg.lat_min) * d
+                    self.lat[i][j] = (cfg.lat_min + (cfg.lat_max - cfg.lat_min) * d) * stretch[i][j]
                     if self.rng.random() < cfg.bad_links:
                         self.lossp[i][j] = cfg.bad_loss
         self.nodes = [Node(v) for v in range(n)]
@@ -216,6 +223,9 @@ class Sim:
         self.stop_round = cfg.rounds + 6
         # statistics
         self.bytes = {"push": 0, "sym": 0, "pullreq": 0, "pullresp": 0}
+        # per validator, by kind: bytes sent, and bytes received (packets delivered)
+        self.out = {k: [0] * n for k in self.bytes}
+        self.inb = {k: [0] * n for k in self.bytes}
         self.dup_frags = 0
         self.why: dict[str, int] = {}  # reason -> blocks built in the measured rounds
         self.decoded = 0
@@ -247,10 +257,12 @@ class Sim:
         c = self.cfg.crash
         return c is not None and v in c[0] and self.now >= c[1]
 
-    def transmit(self, src: int, dst: int, size: int) -> float | None:
+    def transmit(self, src: int, dst: int, size: int, kind: str | None = None) -> float | None:
         """Queue one packet on src's uplink; its arrival time, or None if lost."""
         if self.crashed(src):
             return None
+        if kind is not None:
+            self.out[kind][src] += size + WIRE
         start = max(self.now, self.up_free[src])
         done = start + (size + WIRE) * 8 / self.cfg.uplink_bps
         self.up_free[src] = done
@@ -259,6 +271,8 @@ class Sim:
         o = self.cfg.outage
         if o is not None and dst == o[0] and o[1] <= self.now < o[1] + o[2]:
             return None
+        if kind is not None:
+            self.inb[kind][dst] += size + WIRE
         return done + self.lat[src][dst] + self.rng.expovariate(1 / self.cfg.jitter)
 
     def send_frags(self, src: int, dst: int, blk: Block, mask: int, kind: str) -> None:
@@ -279,6 +293,7 @@ class Sim:
         self.bytes[kind] += sizes
         if self.crashed(src):
             return None
+        self.out[kind][src] += sizes
         start = max(self.now, self.up_free[src])
         done = start + sizes * 8 / cfg.uplink_bps
         self.up_free[src] = done
@@ -300,6 +315,8 @@ class Sim:
             got &= ~(1 << (blk.base + js[i]))
         k = len(js) - len(lost)
         if k:
+            self.inb[kind][dst] += sizes - sum(
+                FRAG_HEADER + min(cfg.frag, blk.size - js[i] * cfg.frag) + WIRE for i in lost)
             jit = -cfg.jitter * math.log(1 - self.rng.random() ** (1 / k))
             self.at(done + self.lat[src][dst] + jit, "frags", dst, got, blk.bid)
 
@@ -479,7 +496,7 @@ class Sim:
             size = SYM_HEADER + c
             self.symbols_sent += 1
             self.bytes["sym"] += size + WIRE
-            t = self.transmit(u.vid, w, size)
+            t = self.transmit(u.vid, w, size, "sym")
             if t is not None:
                 self.at(t, "sym", w, R, mask)
 
@@ -832,7 +849,7 @@ class Sim:
         if cfg.pull_mode != "oracle":  # the request carries what the requester holds of each
             fresh = [(b, u.frags & self.blocks[b].mask) for b in fresh]
         self.bytes["pullreq"] += size + WIRE
-        t = self.transmit(v, blk.author, size)
+        t = self.transmit(v, blk.author, size, "pullreq")
         if t is not None:
             self.at(t, "pull_req", blk.author, v, fresh)
         self.at(self.now + cfg.retry_timer, "pull_timer", v, root, token)
@@ -866,11 +883,17 @@ class Sim:
                     continue
                 size = SYM_HEADER + cfg.frag
                 self.bytes["pullresp"] += size + WIRE
-                t = self.transmit(h, v, size)
+                t = self.transmit(h, v, size, "pullresp")
                 if t is not None:
                     self.at(t, "sym", v, top, mask)
 
     # ------------------------------------------------------------ report
+    def mbps(self, table: dict, agg=None) -> float:
+        span = max((b.built for b in self.blocks), default=0.0)
+        per = [sum(table[k][v] for k in table) for v in range(self.cfg.n)]
+        x = (agg or (lambda xs: sum(xs) / len(xs)))(per)
+        return x * 8 / max(span, 1e-9) / 1e6
+
     def report(self) -> dict:
         cfg = self.cfg
 
@@ -911,6 +934,9 @@ class Sim:
             "decoded": self.decoded / per_node_round,
             "dup": self.dup_frags / per_node_round,
             "timeouts": self.why.get("timer", 0) / max(1, sum(self.why.values())),
+            # mean over validators of all bytes sent and received, in Mb/s over the run, and the busiest
+            "out_mbps": self.mbps(self.out), "in_mbps": self.mbps(self.inb),
+            "out_mbps_max": self.mbps(self.out, max), "in_mbps_max": self.mbps(self.inb, max),
             "caught_up": self.caught_up if self.caught_up is not None else float("nan"),
         }
 
