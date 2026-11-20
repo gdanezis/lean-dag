@@ -78,6 +78,8 @@ class Config:
     density: int = 1  # each fragment in a symbol with probability 2^-density
     span: int = 2  # rounds below the new block that symbols cover
     size_class: int = 0  # a symbol XORs fragments of one size class, rounded up to this (0: one class, F)
+    idle: float = 0.15  # > 0: a validator that has sent no symbols for this long, or 1.5 rounds if longer, sends a batch
+    recent: float = 0.1  # > 0: symbols also cover blocks of older rounds completed this recently (s)
     tail: tuple | None = None  # (rounds, symbols): also this many symbols per receiver over the older rounds
     pull_fec: int = 3  # >= 0 (coded only): a pull response adds d at its 99.9th percentile plus this many symbols
     margin: tuple = (3,)  # symbols above the quantile, per class from the smallest (last value repeats)
@@ -86,12 +88,14 @@ class Config:
     trigger: str = "held"  # send symbols on f + 1 held blocks of a round, a new quorum round, or on building
     trigger_count: int = 0  # with trigger = "held": complete blocks of this many others in a round (0: f + 1)
     trigger_delay: float = 0.0  # with trigger = quorum, wait this long after the quorum
+    vote_wait: str = "included"  # await votes for the leader of r - 1 only if own block at r references it; "always"
     grace: float = 0.0
     round_timeout: float = 1.0
     K: int = 6  # window depth
     window_pull: bool = True  # a pull asks for the whole window to depth K, not one block
     behind_pull: bool = True  # pull at once when f + 1 others are two rounds ahead
     check_claims: bool = True  # R2: admit a block only when holding the votes behind its claims
+    crash: tuple | None = None  # (validators, time): from then on they build and send nothing
     outage: tuple | None = None  # (validator, start, duration): it receives nothing meanwhile
     seed: int = 1
 
@@ -154,7 +158,8 @@ class Node:
     leader_at: dict = field(default_factory=dict)  # round -> admitted leader bid
     committed: set = field(default_factory=set)
     next_undecided: int = 1
-    pulling: set = field(default_factory=set)
+    pulling: dict = field(default_factory=dict)  # root -> token of its live pull timer
+    deferred: set = field(default_factory=set)  # roots whose first pull waits pull_timer
     newest: int = 0  # highest round of a block seen
     held_by_round: dict = field(default_factory=dict)  # round -> authors of complete blocks
     ahead: int = 0  # highest round with complete blocks from f + 1 authors
@@ -164,6 +169,10 @@ class Node:
     own: int | None = None
     timers: set = field(default_factory=set)
     rows: list = field(default_factory=list)  # (round tag, mask)
+    round_avg: float = 0.1  # running average of the time between quorum rounds
+    qround_at: float = 0.0  # when the quorum round last advanced
+    sym_seq: int = 0  # symbol batches sent; an idle timer is live only for the latest
+    arrivals: list = field(default_factory=list)  # (time, bid) of blocks completed
     rowunion: int = 0
 
 
@@ -172,7 +181,7 @@ class Sim:
         self.cfg = cfg
         self.rng = random.Random(cfg.seed)
         n = cfg.n
-        self.keep = max(cfg.span, cfg.tail[0] if cfg.tail else 0,
+        self.keep = max(cfg.span, cfg.tail[0] if cfg.tail else 0, cfg.K + 2 if cfg.recent > 0 else 0,
                         cfg.K + 2 if cfg.pull_fec >= 0 and cfg.strategy == "coded" else 0) + 1  # rounds of symbol rows kept
         self.s = cfg.symbols if cfg.symbols is not None else auto_symbols(cfg)
         pts = [(self.rng.random(), self.rng.random()) for _ in range(n)]
@@ -201,6 +210,7 @@ class Sim:
         # statistics
         self.bytes = {"push": 0, "sym": 0, "pullreq": 0, "pullresp": 0}
         self.dup_frags = 0
+        self.why: dict[str, int] = {}  # reason -> blocks built in the measured rounds
         self.decoded = 0
         self.pulls = 0
         self.deliver: list[float] = []
@@ -226,8 +236,14 @@ class Sim:
             getattr(self, "on_" + kind)(*args)
 
     # ------------------------------------------------------------ network
+    def crashed(self, v: int) -> bool:
+        c = self.cfg.crash
+        return c is not None and v in c[0] and self.now >= c[1]
+
     def transmit(self, src: int, dst: int, size: int) -> float | None:
         """Queue one packet on src's uplink; its arrival time, or None if lost."""
+        if self.crashed(src):
+            return None
         start = max(self.now, self.up_free[src])
         done = start + (size + WIRE) * 8 / self.cfg.uplink_bps
         self.up_free[src] = done
@@ -250,6 +266,8 @@ class Sim:
             return
         sizes = sum(FRAG_HEADER + min(cfg.frag, blk.size - j * cfg.frag) + WIRE for j in js)
         self.bytes[kind] += sizes
+        if self.crashed(src):
+            return None
         start = max(self.now, self.up_free[src])
         done = start + sizes * 8 / cfg.uplink_bps
         self.up_free[src] = done
@@ -276,10 +294,12 @@ class Sim:
             self.at(done + self.lat[src][dst] + jit, "frags", dst, got, blk.bid)
 
     # ------------------------------------------------------------ building
-    def build(self, u: Node, R: int) -> None:
+    def build(self, u: Node, R: int, why: str = "leader") -> None:
         cfg = self.cfg
-        if R > self.stop_round or u.latest >= R:
+        if R > self.stop_round or u.latest >= R or self.crashed(u.vid):
             return
+        if cfg.warmup <= R <= cfg.rounds:
+            self.why[why] = self.why.get(why, 0) + 1
         r = R - 1
         lead = u.leader_at.get(r)
         is_leader = R % cfg.n == u.vid
@@ -344,10 +364,29 @@ class Sim:
     def on_quorum_symbols(self, v: int, r: int) -> None:
         cfg = self.cfg
         self.send_symbols(self.nodes[v], r + 1, range(r + 1 - cfg.span, r + 1))
+        self.arm_idle(self.nodes[v])
         if cfg.tail is not None:
             lo = max(1, r + 1 - cfg.tail[0])
             self.send_symbols(self.nodes[v], r + 1, range(lo, r + 1 - cfg.span),
                               salt=3, count=cfg.tail[1])
+
+    def arm_idle(self, u: Node, delay: float | None = None) -> None:
+        """Arm the idle timer; it doubles after each idle batch."""
+        u.sym_seq += 1
+        if self.cfg.idle > 0:
+            d = max(self.cfg.idle, 1.5 * u.round_avg) if delay is None else delay
+            self.at(self.now + d, "sym_idle", u.vid, u.sym_seq, d)
+
+    def on_sym_idle(self, v: int, seq: int, delay: float) -> None:
+        """No symbols for ``idle``: a batch over the quorum round and the round
+        above, and recent arrivals, so a late block is covered even when no
+        round reaches the trigger."""
+        u = self.nodes[v]
+        if seq != u.sym_seq or self.crashed(v) or u.latest > self.stop_round - 2:
+            return
+        r = u.qround
+        self.send_symbols(u, r + 1, range(max(1, r), r + 2), salt=5 + seq)
+        self.arm_idle(u, 2 * delay)
 
     def on_early(self, v: int, R: int) -> None:
         self.send_symbols(self.nodes[v], R + 1, [R], salt=1)
@@ -383,6 +422,16 @@ class Sim:
             for c, m in self.class_mask.get(k, {}).items():
                 if u.frags & m:
                     held[c] = held.get(c, 0) | (u.frags & m)
+        if cfg.recent > 0 and (salt == 0 or salt >= 5):
+            # late blocks of older rounds, completed recently
+            lo = min(rounds)
+            u.arrivals = [(t, b) for t, b in u.arrivals if t >= self.now - cfg.recent]
+            for _, b in u.arrivals:
+                blk = self.blocks[b]
+                if blk.rnd < lo:
+                    for c, m in self.class_mask[blk.rnd].items():
+                        if m & blk.mask:
+                            held[c] = held.get(c, 0) | (m & blk.mask & u.frags)
         if not held:
             return
         p = cfg.loss * (1 - cfg.bad_links) + cfg.bad_loss * cfg.bad_links
@@ -432,22 +481,30 @@ class Sim:
         # behind: f + 1 others hold blocks of round r + 1
         ahead = u.by_round.get(r + 1, set()) - {u.vid}
         if len(ahead) >= cfg.f + 1:
-            self.build(u, r + 1)
+            self.build(u, r + 1, "behind")
             return
         lead = u.leader_at.get(r)
-        voted = r < 2 or (
-            (Lp := u.leader_at.get(r - 1)) is not None and u.votes.get(Lp, 0) >= cfg.q)
+        # votes for the leader of r - 1 are awaited only if the validator's own
+        # block at r references it; otherwise a quorum at r is enough
+        Lp = u.leader_at.get(r - 1)
+        mine = u.own if u.own is not None and self.blocks[u.own].rnd == r else None
+        included = mine is not None and Lp is not None and Lp in self.blocks[mine].refs
+        if cfg.vote_wait == "always":
+            included = True
+        voted = r < 2 or not included or u.votes.get(Lp, 0) >= cfg.q
         if lead is not None and voted:
             if cfg.grace <= 0:
                 self.build(u, r + 1)
             elif ("grace", r) not in u.timers:
                 u.timers.add(("grace", r))
-                self.at(self.now + cfg.grace, "build_timer", u.vid)
+                self.at(self.now + cfg.grace, "build_timer", u.vid, r, "grace")
 
-    def on_build_timer(self, v: int) -> None:
+    def on_build_timer(self, v: int, r: int, why: str) -> None:
+        """A timer armed at quorum round r: it builds only if the validator is
+        still at quorum round r and has not built r + 1."""
         u = self.nodes[v]
-        if u.latest < u.qround + 1:
-            self.build(u, u.qround + 1)
+        if u.qround == r and u.latest < r + 1:
+            self.build(u, r + 1, why)
 
     # ------------------------------------------------------------ admission
     def admit(self, u: Node, blk: Block, own: bool = False) -> None:
@@ -457,12 +514,15 @@ class Sim:
         authors = u.by_round.setdefault(blk.rnd, set())
         authors.add(blk.author)
         if len(authors) >= cfg.q and blk.rnd > u.qround:
+            step = (self.now - u.qround_at) / (blk.rnd - u.qround)
+            u.round_avg = 0.8 * u.round_avg + 0.2 * step
+            u.qround_at = self.now
             u.qround = blk.rnd
             if cfg.strategy in ("coded", "relay") and cfg.trigger == "quorum" and blk.rnd >= cfg.span:
                 self.at(self.now + cfg.trigger_delay, "quorum_symbols", u.vid, blk.rnd)
             if ("timeout", blk.rnd) not in u.timers:
                 u.timers.add(("timeout", blk.rnd))
-                self.at(self.now + cfg.round_timeout, "build_timer", u.vid)
+                self.at(self.now + cfg.round_timeout, "build_timer", u.vid, blk.rnd, "timer")
         if blk.leader:
             u.leader_at[blk.rnd] = blk.bid
         for ref in blk.refs:
@@ -497,12 +557,15 @@ class Sim:
         while progress:
             progress = False
             for bid in sorted(u.pending, key=lambda b: self.blocks[b].rnd):
+                if bid not in u.pending:  # admitted by a nested call
+                    continue
                 blk = self.blocks[bid]
                 if self.admissible(u, blk):
                     self.admit(u, blk)
                     progress = True
-            if progress:
-                self.check_build(u)
+                    # a node checks its build rule on each admission, so it does
+                    # not skip a round it could have built
+                    self.check_build(u)
         self.check_build(u)
 
     # ------------------------------------------------------------ receiving
@@ -540,11 +603,14 @@ class Sim:
             return
         if u.frags & blk.mask == blk.mask:
             u.complete.add(bid)
+            if self.cfg.recent > 0:
+                u.arrivals.append((self.now, bid))
             u.pending.add(bid)
             hb = u.held_by_round.setdefault(blk.rnd, set())
             hb.add(blk.author)
-            if len(hb) >= self.cfg.f + 1:
-                u.ahead = max(u.ahead, blk.rnd)
+            if len(hb) >= self.cfg.f + 1 and blk.rnd > u.ahead:
+                u.ahead = blk.rnd
+                self.promote(u)
             cfg = self.cfg
             if (cfg.trigger == "held" and len(hb) == (cfg.trigger_count or cfg.f + 1)
                     and cfg.strategy in ("coded", "relay") and blk.rnd >= cfg.span):
@@ -606,11 +672,25 @@ class Sim:
     def start_pull(self, u: Node, bid: int) -> None:
         if bid in u.pulling:
             return
-        u.pulling.add(bid)
-        # a validator holding blocks from f + 1 authors two rounds above its
-        # quorum round is behind: what it lacks is not in flight
-        late = self.cfg.behind_pull and u.qround + 2 <= u.ahead
-        self.at(self.now + (0.0 if late else self.cfg.pull_timer), "pull_timer", u.vid, bid)
+        u.pulling[bid] = 0
+        if self.behind(u):
+            self.at(self.now, "pull_timer", u.vid, bid, 0)
+        else:
+            u.deferred.add(bid)
+            self.at(self.now + self.cfg.pull_timer, "pull_timer", u.vid, bid, 0)
+
+    def behind(self, u: Node) -> bool:
+        """Holding blocks from f + 1 authors two rounds above its quorum round:
+        what it lacks is not in flight."""
+        return self.cfg.behind_pull and u.qround + 2 <= u.ahead
+
+    def promote(self, u: Node) -> None:
+        """Once behind, deferred pulls go out at once."""
+        if u.deferred and self.behind(u):
+            for root in u.deferred:
+                u.pulling[root] += 1
+                self.at(self.now, "pull_timer", u.vid, root, u.pulling[root])
+            u.deferred.clear()
 
     def window(self, bid: int) -> list[int]:
         """The block and what admitting it needs: the windows to depth K of its
@@ -631,11 +711,14 @@ class Sim:
                     stack.append(r)
         return list(seen)
 
-    def on_pull_timer(self, v: int, root: int) -> None:
+    def on_pull_timer(self, v: int, root: int, token: int) -> None:
         """Ask root's author for every block of root's window the requester lacks,
         in one request; the author sends them all at once."""
         cfg = self.cfg
         u = self.nodes[v]
+        if u.pulling.get(root) != token:  # superseded by a promoted timer
+            return
+        u.deferred.discard(root)
         blk = self.blocks[root]
         want = self.window(root) if cfg.window_pull else [root]
         missing = [b for b in want if b not in u.complete]
@@ -643,7 +726,7 @@ class Sim:
             return
         fresh = [b for b in missing if u.asked.get(b, 0) <= self.now]
         if not fresh:  # outstanding requests cover them all
-            self.at(min(u.asked[b] for b in missing), "pull_timer", v, root)
+            self.at(min(u.asked[b] for b in missing), "pull_timer", v, root, token)
             return
         if cfg.warmup <= blk.rnd <= cfg.rounds:
             self.pulls += 1
@@ -656,7 +739,7 @@ class Sim:
         t = self.transmit(v, blk.author, size)
         if t is not None:
             self.at(t, "pull_req", blk.author, v, fresh)
-        self.at(self.now + cfg.retry_timer, "pull_timer", v, root)
+        self.at(self.now + cfg.retry_timer, "pull_timer", v, root, token)
 
     def on_pull_req(self, h: int, v: int, fresh: list[int]) -> None:
         hold, want = self.nodes[h], self.nodes[v]
@@ -724,6 +807,7 @@ class Sim:
             "pulls": self.pulls / (cfg.n * (cfg.rounds - cfg.warmup + 1)),
             "decoded": self.decoded / per_node_round,
             "dup": self.dup_frags / per_node_round,
+            "timeouts": self.why.get("timer", 0) / max(1, sum(self.why.values())),
             "caught_up": self.caught_up if self.caught_up is not None else float("nan"),
         }
 

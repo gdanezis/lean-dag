@@ -36,6 +36,7 @@ GROUPS = {
     "scale": "Coded: number of validators (p = 1%)",
     "payload": "Payload size (p = 1%)",
     "ablation": "Ablation: the default with one component changed",
+    "crash": "Crashed validators from t = 0.5 s (p = 0.1%): waiting for votes on a leader not referenced",
     "outage": "One validator receives nothing for a while (p = 0.1%)",
 }
 
@@ -72,11 +73,12 @@ for pay in [0, 1_000, 10_000, 100_000]:
                      ("coded, nested 320 B", dict(cuts=(320,), **VARIANTS["coded + pull 500 ms"]))]:
         SCENARIOS.append(("payload", f"payload {pay // 1000} KB" if pay else "no payload", name,
                           dict(loss=0.01, payload=pay, **kw)))
-OLD = dict(strategy="coded", trigger="quorum", pull_fec=-1)
+OLD = dict(strategy="coded", trigger="quorum", pull_fec=-1, recent=0, idle=0)
 ABLATION = [("best (default)", dict(strategy="coded")),
-            ("+ tail (6, 3)", dict(strategy="coded", tail=(6, 3))),
+            ("− recent arrivals", dict(strategy="coded", recent=0)),
+            ("− recent + tail (6, 3)", dict(strategy="coded", recent=0, tail=(6, 3))),
+            ("− idle batches", dict(strategy="coded", idle=0)),
             ("− pull repair", dict(strategy="coded", pull_fec=-1)),
-            ("− pull repair + tail (6, 3)", dict(strategy="coded", pull_fec=-1, tail=(6, 3))),
             ("trigger quorum", dict(strategy="coded", trigger="quorum")),
             ("trigger build", dict(strategy="coded", trigger="build")),
             ("span 1", dict(strategy="coded", span=1)),
@@ -88,6 +90,10 @@ ABLATION = [("best (default)", dict(strategy="coded")),
 for loss in [0.01, 0.05]:
     for name, kw in ABLATION:
         SCENARIOS.append(("ablation", f"p = {loss:.0%}", name, dict(loss=loss, **kw)))
+F = (N - 1) // 3
+for label, vs in [("1 crashed (leads round 20)", (20,)), ("f crashed", tuple(range(1, 3 * F, 3)))]:
+    for name, w in [("votes awaited always", "always"), ("votes awaited if referenced (default)", "included")]:
+        SCENARIOS.append(("crash", label, name, dict(loss=0.001, crash=(vs, 0.5), vote_wait=w)))
 for dur in [0.2, 0.5]:
     for name, kw in ABLATION:
         SCENARIOS.append(("outage", f"outage {dur * 1000:.0f} ms", name,
@@ -139,7 +145,8 @@ if __name__ == "__main__":
            "Latencies in ms, pooled over seeds. *deliver*: block built to admitted at "
            "another validator. *decide*: leader block built to decided (committed "
            "directly, or decided by a later direct commit). *direct*: fraction of "
-           "leaders committed directly. *extra*: symbol and pull bytes per validator "
+           "leaders committed directly. *timeouts*: fraction of blocks built on the "
+           "round timeout. *extra*: symbol and pull bytes per validator "
            "per round, and as a share of push bytes. *pulls*, *decoded*, *dup*: per "
            "validator per round (requests, fragments decoded, duplicate fragments). "
            "*catch-up*: from the end of the outage to the validator's first block at "
@@ -159,8 +166,8 @@ if __name__ == "__main__":
                            + f" | {ms(statistics.mean(ok)) if ok else '—'} |")
             continue
         out.append("| setting | variant | s | deliver p50 / p99 / p99.9 | decide p50 / p99 / max "
-                   "| round | direct | push KB | extra KB (%) | pulls | decoded | dup |")
-        out.append("|---|---|---|---|---|---|---|---|---|---|---|---|")
+                   "| round | direct | timeouts | push KB | extra KB (%) | pulls | decoded | dup |")
+        out.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
         for r in rows:
             if r["group"] != g:
                 continue
@@ -169,7 +176,7 @@ if __name__ == "__main__":
                 f"| {r['setting']} | {r['variant']} | {r['symbols']:.1f} "
                 f"| {ms(r['deliver_p50'])} / {ms(r['deliver_p99'])} / {ms(r['deliver_p999'])} "
                 f"| {ms(r['commit_p50'])} / {ms(r['commit_p99'])} / {ms(r['commit_max'])} "
-                f"| {ms(r['round_time'])} | {r['direct']:.2f} | {r['push_kb']:.0f} "
+                f"| {ms(r['round_time'])} | {r['direct']:.2f} | {r['timeouts']:.3f} | {r['push_kb']:.0f} "
                 f"| {extra:.1f} ({100 * extra / r['push_kb']:.1f}%) | {r['pulls']:.2f} "
                 f"| {r['decoded']:.1f} | {r['dup']:.2f} |")
     text = "\n".join(out) + "\n"

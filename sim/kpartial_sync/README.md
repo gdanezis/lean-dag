@@ -4,7 +4,7 @@ A discrete-event simulator of the honest case: every validator is correct and
 none equivocates. It compares ways of repairing lost or late fragments.
 
 ```
-python3 run.py [n]     # all sweeps, about 12 minutes at n = 100 on 12 cores
+python3 run.py [n]     # all sweeps, about 20 minutes at n = 100 on 12 cores
 ```
 
 `run.py` writes `results.md` (tables) and `results.csv`. `sim.py` holds the
@@ -23,6 +23,7 @@ use small settings (n = 20–30, a few rounds) that run in seconds.
 - Each packet is dropped with probability `loss`; a fraction `bad_links` of
   directed links drop with `bad_loss` instead.
 - `outage = (v, t, d)` drops every packet sent to v during [t, t + d).
+- `crash = (vs, t)`: the validators vs build and send nothing from time t.
 - Every packet pays 80 B of IPv6, UDP and encryption framing.
 
 **Blocks.**
@@ -47,9 +48,14 @@ per round in rotation.
   - for each leader block it claims, that block and votes for it from a
     quorum are admitted.
 - **Building (R3).** A validator at highest quorum round r builds at r + 1
-  when it holds the leader block of r and votes from a quorum for the leader
-  block of r − 1. It also builds after 1 s from the quorum, or at once when
-  f + 1 others hold blocks of r + 1. The grace period is γ = 0.
+  when it holds the leader block of r and, if its own block at r references
+  the leader block of r − 1, votes from a quorum for that block. A validator
+  whose block at r does not reference the leader of r − 1 builds on the
+  quorum at r and the leader of r (`vote_wait = "always"` restores the wait).
+  It also builds once 1 s has passed since it reached quorum round r, while
+  still at r, or at once when f + 1 others hold blocks of r + 1. The rule is
+  checked after each admission, so a validator skips only rounds it could
+  not have built. The grace period is γ = 0.
 - **Shape (R4).** A leader's block, or a validator's first block after a gap,
   or a block built without the leader block, is dense. Every other block is
   sparse.
@@ -71,7 +77,8 @@ per round in rotation.
   - **Timing:** the request goes out after τ, and is retried every τ. There
     is no wait when the validator is behind: it holds blocks from f + 1
     authors two rounds above its quorum round, so nothing it lacks is in
-    flight.
+    flight. Requests waiting for τ go out at once when the validator finds
+    it is behind.
 - **coded** (the default configuration).
   - A pull with τ = 500 ms stays as the fallback.
   - When a validator first holds complete blocks of round r from f + 1 other
@@ -82,6 +89,14 @@ per round in rotation.
   - Receivers decode by Gaussian elimination over GF(2), after removing the
     fragments they hold. One linear system holds the symbols of every sender
     over every block.
+  - The symbols also cover the blocks of older rounds that the sender
+    completed in the last 100 ms (`recent`): a late block of an old round,
+    from a validator that fell behind, is covered while it is new.
+  - A validator that has sent no symbols for 150 ms sends a batch over its
+    quorum round and the round above, and its recent arrivals (`idle`); the
+    interval doubles after each idle batch. This covers a late leader block
+    when fewer than f + 1 validators can build the next round, so no round
+    reaches the trigger.
   - s is d at its 99.9th percentile plus 3, where d is Poisson with mean p
     times the fragments the sender holds over the span.
   - A pull response carries repair symbols: d at its 99.9th percentile plus
@@ -102,7 +117,8 @@ per round in rotation.
 
 **What is simplified.**
 
-- No crashes, no Byzantine behaviour, no equivocation.
+- No Byzantine behaviour, no equivocation; crashed validators stop and stay
+  down.
 - Receivers know each block's fragment count; in the protocol it comes from
   the length in the reference.
 - The responder of a pull sees the requester's holdings exactly, as the
@@ -112,8 +128,9 @@ per round in rotation.
 ## Findings (n = 100; `results.md`)
 
 Three seeds, six for the ablation and the outages. Without loss, a block is
-admitted at another validator in 64 ms at the median, and a leader block is
-decided in 248 ms.
+admitted at another validator in 64 ms at the median, a leader block is
+decided in 241 ms (p99 282 ms), every block is built on its leader and votes,
+and every leader commits directly.
 
 1. **A pull with a long timer collapses under rare loss.** A dense leader
    block references about n blocks. Admitting it needs every fragment of
@@ -124,78 +141,91 @@ decided in 248 ms.
 
    | Loss | pull 500 ms | pull 100 ms | coded | extra bandwidth for coding |
    |---|---|---|---|---|
-   | 0.1% | 815 ms | 352 ms | 252 ms | 1.1% |
-   | 1% | 1.45 s | 604 ms | 272 ms | 3.3% |
-   | 5% | 2.22 s | 854 ms | 324 ms | 11.7% |
-   | 5% of links at 20%, 0.1% elsewhere | 1.98 s | 630 ms | 275 ms | 3.5% |
+   | 0.1% | 687 ms | 330 ms | 246 ms | 1.1% |
+   | 1% | 1.12 s | 482 ms | 259 ms | 3.4% |
+   | 5% | 1.99 s | 711 ms | 322 ms | 11.9% |
+   | 5% of links at 20%, 0.1% elsewhere | 1.60 s | 533 ms | 262 ms | 3.7% |
 
-   Coded symbols keep the median within 80 ms of the loss-free run up to 5%
-   loss, with almost no pulls.
+   With coding, the decision p99 stays within 120 ms of the loss-free run
+   up to 5% loss, with no pulls and no timeouts.
 
 2. **Ablation.** Each row changes one component of the default.
 
-   | Variant | p = 1%: decide p50 / deliver p99 | p = 1%: extra | p = 5%: decide p50 / deliver p99 | p = 5%: extra | catch-up after 500 ms outage |
+   | Variant | p = 1%: decide p50 / p99 | p = 1%: extra | p = 5%: decide p50 / p99 | p = 5%: extra | catch-up after 500 ms outage |
    |---|---|---|---|---|---|
-   | default | 274 / 159 ms | 3.3% | 329 / 146 ms | 11.6% | 338 ms |
-   | trigger on quorum | 275 / 147 ms | 3.8% | 545 / 409 ms | 15.0% | 305 ms |
-   | trigger on build | 281 / 165 ms | 4.1% | 1489 / 685 ms | 17.6% | 376 ms |
-   | no pull repair | 269 / 152 ms | 3.3% | 328 / 146 ms | 11.5% | 639 ms |
-   | + tail (6, 3) | 275 / 152 ms | 3.7% | 331 / 148 ms | 12.0% | 330 ms |
-   | span 1 | 1141 / 796 ms | 3.1% | 1754 / 1127 ms | 11.2% | 454 ms |
-   | span 6 | 256 / 275 ms | 8.2% | 281 / 625 ms | 33.7% | 310 ms |
-   | density ¼ | 304 / 328 ms | 3.4% | 333 / 213 ms | 11.6% | 331 ms |
-   | relay, uncoded | 1416 / 946 ms | 4.5% | 2194 / 1314 ms | 17.1% | 932 ms |
-   | previous default (quorum, no pull repair) | 274 / 147 ms | 3.8% | 539 / 292 ms | 14.5% | 740 ms |
-   | pull 500 ms only | 1446 / 961 ms | 1.2% | 2270 / 1360 ms | 6.1% | 823 ms |
+   | default | 263 / 309 ms | 3.4% | 327 / 368 ms | 11.9% | 300 ms |
+   | no recent arrivals | 484 / 1165 ms | 4.2% | 335 / 1198 ms | 13.1% | 309 ms |
+   | no recent arrivals, tail (6, 3) | 266 / 348 ms | 3.8% | 327 / 430 ms | 12.3% | 302 ms |
+   | no idle batches | 263 / 309 ms | 3.4% | 327 / 850 ms | 11.8% | 329 ms |
+   | no pull repair | 263 / 309 ms | 3.4% | 326 / 374 ms | 11.7% | 704 ms |
+   | trigger on quorum | 268 / 324 ms | 3.9% | 496 / 632 ms | 16.0% | 316 ms |
+   | trigger on build | 269 / 321 ms | 4.1% | 699 / 1241 ms | 16.2% | 337 ms |
+   | span 1 | 268 / 338 ms | 3.1% | 362 / 622 ms | 9.2% | 332 ms |
+   | span 6 | 255 / 752 ms | 8.3% | 281 / 883 ms | 33.8% | 319 ms |
+   | density ¼ | 279 / 375 ms | 3.5% | 327 / 441 ms | 12.0% | 329 ms |
+   | relay, uncoded | 1116 / 1566 ms | 5.1% | 1940 / 2480 ms | 19.1% | 806 ms |
+   | quorum trigger, span 2 only | 281 / 872 ms | 3.9% | 516 / 862 ms | 14.5% | 686 ms |
+   | pull 500 ms only | 1120 / 1556 ms | 1.2% | 1987 / 2644 ms | 6.1% | 716 ms |
 
+   - **Recent arrivals.** A validator that falls behind builds late blocks
+     of old rounds. A dense leader block that references one stalls every
+     validator that lost a fragment of it, and through the leader every
+     validator, until the 500 ms pull. Symbols over rounds r − 1 and r do
+     not cover such a block; symbols over the blocks received in the last
+     100 ms do. Symbols over older rounds (tail) also work, at a little
+     more bandwidth.
+   - **Idle batches.** A late leader block that misses the symbols of its
+     round, and that fewer than f + 1 validators receive whole, is never
+     covered: only those validators build the next round, so no round
+     reaches the trigger. An idle batch covers it.
    - **Trigger.** A sender should send once it holds f + 1 complete blocks
      of the round. At p = 5% a 10 KB block of 8 fragments loses one with
      probability 1 − 0.95⁸ ≈ 34%, so reaching a quorum of complete blocks
      itself waits on repair: a quorum trigger waits for the repairs it would
-     send. Fewer held blocks (1, or f/2) cover too little of the round, and
-     pulls return. Building waits on the leader block, so the repair of a
-     lost leader block waits with it.
+     send. Building waits on the leader block, so the repair of a lost
+     leader block waits with it.
    - **Pull repair.** After an outage a validator pulls its missing window.
      Without repair symbols, a lost fragment of the response waits for the
      500 ms retry. Pull repair costs nothing when no validator pulls.
-   - **Tail.** Symbols over older rounds also repair the pull, but with pull
-     repair they add nothing and cost 0.4 points of bandwidth.
-   - **Span.** Two rounds beat one: a sender sends before it holds the late
-     blocks of round r, and covers them one round later. Six rounds widen
-     the delivery tail, since every symbol mixes the unknowns of six rounds,
-     and cost two to three times the bandwidth.
+   - **Span.** Two rounds beat one at p = 5%: a sender sends before it holds
+     the late blocks of round r, and covers them one round later. Six
+     rounds widen the delivery tail, since every symbol mixes the unknowns
+     of six rounds, and cost two to three times the bandwidth.
    - **Coding.** An uncoded relay with the same number of symbols is no
      better than pull alone. A random fragment is the missing one with
      probability about d over the number of fragments.
-3. **Budget.** At p = 1% the knee is about s = 20, and below about 10 the
-   pulls return. The automatic budget (25) is enough.
+3. **Budget.** At p = 1%, s = 20 is enough (269 / 324 ms), and at s = 10 the
+   pulls return (532 / 1109 ms). The automatic budget (28) is enough.
 4. **A short pull timer (100 ms) recovers about half the gap.** It doubles
-   or triples the decision latency of coding, and under reordering it
-   duplicates fragments.
-5. **The extra bandwidth falls as n grows** at p = 1%: 6.7% of push bytes at
-   n = 25, 2.8% at n = 150. The symbol count grows about as 2p·n·T plus a
+   the decision latency of coding, and under reordering it duplicates
+   fragments.
+5. **The extra bandwidth falls as n grows** at p = 1%: 6.9% of push bytes at
+   n = 25, 3.0% at n = 150. The symbol count grows about as 2p·n·T plus a
    tail, and the push bytes as n·T.
 6. **Large payloads.** At 100 KB, coding decides in 642 ms at the median
    (rounds of 217 ms) for 2.1% extra bandwidth; pull alone takes 2.1 s. A
    block of about 73 fragments loses one at p = 1% with probability about
    one half, so almost every round needs repair.
-7. **Losses erode the sparse savings without coding.** A validator that
-   lacks the leader block builds a dense block. With no payload, pull-only
-   runs push 132 KB per validator per round, against 65 KB with coding.
+7. **Crashes.** With a crashed validator, its leader slot costs the 1 s
+   timeout. Waiting for votes on the leader of r − 1 only when one's own
+   block references it removes the second timeout, a round later, for votes
+   that cannot come:
+
+   | | rounds, votes always awaited | rounds, awaited if referenced | blocks built on timeout |
+   |---|---|---|---|
+   | 1 crashed | 167 ms | 126 ms | 7.7% → 3.8% |
+   | f crashed | 824 ms | 519 ms | 49% → 26% |
+
+   With f crashed, the median decision falls from 1.59 s to 1.30 s; every
+   correct validator is needed for a quorum, so each lost fragment stalls
+   it until repaired.
 
 **Limits.**
 
 - **Small blocks are costly to protect.** With no payload, coding costs
-  21.2% of push bytes: a symbol is a full fragment (1.4 KB), while sparse
-  blocks are about 240 B. Coding each size class separately costs more, not
-  less (22.8%), because every class needs its own margin of symbols. Nested
-  classes with a 320 B cut send fewer symbol bytes (16.2%), but they protect
-  the dense leader block less: more validators miss it and build dense
-  blocks, push bytes rise from 65 KB to 79 KB per round, and the decision
-  p99 rises from 394 ms to 619 ms.
-- **The decision tails are noisy.** With γ = 0, the catch-up rule lets fast
-  validators move on without a slow leader's block. The fraction of leaders
-  committed directly therefore varies between runs, and decision
-  percentiles above the median vary by several hundred ms between settings
-  that behave alike in steady state; the ablation reports the delivery p99
-  instead. Catch-up times vary by a factor of two between seeds.
+  37% of push bytes (36 KB per validator per round): a symbol is a full
+  fragment (1.4 KB), while sparse blocks are about 240 B. Coding each 256 B
+  size class separately (27.5%) or nesting classes with a 320 B cut (28%)
+  costs less here, but more once blocks carry a payload (26% and 12%
+  against 11% at 1 KB), since every class needs its own margin of symbols.
+- **Catch-up times vary** by up to a factor of two between seeds.
