@@ -15,13 +15,14 @@ from sim import simulate
 
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 100
 SEEDS = [1, 2, 3]
+SEEDS_ABLATION = [1, 2, 3, 4, 5, 6]  # ablation and outage: decision tails vary between seeds
 BASE = dict(n=N, rounds=30, warmup=5)
 
 VARIANTS = {
     "pull 500 ms": dict(strategy="pull", pull_timer=0.5),
     "pull 100 ms": dict(strategy="pull", pull_timer=0.1, retry_timer=0.1),
     "relay + pull 500 ms": dict(strategy="relay", pull_timer=0.5),
-    "coded + pull 500 ms": dict(strategy="coded", pull_timer=0.5),
+    "coded + pull 500 ms": dict(strategy="coded", pull_timer=0.5),  # the default configuration
 }
 
 GROUPS = {
@@ -34,7 +35,7 @@ GROUPS = {
     "density": "Coded: density of a symbol (p = 1%)",
     "scale": "Coded: number of validators (p = 1%)",
     "payload": "Payload size (p = 1%)",
-    "refine": "Coded span 2 with older-round symbols or pull repair",
+    "ablation": "Ablation: the default with one component changed",
     "outage": "One validator receives nothing for a while (p = 0.1%)",
 }
 
@@ -54,8 +55,8 @@ for loss in [0.01, 0.05]:
     for span in [1, 2, 4, 6]:
         SCENARIOS.append(("span", f"p = {loss:.0%}", f"span {span}",
                           dict(loss=loss, strategy="coded", span=span)))
-    for trig in ["build", "quorum"]:
-        SCENARIOS.append(("trigger", f"p = {loss:.0%}", f"on {trig}",
+    for trig in ["build", "quorum", "held"]:
+        SCENARIOS.append(("trigger", f"p = {loss:.0%}", "on f + 1 held" if trig == "held" else f"on {trig}",
                           dict(loss=loss, strategy="coded", trigger=trig)))
 for d in [1, 2, 3]:
     SCENARIOS.append(("density", "p = 1%", f"2^-{d}",
@@ -71,18 +72,26 @@ for pay in [0, 1_000, 10_000, 100_000]:
                      ("coded, nested 320 B", dict(cuts=(320,), **VARIANTS["coded + pull 500 ms"]))]:
         SCENARIOS.append(("payload", f"payload {pay // 1000} KB" if pay else "no payload", name,
                           dict(loss=0.01, payload=pay, **kw)))
-REFINE = [("coded span 2", dict(strategy="coded", span=2)),
-          ("coded span 6", dict(strategy="coded", span=6)),
-          ("span 2 + tail (6, 3)", dict(strategy="coded", tail=(6, 3))),
-          ("span 2 + pull repair", dict(strategy="coded", pull_fec=3))]
+OLD = dict(strategy="coded", trigger="quorum", pull_fec=-1)
+ABLATION = [("best (default)", dict(strategy="coded")),
+            ("+ tail (6, 3)", dict(strategy="coded", tail=(6, 3))),
+            ("− pull repair", dict(strategy="coded", pull_fec=-1)),
+            ("− pull repair + tail (6, 3)", dict(strategy="coded", pull_fec=-1, tail=(6, 3))),
+            ("trigger quorum", dict(strategy="coded", trigger="quorum")),
+            ("trigger build", dict(strategy="coded", trigger="build")),
+            ("span 1", dict(strategy="coded", span=1)),
+            ("span 6", dict(strategy="coded", span=6)),
+            ("density 2^-2", dict(strategy="coded", density=2)),
+            ("previous default", OLD),
+            ("relay (uncoded)", dict(strategy="relay")),
+            ("pull 500 ms only", VARIANTS["pull 500 ms"])]
 for loss in [0.01, 0.05]:
-    for name, kw in REFINE:
-        SCENARIOS.append(("refine", f"p = {loss:.0%}", name, dict(loss=loss, **kw)))
+    for name, kw in ABLATION:
+        SCENARIOS.append(("ablation", f"p = {loss:.0%}", name, dict(loss=loss, **kw)))
 for dur in [0.2, 0.5]:
-    for name, kw in [("pull 500 ms", VARIANTS["pull 500 ms"])] + REFINE:
+    for name, kw in ABLATION:
         SCENARIOS.append(("outage", f"outage {dur * 1000:.0f} ms", name,
                           dict(loss=0.001, rounds=60, outage=(7, 2.0, dur), **kw)))
-
 
 def one(job):
     i, seed = job
@@ -112,7 +121,8 @@ def merge(runs):
 
 
 if __name__ == "__main__":
-    jobs = [(i, s) for i in range(len(SCENARIOS)) for s in SEEDS]
+    jobs = [(i, s) for i, sc in enumerate(SCENARIOS)
+            for s in (SEEDS_ABLATION if sc[0] in ("ablation", "outage") else SEEDS)]
     runs = {}
     with Pool() as pool:
         for i, r in pool.imap_unordered(one, jobs):
@@ -125,7 +135,7 @@ if __name__ == "__main__":
         w.writeheader()
         w.writerows(rows)
     ms = lambda x: f"{x * 1000:.0f}"
-    out = [f"# Synchroniser simulation, n = {N} unless stated, seeds {SEEDS}\n",
+    out = [f"# Synchroniser simulation, n = {N} unless stated, seeds {SEEDS} (ablation and outage {SEEDS_ABLATION})\n",
            "Latencies in ms, pooled over seeds. *deliver*: block built to admitted at "
            "another validator. *decide*: leader block built to decided (committed "
            "directly, or decided by a later direct commit). *direct*: fraction of "

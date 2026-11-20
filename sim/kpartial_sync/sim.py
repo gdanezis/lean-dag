@@ -30,8 +30,11 @@ Synchroniser strategies (all push every block, fragmented, to every peer):
 * ``coded`` : as ``pull``, and each receiver gets ``symbols`` coded symbols per
   round, each the XOR of a random subset of the sender's fragments of the last
   ``span`` rounds, decoded by Gaussian elimination over GF(2). A validator sends
-  them when it first holds a quorum of a round (``trigger = "quorum"``), or
-  when it builds, over the rounds below its new block (``trigger = "build"``);
+  them when it first holds complete blocks of a round from ``trigger_count``
+  others (``trigger = "held"``, default f + 1), when it first holds a quorum of
+  a round (``trigger = "quorum"``), or when it builds, over the rounds below its
+  new block (``trigger = "build"``). By default a pull response carries repair
+  symbols (``pull_fec``); ``tail`` also sends a few symbols over older rounds;
 * ``relay`` : as ``coded``, but each symbol is one random fragment, uncoded.
 
 Fragments are indexed globally; a set of fragments is a Python int bitmask,
@@ -76,12 +79,12 @@ class Config:
     span: int = 2  # rounds below the new block that symbols cover
     size_class: int = 0  # a symbol XORs fragments of one size class, rounded up to this (0: one class, F)
     tail: tuple | None = None  # (rounds, symbols): also this many symbols per receiver over the older rounds
-    pull_fec: int = -1  # >= 0: a pull response adds d at its 99.9th percentile plus this many symbols
+    pull_fec: int = 3  # >= 0 (coded only): a pull response adds d at its 99.9th percentile plus this many symbols
     margin: tuple = (3,)  # symbols above the quantile, per class from the smallest (last value repeats)
     cuts: tuple = ()  # nested classes: a symbol of class L covers held fragments of at most L bytes
     early: float | None = None  # also send symbols over the current round this long after building
-    trigger: str = "quorum"  # send symbols on a new quorum round, or on building (rounds below)
-    trigger_count: int = 0  # with trigger = "held": send when holding complete blocks of this many others in a round
+    trigger: str = "held"  # send symbols on f + 1 held blocks of a round, a new quorum round, or on building
+    trigger_count: int = 0  # with trigger = "held": complete blocks of this many others in a round (0: f + 1)
     trigger_delay: float = 0.0  # with trigger = quorum, wait this long after the quorum
     grace: float = 0.0
     round_timeout: float = 1.0
@@ -170,7 +173,7 @@ class Sim:
         self.rng = random.Random(cfg.seed)
         n = cfg.n
         self.keep = max(cfg.span, cfg.tail[0] if cfg.tail else 0,
-                        cfg.K + 2 if cfg.pull_fec >= 0 else 0) + 1  # rounds of symbol rows kept
+                        cfg.K + 2 if cfg.pull_fec >= 0 and cfg.strategy == "coded" else 0) + 1  # rounds of symbol rows kept
         self.s = cfg.symbols if cfg.symbols is not None else auto_symbols(cfg)
         pts = [(self.rng.random(), self.rng.random()) for _ in range(n)]
         self.lat = [[0.0] * n for _ in range(n)]
@@ -543,7 +546,7 @@ class Sim:
             if len(hb) >= self.cfg.f + 1:
                 u.ahead = max(u.ahead, blk.rnd)
             cfg = self.cfg
-            if (cfg.trigger == "held" and len(hb) == cfg.trigger_count
+            if (cfg.trigger == "held" and len(hb) == (cfg.trigger_count or cfg.f + 1)
                     and cfg.strategy in ("coded", "relay") and blk.rnd >= cfg.span):
                 self.at(self.now + cfg.trigger_delay, "quorum_symbols", u.vid, blk.rnd)
             gap = False
@@ -667,7 +670,7 @@ class Sim:
                 self.send_frags(h, v, blk, missing, "pullresp")
                 sent |= missing
                 top = max(top, blk.rnd)
-        if self.cfg.pull_fec >= 0 and sent:
+        if self.cfg.pull_fec >= 0 and self.cfg.strategy == "coded" and sent:
             # repair symbols over the response, so a lost fragment needs no retry
             cfg = self.cfg
             p = cfg.loss * (1 - cfg.bad_links) + cfg.bad_loss * cfg.bad_links
