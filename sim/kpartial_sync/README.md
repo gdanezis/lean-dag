@@ -4,8 +4,14 @@ A discrete-event simulator of the honest case: every validator is correct and
 none equivocates. It compares ways of repairing lost or late fragments.
 
 ```
-python3 run.py [n]     # all sweeps, about 16 minutes at n = 100 on 14 cores
+python3 run.py [n]          # all sweeps, about 16 minutes at n = 100 on 14 cores
+python3 adapt_eval.py [n]   # adaptive control against fixed budgets, about 12 minutes
+python3 adapt_trace.py [n]  # adaptation to a change of loss, about 1 minute
 ```
+
+The sweeps run in worker processes. A worker that dies (an interpreter crash
+was seen once, in CPython 3.14.6) loses its jobs, which run again in a new
+pool.
 
 `run.py` writes `results.md` (tables) and `results.csv`. `sim.py` holds the
 model; `simulate(**kw)` runs one setting, with the fields of `Config` as
@@ -151,7 +157,11 @@ per round in rotation.
     with time constants 0.1 s and 2 s, each with a Beta prior of weight 20 at
     1%. It uses the slow one, unless the fast one exceeds it by more than two
     standard errors of the fast one (`est_gate`): taking the larger of the
-    two would bias the estimate upwards, as the fast one is noisy.
+    two would bias the estimate upwards, as the fast one is noisy. When the
+    fast one departs from the slow one by more than three standard errors,
+    in either direction, the slow one restarts from zero (`est_reset`), so
+    it counts only samples after the change; not again for 0.3 s, three
+    fast time constants, while the fast one catches up.
   - **Report.** It puts its estimate p̂ and its margin m in each block,
     symbol and pull request it sends (2 B), and keeps the newest report of
     each peer.
@@ -313,56 +323,93 @@ two leaders. With 3 seeds, p99 differences under about 50 ms were noise.
 
 | scenario | fixed, mean loss | fixed, 1% | adaptive |
 |---|---|---|---|
-| p = 0.1% | 293 [287–301] (1.1%) | 282 [278–286] (3.3%) | 294 [286–304] (1.2%) |
-| p = 1% | 321 [303–335] (3.4%) | 321 [303–335] (3.4%) | 353 [330–368] (3.6%) |
-| p = 2% | 362 [333–371] (5.5%) | 471 [426–796] (3.8%) | 334 [316–353] (5.8%) |
-| p = 5% | 370 [366–375] (12.0%) | 1760 [1563–1816] (14.0%) | 363 [357–369] (13.3%) |
-| step up: 0.1% → 5% (1.5–3 s) → 0.1% | 836 [799–862] (4.9%) | 1026 [959–1098] (4.1%) | 421 [402–432] (5.9%) |
-| step down: 5% → 0.1% at 1.5 s | 609 [563–645] (5.1%) | 672 [305–763] (4.2%) | 347 [339–359] (7.2%) |
-| ramp: 0.1% → 5% over 1–2.5 s | 680 [601–754] (8.1%) | 1486 [1446–1551] (8.4%) | 367 [361–374] (7.3%) |
-| bursts: 5% for 0.2 s each second, else 0.1% | 583 [572–590] (3.8%) | 523 [508–534] (4.0%) | 400 [390–424] (5.1%) |
-| 5% of links at 20%, p = 0.1% | 329 [310–339] (3.6%) | 354 [313–364] (3.5%) | 309 [297–348] (4.2%) |
-| 10% of validators receive at 10%, p = 0.1% | 497 [473–523] (6.6%) | 496 [472–522] (6.4%) | 302 [298–307] (5.6%) |
-| 10% of validators send at 10%, p = 0.1% | 363 [329–372] (3.6%) | 376 [350–385] (3.4%) | 359 [325–369] (3.8%) |
-| jitter 30 ms, p = 0.1% | 616 [593–761] (1.1%) | 577 [544–640] (3.4%) | 586 [572–595] (1.5%) |
-| jitter 5 → 30 ms (1.5–3 s) → 5 ms, p = 0.1% | 573 [538–598] (1.2%) | 540 [519–555] (3.5%) | 541 [530–548] (1.4%) |
-| routing stretch σ = 0.4, p = 1% | 497 [467–517] (3.5%) | 497 [467–517] (3.5%) | 460 [446–468] (4.3%) |
-| outage 500 ms, p = 0.1% | 306 [296–313] (1.2%) | 290 [285–301] (3.5%) | 316 [299–385] (1.4%) |
-| f crashed at 0.5 s, p = 1% | 3962 [3830–3999] (5.5%) | 3962 [3833–3994] (5.5%) | 2158 [2124–2171] (8.9%) |
-| n = 50, p = 1% | 313 [302–329] (4.6%) | 313 [301–327] (4.6%) | 320 [304–331] (4.8%) |
-| n = 150, p = 1% | 347 [321–360] (2.9%) | 347 [321–360] (2.9%) | 349 [324–359] (3.1%) |
-| no payload, p = 1% | 269 [255–297] (29.3%) | 269 [255–297] (29.3%) | 273 [256–450] (27.6%) |
-| payload 100 KB, p = 1% | 912 [797–958] (2.2%) | 912 [797–958] (2.2%) | 722 [714–728] (2.3%) |
-| p = 1%, jitter 20 ms, stretch 0.3, 5% of links at 20% | 648 [612–675] (5.5%) | 1319 [1166–1550] (4.4%) | 633 [601–647] (7.4%) |
+| p = 0.1% | 293 [287–301] (1.1%) | 282 [278–286] (3.3%) | 299 [285–324] (1.2%) |
+| p = 1% | 321 [304–335] (3.4%) | 321 [303–335] (3.4%) | 353 [328–370] (3.6%) |
+| p = 2% | 362 [334–371] (5.5%) | 471 [425–796] (3.8%) | 334 [316–353] (5.8%) |
+| p = 5% | 370 [366–375] (12.0%) | 1760 [1553–1816] (14.0%) | 363 [357–369] (13.3%) |
+| step up: 0.1% → 5% (1.5–3 s) → 0.1% | 836 [799–862] (4.9%) | 1026 [958–1091] (4.1%) | 353 [348–360] (4.4%) |
+| step down: 5% → 0.1% at 1.5 s | 609 [554–645] (5.1%) | 672 [303–792] (4.2%) | 348 [340–359] (4.8%) |
+| ramp: 0.1% → 5% over 1–2.5 s | 680 [603–738] (8.1%) | 1486 [1450–1557] (8.4%) | 376 [364–395] (7.5%) |
+| bursts: 5% for 0.2 s each second, else 0.1% | 583 [571–590] (3.8%) | 523 [508–534] (4.0%) | 328 [323–338] (4.5%) |
+| 5% of links at 20%, p = 0.1% | 329 [311–338] (3.6%) | 354 [314–364] (3.5%) | 305 [295–315] (4.2%) |
+| 10% of validators receive at 10%, p = 0.1% | 497 [473–524] (6.6%) | 497 [472–525] (6.4%) | 304 [299–308] (5.6%) |
+| 10% of validators send at 10%, p = 0.1% | 363 [328–371] (3.6%) | 376 [348–385] (3.4%) | 351 [315–379] (3.8%) |
+| jitter 30 ms, p = 0.1% | 616 [585–765] (1.1%) | 577 [544–640] (3.4%) | 607 [566–629] (1.5%) |
+| jitter 5 → 30 ms (1.5–3 s) → 5 ms, p = 0.1% | 573 [538–598] (1.2%) | 540 [518–553] (3.5%) | 528 [519–538] (1.3%) |
+| routing stretch σ = 0.4, p = 1% | 497 [467–517] (3.5%) | 497 [470–517] (3.5%) | 463 [448–472] (4.2%) |
+| outage 500 ms, p = 0.1% | 306 [295–313] (1.2%) | 290 [285–301] (3.5%) | 310 [295–407] (1.3%) |
+| f crashed at 0.5 s, p = 1% | 3962 [3833–3994] (5.5%) | 3962 [3833–3994] (5.5%) | 2167 [2140–2177] (8.8%) |
+| n = 50, p = 1% | 313 [302–329] (4.6%) | 313 [302–329] (4.6%) | 320 [304–330] (4.8%) |
+| n = 150, p = 1% | 347 [321–360] (2.9%) | 347 [321–360] (2.9%) | 351 [332–360] (3.1%) |
+| no payload, p = 1% | 269 [254–297] (29.3%) | 269 [254–297] (29.3%) | 274 [260–450] (27.6%) |
+| payload 100 KB, p = 1% | 912 [801–958] (2.2%) | 912 [796–958] (2.2%) | 730 [716–839] (2.3%) |
+| p = 1%, jitter 20 ms, stretch 0.3, 5% of links at 20% | 648 [608–675] (5.5%) | 1319 [1180–1550] (4.4%) | 599 [570–620] (7.3%) |
 
 - **Steady loss: a tie.** The intervals of the adaptive and the mean-loss
-  budget overlap at every rate (at 1% only just: 353 [330–368] against
-  321 [303–335]; an earlier 3-seed run had the order reversed). The adaptive
+  budget overlap at every rate (at 1% only just: 353 [328–370] against
+  321 [304–335]; an earlier 3-seed run had the order reversed). The adaptive
   validator spends 0.1–1.3 points more bytes, and its estimates are exact
   (0.0010, 0.0100, 0.0200, 0.0500). A budget that assumes too little loss
   collapses: at 5%, the 1% budget stretches rounds from 111 ms to 427 ms.
 - **Changing loss: a clear win.** No fixed budget fits a schedule. The
-  adaptive validator cuts the p99 by a third (bursts) to about a half
-  (steps, ramp), with intervals far apart, for at most 2.1 more points of bytes.
+  adaptive validator cuts the p99 by 43–58% (steps, ramp, bursts), with
+  intervals far apart, for −0.6 to +0.7 points of bytes.
 - **Uneven loss.** When a tenth of the validators receive at 10%, their
-  reports raise only their own budgets: p99 302 ms against 497 ms, for fewer
+  reports raise only their own budgets: p99 304 ms against 497 ms, for fewer
   bytes. When a tenth send at 10%, all three budgets tie: every symbol mixes
   the fragments of all blocks of its rounds, so a receiver needs as many
   symbols as it lost fragments, whichever authors they came from.
 - **Timing.** The margin rises after late blocks miss their repair deadline
   (to about 3 under 30 ms jitter, 6 under routing stretch); the adaptive
   validator matches a fixed 1% budget under jitter at less than half its
-  bytes, and is slightly ahead under routing stretch (460 [446–468] against
-  497 [467–517] ms, intervals just touching).
+  bytes, and is slightly ahead under routing stretch (463 [448–472] against
+  497 [467–517] ms, intervals overlapping a little).
 - **Crashes.** With f crashed, rounds wait for the 1 s timeout, and blocks
   that arrive after their round's symbols waited about 1.5 s for the next
   batch. The cap on the idle interval covers them within 250 ms: p99 2.2 s
-  against 4.0 s, median 1.4 s against 2.8 s, for 3.4 more points of bytes.
-- **Large payloads.** At 100 KB the p99 falls from 912 ms to 722 ms.
+  against 4.0 s, median 1.4 s against 2.8 s, for 3.3 more points of bytes.
+- **Large payloads.** At 100 KB the p99 falls from 912 ms to 730 ms.
 - **Reports alone are not enough.** Without the floor of the sender's own
   estimate, a step up in loss stalls rounds, few blocks or symbols carry the
   new reports, and senders keep sizing for the old loss (p99 623 ms against
   400 ms with the floor, 3 seeds).
+
+**Adaptation speed** (`python3 adapt_trace.py`, about 1 minute;
+`adapt_trace.md`). Every 20 ms the trace records the validators' own
+estimates, the loss senders plan for, the margin, symbol bytes and misses,
+and it gives the decision latency of each leader by when it was built. The
+oracle plans with each receiver's true current loss (`oracle_loss`), so the
+gap to it is the cost of learning the loss. n = 100, 4 seeds.
+
+| step up 0.1% → 5%, t after the step | 40 ms | 60 ms | 100 ms | 200 ms | 400 ms |
+|---|---|---|---|---|---|
+| loss senders plan for | 0.17% | 0.84% | 3.3% | 4.9% | 5.1% |
+
+| leaders built after the step | 0–100 ms | 100–200 ms | 200–400 ms | 0.4–1 s |
+|---|---|---|---|---|
+| adaptive, mean decision (ms) | 325 | 334 | 317 | 323 |
+| oracle | 316 | 328 | 324 | 325 |
+| adaptive without restarts | 397 | 367 | 330 | 324 |
+
+- **Step up.** The planned loss is within 10% of 5% after 140 ms, and the
+  decisions are within 10 ms of the oracle's. What remains is detection:
+  at about 10,000 incoming fragments a second, telling 5% loss from 0.1%
+  takes some tens of milliseconds. The oracle itself is 55 ms slower in the
+  first 100 ms than before the step: those blocks were pushed before any
+  validator could know, which no controller avoids.
+- **Step down.** The planned loss is within 10% of 0.1% after 560 ms, and
+  the decisions match the oracle's. Planning for the current loss is not
+  optimal here: the oracle drops its budget at once, and misses repairs
+  0.4 s later, because symbols cover the last two rounds, whose fragments
+  were sent at 5%. The right target is the loss of the fragments the
+  symbols cover, which lags the link by about two rounds.
+- **Restarts.** Without them, the slow estimate mixes samples from before
+  the change, and the estimate settles at 4.3% instead of 5% for seconds.
+  A restart without the refractory period repeats at every sample right
+  after a change, since the fast estimate still lags.
+- **The margin** barely moves in either step (2.2 → 2.0); it falls by 0.05
+  per round, so about 9 s from 5 back to 1 after a period of misses, which
+  costs about 0.4% of push bytes.
 
 **Limits.**
 

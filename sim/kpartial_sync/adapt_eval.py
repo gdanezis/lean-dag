@@ -8,13 +8,11 @@ percentiles pool the seeds; the other columns average them.
 
 from __future__ import annotations
 
-import os
 import random
 import statistics
 import sys
-from multiprocessing import Pool
 
-from run import guard, pct
+from run import pct, run_jobs
 from sim import simulate
 
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 100
@@ -112,9 +110,8 @@ def one(job):
 if __name__ == "__main__":
     jobs = sorted(((j, s) for j in JOBS for s in SEEDS), key=lambda j: -cost(j))
     runs = {}
-    with Pool(initializer=guard, initargs=(os.getpid(),)) as pool:
-        for key, r in pool.imap_unordered(one, jobs):
-            runs.setdefault(key, []).append(r)
+    for key, r in run_jobs(one, jobs):
+        runs.setdefault(key, []).append(r)
     ms = lambda x: f"{x * 1000:.0f}" if x == x else "—"
 
     def stats(key):

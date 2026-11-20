@@ -109,9 +109,13 @@ class Config:
     est_tau: tuple = (0.1, 2.0)  # adapt: time constants of a fast and a slow loss estimate, s
     est_gate: float | None = 2.0  # adapt: use the fast estimate when it exceeds the slow one by this many
     # standard errors of the fast one, else the slow one (None: always the larger)
+    est_reset: float | None = 3.0  # adapt: when the fast estimate departs from the slow one by this many standard
+    # errors, the slow one restarts afresh, from samples after the change only, at most once per three
+    # fast time constants (the fast one lags a change for that long); None: never
     est_prior: tuple = (0.2, 19.8)  # adapt: Beta prior (lost, received) of the loss estimate
     adapt_timers: bool = True  # adapt: timers follow measured round time and delays (else the fixed ones)
     loss_cap: float = 0.25  # adapt: budgets plan for at most this loss (an outage is not repairable loss)
+    oracle_loss: bool = False  # adapt: plan with each receiver's true current incoming loss (a bound, not a protocol)
     own_floor: bool = True  # adapt: a sender plans for at least its own loss estimate at every receiver
     margin_ctl: tuple = (2.0, 0.05, 1.0, 30.0)  # adapt: margin times this after a round with a miss, minus this after one without, min, max
     crash: tuple | None = None  # (validators, time): from then on they build and send nothing
@@ -216,6 +220,7 @@ class Node:
     est_lost: list = field(default_factory=lambda: [0.0, 0.0])  # adapt: fragments lost and sent on
     est_sent: list = field(default_factory=lambda: [0.0, 0.0])  # incoming links, decayed with each est_tau
     est_at: float = 0.0
+    reset_at: float = -1.0  # adapt: when the slow estimate last restarted
     margin: float = 3.0  # adapt: symbols asked above the quantile
     missed: bool = False  # adapt: a repair deadline passed since the quorum round last advanced
     reports: dict = field(default_factory=dict)  # adapt: peer -> (time, loss, margin), the newest it sent
@@ -262,6 +267,7 @@ class Sim:
                                 self.lossp[v][w] = spec[1]
         self.jitter = cfg.jitter
         self.timed = cfg.adapt and cfg.adapt_timers
+        self.true_in = self.incoming()
         self.bad = {(i, j) for i in range(n) for j in range(n) if self.lossp[i][j] != cfg.loss}
         self.nodes = [Node(v, margin=float(cfg.margin[0])) for v in range(n)]
         self.misses = 0
@@ -316,12 +322,18 @@ class Sim:
     def on_set_jitter(self, j: float) -> None:
         self.jitter = j
 
+    def incoming(self) -> list:
+        """Each validator's true mean loss over its incoming links."""
+        n = self.cfg.n
+        return [sum(self.lossp[i][j] for i in range(n) if i != j) / (n - 1) for j in range(n)]
+
     def on_set_loss(self, p: float) -> None:
         n = self.cfg.n
         for i in range(n):
             for j in range(n):
                 if i != j and (i, j) not in self.bad:
                     self.lossp[i][j] = p
+        self.true_in = self.incoming()
 
     # ------------------------------------------------------------ adaptive
     # A validator estimates the loss on its incoming links from the fragments
@@ -347,6 +359,14 @@ class Sim:
             u.est_lost[i] = u.est_lost[i] * w + lost
             u.est_sent[i] = u.est_sent[i] * w + sent
         u.est_at = self.now
+        g = self.cfg.est_reset
+        if g is not None:  # a change of loss: the slow estimate forgets what came before it
+            a, b = self.cfg.est_prior
+            fast, slow = ((u.est_lost[i] + a) / (u.est_sent[i] + a + b) for i in range(2))
+            if (self.now - u.reset_at > 3 * self.cfg.est_tau[0]
+                    and abs(fast - slow) > g * math.sqrt(slow * (1 - slow) / (u.est_sent[0] + a + b))):
+                u.est_lost[1], u.est_sent[1] = 0.0, 0.0
+                u.reset_at = self.now
 
     def my_report(self, u: Node) -> tuple:
         return (self.now, self.p_hat(u), u.margin) if self.cfg.adapt else ()
@@ -363,6 +383,8 @@ class Sim:
         if r is None:
             a, b = self.cfg.est_prior
             r = (0.0, a / (a + b), float(self.cfg.margin[0]))
+        if self.cfg.oracle_loss:
+            return min(self.true_in[w], self.cfg.loss_cap), r[2]
         p = max(r[1], self.p_hat(u)) if self.cfg.own_floor else r[1]
         return min(p, self.cfg.loss_cap), r[2]
 

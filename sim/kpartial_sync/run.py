@@ -12,7 +12,6 @@ import statistics
 import sys
 import threading
 import time
-from multiprocessing import Pool
 
 from sim import simulate
 
@@ -129,6 +128,33 @@ def guard(parent: int) -> None:
     threading.Thread(target=watch, daemon=True).start()
 
 
+def run_jobs(fn, jobs, tries: int = 4):
+    """Run fn over jobs in worker processes, yielding results as they finish. A
+    worker that dies (an interpreter crash) breaks the pool, which loses the
+    jobs in flight; they run again in a new pool, and a job lost tries times
+    stops the sweep with its name."""
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+    from concurrent.futures.process import BrokenProcessPool
+    left, lost = list(jobs), {}
+    while left:
+        with ProcessPoolExecutor(initializer=guard, initargs=(os.getpid(),)) as ex:
+            futs = {ex.submit(fn, j): j for j in left}
+            left = []
+            for f in as_completed(futs):
+                try:
+                    r = f.result()
+                except BrokenProcessPool:
+                    j = futs[f]
+                    lost[j] = lost.get(j, 0) + 1
+                    if lost[j] >= tries:
+                        raise RuntimeError(f"job {j} was lost to a crashed worker {tries} times")
+                    left.append(j)
+                    continue
+                yield r
+        if left:
+            print(f"a worker crashed: running {len(left)} lost jobs again", file=sys.stderr, flush=True)
+
+
 def one(job):
     i, seed = job
     group, setting, name, kw = SCENARIOS[i]
@@ -161,9 +187,8 @@ if __name__ == "__main__":
             for s in (SEEDS_ABLATION if sc[0] in ("ablation", "outage", "pullmode") else SEEDS)]
     runs = {}
     jobs.sort(key=lambda j: -cost(j[0]))
-    with Pool(initializer=guard, initargs=(os.getpid(),)) as pool:
-        for i, r in pool.imap_unordered(one, jobs):
-            runs.setdefault(i, []).append(r)
+    for i, r in run_jobs(one, jobs):
+        runs.setdefault(i, []).append(r)
     rows = []
     for i, (group, setting, name, kw) in enumerate(SCENARIOS):
         rows.append(dict(group=group, setting=setting, variant=name, **merge(runs[i])))
