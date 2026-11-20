@@ -102,6 +102,9 @@ class Config:
     adapt: bool = False  # validators estimate loss, margin and timers locally (see ``Adaptive``)
     assumed_loss: float | None = None  # without adapt: the loss the budget assumes (None: the true loss)
     loss_steps: tuple = ()  # ((time, loss), ...): the loss of every link that is not bad changes then
+    lossy_in: tuple | None = None  # (fraction, loss): every link into this fraction of validators drops with loss
+    lossy_out: tuple | None = None  # (fraction, loss): every link out of this fraction of validators drops with loss
+    jitter_steps: tuple = ()  # ((time, jitter), ...): the mean jitter changes then
     est_tau: tuple = (0.1, 2.0)  # adapt: time constants of a fast and a slow loss estimate (the larger is used), s
     est_prior: tuple = (0.2, 19.8)  # adapt: Beta prior (lost, received) of the loss estimate
     own_floor: bool = True  # adapt: a sender plans for at least its own loss estimate at every receiver
@@ -209,6 +212,7 @@ class Node:
     missed: bool = False  # adapt: a repair deadline passed since the quorum round last advanced
     reports: dict = field(default_factory=dict)  # adapt: peer -> (time, loss, margin), the newest it sent
     owd: dict = field(default_factory=dict)  # adapt: author -> [mean, deviation] of its blocks' delay
+    counted: set = field(default_factory=set)  # adapt: blocks whose push the loss estimate has counted
 
 
 class Sim:
@@ -236,6 +240,17 @@ class Sim:
                     self.lat[i][j] = (cfg.lat_min + (cfg.lat_max - cfg.lat_min) * d) * stretch[i][j]
                     if self.rng.random() < cfg.bad_links:
                         self.lossp[i][j] = cfg.bad_loss
+        for spec, into in ((cfg.lossy_in, True), (cfg.lossy_out, False)):
+            if spec is not None:
+                step = max(1, round(1 / spec[0]))
+                for v in range(step // 2, n, step):
+                    for w in range(n):
+                        if w != v:
+                            if into:
+                                self.lossp[w][v] = spec[1]
+                            else:
+                                self.lossp[v][w] = spec[1]
+        self.jitter = cfg.jitter
         self.bad = {(i, j) for i in range(n) for j in range(n) if self.lossp[i][j] != cfg.loss}
         self.nodes = [Node(v, margin=float(cfg.margin[0])) for v in range(n)]
         self.misses = 0
@@ -275,6 +290,8 @@ class Sim:
     def run(self, horizon: float = 600.0) -> None:
         for t, p in self.cfg.loss_steps:
             self.at(t, "set_loss", p)
+        for t, j in self.cfg.jitter_steps:
+            self.at(t, "set_jitter", j)
         for v in range(self.cfg.n):
             self.build(self.nodes[v], 1)
         while self.q:
@@ -283,6 +300,9 @@ class Sim:
                 break
             self.now = t
             getattr(self, "on_" + kind)(*args)
+
+    def on_set_jitter(self, j: float) -> None:
+        self.jitter = j
 
     def on_set_loss(self, p: float) -> None:
         n = self.cfg.n
@@ -369,7 +389,7 @@ class Sim:
             return None
         if kind is not None:
             self.inb[kind][dst] += size + WIRE
-        return done + self.lat[src][dst] + self.rng.expovariate(1 / self.cfg.jitter)
+        return done + self.lat[src][dst] + self.rng.expovariate(1 / self.jitter)
 
     def send_frags(self, src: int, dst: int, blk: Block, mask: int, kind: str) -> None:
         """Send the fragments of blk in mask, one packet each, back to back on
@@ -413,7 +433,7 @@ class Sim:
         if k:
             self.inb[kind][dst] += sizes - sum(
                 FRAG_HEADER + min(cfg.frag, blk.size - js[i] * cfg.frag) + WIRE for i in lost)
-            jit = -cfg.jitter * math.log(1 - self.rng.random() ** (1 / k))
+            jit = -self.jitter * math.log(1 - self.rng.random() ** (1 / k))
             self.at(done + self.lat[src][dst] + jit, "frags", dst, got, blk.bid, len(lost), len(js), kind)
 
     # ------------------------------------------------------------ building
@@ -500,6 +520,8 @@ class Sim:
         if self.cfg.idle > 0:
             floor = 0.03 if self.cfg.adapt else self.cfg.idle
             d = max(floor, 1.5 * u.round_avg) if delay is None else delay
+            if self.cfg.adapt:  # when rounds are slow, late arrivals are still covered before
+                d = min(d, self.cfg.pull_timer / 2)  # the longest repair deadline
             self.at(self.now + d, "sym_idle", u.vid, u.sym_seq, d)
 
     def on_sym_idle(self, v: int, seq: int, delay: float) -> None:
@@ -779,6 +801,13 @@ class Sim:
             self.observe(u, sent, lost)
             blk = self.blocks[bid]
             if kind == "push":
+                # a push lost whole shows no fragment: the author's next block
+                # references its previous one, so count that push as lost if
+                # none of it arrives within a round time (pushes may reorder)
+                u.counted.add(bid)
+                for ref in blk.refs:
+                    if self.blocks[ref].author == blk.author and ref not in u.counted:
+                        self.at(self.now + u.round_avg, "push_check", v, ref)
                 d = self.now - blk.built
                 e = u.owd.get(blk.author)
                 if e is None:
@@ -787,6 +816,13 @@ class Sim:
                     e[1] += (abs(d - e[0]) - e[1]) / 4
                     e[0] += (d - e[0]) / 8
         self.learn(u, bits, bid)
+
+    def on_push_check(self, v: int, bid: int) -> None:
+        u = self.nodes[v]
+        if bid not in u.counted:
+            u.counted.add(bid)
+            nf = self.blocks[bid].nfrag
+            self.observe(u, nf, nf)
 
     def on_sym(self, v: int, R: int, mask: int, src: int = -1, rep: tuple = ()) -> None:
         u = self.nodes[v]
@@ -970,9 +1006,13 @@ class Sim:
         if not missing:
             return
         if was_deferred and token == 0:  # symbols did not repair it in time
-            u.missed = True
             if cfg.warmup <= blk.rnd <= cfg.rounds:
                 self.misses += 1
+            gap = 0
+            for b in missing:
+                gap |= self.blocks[b].mask & ~u.frags
+            if u.rowunion & gap:  # symbols covered it, too few to decode: raise the margin
+                u.missed = True
         fresh = [b for b in missing if u.asked.get(b, 0) <= self.now]
         if not fresh:  # outstanding requests cover them all
             self.at(min(u.asked[b] for b in missing), "pull_timer", v, root, token)

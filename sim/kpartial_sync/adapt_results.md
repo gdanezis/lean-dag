@@ -1,32 +1,99 @@
-# Adaptive control, n = 100, seeds [1, 2, 3]
+# Adaptive control, n = 100 unless stated, seeds [1, 2, 3]
 
-Latencies in ms, pooled over seeds. *extra*: symbol and pull KB per validator per round, and as a share of push. *misses*: partial blocks not repaired by symbols before the repair deadline (fixed: pull_timer, 500 ms; adaptive: twice the round time), per validator per round. *loss est.*, *margin*: means over validators at the end of the run. *catch-up*: outage only.
+*fixed, mean loss*: the symbol budget assumes the loss averaged over links and over the run. *fixed, 1%*: it assumes 1%. *adaptive*: `adapt = True`. Latencies in ms, pooled over seeds. *extra*: symbol and pull bytes as a share of push bytes.
 
-| scenario | budget | decide p50 / p99 / max | round | extra KB (%) | misses | loss est. | margin | catch-up |
-|---|---|---|---|---|---|---|---|---|
-| p = 0.1% | fixed, true loss (oracle) | 247 / 291 / 381 | 86 | 12.2 (1.1%) | 0.000 | — | — |  |
-| p = 0.1% | fixed, assumes 1% | 242 / 283 / 311 | 85 | 37.2 (3.3%) | 0.000 | — | — |  |
-| p = 0.1% | adaptive | 247 / 292 / 446 | 86 | 14.5 (1.3%) | 0.001 | 0.0019 | 1.3 |  |
-| p = 1.0% | fixed, true loss (oracle) | 258 / 336 / 359 | 92 | 38.2 (3.4%) | 0.000 | — | — |  |
-| p = 1.0% | fixed, assumes 1% | 258 / 336 / 359 | 92 | 38.2 (3.4%) | 0.000 | — | — |  |
-| p = 1.0% | adaptive | 258 / 292 / 310 | 89 | 41.4 (3.7%) | 0.000 | 0.0105 | 1.3 |  |
-| p = 5.0% | fixed, true loss (oracle) | 322 / 361 / 397 | 109 | 132.7 (12.0%) | 0.000 | — | — |  |
-| p = 5.0% | fixed, assumes 1% | 1274 / 1745 / 1839 | 426 | 153.9 (13.9%) | 21.606 | — | — |  |
-| p = 5.0% | adaptive | 314 / 349 / 369 | 107 | 154.3 (14.0%) | 0.000 | 0.0511 | 5.4 |  |
-| 5% of links at 20%, p = 0.1% | fixed, true loss (oracle) | 262 / 315 / 403 | 91 | 40.0 (3.6%) | 0.000 | — | — |  |
-| 5% of links at 20%, p = 0.1% | fixed, assumes 1% | 265 / 362 / 478 | 98 | 38.7 (3.5%) | 0.000 | — | — |  |
-| 5% of links at 20%, p = 0.1% | adaptive | 253 / 328 / 359 | 89 | 48.4 (4.4%) | 0.001 | 0.0142 | 1.4 |  |
-| 5% of links at 20%, p = 0.1% | adaptive, reports only | 258 / 302 / 330 | 90 | 41.5 (3.8%) | 0.002 | 0.0154 | 1.7 |  |
-| jitter 30 ms, p = 0.1% | fixed, true loss (oracle) | 501 / 758 / 946 | 178 | 12.7 (1.1%) | 0.005 | — | — |  |
-| jitter 30 ms, p = 0.1% | fixed, assumes 1% | 480 / 539 / 607 | 166 | 36.8 (3.3%) | 0.000 | — | — |  |
-| jitter 30 ms, p = 0.1% | adaptive | 491 / 577 / 625 | 172 | 18.7 (1.7%) | 0.005 | 0.0032 | 3.5 |  |
-| jitter 30 ms, p = 0.1% | adaptive, reports only | 493 / 675 / 704 | 175 | 18.0 (1.6%) | 0.007 | 0.0030 | 3.9 |  |
-| outage 500 ms, p = 0.1% | fixed, true loss (oracle) | 248 / 302 / 895 | 86 | 13.4 (1.2%) | 0.000 | — | — | 341 |
-| outage 500 ms, p = 0.1% | fixed, assumes 1% | 244 / 287 / 806 | 85 | 38.8 (3.5%) | 0.000 | — | — | 298 |
-| outage 500 ms, p = 0.1% | adaptive | 247 / 299 / 924 | 86 | 15.4 (1.4%) | 0.004 | 0.0018 | 1.2 | 364 |
-| outage 500 ms, p = 0.1% | adaptive, reports only | 247 / 342 / 908 | 87 | 14.7 (1.3%) | 0.005 | 0.0018 | 1.3 | 359 |
-| p 0.1% → 5% (1.5–3 s) → 0.1% | fixed, assumes 0.1% | 250 / 1418 / 1899 | 124 | 21.5 (2.0%) | 2.624 | — | — |  |
-| p 0.1% → 5% (1.5–3 s) → 0.1% | fixed, assumes 1% | 249 / 1038 / 1178 | 113 | 46.1 (4.2%) | 0.172 | — | — |  |
-| p 0.1% → 5% (1.5–3 s) → 0.1% | fixed, assumes 5% | 252 / 358 / 387 | 92 | 122.0 (11.0%) | 0.000 | — | — |  |
-| p 0.1% → 5% (1.5–3 s) → 0.1% | adaptive | 255 / 400 / 438 | 93 | 66.4 (6.0%) | 0.099 | 0.0090 | 2.1 |  |
-| p 0.1% → 5% (1.5–3 s) → 0.1% | adaptive, reports only | 252 / 623 / 687 | 100 | 60.3 (5.4%) | 0.937 | 0.0061 | 5.7 |  |
+## Summary: decide p99 in ms (extra)
+
+| group | scenario | mean loss | fixed, mean loss | fixed, 1% | adaptive |
+|---|---|---|---|---|---|
+| steady | p = 0.1% | 0.10% | 291 (1.1%) | 283 (3.3%) | 293 (1.3%) |
+| steady | p = 1% | 1.00% | 336 (3.4%) | 336 (3.4%) | 292 (3.7%) |
+| steady | p = 2% | 2.00% | 339 (5.5%) | 417 (3.7%) | 369 (6.1%) |
+| steady | p = 5% | 5.00% | 361 (12.0%) | 1745 (13.9%) | 351 (13.8%) |
+| changing loss | step up: 0.1% → 5% (1.5–3 s) → 0.1% | 1.48% | 819 (4.9%) | 1038 (4.2%) | 430 (6.0%) |
+| changing loss | step down: 5% → 0.1% at 1.5 s | 1.48% | 620 (5.1%) | 678 (4.1%) | 335 (7.2%) |
+| changing loss | ramp: 0.1% → 5% over 1–2.5 s | 3.00% | 666 (8.3%) | 1503 (8.4%) | 355 (7.4%) |
+| changing loss | bursts: 5% for 0.2 s each second, else 0.1% | 0.84% | 567 (3.7%) | 508 (4.0%) | 388 (4.7%) |
+| uneven loss | 5% of links at 20%, p = 0.1% | 1.10% | 315 (3.6%) | 362 (3.5%) | 328 (4.4%) |
+| uneven loss | 10% of validators receive at 10%, p = 0.1% | 1.09% | 503 (6.6%) | 504 (6.3%) | 301 (5.8%) |
+| uneven loss | 10% of validators send at 10%, p = 0.1% | 1.09% | 358 (3.6%) | 302 (3.4%) | 347 (4.0%) |
+| timing | jitter 30 ms, p = 0.1% | 0.10% | 758 (1.1%) | 539 (3.3%) | 574 (1.7%) |
+| timing | jitter 5 → 30 ms (1.5–3 s) → 5 ms, p = 0.1% | 0.10% | 583 (1.2%) | 529 (3.5%) | 534 (1.5%) |
+| timing | routing stretch σ = 0.4, p = 1% | 1.00% | 462 (3.5%) | 462 (3.5%) | 445 (4.4%) |
+| faults | outage 500 ms, p = 0.1% | 0.10% | 302 (1.2%) | 287 (3.5%) | 293 (1.5%) |
+| faults | f crashed at 0.5 s, p = 1% | 1.00% | 3921 (5.8%) | 3921 (5.8%) | 2068 (10.5%) |
+| size | n = 50, p = 1% | 1.00% | 326 (4.7%) | 326 (4.7%) | 320 (5.2%) |
+| size | n = 150, p = 1% | 1.00% | 337 (2.9%) | 337 (2.9%) | 359 (3.2%) |
+| size | no payload, p = 1% | 1.00% | 260 (29.4%) | 260 (29.4%) | 267 (30.7%) |
+| size | payload 100 KB, p = 1% | 1.00% | 955 (2.2%) | 955 (2.2%) | 806 (2.5%) |
+| combined | p = 1%, jitter 20 ms, stretch 0.3, 5% of links at 20% | 1.95% | 633 (5.5%) | 1547 (4.4%) | 570 (7.7%) |
+
+## Detail
+
+*misses*: partial blocks not repaired by symbols before the repair deadline (fixed: 500 ms; adaptive: twice the round time), per validator per round. *timeouts*: blocks built on the round timeout. *loss est.*, *margin*: means over validators at the end. *catch-up*: outage only.
+
+| scenario | budget | decide p50 / p99 / max | round | extra KB (%) | misses | timeouts | loss est. | margin | catch-up |
+|---|---|---|---|---|---|---|---|---|---|
+| p = 0.1% | fixed, mean loss | 247 / 291 / 381 | 86 | 12.2 (1.1%) | 0.000 | 0.000 | — | — |  |
+| p = 0.1% | fixed, 1% | 242 / 283 / 311 | 85 | 37.2 (3.3%) | 0.000 | 0.000 | — | — |  |
+| p = 0.1% | adaptive | 245 / 293 / 339 | 86 | 14.5 (1.3%) | 0.001 | 0.000 | 0.0018 | 1.2 |  |
+| p = 1% | fixed, mean loss | 258 / 336 / 359 | 92 | 38.2 (3.4%) | 0.000 | 0.000 | — | — |  |
+| p = 1% | fixed, 1% | 258 / 336 / 359 | 92 | 38.2 (3.4%) | 0.000 | 0.000 | — | — |  |
+| p = 1% | adaptive | 258 / 292 / 310 | 89 | 41.4 (3.7%) | 0.000 | 0.000 | 0.0104 | 1.3 |  |
+| p = 2% | fixed, mean loss | 276 / 339 / 367 | 97 | 60.6 (5.5%) | 0.000 | 0.000 | — | — |  |
+| p = 2% | fixed, 1% | 321 / 417 / 591 | 119 | 41.6 (3.7%) | 0.000 | 0.000 | — | — |  |
+| p = 2% | adaptive | 271 / 369 / 399 | 97 | 67.9 (6.1%) | 0.000 | 0.000 | 0.0203 | 1.7 |  |
+| p = 5% | fixed, mean loss | 322 / 361 / 397 | 109 | 132.7 (12.0%) | 0.000 | 0.000 | — | — |  |
+| p = 5% | fixed, 1% | 1274 / 1745 / 1839 | 426 | 153.9 (13.9%) | 21.606 | 0.000 | — | — |  |
+| p = 5% | adaptive | 315 / 351 / 374 | 107 | 152.3 (13.8%) | 0.000 | 0.000 | 0.0507 | 4.1 |  |
+| step up: 0.1% → 5% (1.5–3 s) → 0.1% | fixed, mean loss | 247 / 819 / 921 | 107 | 53.7 (4.9%) | 0.002 | 0.000 | — | — |  |
+| step up: 0.1% → 5% (1.5–3 s) → 0.1% | fixed, 1% | 249 / 1038 / 1178 | 113 | 46.1 (4.2%) | 0.172 | 0.000 | — | — |  |
+| step up: 0.1% → 5% (1.5–3 s) → 0.1% | adaptive | 255 / 430 / 468 | 94 | 65.5 (6.0%) | 0.134 | 0.000 | 0.0085 | 2.7 |  |
+| step down: 5% → 0.1% at 1.5 s | fixed, mean loss | 244 / 620 / 785 | 91 | 56.1 (5.1%) | 0.004 | 0.000 | — | — |  |
+| step down: 5% → 0.1% at 1.5 s | fixed, 1% | 244 / 678 / 732 | 91 | 45.9 (4.1%) | 0.087 | 0.000 | — | — |  |
+| step down: 5% → 0.1% at 1.5 s | adaptive | 248 / 335 / 366 | 89 | 78.7 (7.2%) | 0.000 | 0.000 | 0.0044 | 3.2 |  |
+| ramp: 0.1% → 5% over 1–2.5 s | fixed, mean loss | 285 / 666 / 764 | 109 | 92.4 (8.3%) | 0.000 | 0.000 | — | — |  |
+| ramp: 0.1% → 5% over 1–2.5 s | fixed, 1% | 480 / 1503 / 1956 | 239 | 92.5 (8.4%) | 8.852 | 0.000 | — | — |  |
+| ramp: 0.1% → 5% over 1–2.5 s | adaptive | 294 / 355 / 403 | 98 | 81.3 (7.4%) | 0.005 | 0.000 | 0.0486 | 1.2 |  |
+| bursts: 5% for 0.2 s each second, else 0.1% | fixed, mean loss | 253 / 567 / 635 | 107 | 40.7 (3.7%) | 0.000 | 0.000 | — | — |  |
+| bursts: 5% for 0.2 s each second, else 0.1% | fixed, 1% | 252 / 508 / 577 | 104 | 44.1 (4.0%) | 0.000 | 0.000 | — | — |  |
+| bursts: 5% for 0.2 s each second, else 0.1% | adaptive | 252 / 388 / 442 | 93 | 51.7 (4.7%) | 0.297 | 0.000 | 0.0057 | 8.0 |  |
+| 5% of links at 20%, p = 0.1% | fixed, mean loss | 262 / 315 / 403 | 91 | 40.0 (3.6%) | 0.000 | 0.000 | — | — |  |
+| 5% of links at 20%, p = 0.1% | fixed, 1% | 265 / 362 / 478 | 98 | 38.7 (3.5%) | 0.000 | 0.000 | — | — |  |
+| 5% of links at 20%, p = 0.1% | adaptive | 254 / 328 / 359 | 90 | 49.0 (4.4%) | 0.002 | 0.000 | 0.0149 | 1.4 |  |
+| 10% of validators receive at 10%, p = 0.1% | fixed, mean loss | 259 / 503 / 733 | 113 | 73.1 (6.6%) | 0.018 | 0.000 | — | — |  |
+| 10% of validators receive at 10%, p = 0.1% | fixed, 1% | 257 / 504 / 712 | 103 | 69.8 (6.3%) | 0.000 | 0.000 | — | — |  |
+| 10% of validators receive at 10%, p = 0.1% | adaptive | 251 / 301 / 327 | 88 | 63.5 (5.8%) | 0.000 | 0.000 | 0.0112 | 1.2 |  |
+| 10% of validators send at 10%, p = 0.1% | fixed, mean loss | 256 / 358 / 392 | 91 | 40.0 (3.6%) | 0.000 | 0.000 | — | — |  |
+| 10% of validators send at 10%, p = 0.1% | fixed, 1% | 256 / 302 / 326 | 90 | 37.5 (3.4%) | 0.000 | 0.000 | — | — |  |
+| 10% of validators send at 10%, p = 0.1% | adaptive | 254 / 347 / 383 | 91 | 44.3 (4.0%) | 0.001 | 0.000 | 0.0114 | 1.3 |  |
+| jitter 30 ms, p = 0.1% | fixed, mean loss | 501 / 758 / 946 | 178 | 12.7 (1.1%) | 0.005 | 0.000 | — | — |  |
+| jitter 30 ms, p = 0.1% | fixed, 1% | 480 / 539 / 607 | 166 | 36.8 (3.3%) | 0.000 | 0.000 | — | — |  |
+| jitter 30 ms, p = 0.1% | adaptive | 492 / 574 / 621 | 172 | 18.8 (1.7%) | 0.005 | 0.000 | 0.0036 | 2.9 |  |
+| jitter 5 → 30 ms (1.5–3 s) → 5 ms, p = 0.1% | fixed, mean loss | 256 / 583 / 765 | 106 | 12.9 (1.2%) | 0.000 | 0.000 | — | — |  |
+| jitter 5 → 30 ms (1.5–3 s) → 5 ms, p = 0.1% | fixed, 1% | 250 / 529 / 574 | 102 | 39.3 (3.5%) | 0.000 | 0.000 | — | — |  |
+| jitter 5 → 30 ms (1.5–3 s) → 5 ms, p = 0.1% | adaptive | 254 / 534 / 596 | 104 | 16.3 (1.5%) | 0.014 | 0.000 | 0.0017 | 1.6 |  |
+| routing stretch σ = 0.4, p = 1% | fixed, mean loss | 375 / 462 / 537 | 133 | 38.5 (3.5%) | 0.000 | 0.000 | — | — |  |
+| routing stretch σ = 0.4, p = 1% | fixed, 1% | 375 / 462 / 537 | 133 | 38.5 (3.5%) | 0.000 | 0.000 | — | — |  |
+| routing stretch σ = 0.4, p = 1% | adaptive | 364 / 445 / 533 | 128 | 48.8 (4.4%) | 0.005 | 0.000 | 0.0101 | 5.4 |  |
+| outage 500 ms, p = 0.1% | fixed, mean loss | 248 / 302 / 895 | 86 | 13.4 (1.2%) | 0.000 | 0.000 | — | — | 341 |
+| outage 500 ms, p = 0.1% | fixed, 1% | 244 / 287 / 806 | 85 | 38.8 (3.5%) | 0.000 | 0.000 | — | — | 298 |
+| outage 500 ms, p = 0.1% | adaptive | 247 / 293 / 822 | 86 | 16.3 (1.5%) | 0.003 | 0.000 | 0.0019 | 1.0 | 351 |
+| f crashed at 0.5 s, p = 1% | fixed, mean loss | 2792 / 3921 / 4747 | 952 | 49.8 (5.8%) | 1.896 | 0.253 | — | — |  |
+| f crashed at 0.5 s, p = 1% | fixed, 1% | 2792 / 3921 / 4747 | 952 | 49.8 (5.8%) | 1.896 | 0.253 | — | — |  |
+| f crashed at 0.5 s, p = 1% | adaptive | 1397 / 2068 / 2108 | 568 | 89.9 (10.5%) | 0.002 | 0.263 | 0.0106 | 1.3 |  |
+| n = 50, p = 1% | fixed, mean loss | 251 / 326 / 356 | 89 | 25.5 (4.7%) | 0.000 | 0.000 | — | — |  |
+| n = 50, p = 1% | fixed, 1% | 251 / 326 / 356 | 89 | 25.5 (4.7%) | 0.000 | 0.000 | — | — |  |
+| n = 50, p = 1% | adaptive | 251 / 320 / 353 | 89 | 28.2 (5.2%) | 0.001 | 0.000 | 0.0107 | 1.2 |  |
+| n = 150, p = 1% | fixed, mean loss | 277 / 337 / 365 | 98 | 49.4 (2.9%) | 0.000 | 0.000 | — | — |  |
+| n = 150, p = 1% | fixed, 1% | 277 / 337 / 365 | 98 | 49.4 (2.9%) | 0.000 | 0.000 | — | — |  |
+| n = 150, p = 1% | adaptive | 271 / 359 / 391 | 96 | 54.1 (3.2%) | 0.001 | 0.000 | 0.0104 | 1.3 |  |
+| no payload, p = 1% | fixed, mean loss | 212 / 260 / 416 | 75 | 13.6 (29.4%) | 0.000 | 0.000 | — | — |  |
+| no payload, p = 1% | fixed, 1% | 212 / 260 / 416 | 75 | 13.6 (29.4%) | 0.000 | 0.000 | — | — |  |
+| no payload, p = 1% | adaptive | 213 / 267 / 363 | 76 | 14.3 (30.7%) | 0.001 | 0.000 | 0.0183 | 1.2 |  |
+| payload 100 KB, p = 1% | fixed, mean loss | 652 / 955 / 998 | 230 | 235.0 (2.2%) | 0.000 | 0.000 | — | — |  |
+| payload 100 KB, p = 1% | fixed, 1% | 652 / 955 / 998 | 230 | 235.0 (2.2%) | 0.000 | 0.000 | — | — |  |
+| payload 100 KB, p = 1% | adaptive | 644 / 806 / 848 | 218 | 262.6 (2.5%) | 0.000 | 0.000 | 0.0104 | 2.2 |  |
+| p = 1%, jitter 20 ms, stretch 0.3, 5% of links at 20% | fixed, mean loss | 514 / 633 / 897 | 185 | 61.1 (5.5%) | 0.001 | 0.000 | — | — |  |
+| p = 1%, jitter 20 ms, stretch 0.3, 5% of links at 20% | fixed, 1% | 627 / 1547 / 2559 | 258 | 48.9 (4.4%) | 0.453 | 0.013 | — | — |  |
+| p = 1%, jitter 20 ms, stretch 0.3, 5% of links at 20% | adaptive | 489 / 570 / 622 | 169 | 85.4 (7.7%) | 0.000 | 0.000 | 0.0224 | 9.6 |  |
