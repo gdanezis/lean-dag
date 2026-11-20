@@ -88,6 +88,9 @@ per round in rotation.
   - `cuts = (L,)` nests the classes: a symbol of class L is L bytes long and
     covers every held fragment of at most L bytes; a full-length symbol
     covers every fragment.
+  - `trigger = "held"` with `trigger_count = c` sends the symbols over rounds
+    r − 1 and r when the sender first holds complete blocks of round r from c
+    other authors, instead of on a quorum of admitted blocks.
   - `tail = (k, t)` also sends t symbols per receiver per round over the
     older rounds r − k + 1 … r − 2.
   - `pull_fec = m` adds, to each pull response, d at its 99.9th percentile

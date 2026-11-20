@@ -81,6 +81,7 @@ class Config:
     cuts: tuple = ()  # nested classes: a symbol of class L covers held fragments of at most L bytes
     early: float | None = None  # also send symbols over the current round this long after building
     trigger: str = "quorum"  # send symbols on a new quorum round, or on building (rounds below)
+    trigger_count: int = 0  # with trigger = "held": send when holding complete blocks of this many others in a round
     trigger_delay: float = 0.0  # with trigger = quorum, wait this long after the quorum
     grace: float = 0.0
     round_timeout: float = 1.0
@@ -541,6 +542,10 @@ class Sim:
             hb.add(blk.author)
             if len(hb) >= self.cfg.f + 1:
                 u.ahead = max(u.ahead, blk.rnd)
+            cfg = self.cfg
+            if (cfg.trigger == "held" and len(hb) == cfg.trigger_count
+                    and cfg.strategy in ("coded", "relay") and blk.rnd >= cfg.span):
+                self.at(self.now + cfg.trigger_delay, "quorum_symbols", u.vid, blk.rnd)
             gap = False
             for ref in blk.refs:
                 if ref not in u.complete:
