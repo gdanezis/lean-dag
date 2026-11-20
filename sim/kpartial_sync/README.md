@@ -22,6 +22,8 @@ use small settings (n = 20–30, a few rounds) that run in seconds.
 - Each packet waits on its sender's 1 Gb/s uplink.
 - Each packet is dropped with probability `loss`; a fraction `bad_links` of
   directed links drop with `bad_loss` instead.
+- `loss_steps = ((t, p), ...)` sets the loss of every link that is not bad
+  to p at time t.
 - `outage = (v, t, d)` drops every packet sent to v during [t, t + d).
 - `crash = (vs, t)`: the validators vs build and send nothing from time t.
 - Every packet pays 80 B of IPv6, UDP and encryption framing.
@@ -127,6 +129,30 @@ per round in rotation.
       covers every fragment.
 - **relay.** As coded, with the same number of symbols, but each symbol is one
   random fragment, uncoded.
+- **Adaptive control** (`adapt = True`, off by default). The budgets above
+  use the true loss rate p, which a validator cannot know. With `adapt`, each
+  validator measures what it needs instead:
+  - **Loss.** It counts the fragments missing from each delivery of a block
+    (every fragment header carries the block's fragment count). It keeps two
+    decayed estimates, with time constants 0.1 s and 2 s, and a Beta prior
+    of weight 20 at 1%, and uses the larger.
+  - **Report.** It puts its estimate p̂ and its margin m in each block,
+    symbol and pull request it sends (2 B), and keeps the newest report of
+    each peer.
+  - **Budget per receiver.** A sender sizes the symbols for receiver w from
+    w's newest report, with its own estimate as a floor on p̂ (`own_floor`): w needs (d + m) / (1 − p̂) symbols in all, where d is
+    the 99.9th percentile of a Poisson variable with mean p̂ times the
+    fragments covered. Each of the n − 1 senders sends its share, rounded so
+    that w receives the total. Repair symbols on pull responses use the
+    requester's p̂ the same way.
+  - **Margin.** A partial block that symbols have not repaired by its repair
+    deadline is a miss. The margin doubles after a quorum round with a miss
+    and falls by 0.05 after a round without one, between 1 and 30.
+  - **Timers.** The repair deadline, after which a partial block is pulled,
+    is twice the measured round time, between 50 ms and 500 ms. A pull is
+    retried after twice the measured delay of the author's blocks plus four
+    deviations, at most 500 ms. The `recent` window is one round time, and
+    the floor of the idle interval is 30 ms.
 
 **What is simplified.**
 
@@ -135,6 +161,8 @@ per round in rotation.
 - Receivers know each block's fragment count; in the protocol it comes from
   the length in the reference.
 - Computation (coding, elimination, signatures) takes no time.
+- Without `adapt`, every validator knows the true loss rate, and uses it
+  for every link.
 
 ## Findings (n = 100; `results.md`)
 
@@ -248,6 +276,44 @@ leader and votes, and every leader commits directly.
    With f crashed, the median decision falls from 1.59 s to 1.23 s; every
    correct validator is needed for a quorum, so each lost fragment stalls
    it until repaired.
+
+**Adaptive control** (`python3 adapt_eval.py`, about 1 minute; `adapt_results.md`).
+The fixed budgets above use the true loss rate. The table compares them with
+a fixed budget that assumes 1%, and with the adaptive validator (decision p99
+in ms, and repair bytes as a share of push).
+
+| scenario | fixed, true loss | fixed, assumes 1% | adaptive |
+|---|---|---|---|
+| p = 0.1% | 291 (1.1%) | 283 (3.3%) | 292 (1.3%) |
+| p = 1% | 336 (3.4%) | 336 (3.4%) | 292 (3.7%) |
+| p = 5% | 361 (12.0%) | 1745 (13.9%) | 349 (14.0%) |
+| 5% of links at 20% | 315 (3.6%) | 362 (3.5%) | 328 (4.4%) |
+| jitter 30 ms | 758 (1.1%) | 539 (3.3%) | 577 (1.7%) |
+
+- **Steady conditions.** The adaptive validator matches the budget that knows
+  the true loss, for 0.1–0.3 points more bytes. Its estimates are close
+  (0.0019, 0.0105 and 0.0511 at 0.1%, 1% and 5%). A budget that assumes too
+  little loss collapses: at 5% it misses 22 repairs per validator per round
+  and rounds take 426 ms instead of 109 ms.
+- **Jitter.** The margin rises to about 3.5 after late blocks miss their
+  repair deadline, which cuts the p99 from 758 ms to 577 ms for 0.6 points
+  more bytes.
+- **A step in loss** (0.1% → 5% for 1.5 s → 0.1%):
+
+  | budget | decide p99 / max | extra (%) |
+  |---|---|---|
+  | fixed, assumes 0.1% | 1418 / 1899 | 2.0% |
+  | fixed, assumes 1% | 1038 / 1178 | 4.2% |
+  | fixed, assumes 5% | 358 / 387 | 11.0% |
+  | adaptive | 400 / 438 | 6.0% |
+  | adaptive, reports only | 623 / 687 | 5.4% |
+
+  Reports alone react too slowly. When loss rises, rounds stall, so few
+  blocks or symbols carry the new reports, and senders keep sizing for the
+  old loss. A sender that also plans for at least its own loss estimate
+  (`own_floor`) reacts within one round: a change of loss across the network
+  reaches its own estimate first. The floor costs 0.6 points of bytes with 5%
+  bad links, where it oversends to the validators with good links.
 
 **Limits.**
 

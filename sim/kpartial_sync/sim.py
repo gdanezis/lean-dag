@@ -47,6 +47,7 @@ import heapq
 import math
 import random
 from dataclasses import dataclass, field
+from functools import lru_cache
 
 WIRE = 80  # IPv6 + UDP + authenticated-encryption framing, bytes per packet
 FRAG_HEADER = 19
@@ -98,6 +99,13 @@ class Config:
     window_pull: bool = True  # a pull asks for the whole window to depth K, not one block
     behind_pull: bool = True  # pull at once when f + 1 others are two rounds ahead
     check_claims: bool = True  # R2: admit a block only when holding the votes behind its claims
+    adapt: bool = False  # validators estimate loss, margin and timers locally (see ``Adaptive``)
+    assumed_loss: float | None = None  # without adapt: the loss the budget assumes (None: the true loss)
+    loss_steps: tuple = ()  # ((time, loss), ...): the loss of every link that is not bad changes then
+    est_tau: tuple = (0.1, 2.0)  # adapt: time constants of a fast and a slow loss estimate (the larger is used), s
+    est_prior: tuple = (0.2, 19.8)  # adapt: Beta prior (lost, received) of the loss estimate
+    own_floor: bool = True  # adapt: a sender plans for at least its own loss estimate at every receiver
+    margin_ctl: tuple = (2.0, 0.05, 1.0, 30.0)  # adapt: margin times this after a round with a miss, minus this after one without, min, max
     crash: tuple | None = None  # (validators, time): from then on they build and send nothing
     outage: tuple | None = None  # (validator, start, duration): it receives nothing meanwhile
     seed: int = 1
@@ -121,12 +129,24 @@ def poisson_quantile(lam: float, prob: float) -> int:
     return k
 
 
+@lru_cache(maxsize=None)
+def q999(lam20: int) -> int:
+    """The 99.9th percentile of a Poisson variable of mean lam20 / 20."""
+    return poisson_quantile(lam20 / 20, 0.999)
+
+
+def assumed(cfg: Config) -> float:
+    """The loss a validator without estimates assumes: assumed_loss, or the true mean."""
+    if cfg.assumed_loss is not None:
+        return cfg.assumed_loss
+    return cfg.loss * (1 - cfg.bad_links) + cfg.bad_loss * cfg.bad_links
+
+
 def auto_symbols(cfg: Config) -> int:
     """d_f at the 99.9th percentile plus 3, over the rounds symbols cover."""
     mean_size = cfg.header + cfg.payload + 2 * cfg.ref_bytes
     frags = cfg.span * cfg.n * math.ceil(mean_size / cfg.frag)
-    p = cfg.loss * (1 - cfg.bad_links) + cfg.bad_loss * cfg.bad_links
-    return poisson_quantile(p * frags, 0.999) + 3
+    return poisson_quantile(assumed(cfg) * frags, 0.999) + 3
 
 
 @dataclass
@@ -141,6 +161,7 @@ class Block:
     base: int
     built: float
     leader: bool
+    report: tuple = ()  # adapt: the author's (time, loss estimate, margin) when it built the block
 
     @property
     def mask(self) -> int:
@@ -181,6 +202,13 @@ class Node:
     boff: int = 0  # the local frame: bit offset and width
     bwidth: int = 0
     bknown: int = -1  # the held fragments in the frame when the basis was built
+    est_lost: list = field(default_factory=lambda: [0.0, 0.0])  # adapt: fragments lost and sent on
+    est_sent: list = field(default_factory=lambda: [0.0, 0.0])  # incoming links, decayed with each est_tau
+    est_at: float = 0.0
+    margin: float = 3.0  # adapt: symbols asked above the quantile
+    missed: bool = False  # adapt: a repair deadline passed since the quorum round last advanced
+    reports: dict = field(default_factory=dict)  # adapt: peer -> (time, loss, margin), the newest it sent
+    owd: dict = field(default_factory=dict)  # adapt: author -> [mean, deviation] of its blocks' delay
 
 
 class Sim:
@@ -208,7 +236,9 @@ class Sim:
                     self.lat[i][j] = (cfg.lat_min + (cfg.lat_max - cfg.lat_min) * d) * stretch[i][j]
                     if self.rng.random() < cfg.bad_links:
                         self.lossp[i][j] = cfg.bad_loss
-        self.nodes = [Node(v) for v in range(n)]
+        self.bad = {(i, j) for i in range(n) for j in range(n) if self.lossp[i][j] != cfg.loss}
+        self.nodes = [Node(v, margin=float(cfg.margin[0])) for v in range(n)]
+        self.misses = 0
         self.up_free = [0.0] * n
         self.blocks: list[Block] = []
         self.owner: list[int] = []  # fragment index -> bid
@@ -243,6 +273,8 @@ class Sim:
         heapq.heappush(self.q, (t, self.seq, kind, args))
 
     def run(self, horizon: float = 600.0) -> None:
+        for t, p in self.cfg.loss_steps:
+            self.at(t, "set_loss", p)
         for v in range(self.cfg.n):
             self.build(self.nodes[v], 1)
         while self.q:
@@ -251,6 +283,70 @@ class Sim:
                 break
             self.now = t
             getattr(self, "on_" + kind)(*args)
+
+    def on_set_loss(self, p: float) -> None:
+        n = self.cfg.n
+        for i in range(n):
+            for j in range(n):
+                if i != j and (i, j) not in self.bad:
+                    self.lossp[i][j] = p
+
+    # ------------------------------------------------------------ adaptive
+    # A validator estimates the loss on its incoming links from the fragments
+    # missing from each block delivery (the fragment count is in every
+    # fragment's header), and reports the estimate and its margin in its
+    # blocks, symbols and pull requests (2 B each), so reports still flow when
+    # rounds stall. A sender sizes the symbols for each receiver from that
+    # receiver's report. A receiver raises its margin after a round in which a
+    # partial block outlived its repair deadline, and lowers it slowly
+    # otherwise. Timers follow the measured round time and block delays.
+    def p_hat(self, u: Node) -> float:
+        a, b = self.cfg.est_prior
+        return max((u.est_lost[i] + a) / (u.est_sent[i] + a + b) for i in range(2))
+
+    def observe(self, u: Node, sent: int, lost: int) -> None:
+        for i, tau in enumerate(self.cfg.est_tau):
+            w = math.exp(-(self.now - u.est_at) / tau)
+            u.est_lost[i] = u.est_lost[i] * w + lost
+            u.est_sent[i] = u.est_sent[i] * w + sent
+        u.est_at = self.now
+
+    def my_report(self, u: Node) -> tuple:
+        return (self.now, self.p_hat(u), u.margin) if self.cfg.adapt else ()
+
+    def hear(self, u: Node, w: int, rep: tuple) -> None:
+        if rep and (w not in u.reports or u.reports[w][0] < rep[0]):
+            u.reports[w] = rep
+
+    def report_of(self, u: Node, w: int) -> tuple:
+        """The loss and margin u plans for at w: w's newest report, with u's own
+        estimate as a floor on the loss, since a change of loss across the
+        network reaches u's estimate before w's report reaches u."""
+        r = u.reports.get(w)
+        if r is None:
+            a, b = self.cfg.est_prior
+            r = (0.0, a / (a + b), float(self.cfg.margin[0]))
+        p = max(r[1], self.p_hat(u)) if self.cfg.own_floor else r[1]
+        return p, r[2]
+
+    def loss_for(self, u: Node, w: int) -> float:
+        return self.report_of(u, w)[0] if self.cfg.adapt else assumed(self.cfg)
+
+    def repair_delay(self, u: Node) -> float:
+        """How long a partial block waits for symbols before it is pulled."""
+        if not self.cfg.adapt:
+            return self.cfg.pull_timer
+        return min(self.cfg.pull_timer, max(0.05, 2 * u.round_avg))
+
+    def retry_delay(self, u: Node, w: int) -> float:
+        """When a pull to w is retried: twice the delay of w's blocks plus four deviations."""
+        if not self.cfg.adapt or w not in u.owd:
+            return self.cfg.retry_timer
+        m, d = u.owd[w]
+        return min(self.cfg.retry_timer, max(0.03, 2 * m + 4 * d))
+
+    def recent_window(self, u: Node) -> float:
+        return u.round_avg if self.cfg.adapt and self.cfg.recent > 0 else self.cfg.recent
 
     # ------------------------------------------------------------ network
     def crashed(self, v: int) -> bool:
@@ -318,7 +414,7 @@ class Sim:
             self.inb[kind][dst] += sizes - sum(
                 FRAG_HEADER + min(cfg.frag, blk.size - js[i] * cfg.frag) + WIRE for i in lost)
             jit = -cfg.jitter * math.log(1 - self.rng.random() ** (1 / k))
-            self.at(done + self.lat[src][dst] + jit, "frags", dst, got, blk.bid)
+            self.at(done + self.lat[src][dst] + jit, "frags", dst, got, blk.bid, len(lost), len(js), kind)
 
     # ------------------------------------------------------------ building
     def build(self, u: Node, R: int, why: str = "leader") -> None:
@@ -346,10 +442,11 @@ class Sim:
         if cfg.payload_sigma > 0 and cfg.payload > 0:
             mu = math.log(cfg.payload) - cfg.payload_sigma ** 2 / 2
             pay = int(self.rng.lognormvariate(mu, cfg.payload_sigma))
-        size = cfg.header + len(refs) * cfg.ref_bytes + pay + self.bitmap_bytes
+        size = cfg.header + len(refs) * cfg.ref_bytes + pay + self.bitmap_bytes + (2 if cfg.adapt else 0)
         nfrag = max(1, math.ceil(size / cfg.frag))
         blk = Block(len(self.blocks), u.vid, R, refs, claims, size, nfrag,
                     len(self.owner), self.now, is_leader)
+        blk.report = self.my_report(u)
         self.blocks.append(blk)
         self.owner.extend([blk.bid] * nfrag)
         self.round_mask[R] = self.round_mask.get(R, 0) | blk.mask
@@ -401,7 +498,8 @@ class Sim:
         """Arm the idle timer; it doubles after each idle batch."""
         u.sym_seq += 1
         if self.cfg.idle > 0:
-            d = max(self.cfg.idle, 1.5 * u.round_avg) if delay is None else delay
+            floor = 0.03 if self.cfg.adapt else self.cfg.idle
+            d = max(floor, 1.5 * u.round_avg) if delay is None else delay
             self.at(self.now + d, "sym_idle", u.vid, u.sym_seq, d)
 
     def on_sym_idle(self, v: int, seq: int, delay: float) -> None:
@@ -452,7 +550,7 @@ class Sim:
         if cfg.recent > 0 and (salt == 0 or salt >= 5):
             # late blocks of older rounds, completed recently
             lo = min(rounds)
-            u.arrivals = [(t, b) for t, b in u.arrivals if t >= self.now - cfg.recent]
+            u.arrivals = [(t, b) for t, b in u.arrivals if t >= self.now - self.recent_window(u)]
             for _, b in u.arrivals:
                 blk = self.blocks[b]
                 if blk.rnd < lo:
@@ -461,18 +559,34 @@ class Sim:
                             held[c] = held.get(c, 0) | (m & blk.mask & u.frags)
         if not held:
             return
-        p = cfg.loss * (1 - cfg.bad_links) + cfg.bad_loss * cfg.bad_links
+        p = assumed(cfg)
         total = sum(h.bit_count() for h in held.values())
         fixed = count if count is not None else cfg.symbols
         plan = []
+        off = R + salt * 7
+        n1 = cfg.n - 1
         for i, c in enumerate(sorted(held)):
             h = held[c]
+            if fixed is None and cfg.adapt:
+                # receiver w needs need_w symbols in all, from n - 1 senders: each
+                # sends floor(need_w / (n - 1)), and one more from a rotating
+                # share of senders, so w gets need_w whatever the rounding
+                m = h.bit_count()
+                for j in range(n1):
+                    w = (u.vid + 1 + j) % cfg.n
+                    pw, mw = self.report_of(u, w)
+                    if i:
+                        mw = cfg.margin[min(i, len(cfg.margin) - 1)]
+                    x = (q999(round(20 * pw * m)) + mw) / (1 - pw) / n1
+                    k = int(x) + (1 if (j - off - i) % n1 < (x - int(x)) * n1 else 0)
+                    plan += [(c, w)] * k
+                continue
             if fixed is None:
                 extra = cfg.margin[min(i, len(cfg.margin) - 1)]
                 k = poisson_quantile(p * h.bit_count(), 0.999) + extra
             else:
                 k = round(fixed * h.bit_count() / total)
-            plan += [c] * k
+            plan += [(c, None)] * k
         if cfg.cuts:  # class L covers every class up to L
             acc = {}
             run = 0
@@ -480,9 +594,9 @@ class Sim:
                 run |= held[c]
                 acc[c] = run
             held = acc
-        off = R + salt * 7
-        for i, c in enumerate(plan):
-            w = (u.vid + 1 + (off + i) % (cfg.n - 1)) % cfg.n
+        for i, (c, w) in enumerate(plan):
+            if w is None:
+                w = (u.vid + 1 + (off + i) % (cfg.n - 1)) % cfg.n
             h = held[c]
             if cfg.strategy == "relay":
                 x = h
@@ -493,12 +607,12 @@ class Sim:
                 mask = self.code_mask(h)
                 if not mask:
                     continue
-            size = SYM_HEADER + c
+            size = SYM_HEADER + c + (2 if cfg.adapt else 0)
             self.symbols_sent += 1
             self.bytes["sym"] += size + WIRE
             t = self.transmit(u.vid, w, size, "sym")
             if t is not None:
-                self.at(t, "sym", w, R, mask)
+                self.at(t, "sym", w, R, mask, u.vid, self.my_report(u))
 
     def check_build(self, u: Node) -> None:
         cfg = self.cfg
@@ -544,6 +658,10 @@ class Sim:
             step = (self.now - u.qround_at) / (blk.rnd - u.qround)
             u.round_avg = 0.8 * u.round_avg + 0.2 * step
             u.qround_at = self.now
+            if cfg.adapt:
+                up, down, lo, hi = cfg.margin_ctl
+                u.margin = min(hi, u.margin * up) if u.missed else max(lo, u.margin - down)
+                u.missed = False
             u.qround = blk.rnd
             if cfg.strategy in ("coded", "relay") and cfg.trigger == "quorum" and blk.rnd >= cfg.span:
                 self.at(self.now + cfg.trigger_delay, "quorum_symbols", u.vid, blk.rnd)
@@ -630,6 +748,7 @@ class Sim:
             return
         if u.frags & blk.mask == blk.mask:
             u.complete.add(bid)
+            self.hear(u, blk.author, blk.report)
             if self.cfg.recent > 0:
                 u.arrivals.append((self.now, bid))
             u.pending.add(bid)
@@ -653,11 +772,25 @@ class Sim:
         elif not via_ref:  # part of the block arrived: pull it from its author
             self.start_pull(u, bid)
 
-    def on_frags(self, v: int, bits: int, bid: int) -> None:
-        self.learn(self.nodes[v], bits, bid)
-
-    def on_sym(self, v: int, R: int, mask: int) -> None:
+    def on_frags(self, v: int, bits: int, bid: int, lost: int = 0, sent: int = 0,
+                 kind: str | None = None) -> None:
         u = self.nodes[v]
+        if self.cfg.adapt:
+            self.observe(u, sent, lost)
+            blk = self.blocks[bid]
+            if kind == "push":
+                d = self.now - blk.built
+                e = u.owd.get(blk.author)
+                if e is None:
+                    u.owd[blk.author] = [d, d / 2]
+                else:
+                    e[1] += (abs(d - e[0]) - e[1]) / 4
+                    e[0] += (d - e[0]) / 8
+        self.learn(u, bits, bid)
+
+    def on_sym(self, v: int, R: int, mask: int, src: int = -1, rep: tuple = ()) -> None:
+        u = self.nodes[v]
+        self.hear(u, src, rep)
         row = mask ^ (mask & u.frags)
         if not row:
             return
@@ -763,7 +896,7 @@ class Sim:
             self.at(self.now, "pull_timer", u.vid, bid, 0)
         else:
             u.deferred.add(bid)
-            self.at(self.now + self.cfg.pull_timer, "pull_timer", u.vid, bid, 0)
+            self.at(self.now + self.repair_delay(u), "pull_timer", u.vid, bid, 0)
 
     def behind(self, u: Node) -> bool:
         """Holding blocks from f + 1 authors two rounds above its quorum round:
@@ -829,12 +962,17 @@ class Sim:
         u = self.nodes[v]
         if u.pulling.get(root) != token:  # superseded by a promoted timer
             return
+        was_deferred = root in u.deferred
         u.deferred.discard(root)
         blk = self.blocks[root]
         want = self.wanted(u, root)
         missing = [b for b in want if b not in u.complete]
         if not missing:
             return
+        if was_deferred and token == 0:  # symbols did not repair it in time
+            u.missed = True
+            if cfg.warmup <= blk.rnd <= cfg.rounds:
+                self.misses += 1
         fresh = [b for b in missing if u.asked.get(b, 0) <= self.now]
         if not fresh:  # outstanding requests cover them all
             self.at(min(u.asked[b] for b in missing), "pull_timer", v, root, token)
@@ -843,19 +981,21 @@ class Sim:
             self.pulls += 1
         # the request's bitmap marks the slots held or already asked for, so the
         # author sends only the fresh blocks
-        size = self.request_bytes(u, fresh)
+        size = self.request_bytes(u, fresh) + (2 if cfg.adapt else 0)
+        retry = self.retry_delay(u, blk.author)
         for b in fresh:
-            u.asked[b] = self.now + cfg.retry_timer
+            u.asked[b] = self.now + retry
         if cfg.pull_mode != "oracle":  # the request carries what the requester holds of each
             fresh = [(b, u.frags & self.blocks[b].mask) for b in fresh]
         self.bytes["pullreq"] += size + WIRE
         t = self.transmit(v, blk.author, size, "pullreq")
         if t is not None:
-            self.at(t, "pull_req", blk.author, v, fresh)
-        self.at(self.now + cfg.retry_timer, "pull_timer", v, root, token)
+            self.at(t, "pull_req", blk.author, v, fresh, self.my_report(u))
+        self.at(self.now + retry, "pull_timer", v, root, token)
 
-    def on_pull_req(self, h: int, v: int, fresh: list) -> None:
+    def on_pull_req(self, h: int, v: int, fresh: list, rep: tuple = ()) -> None:
         hold, want = self.nodes[h], self.nodes[v]
+        self.hear(hold, v, rep)
         sent, top = 0, 0
         for item in fresh:
             if self.cfg.pull_mode == "oracle":  # the requester's state, read directly
@@ -876,7 +1016,7 @@ class Sim:
         if self.cfg.pull_fec >= 0 and self.cfg.strategy == "coded" and sent:
             # repair symbols over the response, so a lost fragment needs no retry
             cfg = self.cfg
-            p = cfg.loss * (1 - cfg.bad_links) + cfg.bad_loss * cfg.bad_links
+            p = self.loss_for(hold, v)
             for _ in range(poisson_quantile(p * sent.bit_count(), 0.999) + cfg.pull_fec):
                 mask = self.code_mask(sent)
                 if not mask:
@@ -938,6 +1078,9 @@ class Sim:
             "out_mbps": self.mbps(self.out), "in_mbps": self.mbps(self.inb),
             "out_mbps_max": self.mbps(self.out, max), "in_mbps_max": self.mbps(self.inb, max),
             "caught_up": self.caught_up if self.caught_up is not None else float("nan"),
+            "misses": self.misses / (cfg.n * (cfg.rounds - cfg.warmup + 1)),
+            "p_hat": sum(self.p_hat(u) for u in self.nodes) / cfg.n,
+            "margin_end": sum(u.margin for u in self.nodes) / cfg.n,
         }
 
 
