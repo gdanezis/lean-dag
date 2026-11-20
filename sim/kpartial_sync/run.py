@@ -34,6 +34,7 @@ GROUPS = {
     "density": "Coded: density of a symbol (p = 1%)",
     "scale": "Coded: number of validators (p = 1%)",
     "payload": "Payload size (p = 1%)",
+    "refine": "Coded span 2 with older-round symbols or pull repair",
     "outage": "One validator receives nothing for a while (p = 0.1%)",
 }
 
@@ -66,13 +67,19 @@ for n in [25, 50, 100, 150]:
 for pay in [0, 1_000, 10_000, 100_000]:
     for name, kw in [("pull 500 ms", VARIANTS["pull 500 ms"]),
                      ("coded, one class", VARIANTS["coded + pull 500 ms"]),
-                     ("coded, 256 B classes", dict(size_class=256, **VARIANTS["coded + pull 500 ms"]))]:
+                     ("coded, 256 B classes", dict(size_class=256, **VARIANTS["coded + pull 500 ms"])),
+                     ("coded, nested 320 B", dict(cuts=(320,), **VARIANTS["coded + pull 500 ms"]))]:
         SCENARIOS.append(("payload", f"payload {pay // 1000} KB" if pay else "no payload", name,
                           dict(loss=0.01, payload=pay, **kw)))
+REFINE = [("coded span 2", dict(strategy="coded", span=2)),
+          ("coded span 6", dict(strategy="coded", span=6)),
+          ("span 2 + tail (6, 3)", dict(strategy="coded", tail=(6, 3))),
+          ("span 2 + pull repair", dict(strategy="coded", pull_fec=3))]
+for loss in [0.01, 0.05]:
+    for name, kw in REFINE:
+        SCENARIOS.append(("refine", f"p = {loss:.0%}", name, dict(loss=loss, **kw)))
 for dur in [0.2, 0.5]:
-    for name, kw in [("pull 500 ms", VARIANTS["pull 500 ms"]),
-                     ("coded span 2", dict(strategy="coded", span=2)),
-                     ("coded span 6", dict(strategy="coded", span=6))]:
+    for name, kw in [("pull 500 ms", VARIANTS["pull 500 ms"])] + REFINE:
         SCENARIOS.append(("outage", f"outage {dur * 1000:.0f} ms", name,
                           dict(loss=0.001, rounds=60, outage=(7, 2.0, dur), **kw)))
 

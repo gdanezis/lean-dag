@@ -75,6 +75,10 @@ class Config:
     density: int = 1  # each fragment in a symbol with probability 2^-density
     span: int = 2  # rounds below the new block that symbols cover
     size_class: int = 0  # a symbol XORs fragments of one size class, rounded up to this (0: one class, F)
+    tail: tuple | None = None  # (rounds, symbols): also this many symbols per receiver over the older rounds
+    pull_fec: int = -1  # >= 0: a pull response adds d at its 99.9th percentile plus this many symbols
+    margin: tuple = (3,)  # symbols above the quantile, per class from the smallest (last value repeats)
+    cuts: tuple = ()  # nested classes: a symbol of class L covers held fragments of at most L bytes
     early: float | None = None  # also send symbols over the current round this long after building
     trigger: str = "quorum"  # send symbols on a new quorum round, or on building (rounds below)
     trigger_delay: float = 0.0  # with trigger = quorum, wait this long after the quorum
@@ -164,6 +168,8 @@ class Sim:
         self.cfg = cfg
         self.rng = random.Random(cfg.seed)
         n = cfg.n
+        self.keep = max(cfg.span, cfg.tail[0] if cfg.tail else 0,
+                        cfg.K + 2 if cfg.pull_fec >= 0 else 0) + 1  # rounds of symbol rows kept
         self.s = cfg.symbols if cfg.symbols is not None else auto_symbols(cfg)
         pts = [(self.rng.random(), self.rng.random()) for _ in range(n)]
         self.lat = [[0.0] * n for _ in range(n)]
@@ -332,22 +338,41 @@ class Sim:
         return [b for b in u.admitted if self.blocks[b].rnd == r]
 
     def on_quorum_symbols(self, v: int, r: int) -> None:
-        self.send_symbols(self.nodes[v], r + 1, range(r + 1 - self.cfg.span, r + 1))
+        cfg = self.cfg
+        self.send_symbols(self.nodes[v], r + 1, range(r + 1 - cfg.span, r + 1))
+        if cfg.tail is not None:
+            lo = max(1, r + 1 - cfg.tail[0])
+            self.send_symbols(self.nodes[v], r + 1, range(lo, r + 1 - cfg.span),
+                              salt=3, count=cfg.tail[1])
 
     def on_early(self, v: int, R: int) -> None:
         self.send_symbols(self.nodes[v], R + 1, [R], salt=1)
 
     def size_class(self, data: int) -> int:
-        c = self.cfg.size_class
-        return self.cfg.frag if c <= 0 else min(self.cfg.frag, -(-data // c) * c)
+        cfg = self.cfg
+        if cfg.cuts:
+            return next((L for L in cfg.cuts if data <= L), cfg.frag)
+        c = cfg.size_class
+        return cfg.frag if c <= 0 else min(cfg.frag, -(-data // c) * c)
 
-    def send_symbols(self, u: Node, R: int, rounds, salt: int = 0) -> None:
+    def code_mask(self, h: int) -> int:
+        """A random subset of h, each fragment with probability 2^-density."""
+        lo = (h & -h).bit_length() - 1
+        rnd = self.rng.getrandbits(h.bit_length() - lo)
+        for _ in range(self.cfg.density - 1):
+            rnd &= self.rng.getrandbits(h.bit_length() - lo)
+        return h & (rnd << lo)
+
+    def send_symbols(self, u: Node, R: int, rounds, salt: int = 0, count: int | None = None) -> None:
         """Coded symbols over ``rounds``. Each size class of fragments is its own
         code: a symbol XORs a random subset of the sender's fragments of one
         class and is as long as the class. A class with m held fragments gets
         d at its 99.9th percentile plus 3 symbols per receiver on average, d
         Poisson with mean p * m; a fixed ``symbols`` is shared by fragment count.
-        Distinct receivers when the count is below n."""
+        Distinct receivers when the count is below n. With ``cuts`` the classes
+        nest: a symbol of class L covers every held fragment of at most L bytes,
+        and class L's budget counts the fragments above the next smaller cut.
+        ``count`` fixes the total, shared by fragment count."""
         cfg = self.cfg
         held: dict[int, int] = {}
         for k in rounds:
@@ -358,13 +383,23 @@ class Sim:
             return
         p = cfg.loss * (1 - cfg.bad_links) + cfg.bad_loss * cfg.bad_links
         total = sum(h.bit_count() for h in held.values())
+        fixed = count if count is not None else cfg.symbols
         plan = []
-        for c, h in held.items():
-            if cfg.symbols is None:
-                k = poisson_quantile(p * h.bit_count(), 0.999) + 3
+        for i, c in enumerate(sorted(held)):
+            h = held[c]
+            if fixed is None:
+                extra = cfg.margin[min(i, len(cfg.margin) - 1)]
+                k = poisson_quantile(p * h.bit_count(), 0.999) + extra
             else:
-                k = round(cfg.symbols * h.bit_count() / total)
+                k = round(fixed * h.bit_count() / total)
             plan += [c] * k
+        if cfg.cuts:  # class L covers every class up to L
+            acc = {}
+            run = 0
+            for c in sorted(held):
+                run |= held[c]
+                acc[c] = run
+            held = acc
         off = R + salt * 7
         for i, c in enumerate(plan):
             w = (u.vid + 1 + (off + i) % (cfg.n - 1)) % cfg.n
@@ -375,11 +410,7 @@ class Sim:
                     x &= x - 1
                 mask = x & -x
             else:
-                lo = (h & -h).bit_length() - 1
-                rnd = self.rng.getrandbits(h.bit_length() - lo)
-                for _ in range(cfg.density - 1):
-                    rnd &= self.rng.getrandbits(h.bit_length() - lo)
-                mask = h & (rnd << lo)
+                mask = self.code_mask(h)
                 if not mask:
                     continue
             size = SYM_HEADER + c
@@ -528,7 +559,7 @@ class Sim:
         row = mask & ~u.frags
         if not row:
             return
-        u.rows = [(t, m) for t, m in u.rows if t >= u.latest - self.cfg.span - 1]
+        u.rows = [(t, m) for t, m in u.rows if t >= u.latest - self.keep]
         u.rows.append((R, row))
         u.rowunion |= row
         bits = self.solve(u)
@@ -621,6 +652,7 @@ class Sim:
 
     def on_pull_req(self, h: int, v: int, fresh: list[int]) -> None:
         hold, want = self.nodes[h], self.nodes[v]
+        sent, top = 0, 0
         for b in fresh:
             if b not in hold.complete or b in want.complete:
                 continue
@@ -628,6 +660,21 @@ class Sim:
             missing = blk.mask & ~want.frags
             if missing:
                 self.send_frags(h, v, blk, missing, "pullresp")
+                sent |= missing
+                top = max(top, blk.rnd)
+        if self.cfg.pull_fec >= 0 and sent:
+            # repair symbols over the response, so a lost fragment needs no retry
+            cfg = self.cfg
+            p = cfg.loss * (1 - cfg.bad_links) + cfg.bad_loss * cfg.bad_links
+            for _ in range(poisson_quantile(p * sent.bit_count(), 0.999) + cfg.pull_fec):
+                mask = self.code_mask(sent)
+                if not mask:
+                    continue
+                size = SYM_HEADER + cfg.frag
+                self.bytes["pullresp"] += size + WIRE
+                t = self.transmit(h, v, size)
+                if t is not None:
+                    self.at(t, "sym", v, top, mask)
 
     # ------------------------------------------------------------ report
     def report(self) -> dict:
