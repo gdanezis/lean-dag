@@ -94,6 +94,7 @@ class Config:
     grace: float = 0.0
     round_timeout: float = 1.0
     K: int = 6  # window depth
+    D: int = 8  # output depth: a committed leader outputs its available blocks at most D rounds below it
     pull_mode: str = "bitmap"  # what a requester can ask for: "oracle" (the window, known globally),
     # "refs" (blocks it has seen referenced), "bitmap" (each block carries a bitmap of its window's slots)
     window_pull: bool = True  # a pull asks for the whole window to depth K, not one block
@@ -1018,7 +1019,10 @@ class Sim:
         if u.pulling.get(root) != token:  # superseded by a promoted timer
             return
         blk = self.blocks[root]
-        if self.crashed(v) or blk.rnd + cfg.K + 1 < u.qround:  # crashed, or below every window it needs
+        # stop when crashed, or once every leader whose output can hold root (at most
+        # D rounds above it) is decided; the quorum round is no bound, as an
+        # undecided leader's available sub-DAG reaches below any window
+        if self.crashed(v) or blk.rnd + cfg.D < u.next_undecided:
             u.deferred.discard(root)
             return
         was_deferred = root in u.deferred

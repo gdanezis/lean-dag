@@ -95,8 +95,12 @@ per round in rotation.
   - **Timing:** the request goes out after τ, and is retried every τ; after
     three requests in a row with no packet from the author, the interval
     doubles each time, up to 2 s (the author may be down). A pull stops once
-    its block is more than K + 1 rounds below the validator's quorum round,
-    and a crashed validator stops pulling. There
+    every leader whose output can hold its block is decided (the block is
+    more than D = 8 rounds below the lowest undecided leader), and a crashed
+    validator stops pulling. The quorum round is no bound: a leader's output
+    is its available sub-DAG to depth D, which reaches below the window of
+    any block the validator builds on (`Avail`, `Out` and `Fetches` in the
+    Lean model). There
     is no wait when the validator is behind: it holds blocks from f + 1
     authors two rounds above its quorum round, so nothing it lacks is in
     flight. Requests waiting for τ go out at once when the validator finds
@@ -180,6 +184,9 @@ per round in rotation.
 - Computation (coding, elimination, signatures) takes no time.
 - Without `adapt`, every validator knows the true loss rate, and uses it
   for every link.
+- A leader counts as decided when its decision rule is met; the simulator
+  does not model output, so a decision does not wait for the validator to
+  fetch the leader's available sub-DAG.
 
 ## Findings (n = 100; `results.md`)
 
