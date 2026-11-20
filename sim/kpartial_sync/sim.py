@@ -92,6 +92,8 @@ class Config:
     grace: float = 0.0
     round_timeout: float = 1.0
     K: int = 6  # window depth
+    pull_mode: str = "bitmap"  # what a requester can ask for: "oracle" (the window, known globally),
+    # "refs" (blocks it has seen referenced), "bitmap" (each block carries a bitmap of its window's slots)
     window_pull: bool = True  # a pull asks for the whole window to depth K, not one block
     behind_pull: bool = True  # pull at once when f + 1 others are two rounds ahead
     check_claims: bool = True  # R2: admit a block only when holding the votes behind its claims
@@ -174,6 +176,10 @@ class Node:
     sym_seq: int = 0  # symbol batches sent; an idle timer is live only for the latest
     arrivals: list = field(default_factory=list)  # (time, bid) of blocks completed
     rowunion: int = 0
+    basis: dict | None = None  # reduced rows in a local frame: pivot -> (tag, row); None when stale
+    boff: int = 0  # the local frame: bit offset and width
+    bwidth: int = 0
+    bknown: int = -1  # the held fragments in the frame when the basis was built
 
 
 class Sim:
@@ -181,6 +187,7 @@ class Sim:
         self.cfg = cfg
         self.rng = random.Random(cfg.seed)
         n = cfg.n
+        self.bitmap_bytes = -(-cfg.n * (cfg.K + 2) // 8) if cfg.pull_mode == "bitmap" else 0
         self.keep = max(cfg.span, cfg.tail[0] if cfg.tail else 0, cfg.K + 2 if cfg.recent > 0 else 0,
                         cfg.K + 2 if cfg.pull_fec >= 0 and cfg.strategy == "coded" else 0) + 1  # rounds of symbol rows kept
         self.s = cfg.symbols if cfg.symbols is not None else auto_symbols(cfg)
@@ -261,10 +268,14 @@ class Sim:
         by geometric gaps, the last arrival as the uplink finishing time plus the
         latency plus the largest of the jitters."""
         cfg = self.cfg
-        js = [j for j in range(blk.nfrag) if mask >> (blk.base + j) & 1]
-        if not js:
-            return
-        sizes = sum(FRAG_HEADER + min(cfg.frag, blk.size - j * cfg.frag) + WIRE for j in js)
+        if mask == blk.mask:  # the whole block, the common case
+            js = range(blk.nfrag)
+            sizes = blk.size + blk.nfrag * (FRAG_HEADER + WIRE)
+        else:
+            js = [j for j in range(blk.nfrag) if mask >> (blk.base + j) & 1]
+            if not js:
+                return
+            sizes = sum(FRAG_HEADER + min(cfg.frag, blk.size - j * cfg.frag) + WIRE for j in js)
         self.bytes[kind] += sizes
         if self.crashed(src):
             return None
@@ -284,10 +295,9 @@ class Sim:
                 if i >= len(js):
                     break
                 lost.add(i)
-        got = 0
-        for i, j in enumerate(js):
-            if i not in lost:
-                got |= 1 << (blk.base + j)
+        got = mask
+        for i in lost:
+            got &= ~(1 << (blk.base + js[i]))
         k = len(js) - len(lost)
         if k:
             jit = -cfg.jitter * math.log(1 - self.rng.random() ** (1 / k))
@@ -319,7 +329,7 @@ class Sim:
         if cfg.payload_sigma > 0 and cfg.payload > 0:
             mu = math.log(cfg.payload) - cfg.payload_sigma ** 2 / 2
             pay = int(self.rng.lognormvariate(mu, cfg.payload_sigma))
-        size = cfg.header + len(refs) * cfg.ref_bytes + pay
+        size = cfg.header + len(refs) * cfg.ref_bytes + pay + self.bitmap_bytes
         nfrag = max(1, math.ceil(size / cfg.frag))
         blk = Block(len(self.blocks), u.vid, R, refs, claims, size, nfrag,
                     len(self.owner), self.now, is_leader)
@@ -571,7 +581,7 @@ class Sim:
     # ------------------------------------------------------------ receiving
     def learn(self, u: Node, bits: int, bid: int | None = None) -> None:
         """Add fragments; bid names their block when they all come from one."""
-        new = bits & ~u.frags
+        new = bits ^ (bits & u.frags)
         self.dup_frags += (bits & u.frags).bit_count()
         while new:
             u.frags |= new
@@ -590,7 +600,7 @@ class Sim:
             if u.rows and new & u.rowunion:
                 dec = self.solve(u)
                 self.decoded += dec.bit_count()
-                new = dec & ~u.frags
+                new = dec ^ (dec & u.frags)
             else:
                 new = 0
         self.after_change(u)
@@ -620,8 +630,9 @@ class Sim:
                 if ref not in u.complete:
                     gap = True
                     self.notice(u, ref, via_ref=True)
-            if gap:  # pull the window of this block from its author
-                self.start_pull(u, bid)
+            if gap:  # pull the window of this block from its author; at once if
+                # the block itself came from a pull, as what it lacks is old
+                self.start_pull(u, bid, urgent=bid in u.asked and self.cfg.pull_mode != "oracle")
         elif not via_ref:  # part of the block arrived: pull it from its author
             self.start_pull(u, bid)
 
@@ -630,22 +641,69 @@ class Sim:
 
     def on_sym(self, v: int, R: int, mask: int) -> None:
         u = self.nodes[v]
-        row = mask & ~u.frags
+        row = mask ^ (mask & u.frags)
         if not row:
             return
+        n0 = len(u.rows)
         u.rows = [(t, m) for t, m in u.rows if t >= u.latest - self.keep]
+        if len(u.rows) != n0:
+            u.basis = None
         u.rows.append((R, row))
         u.rowunion |= row
-        bits = self.solve(u)
+        bits = self.insert(u, R, row)
+        if bits is None:
+            bits = self.solve(u)
         if bits:
             self.decoded += bits.bit_count()
             self.learn(u, bits)
 
+    def insert(self, u: Node, tag: int, row: int) -> int | None:
+        """Add one row to the reduced basis, when the basis is current and the
+        row fits its frame; the fragments it determines, or None to rebuild."""
+        if u.basis is None or row >> u.boff << u.boff != row or row.bit_length() > u.boff + u.bwidth:
+            return None
+        known = (u.frags >> u.boff) & ((1 << u.bwidth) - 1)
+        if known != u.bknown:
+            return None
+        r = row >> u.boff
+        basis = u.basis
+        for p, (_, prow) in basis.items():
+            if r >> p & 1:
+                r ^= prow
+        if not r:
+            return 0
+        p = (r & -r).bit_length() - 1
+        changed = [p]
+        for k, (t2, r2) in list(basis.items()):
+            if r2 >> p & 1:
+                basis[k] = (t2, r2 ^ r)
+                changed.append(k)
+        basis[p] = (tag, r)
+        out = 0
+        for k in changed:
+            rk = basis[k][1]
+            if rk & (rk - 1) == 0:
+                out |= rk
+        if out:
+            u.basis = None  # learning these changes what is held
+        return out << u.boff
+
     def solve(self, u: Node) -> int:
-        """Gaussian elimination over GF(2); the fragments it determines."""
+        """Gaussian elimination over GF(2); the fragments it determines. The
+        rows cover recent fragments only, so they are shifted down to their own
+        bit range, which keeps the integers short."""
+        union = 0
+        for _, row in u.rows:
+            union |= row
+        if not union:
+            u.rows, u.rowunion = [], 0
+            return 0
+        off = (union & -union).bit_length() - 1
+        known = (u.frags >> off) & ((1 << (union.bit_length() - off)) - 1)
         pivots: dict[int, tuple[int, int]] = {}
         for tag, row in u.rows:
-            row &= ~u.frags
+            row = row >> off
+            row ^= row & known
             for p, (_, prow) in pivots.items():
                 if row >> p & 1:
                     row ^= prow
@@ -663,17 +721,28 @@ class Sim:
             if row & (row - 1) == 0:
                 out |= row
             else:
-                rows.append((tag, row))
+                rows.append((tag, row << off))
                 union |= row
-        u.rows, u.rowunion = rows, union
-        return out
+        u.rows, u.rowunion = rows, union << off
+        if out:
+            u.basis = None
+        else:
+            u.basis = pivots
+            u.boff = off
+            u.bwidth = len(self.owner) - off + 4096  # room for rows over newer fragments
+            u.bknown = (u.frags >> off) & ((1 << u.bwidth) - 1)
+        return out << off
 
     # ------------------------------------------------------------ pulling
-    def start_pull(self, u: Node, bid: int) -> None:
+    def start_pull(self, u: Node, bid: int, urgent: bool = False) -> None:
         if bid in u.pulling:
+            if urgent:  # a pull already waits for bid: fire it now, for what bid lacks
+                u.pulling[bid] += 1
+                u.deferred.discard(bid)
+                self.at(self.now, "pull_timer", u.vid, bid, u.pulling[bid])
             return
         u.pulling[bid] = 0
-        if self.behind(u):
+        if urgent or self.behind(u):
             self.at(self.now, "pull_timer", u.vid, bid, 0)
         else:
             u.deferred.add(bid)
@@ -691,6 +760,31 @@ class Sim:
                 u.pulling[root] += 1
                 self.at(self.now, "pull_timer", u.vid, root, u.pulling[root])
             u.deferred.clear()
+
+    def wanted(self, u: Node, root: int) -> list[int]:
+        """The blocks a pull for root can name. With "refs", root itself if
+        partial, else the references of root (deeper gaps are found as these
+        arrive); with "bitmap", root's window from its bitmap once root is held."""
+        mode = self.cfg.pull_mode
+        if mode == "oracle":
+            return self.window(root) if self.cfg.window_pull else [root]
+        if root not in u.complete:
+            return [root]
+        if mode == "refs":
+            return [r for r in self.blocks[root].refs]
+        return self.window(root)
+
+    def request_bytes(self, u: Node, fresh: list[int]) -> int:
+        """A request names each block by its slot (4 B), or by a bitmap of the
+        window's slots, whichever is smaller, and adds a bitmap of the fragments
+        held of each block held in part."""
+        cfg = self.cfg
+        if cfg.pull_mode == "oracle":
+            return REQ_BYTES + (cfg.n * (cfg.K + 2) // 8 if cfg.window_pull else 0)
+        names = min(4 * len(fresh), -(-cfg.n * (cfg.K + 2) // 8))
+        partial = sum(-(-self.blocks[b].nfrag // 8) for b in fresh
+                      if u.frags & self.blocks[b].mask)
+        return REQ_BYTES + names + partial
 
     def window(self, bid: int) -> list[int]:
         """The block and what admitting it needs: the windows to depth K of its
@@ -720,7 +814,7 @@ class Sim:
             return
         u.deferred.discard(root)
         blk = self.blocks[root]
-        want = self.window(root) if cfg.window_pull else [root]
+        want = self.wanted(u, root)
         missing = [b for b in want if b not in u.complete]
         if not missing:
             return
@@ -732,23 +826,32 @@ class Sim:
             self.pulls += 1
         # the request's bitmap marks the slots held or already asked for, so the
         # author sends only the fresh blocks
-        size = REQ_BYTES + (cfg.n * (cfg.K + 2) // 8 if cfg.window_pull else 0)
+        size = self.request_bytes(u, fresh)
         for b in fresh:
             u.asked[b] = self.now + cfg.retry_timer
+        if cfg.pull_mode != "oracle":  # the request carries what the requester holds of each
+            fresh = [(b, u.frags & self.blocks[b].mask) for b in fresh]
         self.bytes["pullreq"] += size + WIRE
         t = self.transmit(v, blk.author, size)
         if t is not None:
             self.at(t, "pull_req", blk.author, v, fresh)
         self.at(self.now + cfg.retry_timer, "pull_timer", v, root, token)
 
-    def on_pull_req(self, h: int, v: int, fresh: list[int]) -> None:
+    def on_pull_req(self, h: int, v: int, fresh: list) -> None:
         hold, want = self.nodes[h], self.nodes[v]
         sent, top = 0, 0
-        for b in fresh:
-            if b not in hold.complete or b in want.complete:
+        for item in fresh:
+            if self.cfg.pull_mode == "oracle":  # the requester's state, read directly
+                b = item
+                if b in want.complete:
+                    continue
+                has = want.frags
+            else:  # the requester's state as its request reported it
+                b, has = item
+            if b not in hold.complete:
                 continue
             blk = self.blocks[b]
-            missing = blk.mask & ~want.frags
+            missing = blk.mask & ~has
             if missing:
                 self.send_frags(h, v, blk, missing, "pullresp")
                 sent |= missing

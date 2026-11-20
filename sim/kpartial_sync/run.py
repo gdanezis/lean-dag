@@ -7,8 +7,11 @@ all seeds, and the other columns average them.
 from __future__ import annotations
 
 import csv
+import os
 import statistics
 import sys
+import threading
+import time
 from multiprocessing import Pool
 
 from sim import simulate
@@ -37,6 +40,7 @@ GROUPS = {
     "payload": "Payload size (p = 1%)",
     "ablation": "Ablation: the default with one component changed",
     "crash": "Crashed validators from t = 0.5 s (p = 0.1%): waiting for votes on a leader not referenced",
+    "pullmode": "What a pull can ask for: the window known globally (oracle), seen references, or a window bitmap in each block",
     "outage": "One validator receives nothing for a while (p = 0.1%)",
 }
 
@@ -90,6 +94,12 @@ ABLATION = [("best (default)", dict(strategy="coded")),
 for loss in [0.01, 0.05]:
     for name, kw in ABLATION:
         SCENARIOS.append(("ablation", f"p = {loss:.0%}", name, dict(loss=loss, **kw)))
+PULLMODES = [(m, dict(pull_mode=m)) for m in ("oracle", "refs", "bitmap")]
+for setting, kw in [("coded, p = 1%", dict(loss=0.01)), ("coded, p = 5%", dict(loss=0.05)),
+                    ("pull 500 ms, p = 1%", dict(loss=0.01, strategy="pull")),
+                    ("coded, no payload, p = 1%", dict(loss=0.01, payload=0))]:
+    for name, m in PULLMODES:
+        SCENARIOS.append(("pullmode", setting, name, dict(**kw, **m)))
 F = (N - 1) // 3
 for label, vs in [("1 crashed (leads round 20)", (20,)), ("f crashed", tuple(range(1, 3 * F, 3)))]:
     for name, w in [("votes awaited always", "always"), ("votes awaited if referenced (default)", "included")]:
@@ -98,6 +108,26 @@ for dur in [0.2, 0.5]:
     for name, kw in ABLATION:
         SCENARIOS.append(("outage", f"outage {dur * 1000:.0f} ms", name,
                           dict(loss=0.001, rounds=60, outage=(7, 2.0, dur), **kw)))
+    for name, m in PULLMODES:
+        for strat in ("coded", "pull"):
+            SCENARIOS.append(("outage", f"outage {dur * 1000:.0f} ms", f"{strat}, pull mode {name}",
+                              dict(loss=0.001, rounds=60, outage=(7, 2.0, dur), strategy=strat, **m)))
+
+def cost(i: int) -> float:
+    """A rough run time, to start the longest runs first."""
+    kw = {**BASE, **SCENARIOS[i][3]}
+    pay = kw.get("payload", 10_000)
+    return kw["n"] ** 2 * kw["rounds"] * (1 + pay / 10_000) * kw.get("span", 2)
+
+
+def guard(parent: int) -> None:
+    """A worker exits when the sweep that started it is gone."""
+    def watch():
+        while os.getppid() == parent:
+            time.sleep(1)
+        os._exit(1)
+    threading.Thread(target=watch, daemon=True).start()
+
 
 def one(job):
     i, seed = job
@@ -128,9 +158,10 @@ def merge(runs):
 
 if __name__ == "__main__":
     jobs = [(i, s) for i, sc in enumerate(SCENARIOS)
-            for s in (SEEDS_ABLATION if sc[0] in ("ablation", "outage") else SEEDS)]
+            for s in (SEEDS_ABLATION if sc[0] in ("ablation", "outage", "pullmode") else SEEDS)]
     runs = {}
-    with Pool() as pool:
+    jobs.sort(key=lambda j: -cost(j[0]))
+    with Pool(initializer=guard, initargs=(os.getpid(),)) as pool:
         for i, r in pool.imap_unordered(one, jobs):
             runs.setdefault(i, []).append(r)
     rows = []
@@ -141,7 +172,7 @@ if __name__ == "__main__":
         w.writeheader()
         w.writerows(rows)
     ms = lambda x: f"{x * 1000:.0f}"
-    out = [f"# Synchroniser simulation, n = {N} unless stated, seeds {SEEDS} (ablation and outage {SEEDS_ABLATION})\n",
+    out = [f"# Synchroniser simulation, n = {N} unless stated, seeds {SEEDS} (ablation, pull modes and outages {SEEDS_ABLATION})\n",
            "Latencies in ms, pooled over seeds. *deliver*: block built to admitted at "
            "another validator. *decide*: leader block built to decided (committed "
            "directly, or decided by a later direct commit). *direct*: fraction of "
