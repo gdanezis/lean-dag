@@ -68,6 +68,7 @@ class Config:
     uplink_bps: float = 1e9
     lat_min: float = 0.005  # one-way base latency range, seconds
     lat_max: float = 0.120
+    geo: str | None = None  # a key of GEOGRAPHIES: validator i sits in region i mod the regions; replaces lat_min/lat_max
     stretch: float = 0.0  # sigma of a per-link routing stretch exp(|N(0, sigma)|) >= 1; > 0 breaks the triangle inequality
     jitter: float = 0.005  # mean of exponential per-packet jitter
     loss: float = 0.01  # per-packet drop probability
@@ -148,6 +149,35 @@ def poisson_quantile(lam: float, prob: float) -> int:
 def q999(lam20: int) -> int:
     """The 99.9th percentile of a Poisson variable of mean lam20 / 20."""
     return poisson_quantile(lam20 / 20, 0.999)
+
+
+# Region-to-region median RTT in ms between AWS regions, measured on 2026-09-18 on the
+# Mysticeti testbed (asonnino/mysticeti, crates/simulator/examples/geography.yaml).
+# One direction per pair; the other is the same. A link's one-way base latency is half
+# the RTT of its regions.
+GEOGRAPHIES = {
+    "aws6": (
+        ("us-east-1", "us-east-2", "eu-central-1", "eu-west-2", "eu-west-3", "ap-northeast-1"),
+        {
+            "us-east-1": {"us-east-1": 0.2, "us-east-2": 11.4, "eu-central-1": 90.6, "eu-west-2": 75.3,
+                          "eu-west-3": 82.2, "ap-northeast-1": 146.4},
+            "us-east-2": {"us-east-2": 0.6, "eu-central-1": 95.6, "eu-west-2": 86.1, "eu-west-3": 90.7,
+                          "ap-northeast-1": 134.8},
+            "eu-central-1": {"eu-central-1": 0.4, "eu-west-2": 12.0, "eu-west-3": 8.2, "ap-northeast-1": 238.3},
+            "eu-west-2": {"eu-west-2": 0.2, "eu-west-3": 7.4, "ap-northeast-1": 212.2},
+            "eu-west-3": {"eu-west-3": 0.1, "ap-northeast-1": 219.2},
+            "ap-northeast-1": {"ap-northeast-1": 0.3},
+        },
+    ),
+}
+
+
+def geo_latency(name: str, i: int, j: int) -> float:
+    """The one-way base latency in seconds from validator i to validator j."""
+    regions, rtt = GEOGRAPHIES[name]
+    a, b = regions[i % len(regions)], regions[j % len(regions)]
+    ms = rtt.get(a, {}).get(b, rtt.get(b, {}).get(a))
+    return ms / 2000
 
 
 def assumed(cfg: Config) -> float:
@@ -251,8 +281,12 @@ class Sim:
         for i in range(n):
             for j in range(n):
                 if i != j:
-                    d = math.dist(pts[i], pts[j]) / math.sqrt(2)
-                    self.lat[i][j] = (cfg.lat_min + (cfg.lat_max - cfg.lat_min) * d) * stretch[i][j]
+                    if cfg.geo is not None:
+                        base = geo_latency(cfg.geo, i, j)
+                    else:
+                        d = math.dist(pts[i], pts[j]) / math.sqrt(2)
+                        base = cfg.lat_min + (cfg.lat_max - cfg.lat_min) * d
+                    self.lat[i][j] = base * stretch[i][j]
                     if self.rng.random() < cfg.bad_links:
                         self.lossp[i][j] = cfg.bad_loss
         for spec, into in ((cfg.lossy_in, True), (cfg.lossy_out, False)):

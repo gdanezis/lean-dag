@@ -20,7 +20,7 @@ Latencies in ms, pooled over seeds. *deliver*: block built to admitted at anothe
 | p = 1.0% | relay + pull 500 ms | 28.6 | 88 / 770 / 1148 | 1114 / 1576 / 2138 | 464 | 1.00 | 0.004 | 1108 | 55.0 (5.0%) | 7.58 | 0.2 | 0.15 |
 | p = 1.0% | coded + pull 500 ms | 25.3 | 67 / 146 / 190 | 258 / 336 / 359 | 92 | 1.00 | 0.000 | 1107 | 38.2 (3.4%) | 0.00 | 8.1 | 0.21 |
 | p = 5.0% | pull 500 ms | 0.0 | 278 / 1261 / 1773 | 1994 / 2507 / 3394 | 738 | 1.00 | 0.020 | 1113 | 64.1 (5.8%) | 36.23 | 0.0 | 0.01 |
-| p = 5.0% | pull 100 ms | 0.0 | 100 / 433 / 536 | 697 / 854 / 972 | 254 | 1.00 | 0.000 | 1106 | 94.9 (8.6%) | 53.72 | 0.0 | 19.73 |
+| p = 5.0% | pull 100 ms | 0.0 | 101 / 433 / 536 | 701 / 879 / 980 | 262 | 1.00 | 0.000 | 1106 | 95.2 (8.6%) | 54.12 | 0.0 | 19.79 |
 | p = 5.0% | relay + pull 500 ms | 99.3 | 274 / 1257 / 1750 | 1922 / 2393 / 3457 | 742 | 1.00 | 0.021 | 1121 | 210.1 (18.7%) | 34.83 | 2.4 | 0.41 |
 | p = 5.0% | coded + pull 500 ms | 84.9 | 79 / 144 / 191 | 322 / 361 / 397 | 109 | 1.00 | 0.000 | 1105 | 132.7 (12.0%) | 0.00 | 39.8 | 1.23 |
 
@@ -38,9 +38,22 @@ Latencies in ms, pooled over seeds. *deliver*: block built to admitted at anothe
 | setting | variant | s | deliver p50 / p99 / p99.9 | decide p50 / p99 / max | round | direct | timeouts | push KB | extra KB (%) | pulls | decoded | dup |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 5% of links at 20%, p = 0.1% | pull 500 ms | 0.0 | 99 / 1680 / 2529 | 1657 / 2782 / 4533 | 666 | 0.99 | 0.092 | 1145 | 17.6 (1.5%) | 6.73 | 0.0 | 0.63 |
-| 5% of links at 20%, p = 0.1% | pull 100 ms | 0.0 | 78 / 426 / 601 | 542 / 816 / 1446 | 214 | 1.00 | 0.000 | 1098 | 23.2 (2.1%) | 9.08 | 0.0 | 4.04 |
+| 5% of links at 20%, p = 0.1% | pull 100 ms | 0.0 | 78 / 423 / 582 | 555 / 828 / 1088 | 215 | 1.00 | 0.000 | 1101 | 23.4 (2.1%) | 9.15 | 0.0 | 4.06 |
 | 5% of links at 20%, p = 0.1% | relay + pull 500 ms | 32.0 | 99 / 1775 / 2963 | 1593 / 2978 / 4499 | 640 | 0.99 | 0.088 | 1149 | 65.7 (5.7%) | 6.74 | 0.2 | 0.88 |
 | 5% of links at 20%, p = 0.1% | coded + pull 500 ms | 26.4 | 67 / 151 / 207 | 262 / 315 / 403 | 91 | 1.00 | 0.000 | 1108 | 40.0 (3.6%) | 0.00 | 9.0 | 0.27 |
+
+## AWS six regions (measured RTT; validator i in region i mod 6)
+
+| setting | variant | s | deliver p50 / p99 / p99.9 | decide p50 / p99 / max | round | direct | timeouts | push KB | extra KB (%) | pulls | decoded | dup |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| p = 0.1% | pull 500 ms | 0.0 | 75 / 575 / 830 | 641 / 998 / 1258 | 272 | 1.00 | 0.000 | 1098 | 2.9 (0.3%) | 0.91 | 0.0 | 1.19 |
+| p = 0.1% | pull 100 ms | 0.0 | 62 / 297 / 448 | 305 / 620 / 813 | 140 | 1.00 | 0.000 | 1100 | 2.7 (0.2%) | 1.26 | 0.0 | 1.01 |
+| p = 0.1% | relay + pull 500 ms | 9.1 | 75 / 572 / 842 | 647 / 1028 / 1379 | 264 | 1.00 | 0.000 | 1107 | 16.7 (1.5%) | 0.93 | 0.1 | 1.34 |
+| p = 0.1% | coded + pull 500 ms | 9.3 | 57 / 147 / 182 | 224 / 387 / 544 | 91 | 1.00 | 0.000 | 1096 | 14.1 (1.3%) | 0.00 | 1.3 | 0.57 |
+| p = 1.0% | pull 500 ms | 0.0 | 104 / 863 / 1156 | 1147 / 1586 / 2257 | 454 | 1.00 | 0.004 | 1099 | 12.4 (1.1%) | 7.73 | 0.0 | 0.13 |
+| p = 1.0% | pull 100 ms | 0.0 | 75 / 448 / 499 | 536 / 802 / 942 | 225 | 1.00 | 0.000 | 1102 | 19.0 (1.7%) | 11.93 | 0.0 | 4.37 |
+| p = 1.0% | relay + pull 500 ms | 28.9 | 102 / 863 / 1158 | 1184 / 1643 / 2339 | 457 | 1.00 | 0.005 | 1109 | 55.5 (5.0%) | 7.58 | 0.3 | 0.28 |
+| p = 1.0% | coded + pull 500 ms | 28.8 | 58 / 151 / 183 | 227 / 388 / 409 | 91 | 1.00 | 0.000 | 1107 | 43.5 (3.9%) | 0.00 | 10.2 | 2.35 |
 
 ## Coded: symbols per receiver per round (p = 1%)
 
@@ -156,8 +169,8 @@ Latencies in ms, pooled over seeds. *deliver*: block built to admitted at anothe
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 crashed (leads round 20) | votes awaited always | 9.5 | 65 / 125 / 232 | 250 / 1256 / 1275 | 172 | 0.96 | 0.077 | 1104 | 14.3 (1.3%) | 0.00 | 0.9 | 0.10 |
 | 1 crashed (leads round 20) | votes awaited if referenced (default) | 8.7 | 65 / 125 / 221 | 249 / 1251 / 1272 | 126 | 0.96 | 0.038 | 1108 | 13.2 (1.2%) | 0.00 | 0.9 | 0.09 |
-| f crashed | votes awaited always | 9.8 | 67 / 144 / 718 | 1590 / 2702 / 3818 | 800 | 0.69 | 0.464 | 843 | 15.9 (1.9%) | 2.34 | 0.6 | 0.13 |
-| f crashed | votes awaited if referenced (default) | 9.4 | 68 / 159 / 562 | 1231 / 1823 / 2120 | 507 | 0.68 | 0.242 | 852 | 15.3 (1.8%) | 3.57 | 0.6 | 0.14 |
+| f crashed | votes awaited always | 9.8 | 67 / 144 / 718 | 1590 / 2702 / 3818 | 800 | 0.69 | 0.464 | 843 | 15.1 (1.8%) | 0.12 | 0.6 | 0.13 |
+| f crashed | votes awaited if referenced (default) | 9.4 | 68 / 159 / 562 | 1231 / 1823 / 2120 | 507 | 0.68 | 0.242 | 852 | 14.6 (1.7%) | 0.13 | 0.6 | 0.14 |
 
 ## What a pull can ask for: the window known globally (oracle), seen references, or a window bitmap in each block
 
@@ -181,40 +194,40 @@ Latencies in ms, pooled over seeds. *deliver*: block built to admitted at anothe
 | setting | variant | s | catch-up per seed (ms) | mean |
 |---|---|---|---|---|
 | outage 200 ms | best (default) | 8.3 | 342, 397, 704, 374, 679, 279 | 463 |
-| outage 200 ms | − recent arrivals | 8.5 | 122, 254, 580, 578, 286, 302 | 354 |
+| outage 200 ms | − recent arrivals | 8.7 | 122, 254, 578, 580, 286, 302 | 354 |
 | outage 200 ms | − recent + tail (6, 3) | 10.8 | 198, 331, 366, 351, 235, 261 | 290 |
 | outage 200 ms | − idle batches | 8.1 | 371, 372, 220, 381, 289, 310 | 324 |
-| outage 200 ms | − pull repair | 8.2 | 409, 675, 635, 751, 266, 710 | 574 |
+| outage 200 ms | − pull repair | 8.2 | 675, 409, 635, 751, 266, 710 | 574 |
 | outage 200 ms | trigger quorum | 9.0 | 220, 359, 346, 403, 252, 293 | 312 |
 | outage 200 ms | trigger build | 8.9 | 286, 368, 389, 366, 269, 285 | 327 |
-| outage 200 ms | span 1 | 8.1 | 214, 328, 353, 422, 206, 689 | 369 |
-| outage 200 ms | span 6 | 13.9 | 305, 328, 279, 312, 245, 245 | 286 |
-| outage 200 ms | density 2^-2 | 8.4 | 183, 276, 404, 364, 304, 478 | 335 |
-| outage 200 ms | previous default | 8.9 | 346, 417, 345, 380, 293, 178 | 327 |
-| outage 200 ms | relay (uncoded) | 9.3 | 383, 366, 508, 450, 861, 509 | 513 |
-| outage 200 ms | pull 500 ms only | 0.0 | 766, 334, 359, 541, 549, 700 | 541 |
-| outage 200 ms | coded, pull mode oracle | 8.1 | 340, 205, 351, 389, 258, 322 | 311 |
-| outage 200 ms | pull, pull mode oracle | 0.0 | 537, 493, 351, 71, 823, 210 | 414 |
-| outage 200 ms | coded, pull mode refs | 8.1 | 663, 992, 829, 500, 490, 421 | 649 |
-| outage 200 ms | pull, pull mode refs | 0.0 | 472, 431, 290, 763, 1075, 561 | 599 |
-| outage 200 ms | coded, pull mode bitmap | 8.3 | 342, 397, 374, 704, 279, 679 | 463 |
+| outage 200 ms | span 1 | 8.0 | 328, 214, 353, 422, 206, 689 | 369 |
+| outage 200 ms | span 6 | 13.9 | 328, 305, 245, 279, 245, 312 | 286 |
+| outage 200 ms | density 2^-2 | 8.4 | 183, 276, 404, 364, 478, 304 | 335 |
+| outage 200 ms | previous default | 8.9 | 346, 345, 417, 380, 293, 178 | 327 |
+| outage 200 ms | relay (uncoded) | 9.3 | 383, 861, 366, 508, 450, 509 | 513 |
+| outage 200 ms | pull 500 ms only | 0.0 | 766, 334, 549, 541, 359, 700 | 541 |
+| outage 200 ms | coded, pull mode oracle | 8.1 | 205, 340, 351, 389, 258, 322 | 311 |
+| outage 200 ms | pull, pull mode oracle | 0.0 | 351, 493, 537, 71, 823, 210 | 414 |
+| outage 200 ms | coded, pull mode refs | 8.1 | 663, 992, 500, 829, 490, 421 | 649 |
+| outage 200 ms | pull, pull mode refs | 0.0 | 431, 472, 290, 1075, 561, 763 | 599 |
+| outage 200 ms | coded, pull mode bitmap | 8.3 | 342, 397, 704, 374, 679, 279 | 463 |
 | outage 200 ms | pull, pull mode bitmap | 0.0 | 766, 334, 359, 541, 549, 700 | 541 |
-| outage 500 ms | best (default) | 8.2 | 322, 400, 300, 414, 276, 262 | 329 |
+| outage 500 ms | best (default) | 8.2 | 322, 400, 300, 276, 414, 262 | 329 |
 | outage 500 ms | − recent arrivals | 8.4 | 255, 309, 753, 297, 251, 365 | 372 |
-| outage 500 ms | − recent + tail (6, 3) | 11.0 | 316, 384, 274, 335, 189, 291 | 298 |
-| outage 500 ms | − idle batches | 8.2 | 286, 401, 264, 393, 330, 289 | 327 |
-| outage 500 ms | − pull repair | 8.3 | 631, 654, 770, 684, 745, 764 | 708 |
-| outage 500 ms | trigger quorum | 8.9 | 342, 280, 351, 363, 353, 269 | 326 |
+| outage 500 ms | − recent + tail (6, 3) | 11.0 | 316, 384, 274, 335, 291, 189 | 298 |
+| outage 500 ms | − idle batches | 8.2 | 286, 264, 401, 393, 330, 289 | 327 |
+| outage 500 ms | − pull repair | 8.3 | 631, 654, 770, 745, 684, 764 | 708 |
+| outage 500 ms | trigger quorum | 8.9 | 342, 351, 280, 363, 353, 269 | 326 |
 | outage 500 ms | trigger build | 8.9 | 514, 507, 305, 314, 296, 327 | 377 |
 | outage 500 ms | span 1 | 8.0 | 255, 396, 305, 273, 262, 369 | 310 |
 | outage 500 ms | span 6 | 13.8 | 244, 310, 286, 249, 380, 305 | 296 |
-| outage 500 ms | density 2^-2 | 9.0 | 346, 289, 202, 544, 425, 533 | 390 |
-| outage 500 ms | previous default | 8.9 | 661, 650, 625, 697, 671, 766 | 678 |
-| outage 500 ms | relay (uncoded) | 9.2 | 960, 905, 1019, 855, 933, 830 | 917 |
-| outage 500 ms | pull 500 ms only | 0.0 | 443, 387, 1045, 897, 968, 803 | 757 |
+| outage 500 ms | density 2^-2 | 9.0 | 346, 544, 289, 425, 202, 533 | 390 |
+| outage 500 ms | previous default | 8.9 | 661, 625, 650, 697, 766, 671 | 678 |
+| outage 500 ms | relay (uncoded) | 9.2 | 960, 905, 1019, 855, 830, 933 | 917 |
+| outage 500 ms | pull 500 ms only | 0.0 | 443, 1045, 387, 897, 803, 968 | 757 |
 | outage 500 ms | coded, pull mode oracle | 8.1 | 271, 356, 275, 386, 328, 186 | 300 |
 | outage 500 ms | pull, pull mode oracle | 0.0 | 489, 503, 717, 697, 919, 968 | 716 |
 | outage 500 ms | coded, pull mode refs | 8.1 | 977, 1497, 749, 907, 607, 736 | 912 |
-| outage 500 ms | pull, pull mode refs | 0.0 | 934, 1282, 495, 1534, 991, 877 | 1019 |
+| outage 500 ms | pull, pull mode refs | 0.0 | 1282, 934, 1534, 877, 495, 991 | 1019 |
 | outage 500 ms | coded, pull mode bitmap | 8.2 | 322, 400, 300, 414, 276, 262 | 329 |
-| outage 500 ms | pull, pull mode bitmap | 0.0 | 443, 1045, 387, 897, 803, 968 | 757 |
+| outage 500 ms | pull, pull mode bitmap | 0.0 | 443, 1045, 387, 803, 968, 897 | 757 |

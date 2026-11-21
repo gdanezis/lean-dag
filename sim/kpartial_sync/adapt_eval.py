@@ -64,6 +64,9 @@ SCENARIOS = [
     ("size", "n = 150, p = 1%", dict(loss=0.01, n=150)),
     ("size", "no payload, p = 1%", dict(loss=0.01, payload=0)),
     ("size", "payload 100 KB, p = 1%", dict(loss=0.01, payload=100_000)),
+    ("geography", "AWS six regions, p = 1%", dict(loss=0.01, geo="aws6")),
+    ("geography", "AWS six regions, step up: 0.1% → 5% (1.5–3 s) → 0.1%",
+     dict(loss=0.001, geo="aws6", loss_steps=((1.5, 0.05), (3.0, 0.001)), rounds=50)),
     ("combined", "p = 1%, jitter 20 ms, stretch 0.3, 5% of links at 20%",
      dict(loss=0.01, jitter=0.02, stretch=0.3, bad_links=0.05, bad_loss=0.2)),
 ]

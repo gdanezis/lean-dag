@@ -31,6 +31,7 @@ GROUPS = {
     "loss": "Loss sweep (all four strategies)",
     "reorder": "Heavy reordering",
     "badlinks": "A few bad links",
+    "geo": "AWS six regions (measured RTT; validator i in region i mod 6)",
     "symbols": "Coded: symbols per receiver per round (p = 1%)",
     "span": "Coded: rounds covered by a symbol",
     "trigger": "Coded: when symbols are sent",
@@ -52,6 +53,9 @@ for name, v in VARIANTS.items():
                       dict(loss=0.001, jitter=0.03, **v)))
     SCENARIOS.append(("badlinks", "5% of links at 20%, p = 0.1%", name,
                       dict(loss=0.001, bad_links=0.05, bad_loss=0.2, **v)))
+for loss in [0.001, 0.01]:
+    for name, v in VARIANTS.items():
+        SCENARIOS.append(("geo", f"p = {loss:.1%}", name, dict(loss=loss, geo="aws6", **v)))
 for s in [5, 10, 20, 40, 60, 100]:
     SCENARIOS.append(("symbols", "p = 1%", f"s = {s}",
                       dict(loss=0.01, strategy="coded", symbols=s)))

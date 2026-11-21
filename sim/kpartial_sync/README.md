@@ -24,6 +24,13 @@ use small settings (n = 20–30, a few rounds) that run in seconds.
 
 - Validators sit at random points of a unit square. The one-way base latency
   of a link is 5–120 ms, by distance.
+- `geo = "aws6"` replaces this with measured latencies: validator i sits in
+  region i mod 6 of us-east-1, us-east-2, eu-central-1, eu-west-2, eu-west-3
+  and ap-northeast-1 (the round robin of the Mysticeti orchestrator), and the
+  one-way base latency is half the median RTT between the two regions,
+  measured on 2026-09-18 on the Mysticeti AWS testbed (`asonnino/mysticeti`,
+  `crates/simulator/examples/geography.yaml`). Within a region it is
+  0.05–0.3 ms; Tokyo is 67–119 ms from every other region.
 - Each packet adds an exponential jitter (mean 5 ms), which reorders packets.
 - Each packet waits on its sender's 1 Gb/s uplink.
 - Each packet is dropped with probability `loss`; a fraction `bad_links` of
@@ -310,6 +317,17 @@ leader and votes, and every leader commits directly.
    With f crashed, the median decision falls from 1.59 s to 1.23 s; every
    correct validator is needed for a quorum, so each lost fragment stalls
    it until repaired.
+9. **Measured geography** (`geo = "aws6"`, six AWS regions). The ranking of
+   the strategies is unchanged. Coding at p = 1% decides in 227 / 388 ms
+   (random square: 258 / 336 ms) for 3.9% extra bytes, and pull alone takes
+   1147 / 1586 ms. The median falls because 84 of 100 validators sit in
+   the United States and Europe, close enough to form a quorum without
+   Tokyo. The p99 rises because of the leader schedule. A block of round
+   r + 2 commits the leader of r, and is built only once the leader block of
+   r + 1 is held; when that leader sits in Tokyo, every block of r + 2 waits
+   for it. At p = 0.1% the median decision is 309 ms for the leaders that
+   precede a Tokyo leader (eu-west-3 under the round robin), against
+   184–247 ms for the others, Tokyo's own leaders at 247 ms.
 
 **Adaptive control** (`python3 adapt_eval.py`, about 12 minutes on 14 cores;
 `adapt_results.md`). Each scenario runs with three budgets: fixed at the
@@ -343,6 +361,8 @@ two leaders. With 3 seeds, p99 differences under about 50 ms were noise.
 | n = 150, p = 1% | 347 [321–360] (2.9%) | 347 [321–360] (2.9%) | 351 [332–360] (3.1%) |
 | no payload, p = 1% | 269 [254–297] (29.3%) | 269 [254–297] (29.3%) | 274 [260–450] (27.6%) |
 | payload 100 KB, p = 1% | 912 [801–958] (2.2%) | 912 [796–958] (2.2%) | 730 [716–839] (2.3%) |
+| AWS six regions, p = 1% | 389 [383–392] (3.9%) | 389 [383–392] (3.9%) | 388 [382–402] (4.0%) |
+| AWS six regions, step up: 0.1% → 5% (1.5–3 s) → 0.1% | 757 [706–833] (5.7%) | 963 [881–1048] (4.6%) | 396 [387–403] (5.5%) |
 | p = 1%, jitter 20 ms, stretch 0.3, 5% of links at 20% | 648 [608–675] (5.5%) | 1319 [1180–1550] (4.4%) | 599 [570–620] (7.3%) |
 
 - **Steady loss: a tie.** The intervals of the adaptive and the mean-loss
